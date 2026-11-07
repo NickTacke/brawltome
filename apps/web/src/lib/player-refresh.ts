@@ -24,7 +24,9 @@ export interface PendingPlayerSections {
 
 function timestamp(value: Date | string | null | undefined): number {
   if (!value) return 0
+
   const milliseconds = new Date(value).getTime()
+
   return Number.isFinite(milliseconds) ? milliseconds : 0
 }
 
@@ -49,9 +51,11 @@ export function getPendingPlayerSections(
 /** The oldest successful section fetch, i.e. how outdated the profile could be. */
 export function getPlayerDataUpdatedAt(player: PlayerRefreshTimestamps | null): Date | null {
   if (!player) return null
+
   const fetched = [timestamp(player.currentSeason?.lastSuccessAt), timestamp(player.career?.lastSuccessAt)].filter(
     (value) => value > 0,
   )
+
   return fetched.length > 0 ? new Date(Math.min(...fetched)) : null
 }
 
@@ -63,6 +67,7 @@ export function hasCompletedPlayerRefresh(
   if (!next) return false
 
   const rankedAdvanced = timestamp(next.currentSeason?.lastSuccessAt) > timestamp(initial?.currentSeason?.lastSuccessAt)
+
   const careerAdvanced =
     timestamp(next.career?.lastSuccessAt) > timestamp(initial?.career?.lastSuccessAt) ||
     (initial?.career?.snapshotSource === 'legacy-v2' && next.career?.snapshotSource === 'v0-player-snapshot')

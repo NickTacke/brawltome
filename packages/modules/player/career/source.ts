@@ -69,11 +69,13 @@ export type V0CareerSnapshot = {
 
 function record(value: unknown, path: string): RecordValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${path} must be an object`)
+
   return value as RecordValue
 }
 
 function array(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`)
+
   return value
 }
 
@@ -81,6 +83,7 @@ function integer(value: unknown, path: string, minimum = 0): number {
   if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > INT32_MAX) {
     throw new Error(`${path} must be an integer between ${minimum} and ${INT32_MAX}`)
   }
+
   return value as number
 }
 
@@ -88,6 +91,7 @@ function percentage(value: unknown, path: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error(`${path} must be a finite number between 0 and 1`)
   }
+
   return value
 }
 
@@ -95,6 +99,7 @@ function text(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0 || !/[^\p{Separator}\p{Format}]/u.test(value)) {
     throw new Error(`${path} must contain visible text`)
   }
+
   return value
 }
 
@@ -102,17 +107,21 @@ function decimal(value: unknown, path: string): string {
   if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) {
     throw new Error(`${path} must be a canonical non-negative decimal string`)
   }
+
   return value
 }
 
 // ponytail: derive one whole-string Latin-1 layer; persistence requires exact stored evidence before using it.
 export function decodeV0CareerNameCandidate(value: string): string | null {
   const characters = [...value]
+
   if (characters.some((character) => character.charCodeAt(0) > 0xff) || !UTF8_AS_LATIN1_SEQUENCE.test(value)) {
     return null
   }
+
   try {
     const decoded = UTF8_DECODER.decode(Uint8Array.from(characters, (character) => character.charCodeAt(0)))
+
     return decoded !== value && !UTF8_AS_LATIN1_SEQUENCE.test(decoded) ? decoded : null
   } catch {
     return null
@@ -121,8 +130,10 @@ export function decodeV0CareerNameCandidate(value: string): string | null {
 
 function checkedSum(values: number[], path: string): number {
   const result = values.reduce((sum, value) => sum + value, 0)
+
   if (!Number.isSafeInteger(result) || result > INT32_MAX)
     throw new Error(`${path} exceeds the supported integer range`)
+
   return result
 }
 
@@ -133,24 +144,32 @@ export function decodeV0CareerSnapshot(
 ): V0CareerSnapshot {
   const source = record(payload, 'career')
   const brawlhallaId = integer(source.brawlhalla_id, 'career.brawlhalla_id', 1)
+
   if (brawlhallaId !== requestedBrawlhallaId) {
     throw new Error('career.brawlhalla_id does not match the requested player')
   }
 
   const legendIds = new Set<number>()
   const observedLegendMatchTimes: number[] = []
+
   const legendEntries = array(source.legends, 'career.legends').flatMap((value, index) => {
     const path = `career.legends[${index}]`
     const legend = record(value, path)
     const legendId = integer(legend.legend_id, `${path}.legend_id`, 1)
+
     if (legendIds.has(legendId)) throw new Error(`career.legends contains duplicate legend ${legendId}`)
+
     legendIds.add(legendId)
     const legendNameKey = text(legend.legend_name_key, `${path}.legend_name_key`)
     const games = integer(legend.games, `${path}.games`)
     const wins = integer(legend.wins, `${path}.wins`)
+
     if (wins > games) throw new Error(`${path}.wins cannot exceed games`)
+
     const matchTime = integer(legend.matchtime, `${path}.matchtime`)
+
     observedLegendMatchTimes.push(matchTime)
+
     const snapshot = {
       legendId,
       legendNameKey,
@@ -189,26 +208,33 @@ export function decodeV0CareerSnapshot(
         heldTime: integer(legend.timeheldweapontwo, `${path}.timeheldweapontwo`),
       },
     }
+
     const reference = resolveLegend(legendId, legendNameKey)
+
     return !reference || reference.legendId !== legendId || reference.legendNameKey !== legendNameKey
       ? []
       : [{ reference, legend: snapshot }]
   })
+
   const legends = legendEntries.map(({ legend }) => legend)
 
   const weaponFacts = new Map<string, { heldTimes: number[]; damage: bigint; kos: number[] }>()
+
   const addWeapon = (weapon: string, heldTime: number, damage: string, kos: number) => {
     const name = text(weapon, 'career weapon reference')
     const fact = weaponFacts.get(name) ?? { heldTimes: [], damage: 0n, kos: [] }
+
     fact.heldTimes.push(heldTime)
     fact.damage += BigInt(damage)
     fact.kos.push(kos)
     weaponFacts.set(name, fact)
   }
+
   for (const { legend, reference } of legendEntries) {
     addWeapon(reference.weaponOne, legend.weaponOne.heldTime, legend.weaponOne.damage, legend.weaponOne.kos)
     addWeapon(reference.weaponTwo, legend.weaponTwo.heldTime, legend.weaponTwo.damage, legend.weaponTwo.kos)
   }
+
   const weapons = Array.from(weaponFacts, ([weapon, fact]) => ({
     weapon,
     heldTime: checkedSum(fact.heldTimes, `career weapon ${weapon} held time`),
@@ -218,9 +244,11 @@ export function decodeV0CareerSnapshot(
 
   const games = integer(source.games, 'career.games')
   const wins = integer(source.wins, 'career.wins')
+
   if (wins > games) throw new Error('career.wins cannot exceed games')
 
   const guildSource = source.clan === undefined || source.clan === null ? null : record(source.clan, 'career.clan')
+
   const guild = guildSource
     ? {
         guildId: integer(guildSource.clan_id, 'career.clan.clan_id', 1),

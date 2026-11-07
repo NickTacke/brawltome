@@ -5,6 +5,7 @@ export function ChartTooltip({ active, payload }: Partial<TooltipContentProps<nu
   if (!active || !payload?.length) return null
 
   const entry = payload[0]?.payload as ChartPoint | undefined
+
   if (!entry) return null
 
   const winRate = entry.games > 0 ? ((entry.wins / entry.games) * 100).toFixed(1) : null

@@ -19,6 +19,7 @@ export function playerRefreshEventsUrl(apiUrl: string, id: number): string {
 
 function browserEventSource(): CreateRefreshEventSource | undefined {
   if (typeof EventSource !== 'function') return undefined
+
   return (url) => new EventSource(url) as unknown as RefreshEventSource
 }
 
@@ -34,55 +35,71 @@ export function createRefreshEventPush(
   return ({ wake, connected, unavailable }) => {
     if (!createEventSource) {
       unavailable()
+
       return () => {}
     }
+
     let source: RefreshEventSource | undefined
+
     try {
       source = createEventSource(url)
     } catch {
       unavailable()
+
       return () => {}
     }
+
     let closed = false
     let consecutiveErrors = 0
+
     const close = () => {
       if (closed) return
+
       closed = true
       source?.close()
     }
 
     source.addEventListener('ready', () => {
       if (closed) return
+
       consecutiveErrors = 0
       connected()
       wake()
     })
+
     source.addEventListener('resync', () => {
       if (!closed) wake()
     })
+
     source.addEventListener('settled', (event) => {
       if (closed) return
+
       wake()
       let status: unknown
+
       try {
         status = (JSON.parse(event.data) as { status?: unknown }).status
       } catch {
         status = undefined
       }
+
       // A dead-lettered refresh will not settle again: stop listening and let polling run out the clock.
       if (status === 'dead_letter') {
         close()
         unavailable()
       }
     })
+
     source.addEventListener('error', () => {
       if (closed) return
+
       consecutiveErrors += 1
       if (source?.readyState === CLOSED || consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         close()
         unavailable()
       }
     })
+
     return close
   }
 }

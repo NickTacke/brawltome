@@ -19,14 +19,18 @@ export function isUsablePlayerName(name: string, brawlhallaId: number): boolean 
 function newestUsable<T extends CanonicalPlayerNameEvidence>(brawlhallaId: number, candidates: (T | null)[]): T | null {
   let selected: T | null = null
   let selectedAt = Number.NEGATIVE_INFINITY
+
   for (const candidate of candidates) {
     if (!candidate || !isUsablePlayerName(candidate.name, brawlhallaId)) continue
+
     const observedAt = candidate.observedAt ? candidate.observedAt.getTime() : Number.NEGATIVE_INFINITY
+
     if (!selected || observedAt > selectedAt) {
       selected = candidate
       selectedAt = observedAt
     }
   }
+
   return selected
 }
 
@@ -41,6 +45,7 @@ export function selectCanonicalPlayerName<T extends CanonicalPlayerNameEvidence>
 }): T | null {
   const profiles = [input.career, input.ranked]
   const live = (candidate: T | null) => (candidate?.observedAt && !candidate.legacy ? candidate : null)
+
   return (
     newestUsable(input.brawlhallaId, profiles.map(live)) ??
     newestUsable(input.brawlhallaId, [input.leaderboard ?? null]) ??

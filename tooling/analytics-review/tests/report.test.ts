@@ -27,8 +27,10 @@ const empty: ReviewData = {
 describe('buildReport', () => {
   test('flags threshold breaches in Top friction and shows period deltas', () => {
     const report = buildReport(empty, { days: 7, end: new Date('2026-10-12T00:00:00Z') })
+
     expect(report).toContain('# BrawlTome analytics review')
     const friction = report.split('## Top friction')[1].split('\n## ')[0]
+
     expect(friction).toContain('Search miss rate 22.0%')
     expect(friction).toContain('/player/[id] (mobile) LCP p75 3100 ms')
     expect(friction).not.toContain('Refresh wait')
@@ -41,6 +43,7 @@ describe('buildReport', () => {
       { ...empty, searchMissRate: { current: null, previous: null } },
       { days: 7, end: new Date() },
     )
+
     expect(report).toContain('n/a')
   })
 
@@ -51,7 +54,9 @@ describe('buildReport', () => {
       lcpP75Ms: [],
       clientErrors: [],
     }
+
     const report = buildReport(calm, { days: 7, end: new Date('2026-10-12T00:00:00Z') })
+
     expect(report.split('## Top friction')[1].split('\n## ')[0]).toContain('None above thresholds.')
   })
 })

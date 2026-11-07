@@ -11,16 +11,19 @@ describe('Player Reference contract', () => {
       aliases: ['Former Ada'],
       legacyRating: 1800,
     })
+
     expect(parsePlayerReferenceOutput({ brawlhallaId: 2_147_483_647, name: 'A'.repeat(256), aliases: [] })).toEqual({
       brawlhallaId: 2_147_483_647,
       name: 'A'.repeat(256),
       aliases: [],
     })
+
     expect(parsePlayerReferenceOutput({ brawlhallaId: 1, name: '🦊'.repeat(256), aliases: [] })).toEqual({
       brawlhallaId: 1,
       name: '🦊'.repeat(256),
       aliases: [],
     })
+
     expect(parsePlayerReferenceOutput(null)).toBeNull()
   })
 

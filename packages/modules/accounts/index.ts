@@ -38,6 +38,7 @@ export {
 
 export function createPostgresAccounts(database: Database) {
   const { store, readDemandedPlayerIds } = createPostgresAccountsStore(database)
+
   return {
     accounts: createAccounts({ store }),
     primaryMonitoring: { readSnapshot: store.readPrimaryMonitoringSnapshot },

@@ -97,6 +97,7 @@ describe('ProfileHeader', () => {
 
   test('shows how old the oldest profile section is', () => {
     const now = Date.now()
+
     const html = renderToStaticMarkup(
       <ProfileHeader
         player={{

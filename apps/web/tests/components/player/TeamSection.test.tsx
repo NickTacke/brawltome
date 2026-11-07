@@ -26,6 +26,7 @@ describe('TeamSection', () => {
     )
 
     const visibleText = html.replace(/<[^>]+>/g, '')
+
     expect(html).toContain('<h3')
     expect(html).toContain('<h4')
     expect(html).toContain('Ranked 2v2')

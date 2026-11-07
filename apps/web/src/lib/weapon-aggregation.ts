@@ -1,6 +1,8 @@
 const parseNum = (v: unknown): number => {
   if (typeof v === 'bigint') return Number(v)
+
   const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? '0'), 10)
+
   return Number.isFinite(n) ? n : 0
 }
 
@@ -86,6 +88,7 @@ export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: 
 
   for (const l of legends) {
     const ranked = rankedMap.get(l.legendId)
+
     const weapons = [
       {
         name: l.weaponOne,
@@ -103,6 +106,7 @@ export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: 
 
     for (const w of weapons) {
       if (!w.name) continue
+
       const current = weaponStatsMap.get(w.name) || createEmptyRichWeaponAgg(w.name)
 
       current.games += parseNum(l.games)
@@ -127,6 +131,7 @@ export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: 
             key: l.legendNameKey,
           }
         }
+
         if (parseNum(ranked.rating) > current.ranked.highestElo.elo) {
           current.ranked.highestElo = {
             name: l.bioName || l.legendNameKey,
@@ -134,6 +139,7 @@ export function aggregateRichWeaponStats(legends: LegendInput[], rankedLegends: 
             key: l.legendNameKey,
           }
         }
+
         if (parseNum(ranked.peakRating) > current.ranked.highestPeak.elo) {
           current.ranked.highestPeak = {
             name: l.bioName || l.legendNameKey,

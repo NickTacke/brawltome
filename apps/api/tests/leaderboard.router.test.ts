@@ -22,6 +22,7 @@ function callerFor(
   }),
 ) {
   const rankingQueries: RankingQueries = { getLeaderboard, getRecentActivity }
+
   return leaderboardRouter.createCaller({
     rankingQueries,
     playerReferenceQueries: { byId: referenceById },
@@ -31,8 +32,10 @@ function callerFor(
 describe('leaderboard.get', () => {
   test('routes every mode through Ranking and forwards the pagination snapshot', async () => {
     const calls: unknown[] = []
+
     const caller = callerFor(async (input) => {
       calls.push(input)
+
       return {
         status: 'unavailable',
         reason: 'not_yet_published',
@@ -41,7 +44,9 @@ describe('leaderboard.get', () => {
         pageSize: input.pageSize ?? 20,
       }
     })
+
     const snapshotId = '10000000-0000-4000-8000-000000000001'
+
     for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
       await expect(caller.get({ mode, region: 'all', page: 2, pageSize: 20, snapshotId })).resolves.toEqual({
         status: 'unavailable',
@@ -51,6 +56,7 @@ describe('leaderboard.get', () => {
         pageSize: 20,
       })
     }
+
     expect(calls).toEqual(
       (['1v1', '2v2', 'solo2v2', '3v3'] as LeaderboardMode[]).map((mode) => ({
         mode,
@@ -60,6 +66,7 @@ describe('leaderboard.get', () => {
         snapshotId,
       })),
     )
+
     await expect(caller.get({ mode: '1v1', region: 'all', page: 1, sort: 'wins' } as never)).rejects.toThrow()
   })
 
@@ -101,6 +108,7 @@ describe('leaderboard.get', () => {
         bestLegendNameKey: 'bodvar',
       }),
     )
+
     await expect(caller.get({ mode: 'solo2v2', region: 'EU', page: 1 })).resolves.toMatchObject({
       mode: 'solo2v2',
       entries: [
@@ -126,6 +134,7 @@ describe('leaderboard.get', () => {
           entries: [],
         }) as never,
     )
+
     await expect(malformed.get({ mode: '3v3', region: 'EU', page: 1 })).rejects.toThrow()
   })
 
@@ -218,8 +227,10 @@ const activityMetrics = {
 describe('leaderboard.recentActivity', () => {
   test('forwards filters and snapshot pinning while rejecting malformed or unknown input', async () => {
     const calls: unknown[] = []
+
     const caller = callerFor(undefined, undefined, async (input) => {
       calls.push(input)
+
       return {
         status: 'unavailable',
         reason: 'not_enough_history',
@@ -229,14 +240,19 @@ describe('leaderboard.recentActivity', () => {
         pageSize: input.pageSize ?? 20,
       }
     })
+
     const snapshotId = activityBase.currentSnapshotId
+
     await expect(
       caller.recentActivity({ mode: 'solo2v2', region: 'SA', page: 2, pageSize: 50, snapshotId }),
     ).resolves.toMatchObject({ status: 'unavailable', reason: 'not_enough_history' })
+
     expect(calls).toEqual([{ mode: 'solo2v2', region: 'SA', page: 2, pageSize: 50, snapshotId }])
+
     await expect(
       caller.recentActivity({ mode: '1v1', region: 'all', page: 1, snapshotId: 'invalid' }),
     ).rejects.toThrow()
+
     await expect(
       caller.recentActivity({ mode: '1v1', region: 'all', page: 1, online: true } as never),
     ).rejects.toThrow()
@@ -244,10 +260,12 @@ describe('leaderboard.recentActivity', () => {
 
   test('enriches only returned fixed-team slots', async () => {
     const lookedUp: number[] = []
+
     const caller = callerFor(
       undefined,
       async (brawlhallaId) => {
         lookedUp.push(brawlhallaId)
+
         return { brawlhallaId, name: `Current ${brawlhallaId}`, aliases: [], bestLegendNameKey: 'bodvar' }
       },
       async () => ({
@@ -267,6 +285,7 @@ describe('leaderboard.recentActivity', () => {
         ],
       }),
     )
+
     await expect(caller.recentActivity({ mode: '2v2', region: 'EU', page: 1 })).resolves.toMatchObject({
       entries: [
         {
@@ -279,6 +298,7 @@ describe('leaderboard.recentActivity', () => {
         },
       ],
     })
+
     expect(lookedUp.sort()).toEqual([42, 43])
   })
 
@@ -296,11 +316,14 @@ describe('leaderboard.recentActivity', () => {
       },
     ]) {
       const malformed = callerFor(undefined, undefined, async () => ({ ...activityBase, entries: [entry] }) as never)
+
       await expect(malformed.recentActivity({ mode: '1v1', region: 'EU', page: 1 })).rejects.toThrow()
     }
+
     const failed = callerFor(undefined, undefined, async () => {
       throw new Error('SELECT secret FROM internal_table')
     })
+
     await expect(failed.recentActivity({ mode: '1v1', region: 'EU', page: 1 })).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
     })

@@ -52,6 +52,7 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
           {navItems.map((item) => {
             const active = item.href === pathname
             const Icon = item.icon
+
             return (
               <RailTooltip key={item.href} label={`${item.label}${item.wip ? ' (Soon)' : ''}`}>
                 <Link
@@ -78,6 +79,7 @@ export function AppSidebar({ account, playerShortcuts, shortcutsLoading, shortcu
             <ul aria-label="Player shortcuts">
               {shortcutList.map((shortcut) => {
                 const active = shortcut.href === pathname
+
                 return (
                   <li key={`${shortcut.kind}:${shortcut.href}`}>
                     <RailTooltip label={shortcut.label}>

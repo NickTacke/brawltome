@@ -9,7 +9,9 @@ export async function getPlayerReference(
   brawlhallaId: number,
 ): Promise<PlayerReference | null> {
   const stored = await findStoredReference(brawlhallaId)
+
   if (!stored || !isUsablePlayerName(stored.name, brawlhallaId)) return null
+
   const aliases = Array.isArray(stored.aliases)
     ? stored.aliases.filter(
         (alias): alias is string =>
@@ -19,6 +21,7 @@ export async function getPlayerReference(
           isUsablePlayerName(alias, brawlhallaId),
       )
     : []
+
   return {
     brawlhallaId: stored.brawlhallaId,
     name: stored.name,

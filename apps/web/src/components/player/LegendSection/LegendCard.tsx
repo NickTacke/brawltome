@@ -157,6 +157,7 @@ function LegendCardExpanded({ legend, rankedLegend, rankedAvailable }: LegendCar
 
   const weaponOneName = legend.weaponOne ? normalizeWeaponName(legend.weaponOne) : 'Weapon 1'
   const weaponTwoName = legend.weaponTwo ? normalizeWeaponName(legend.weaponTwo) : 'Weapon 2'
+
   const weaponDistribution = [
     { name: weaponOneName, kos: weaponOneKOs, dmg: weaponOneDmg, time: weaponOneTime },
     { name: weaponTwoName, kos: weaponTwoKOs, dmg: weaponTwoDmg, time: weaponTwoTime },
@@ -297,6 +298,7 @@ function LegendCardExpanded({ legend, rankedLegend, rankedAvailable }: LegendCar
 
 function RankedSeasonPanel({ rankedLegend }: { rankedLegend: PlayerData }) {
   const rankedWinrate = rankedLegend.games > 0 ? (rankedLegend.wins / rankedLegend.games) * 100 : 0
+
   return (
     <div className="space-y-3 mt-7">
       <div className="flex gap-3">

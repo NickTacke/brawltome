@@ -6,6 +6,7 @@ import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/
 
 const secret = 'clan-router-test-secret'
 const discordSecret = 'discord-clan-router-test-secret'
+
 const cached = {
   clanId: 77,
   clanName: 'Cached',
@@ -48,6 +49,7 @@ function harness(
   const calls = { reserve: 0, actor: 0, actorKind: '' }
   let activeDedupeKey = ''
   let reservedDedupeKey = ''
+
   const context = {
     internalSecret: secret,
     discordInternalSecret: options.discordCredential === false ? undefined : discordSecret,
@@ -61,11 +63,13 @@ function harness(
     refreshOperations: {
       findActiveInteractiveClanRefresh: async (dedupeKey: string) => {
         activeDedupeKey = dedupeKey
+
         return options.active ? { operationId, awaitingAdmission: false, reservationExpired: false } : null
       },
       reserveInteractiveClanRefresh: async (input: { dedupeKey: string }) => {
         calls.reserve++
         reservedDedupeKey = input.dedupeKey
+
         return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() } as const
       },
       activateInteractiveRefresh: async () => 'transitioned' as const,
@@ -75,6 +79,7 @@ function harness(
       admitActor: async (actor: { kind: string }) => {
         calls.actor++
         calls.actorKind = actor.kind
+
         return options.actorLimited
           ? ({ outcome: 'rate-limited', retryAfterSeconds: 12 } as const)
           : ({ outcome: 'admitted' } as const)
@@ -84,6 +89,7 @@ function harness(
     refreshTrust: { trusted: options.trusted ?? false, grant() {} },
     verifyRefreshChallenge: async () => 'invalid' as const,
   } as unknown as Context
+
   return {
     caller: createClanRouter(
       createInternalProcedure(secret),
@@ -100,6 +106,7 @@ function harness(
 describe('canonical clan router', () => {
   test('maps exact strings and independent section state', async () => {
     const { caller } = harness()
+
     await expect(caller.byId({ id: 77 })).resolves.toMatchObject({
       clanId: 77,
       clanXp: '900719925474099312345',
@@ -110,6 +117,7 @@ describe('canonical clan router', () => {
 
   test('publishes Clans-owned membership by Player identity', async () => {
     const { caller } = harness({ membership: { clanId: 77, clanName: 'Current Clan' } })
+
     await expect(caller.membershipByPlayerId({ id: 42 })).resolves.toEqual({
       clanId: 77,
       clanName: 'Current Clan',
@@ -137,21 +145,26 @@ describe('canonical clan router', () => {
         },
       },
     } as typeof cached
+
     const { caller } = harness({ stored })
     const result = await caller.byId({ id: 77 })
+
     expect(result?.profile.checkProvenance).toEqual({ source: 'v1-guild-stats', outcome: 'success' })
     expect(result?.roster?.checkProvenance).toEqual({ source: 'v1-guild-members', outcome: 'success' })
   })
 
   test('deduplicates before verification and preserves cached data in blocked outcomes', async () => {
     const active = harness({ active: true })
+
     await expect(active.caller.refresh({ id: 77 })).resolves.toMatchObject({
       clan: { clanId: 77 },
       refresh: { outcome: 'alreadyRefreshing', operationId: active.operationId },
     })
+
     expect(active.calls).toEqual({ reserve: 0, actor: 0, actorKind: '' })
 
     const limited = harness({ trusted: true, actorLimited: true })
+
     await expect(limited.caller.refresh({ id: 77 })).resolves.toMatchObject({
       clan: { clanId: 77 },
       refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 12 } },
@@ -160,6 +173,7 @@ describe('canonical clan router', () => {
 
   test('counts each user-facing clan refresh outcome', async () => {
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+
     await harness({ telemetry, active: true }).caller.refresh({ id: 77 })
     await harness({ telemetry, trusted: true, actorLimited: true }).caller.refresh({ id: 77 })
     await harness({ telemetry }).caller.refresh({ id: 77 })
@@ -167,13 +181,17 @@ describe('canonical clan router', () => {
     await harness({ telemetry }).caller.refreshDiscord({ id: 77, discordUserId: '123456789012345678' })
 
     const output = renderPrometheus(telemetry.metrics.snapshot())
+
     expect(output).toContain(
       'refresh_requests_total{kind="clan",outcome="alreadyRefreshing",source="interactive-api"} 1',
     )
+
     expect(output).toContain('refresh_requests_total{kind="clan",outcome="rateLimited",source="interactive-api"} 1')
+
     expect(output).toContain(
       'refresh_requests_total{kind="clan",outcome="verificationRequired",source="interactive-api"} 1',
     )
+
     expect(output).toContain('refresh_requests_total{kind="clan",outcome="accepted",source="interactive-api"} 1')
     expect(output).toContain('refresh_requests_total{kind="clan",outcome="accepted",source="discord"} 1')
   })
@@ -181,16 +199,19 @@ describe('canonical clan router', () => {
   test('changes dedupe identity when another clan section becomes stale without changing stored timestamps', async () => {
     const profileSuccess = new Date('2026-08-10T00:00:00.000Z')
     const rosterSuccess = new Date('2026-08-10T01:00:00.000Z')
+
     const stored = {
       ...cached,
       profile: { ...cached.profile, lastSuccessAt: profileSuccess },
       roster: { ...cached.roster, lastSuccessAt: rosterSuccess },
     }
+
     const profileOnly = harness({
       trusted: true,
       stored,
       now: () => Date.parse('2026-08-10T01:30:00.000Z'),
     })
+
     await profileOnly.caller.refresh({ id: 77 })
 
     const profileAndRoster = harness({
@@ -198,6 +219,7 @@ describe('canonical clan router', () => {
       stored,
       now: () => Date.parse('2026-08-10T02:30:00.000Z'),
     })
+
     await profileAndRoster.caller.refresh({ id: 77 })
 
     expect(profileOnly.activeDedupeKey()).toBe(profileOnly.reservedDedupeKey())
@@ -207,14 +229,17 @@ describe('canonical clan router', () => {
 
   test('separates trusted Discord identity from the web refresh input and generic internal callers', async () => {
     const web = harness({ trusted: true })
+
     await expect(web.caller.refresh({ id: 77, discordUserId: 'spoofed' } as never)).rejects.toThrow()
 
     const genericInternalCaller = harness({ discordCredential: false })
+
     await expect(
       genericInternalCaller.caller.refreshDiscord({ id: 77, discordUserId: '123456789012345678' }),
     ).rejects.toThrow('Access denied')
 
     const discord = harness()
+
     await discord.caller.refreshDiscord({ id: 77, discordUserId: '123456789012345678' })
     expect(discord.calls.actorKind).toBe('discord')
   })

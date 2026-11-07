@@ -18,6 +18,7 @@ export async function refreshCanonicalCareerPlayer(
 ): Promise<'applied' | 'already-applied'> {
   let attempted = false
   let snapshot: V0CareerSnapshot
+
   try {
     const payload = await source.getStats(brawlhallaId, {
       ...options,
@@ -25,23 +26,29 @@ export async function refreshCanonicalCareerPlayer(
         attempted = true
       },
     })
+
     if (payload === null) throw new Error(`V0 career snapshot unavailable for player ${brawlhallaId}`)
+
     snapshot = decodeV0CareerSnapshot(payload, brawlhallaId, resolveLegend)
   } catch (error) {
     if (attempted && (await players.recordChecked(brawlhallaId, effect)) === 'lease-lost') {
       throw new Error(`Career refresh lease lost for player ${brawlhallaId}`, { cause: error })
     }
+
     throw error
   }
 
   try {
     const result = await players.applySnapshot(snapshot, effect)
+
     if (result === 'lease-lost') throw new Error(`Career refresh lease lost for player ${brawlhallaId}`)
+
     return result
   } catch (error) {
     if (attempted && (await players.recordChecked(brawlhallaId, effect)) === 'lease-lost') {
       throw new Error(`Career refresh lease lost for player ${brawlhallaId}`, { cause: error })
     }
+
     throw error
   }
 }

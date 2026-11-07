@@ -20,11 +20,13 @@ describe('OTLP telemetry export', () => {
   test('exports normalized records over OTLP HTTP without promoting correlation IDs to resource labels', async () => {
     let payload: unknown
     const captured = { authorization: null as string | null }
+
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
         captured.authorization = request.headers.get('authorization')
         payload = await request.json()
+
         return new Response(null, { status: 200 })
       },
     })
@@ -34,6 +36,7 @@ describe('OTLP telemetry export', () => {
         endpoint: `http://127.0.0.1:${server.port}`,
         headers: { authorization: 'Bearer local-test' },
       })
+
       await sink.export([record], AbortSignal.timeout(1_000))
 
       const resourceLogs = (
@@ -46,14 +49,17 @@ describe('OTLP telemetry export', () => {
           }>
         }
       ).resourceLogs
+
       const resourceLog = resourceLogs[0]
       const logRecord = resourceLog?.scopeLogs[0]?.logRecords[0]
 
       expect(captured.authorization).toBe('Bearer local-test')
       expect(resourceLogs).toHaveLength(1)
+
       expect(resourceLog?.resource.attributes).toEqual([
         { key: 'service.name', value: { stringValue: record.service } },
       ])
+
       expect(logRecord?.traceId).toBe(record.traceId)
       expect(logRecord?.spanId).toBe(record.spanId)
       expect(JSON.parse(logRecord?.body.stringValue ?? '{}')).toMatchObject(record)
@@ -82,6 +88,7 @@ describe('OTLP telemetry export', () => {
 
   test('exports only marked BrawlTome spans and preserves an incoming remote parent', async () => {
     const exported: Array<{ name: string; parentSpanContext?: { traceId: string; spanId: string } }> = []
+
     const provider = createBrawltomeTraceProvider({
       service: 'api',
       sampleRate: 1,
@@ -93,21 +100,25 @@ describe('OTLP telemetry export', () => {
         shutdown: async () => undefined,
       },
     })
+
     const telemetry = createTelemetry({
       service: 'api',
       drainIntervalMs: 0,
       tracer: provider.getTracer('@brawltome/telemetry'),
     })
+
     const incoming = telemetry.contextFromHeaders(
       { traceparent: `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`, 'x-request-id': 'request-1' },
       { acceptIncoming: true },
     )
 
     await telemetry.run(incoming, () => telemetry.trace('source.call', { domain: 'api' }, async () => undefined))
+
     provider
       .getTracer('next')
       .startSpan('GET /player/123', { attributes: { 'next.route': '/player/123' } })
       .end()
+
     await provider.forceFlush()
 
     expect(exported).toHaveLength(1)

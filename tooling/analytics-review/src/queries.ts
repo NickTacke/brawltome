@@ -41,27 +41,38 @@ function staleSectionShare(section: 'ranked' | 'stats', window: string): string 
 export async function collectReview(api: GrafanaApi, days: number, end: Date): Promise<ReviewData> {
   const w = `${days}d`
   const start = new Date(end.getTime() - days * DAY_MS)
+
   const first = async (query: string, time: Date): Promise<number | null> => {
     const [sample] = await api.promInstant(query, time)
+
     return sample && Number.isFinite(sample.value) ? sample.value : null
   }
+
   const period = async (query: string): Promise<PeriodValue> => {
     const [current, previous] = await Promise.all([first(query, end), first(query, start)])
+
     return { current, previous }
   }
+
   const abandonedRate = async (): Promise<PeriodValue> => {
     const at = async (time: Date): Promise<number | null> => {
       const [abandoned, completed] = await Promise.all([
         first(`sum(increase(analytics_refresh_abandoned_total[${w}]))`, time),
         first(`sum(increase(analytics_refresh_wait_ms_count[${w}]))`, time),
       ])
+
       if (abandoned === null && completed === null) return null
+
       const total = (abandoned ?? 0) + (completed ?? 0)
+
       return total > 0 ? (abandoned ?? 0) / total : null
     }
+
     const [current, previous] = await Promise.all([at(end), at(start)])
+
     return { current, previous }
   }
+
   const prom = (query: string) => api.promInstant(query, end)
   const loki = (query: string) => api.lokiInstant(query, end)
 
@@ -134,6 +145,7 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
           `count(sum by (attributes_visitorKey) (count_over_time({service_name="web"} | json | event="analytics.pageview" [1d])))`,
           time,
         )
+
         return { day: new Date(time.getTime() - DAY_MS).toISOString().slice(0, 10), count: sample?.value ?? 0 }
       }),
     ),

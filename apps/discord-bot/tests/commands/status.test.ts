@@ -4,6 +4,7 @@ import { createStatusCommand } from '../../src/commands/status'
 
 function interaction(events: string[]) {
   let reply: InteractionEditReplyOptions | string | undefined
+
   return {
     value: {
       deferReply: async () => {
@@ -12,11 +13,13 @@ function interaction(events: string[]) {
       editReply: async (value: InteractionEditReplyOptions | string) => {
         events.push('edit')
         reply = value
+
         return {} as never
       },
     } as unknown as ChatInputCommandInteraction,
     embed: () => {
       const embed = (reply as InteractionEditReplyOptions).embeds?.[0]
+
       return embed && 'toJSON' in embed ? embed.toJSON() : embed
     },
   }
@@ -26,14 +29,17 @@ describe('/status lifecycle command', () => {
   test('acknowledges before probing and reports process liveness separately from readiness', async () => {
     const events: string[] = []
     const fake = interaction(events)
+
     const fetcher = async (input: RequestInfo | URL) => {
       events.push(String(input).endsWith('/health/live') ? 'live' : 'ready')
+
       return Response.json({ status: String(input).endsWith('/health/live') ? 'live' : 'ready' })
     }
 
     await createStatusCommand({ fetcher, apiUrl: 'https://api.example.test' }).execute(fake.value)
 
     expect(events[0]).toBe('defer')
+
     expect(fake.embed()?.fields).toEqual([
       { name: '✅ API Process', value: 'Status: **Live**', inline: true },
       { name: '✅ API Dependencies', value: 'Status: **Ready**', inline: true },
@@ -42,6 +48,7 @@ describe('/status lifecycle command', () => {
 
   test('renders an unready live process as degraded rather than offline', async () => {
     const fake = interaction([])
+
     const fetcher = async (input: RequestInfo | URL) =>
       String(input).endsWith('/health/live')
         ? Response.json({ status: 'live' })
@@ -59,10 +66,12 @@ describe('/status lifecycle command', () => {
 
   test('reports temporary probe failures honestly and bounds probe time', async () => {
     const fake = interaction([])
+
     const fetcher = async (_input: RequestInfo | URL, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
       })
+
     const started = performance.now()
 
     await createStatusCommand({ fetcher, apiUrl: 'https://api.example.test', timeoutMs: 1 }).execute(fake.value)

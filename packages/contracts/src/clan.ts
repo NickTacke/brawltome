@@ -6,6 +6,7 @@ export const clanIdSchema = z.number().int().positive().max(2_147_483_647)
 export const decimalXpSchema = z.string().regex(/^(0|[1-9]\d{0,39})$/)
 export const decimalLifetimeXpSchema = z.string().regex(/^(0|[1-9]\d{0,40})$/)
 const dateTimeSchema = z.iso.datetime({ offset: false })
+
 const provenanceSchema = z
   .object({
     source: z.enum(['v1-guild-stats', 'v1-guild-members', 'legacy-import']),
@@ -13,6 +14,7 @@ const provenanceSchema = z
     legacyTimestamp: dateTimeSchema.optional(),
   })
   .strict()
+
 const sectionSchema = z
   .object({
     checkedAt: dateTimeSchema.nullable(),
@@ -21,6 +23,7 @@ const sectionSchema = z
     lastSuccessProvenance: provenanceSchema.nullable(),
   })
   .strict()
+
 const clanMemberSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,

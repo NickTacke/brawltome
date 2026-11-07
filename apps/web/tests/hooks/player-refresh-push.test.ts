@@ -6,11 +6,14 @@ function fakeClock() {
   let now = 0
   let nextId = 1
   const timers = new Map<number, { at: number; callback: () => void }>()
+
   const clock: RefreshRunClock & { advance: (ms: number) => Promise<void>; pending: () => number[] } = {
     now: () => now,
     setTimeout: (callback, ms) => {
       const id = nextId++
+
       timers.set(id, { at: now + ms, callback })
+
       return id
     },
     clearTimeout: (handle) => {
@@ -18,18 +21,23 @@ function fakeClock() {
     },
     async advance(ms) {
       const target = now + ms
+
       for (;;) {
         const due = [...timers.entries()].filter(([, timer]) => timer.at <= target).sort((a, b) => a[1].at - b[1].at)[0]
+
         if (!due) break
+
         timers.delete(due[0])
         now = due[1].at
         due[1].callback()
         await flush()
       }
+
       now = target
     },
     pending: () => [...timers.values()].map(({ at }) => at - now),
   }
+
   return clock
 }
 
@@ -54,6 +62,7 @@ class FakeEventSource implements RefreshEventSource {
   }
   emit(type: string, data = '{}') {
     if (type !== 'error') this.readyState = 1
+
     for (const listener of this.listeners.get(type) ?? []) listener({ data } as MessageEvent<string>)
   }
 }
@@ -66,14 +75,17 @@ function setup(options: { eventSource?: boolean; doneAt?: number } = {}) {
   let version = 0
   let queries = 0
   const settlements: StaleRefreshSettlement[] = []
+
   const push = createRefreshEventPush(
     playerRefreshEventsUrl('https://api.brawltome.app', 42),
     options.eventSource === false ? undefined : (url) => new FakeEventSource(url),
   )
+
   const stop = startRefreshRun<Profile>({
     initial: { version: 0 },
     queryFn: async () => {
       queries++
+
       return { version }
     },
     isDone: (_previous, next) => next.version >= (options.doneAt ?? 1),
@@ -85,6 +97,7 @@ function setup(options: { eventSource?: boolean; doneAt?: number } = {}) {
     onSettled: (settlement) => settlements.push(settlement),
     clock,
   })
+
   return {
     clock,
     stop,
@@ -97,7 +110,9 @@ function setup(options: { eventSource?: boolean; doneAt?: number } = {}) {
     },
     get source() {
       const source = FakeEventSource.instances[0]
+
       if (!source) throw new Error('Expected an EventSource')
+
       return source
     },
   }
@@ -106,12 +121,14 @@ function setup(options: { eventSource?: boolean; doneAt?: number } = {}) {
 describe('player refresh completion push', () => {
   test('subscribes to the player stream on the public API', () => {
     const run = setup()
+
     expect(run.source.url).toBe('https://api.brawltome.app/events/player/42/refresh')
     run.stop()
   })
 
   test('refetches as soon as the refresh settles and closes the stream when the data is fresh', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     // The ready refetch catches a refresh that settled before the subscription opened.
@@ -131,6 +148,7 @@ describe('player refresh completion push', () => {
 
   test('slows polling to a safety net while the stream is live', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     expect(run.queries).toBe(1)
@@ -143,6 +161,7 @@ describe('player refresh completion push', () => {
 
   test('falls back to five-second polling when the EventSource fails for good', async () => {
     const run = setup()
+
     run.source.readyState = 2
     run.source.emit('error')
     expect(run.source.closed).toBe(true)
@@ -157,6 +176,7 @@ describe('player refresh completion push', () => {
 
   test('falls back to polling after a live stream keeps failing to reconnect', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     expect(run.queries).toBe(1)
@@ -171,6 +191,7 @@ describe('player refresh completion push', () => {
 
   test('stays subscribed across a server-ended stream that reconnects', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     run.source.emit('error')
@@ -185,6 +206,7 @@ describe('player refresh completion push', () => {
 
   test('polls every five seconds without EventSource support', async () => {
     const run = setup({ eventSource: false })
+
     expect(FakeEventSource.instances).toHaveLength(0)
     await run.clock.advance(5_000)
     expect(run.queries).toBe(1)
@@ -195,6 +217,7 @@ describe('player refresh completion push', () => {
 
   test('refetches on a dead-lettered refresh, then stops listening and keeps polling', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     run.source.emit('settled', '{"status":"dead_letter","operationId":"op-2"}')
@@ -208,6 +231,7 @@ describe('player refresh completion push', () => {
 
   test('refetches after a resync, when settlements may have been missed', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     run.source.emit('resync')
@@ -221,6 +245,7 @@ describe('player refresh completion push', () => {
     const clock = fakeClock()
     const resolvers: ((value: Profile) => void)[] = []
     const push = createRefreshEventPush('https://api/events/player/1/refresh', (url) => new FakeEventSource(url))
+
     const stop = startRefreshRun<Profile>({
       initial: { version: 0 },
       queryFn: () => new Promise<Profile>((resolve) => resolvers.push(resolve)),
@@ -233,7 +258,9 @@ describe('player refresh completion push', () => {
       onSettled: () => {},
       clock,
     })
+
     const source = FakeEventSource.instances[0]
+
     source.emit('ready')
     source.emit('settled', '{"status":"succeeded","operationId":"op"}')
     source.emit('resync')
@@ -249,6 +276,7 @@ describe('player refresh completion push', () => {
 
   test('closes the stream and stops polling when the page unmounts', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     run.stop()
@@ -262,6 +290,7 @@ describe('player refresh completion push', () => {
 
   test('gives up at the deadline like polling did', async () => {
     const run = setup()
+
     run.source.emit('ready')
     await flush()
     // The deadline is checked on the next poll after 90 s, as before.

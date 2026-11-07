@@ -223,6 +223,7 @@ export class LeaderboardEffectConflictError extends Error {
 
 export function leaderboardModeFromOperationKind(kind: LeaderboardOperationKind): LeaderboardMode {
   if (kind === 'leaderboard-solo-2v2') return 'solo2v2'
+
   return kind.slice('leaderboard-'.length) as LeaderboardMode
 }
 
@@ -234,8 +235,11 @@ function validateDepth(depth: number): void {
 
 function collectionCanPublish(mode: LeaderboardMode, pages: readonly SourceLeaderboardPage[], depth: number): boolean {
   const lastPage = pages.at(-1)
+
   if (!lastPage) return false
+
   if (pages.length >= Math.min(lastPage.totalPages, depth)) return true
+
   return mode === '3v3' && lastPage.rankings.every(({ tier }) => tier !== null && !tier.startsWith('Valhallan'))
 }
 
@@ -256,6 +260,7 @@ export type LeaderboardDeepCrawlStanding = {
 export function leaderboardDeepCrawlStandings(page: SourceLeaderboardPage): LeaderboardDeepCrawlStanding[] {
   return page.rankings.flatMap((row) => {
     if (row.identity.type !== 'one-vs-one-player' && row.identity.type !== 'solo-two-vs-two-player') return []
+
     return [
       {
         brawlhallaId: row.identity.player.id,
@@ -280,7 +285,9 @@ export type LeaderboardDeepCrawlTeam = Omit<LeaderboardDeepCrawlStanding, 'brawl
 export function leaderboardDeepCrawlTeams(page: SourceLeaderboardPage): LeaderboardDeepCrawlTeam[] {
   return page.rankings.flatMap((row) => {
     if (row.identity.type !== 'fixed-two-vs-two-team') return []
+
     const [one, two] = row.identity.players
+
     return [
       {
         brawlhallaIdOne: one.id,
@@ -306,6 +313,7 @@ function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeader
       ],
     }
   }
+
   return {
     type: identity.type,
     player: { brawlhallaId: identity.player.id, name: identity.player.username },
@@ -314,18 +322,24 @@ function publishedIdentity(identity: SourceLeaderboardIdentity): PublishedLeader
 
 function identityKey(mode: LeaderboardMode, identity: PublishedLeaderboardIdentity): string {
   if (mode === '1v1' && identity.type === 'one-vs-one-player') return String(identity.player.brawlhallaId)
+
   if (mode === 'solo2v2' && identity.type === 'solo-two-vs-two-player') return String(identity.player.brawlhallaId)
+
   if (mode === '3v3' && identity.type === 'three-vs-three-player') return String(identity.player.brawlhallaId)
+
   if (mode === '2v2' && identity.type === 'fixed-two-vs-two-team') {
     const [first, second] = identity.players
+
     if (
       first.brawlhallaId > second.brawlhallaId ||
       (first.brawlhallaId === second.brawlhallaId && first.name === second.name)
     ) {
       throw new LeaderboardCandidateError('fixed 2v2 identity must use canonical distinct participant slots')
     }
+
     return `${first.brawlhallaId}:${second.brawlhallaId}`
   }
+
   throw new LeaderboardCandidateError(`${mode} candidate contains a mismatched identity discriminator`)
 }
 
@@ -338,35 +352,48 @@ function validateRegionRows(
   if (pages.length === 0 || pages.length > depth || !collectionCanPublish(mode, pages, depth)) {
     throw new LeaderboardCandidateError(`${mode}/${region} candidate is incomplete`)
   }
+
   const totalPages = pages[0]?.totalPages
+
   // Zero source pages is an empty region; it publishes an empty regional snapshot.
   if (totalPages === 0 && pages.length === 1 && pages[0]?.rankings.length === 0) return []
+
   if (!totalPages) throw new LeaderboardCandidateError(`${mode}/${region} does not contain source pages`)
+
   const rowsByIdentity = new Map<string, PublishedLeaderboardRow>()
   const ranks = new Set<number>()
   let priorRank = 0
+
   for (const [pageIndex, page] of pages.entries()) {
     if (page.totalPages !== totalPages) {
       // The live leaderboard grew or shrank between page reads; a fresh collection will see one consistent size.
       throw new LeaderboardCandidateError(`${mode}/${region} total_pages changed during collection`, true)
     }
+
     const isSourceTerminal = pageIndex + 1 === totalPages
+
     if (!isSourceTerminal && page.rankings.length !== 50) {
       throw new LeaderboardCandidateError(`${mode}/${region} page ${pageIndex + 1} is incomplete`)
     }
+
     if (page.rankings.length === 0) {
       throw new LeaderboardCandidateError(`${mode}/${region} page ${pageIndex + 1} is empty`)
     }
+
     for (const row of page.rankings) {
       const identity = publishedIdentity(row.identity)
       const key = identityKey(mode, identity)
+
       if (ranks.has(row.rank))
         throw new LeaderboardCandidateError(`${mode}/${region} contains duplicate source rank ${row.rank}`)
+
       if (row.rank <= priorRank) {
         throw new LeaderboardCandidateError(`${mode}/${region} source ranks are not strictly increasing`)
       }
+
       ranks.add(row.rank)
       priorRank = row.rank
+
       const candidate = {
         standing: row.rank,
         sourceRank: row.rank,
@@ -379,10 +406,13 @@ function validateRegionRows(
         losses: row.losses,
         tier: resolveTier({ apiTier: row.tier, bestRating: row.best_rating }).tier,
       }
+
       const existing = rowsByIdentity.get(key)
+
       if (!existing || compareDuplicateRows(candidate, existing) < 0) rowsByIdentity.set(key, candidate)
     }
   }
+
   return [...rowsByIdentity.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
@@ -424,26 +454,35 @@ function buildGlobal(
   regional: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
 ) {
   const strongest = new Map<string, PublishedLeaderboardRow>()
+
   for (const region of regionalLeaderboardScopes) {
     const rows = regional.get(region)
+
     if (!rows) throw new LeaderboardCandidateError(`missing ${mode} regional candidate ${region}`)
+
     for (const row of rows) {
       const key = identityKey(mode, row.identity)
       const existing = strongest.get(key)
+
       if (!existing || compareDuplicateRows(row, existing) < 0) strongest.set(key, row)
     }
   }
+
   if (strongest.size === 0) throw new LeaderboardCandidateError(`${mode} candidate has no ranked rows in any region`)
+
   return [...strongest.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 function errorDetails(error: unknown): { code: string; message: string } {
   if (error && typeof error === 'object') {
     const code = 'code' in error && typeof error.code === 'string' ? error.code : 'leaderboard_collection_failed'
+
     const message =
       'message' in error && typeof error.message === 'string' ? error.message : 'Unknown collection failure'
+
     return { code, message }
   }
+
   return { code: 'leaderboard_collection_failed', message: 'Unknown collection failure' }
 }
 
@@ -459,53 +498,68 @@ export async function collectAndPublishLeaderboardGeneration(input: {
   if (leaderboardModeFromOperationKind(input.authorization.operationKind) !== input.mode) {
     throw new LeaderboardCandidateError('leaderboard operation kind does not match collection mode')
   }
+
   const depth = input.pageDepth ?? defaultLeaderboardPageDepth
+
   validateDepth(depth)
   const intervalMs = input.intervalMs ?? defaultLeaderboardIntervalMs
+
   if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
     throw new LeaderboardCandidateError('publication interval must be a positive safe integer')
   }
+
   const clock = input.clock ?? (() => new Date())
   const observedAt = clock()
   let snapshots: ReadonlyMap<LeaderboardScope, readonly PublishedLeaderboardRow[]>
   const scopePageDepths: Partial<Record<LeaderboardScope, number>> = {}
   let collectedDepth = 0
   let failureScope: LeaderboardScope = 'all'
+
   try {
     const regional = new Map<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>()
+
     for (const region of regionalLeaderboardScopes) {
       failureScope = region
       // ponytail: partial pages stay in memory; persist staging only if restart waste prevents hourly publication.
       const pages: SourceLeaderboardPage[] = []
+
       for (let page = 1; page <= depth; page += 1) {
         pages.push(await input.source.fetchPage({ mode: input.mode, region, page }))
         if (collectionCanPublish(input.mode, pages, depth)) break
       }
+
       scopePageDepths[region] = pages.length
       collectedDepth = Math.max(collectedDepth, pages.length)
       regional.set(region, validateRegionRows(input.mode, region, pages, depth))
     }
+
     failureScope = 'all'
     const complete = new Map<LeaderboardScope, readonly PublishedLeaderboardRow[]>(regional)
+
     complete.set('all', buildGlobal(input.mode, regional))
     scopePageDepths.all = collectedDepth
     snapshots = complete
   } catch (error) {
     if (error instanceof LeaderboardLeaseLostError) throw error
+
     const details = errorDetails(error)
+
     const recorded = await input.publication.recordCollectionFailure(input.authorization, {
       mode: input.mode,
       scope: failureScope,
       checkedAt: clock(),
       ...details,
     })
+
     if (recorded === 'lease-lost') throw new LeaderboardLeaseLostError()
+
     throw error
   }
 
   const scheduleWindowAt = input.authorization.scheduleWindowAt
     ? new Date(input.authorization.scheduleWindowAt)
     : observedAt
+
   const result = await input.publication.publishGeneration(input.authorization, {
     mode: input.mode,
     operationKey: input.authorization.operationKey,
@@ -516,7 +570,10 @@ export async function collectAndPublishLeaderboardGeneration(input: {
     scopePageDepths,
     snapshots,
   })
+
   if (result === 'lease-lost') throw new LeaderboardLeaseLostError()
+
   if (result === 'effect-conflict') throw new LeaderboardEffectConflictError()
+
   return result
 }

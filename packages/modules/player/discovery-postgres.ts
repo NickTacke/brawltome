@@ -40,53 +40,63 @@ async function sourceVersion(sql: Sql): Promise<number> {
   const [state] = await sql<{ source_version: string | number }[]>`
     SELECT source_version FROM players.discovery_state WHERE singleton
   `
+
   return Number(state.source_version)
 }
 
 async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDiscoveryFact[]> {
   if (requestedIds && requestedIds.length === 0) return []
+
   const ranked = await sql<FactRow[]>`
     SELECT brawlhalla_id, player_name, last_success_at, region, rating, ranked_main_legend_name_key
     FROM players.ranked_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const careers = await sql<CareerProfileRow[]>`
     SELECT brawlhalla_id, player_name, last_success_at, snapshot_source
     FROM players.career_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const leaderboardNames = await sql<LeaderboardNameRow[]>`
     SELECT brawlhalla_id, player_name, observed_at
     FROM players.leaderboard_name_observations
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const leaderboardRanked = await sql<LeaderboardRankedRow[]>`
     SELECT brawlhalla_id, region, rating, observed_at
     FROM players.leaderboard_ranked_observations
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const careerLegends = await sql<CareerLegendRow[]>`
     SELECT DISTINCT ON (brawlhalla_id) brawlhalla_id, legend_name_key
     FROM players.career_legends
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
     ORDER BY brawlhalla_id, xp DESC, level DESC, ordinal
   `
+
   const legacy = await sql<LegacyRow[]>`
     SELECT brawlhalla_id, player_name, region, rating, view_count, NULL::integer AS best_legend
     FROM players.legacy_discovery_profiles
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const profileLegacy = await sql<LegacyRow[]>`
     SELECT brawlhalla_id, player_name, NULL::text AS region, rating, 0 AS view_count, best_legend
     FROM players.legacy_profile_discovery
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
   `
+
   const canonicalAliases = await sql<AliasRow[]>`
     SELECT brawlhalla_id, display_alias
     FROM players.discovery_aliases
     ${requestedIds ? sql`WHERE brawlhalla_id IN ${sql(requestedIds)}` : sql``}
     ORDER BY observed_at DESC, normalized_alias
   `
+
   const legacyAliases = await sql<AliasRow[]>`
     SELECT brawlhalla_id, display_alias
     FROM players.legacy_discovery_aliases
@@ -101,16 +111,21 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
   const careerLegendById = new Map(careerLegends.map((row) => [row.brawlhalla_id, row.legend_name_key]))
   const profileLegacyById = new Map(profileLegacy.map((row) => [row.brawlhalla_id, row]))
   const legacyById = new Map(profileLegacyById)
+
   for (const row of legacy) {
     legacyById.set(row.brawlhalla_id, {
       ...row,
       best_legend: row.best_legend ?? profileLegacyById.get(row.brawlhalla_id)?.best_legend ?? null,
     })
   }
+
   const aliasesById = new Map<number, string[]>()
+
   for (const alias of [...canonicalAliases, ...legacyAliases]) {
     const aliases = aliasesById.get(alias.brawlhalla_id) ?? []
+
     if (!aliases.includes(alias.display_alias)) aliases.push(alias.display_alias)
+
     aliasesById.set(alias.brawlhalla_id, aliases)
   }
 
@@ -120,6 +135,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
     ...leaderboardById.keys(),
     ...legacyById.keys(),
   ])
+
   return [...identities]
     .sort((left, right) => left - right)
     .flatMap((brawlhallaId) => {
@@ -127,6 +143,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
       const career = careerById.get(brawlhallaId)
       const leaderboard = leaderboardById.get(brawlhallaId)
       const fallback = legacyById.get(brawlhallaId)
+
       const nameEvidence = selectCanonicalPlayerName({
         brawlhallaId,
         ranked: canonical?.player_name ? { name: canonical.player_name, observedAt: canonical.last_success_at } : null,
@@ -139,12 +156,17 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
           : null,
         leaderboard: leaderboard ? { name: leaderboard.player_name, observedAt: leaderboard.observed_at } : null,
       })
+
       const name = nameEvidence?.name ?? fallback?.player_name
+
       if (!name || !isUsablePlayerName(name, brawlhallaId)) return []
+
       const canonicalAvailable = canonical?.last_success_at !== null && canonical?.last_success_at !== undefined
+
       const aliases = (aliasesById.get(brawlhallaId) ?? []).filter(
         (alias) => alias !== name && decodeV0CareerNameCandidate(alias) !== name,
       )
+
       for (const candidate of [
         canonical?.player_name,
         career?.player_name,
@@ -161,12 +183,16 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
           aliases.push(candidate)
         }
       }
+
       // A leaderboard observation newer than the last V0 refresh carries the current rating and region.
       const observed = leaderboardRankedById.get(brawlhallaId)
+
       const observedIsNewest =
         observed !== undefined &&
         (!canonicalAvailable || observed.observed_at.getTime() > (canonical.last_success_at as Date).getTime())
+
       const rawRating = observedIsNewest ? observed.rating : canonicalAvailable ? canonical.rating : fallback?.rating
+
       return [
         {
           brawlhallaId,
@@ -189,6 +215,7 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
             careerLegendById.get(brawlhallaId) ??
             (() => {
               const legend = getLegendById(fallback?.best_legend ?? 0)
+
               return legend ? legendSlug(legend.heroId, legend.displayName) : null
             })(),
           aliases,
@@ -199,13 +226,16 @@ async function readFacts(sql: Sql, requestedIds?: number[]): Promise<PlayerDisco
 
 export function createPostgresPlayerDiscoverySource(database: Database): PlayerDiscoverySource {
   const client = database.sql
+
   return {
     async pendingEvents(limit) {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {
         throw new Error('Player discovery event limit must be between 1 and 1000')
       }
+
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const events = await sql<{ event_id: string; brawlhalla_id: number }[]>`
           SELECT event_id, brawlhalla_id
           FROM players.discovery_outbox
@@ -213,13 +243,16 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
           ORDER BY created_at, event_id
           LIMIT ${limit}
         `
+
         const facts = new Map(
           (await readFacts(sql, [...new Set(events.map(({ brawlhalla_id }) => brawlhalla_id))])).map((fact) => [
             fact.brawlhallaId,
             fact,
           ]),
         )
+
         const version = await sourceVersion(sql)
+
         return events.map((event) => ({
           eventId: event.event_id,
           brawlhallaId: event.brawlhalla_id,
@@ -231,10 +264,12 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
 
     async acknowledgeEvents(eventIds) {
       if (eventIds.length === 0) return
+
       await client`
         UPDATE players.discovery_outbox SET delivered_at = clock_timestamp()
         WHERE event_id IN ${client(eventIds)} AND delivered_at IS NULL
       `
+
       // Delivered events are never read again. Each acknowledgement trims a bounded batch of day-old ones, so the
       // outbox stays small without a separate maintenance job.
       await client`
@@ -249,6 +284,7 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
 
     async replayDeliveredEvents(eventIds) {
       if (eventIds.length === 0) return
+
       await client`
         UPDATE players.discovery_outbox SET delivered_at = NULL
         WHERE event_id IN ${client(eventIds)}
@@ -258,17 +294,21 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
     async withSnapshot<T>(consume: (snapshot: PlayerDiscoverySnapshotStream) => Promise<T>) {
       return (await client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const [pending] = await sql<{ pending_count: number; oldest_pending_at: Date | null }[]>`
           SELECT count(*)::integer AS pending_count, min(created_at) AS oldest_pending_at
           FROM players.discovery_outbox WHERE delivered_at IS NULL
         `
+
         const version = await sourceVersion(sql)
+
         return consume({
           sourceVersion: version,
           pendingEventCount: pending.pending_count,
           oldestPendingAt: pending.oldest_pending_at,
           facts: async function* () {
             let afterId = 0
+
             while (true) {
               const rows = await sql<{ brawlhalla_id: number }[]>`
                 SELECT brawlhalla_id
@@ -286,7 +326,9 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
                 ORDER BY brawlhalla_id
                 LIMIT ${snapshotBatchSize}
               `
+
               if (rows.length === 0) return
+
               afterId = rows.at(-1)?.brawlhalla_id ?? afterId
               for (const fact of await readFacts(
                 sql,
@@ -303,10 +345,12 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
     snapshot() {
       return client.begin('isolation level repeatable read read only', async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const [pending] = await sql<{ pending_count: number; oldest_pending_at: Date | null }[]>`
           SELECT count(*)::integer AS pending_count, min(created_at) AS oldest_pending_at
           FROM players.discovery_outbox WHERE delivered_at IS NULL
         `
+
         return {
           sourceVersion: await sourceVersion(sql),
           facts: await readFacts(sql),
@@ -320,6 +364,7 @@ export function createPostgresPlayerDiscoverySource(database: Database): PlayerD
       const [row] = await client<{ count: number }[]>`
         SELECT count(*)::integer AS count FROM players.discovery_outbox WHERE delivered_at IS NULL
       `
+
       return row.count
     },
   }

@@ -143,6 +143,7 @@ export const pinnedPlayerSchema = z
     if (pinnedPlayer.player && pinnedPlayer.player.brawlhallaId !== pinnedPlayer.brawlhallaId) {
       context.addIssue({ code: 'custom', message: 'Pinned Player reference must match its bookmark' })
     }
+
     if (pinnedPlayer.currentSeason && pinnedPlayer.currentSeason.brawlhallaId !== pinnedPlayer.brawlhallaId) {
       context.addIssue({ code: 'custom', message: 'Pinned Player ranked facts must match its bookmark' })
     }
@@ -173,9 +174,11 @@ export const playerShortcutsSchema = z
   .strict()
   .superRefine((shortcuts, context) => {
     const ids = shortcuts.pins.map(({ brawlhallaId }) => brawlhallaId)
+
     if (new Set(ids).size !== ids.length) {
       context.addIssue({ code: 'custom', message: 'Pinned shortcuts cannot contain duplicates', path: ['pins'] })
     }
+
     if (shortcuts.primary && ids.includes(shortcuts.primary.brawlhallaId)) {
       context.addIssue({ code: 'custom', message: 'Primary Player cannot also be pinned', path: ['pins'] })
     }

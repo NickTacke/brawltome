@@ -16,6 +16,7 @@ describe('stored Player Reference', () => {
     const renamedId = storedId + 7
     const leaderboardOnlyId = storedId + 8
     const rollback = new Error('rollback Player Reference integration test')
+
     const database = createDatabase(process.env.DATABASE_URL as string, {
       maxConnections: 1,
       applicationName: 'player-reference-test',
@@ -24,12 +25,14 @@ describe('stored Player Reference', () => {
     try {
       await database.db.transaction(async (transaction) => {
         const archiveChecksum = 'a'.repeat(64)
+
         await transaction.execute(sql`
           INSERT INTO players.discovery_aliases (brawlhalla_id, normalized_alias, display_alias, observed_at)
           VALUES
             (${storedId}, 'canonical alias', 'Canonical Alias', '2026-08-10T00:00:00Z'),
             (${storedId}, 'stored player', 'STORED PLAYER', '2026-08-10T00:00:00Z')
         `)
+
         await transaction.execute(sql`
           INSERT INTO players.legacy_discovery_aliases
             (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
@@ -49,7 +52,9 @@ describe('stored Player Reference', () => {
                 legacyRating: 1_800,
               }
             }
+
             if (brawlhallaId === placeholderId) return { brawlhallaId, name: `Player ${brawlhallaId}` }
+
             if (brawlhallaId === rankedId) {
               return {
                 brawlhallaId,
@@ -58,12 +63,15 @@ describe('stored Player Reference', () => {
                 legacyRating: 2_000,
               }
             }
+
             if (brawlhallaId === careerPriorityId || brawlhallaId === invalidCareerId) {
               return { brawlhallaId, name: 'Ranked Name' }
             }
+
             if (brawlhallaId === renamedId) {
               return { brawlhallaId, name: 'Renamed Player', observedAt: new Date('2026-10-05T12:00:00Z') }
             }
+
             if (brawlhallaId === storedMetadataId) {
               return {
                 brawlhallaId,
@@ -72,33 +80,41 @@ describe('stored Player Reference', () => {
                 legacyRating: 1_800,
               }
             }
+
             return null
           },
           async (brawlhallaId) => {
             if (brawlhallaId === rankedId) {
               return { brawlhallaId, name: 'Career Name', bestLegendNameKey: 'ragnir' }
             }
+
             if (brawlhallaId === careerId) {
               return { brawlhallaId, name: 'Canonical Career Player' }
             }
+
             if (brawlhallaId === careerPriorityId) {
               return { brawlhallaId, name: 'Career Name' }
             }
+
             if (brawlhallaId === invalidCareerId) {
               return { brawlhallaId, name: `Player ${brawlhallaId}` }
             }
+
             if (brawlhallaId === renamedId) {
               return { brawlhallaId, name: 'Legacy Career Name', observedAt: new Date('2024-01-01T00:00:00Z') }
             }
+
             return null
           },
           async (brawlhallaId) => {
             if (brawlhallaId === renamedId) {
               return { brawlhallaId, name: 'Older Leaderboard Name', observedAt: new Date('2026-10-01T00:00:00Z') }
             }
+
             if (brawlhallaId === leaderboardOnlyId) {
               return { brawlhallaId, name: 'Leaderboard Climber', observedAt: new Date('2026-10-05T00:00:00Z') }
             }
+
             return null
           },
         )
@@ -110,6 +126,7 @@ describe('stored Player Reference', () => {
           bestLegendNameKey: 'bodvar',
           legacyRating: 1_800,
         })
+
         expect(await queries.byId(rankedId)).toEqual({
           brawlhallaId: rankedId,
           name: 'Career Name',
@@ -117,21 +134,25 @@ describe('stored Player Reference', () => {
           bestLegendNameKey: 'teros',
           legacyRating: 2_000,
         })
+
         expect(await queries.byId(careerId)).toEqual({
           brawlhallaId: careerId,
           name: 'Canonical Career Player',
           aliases: [],
         })
+
         expect(await queries.byId(careerPriorityId)).toEqual({
           brawlhallaId: careerPriorityId,
           name: 'Career Name',
           aliases: [],
         })
+
         expect(await queries.byId(invalidCareerId)).toEqual({
           brawlhallaId: invalidCareerId,
           name: 'Ranked Name',
           aliases: [],
         })
+
         expect(await queries.byId(storedMetadataId)).toEqual({
           brawlhallaId: storedMetadataId,
           name: 'Stored Name',
@@ -139,12 +160,15 @@ describe('stored Player Reference', () => {
           bestLegendNameKey: 'teros',
           legacyRating: 1_800,
         })
+
         expect(await queries.byId(renamedId)).toEqual({ brawlhallaId: renamedId, name: 'Renamed Player', aliases: [] })
+
         expect(await queries.byId(leaderboardOnlyId)).toEqual({
           brawlhallaId: leaderboardOnlyId,
           name: 'Leaderboard Climber',
           aliases: [],
         })
+
         expect(await queries.byId(placeholderId)).toBeNull()
         expect(await queries.byId(storedId - 1)).toBeNull()
         throw rollback

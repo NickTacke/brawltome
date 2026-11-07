@@ -44,7 +44,9 @@ describe('accountPreferencesSchema', () => {
         theme: 'dark',
       }),
     ).toThrow()
+
     expect(() => accountPreferencesSchema.parse({ version: 2, leaderboardBracket: '1v1' })).toThrow()
+
     expect(() =>
       accountPreferencesSchema.parse({
         version: 1,
@@ -79,7 +81,9 @@ describe('accountViewSchema', () => {
       ...signedInView,
       account: { ...signedInView.account, avatarUrl: 'https://cdn.discordapp.com/avatar.png' },
     })
+
     if (result.status !== 'signedIn') throw new Error('Expected signed-in account')
+
     expect(result.account).toMatchObject({ avatarUrl: 'https://cdn.discordapp.com/avatar.png' })
   })
 
@@ -90,12 +94,14 @@ describe('accountViewSchema', () => {
         account: { ...signedInView.account, createdAt: '2026-08-09T19:42:01+01:00' },
       }),
     ).toThrow()
+
     expect(() =>
       accountViewSchema.parse({
         ...signedInView,
         account: { ...signedInView.account, providerAccountId: 'discord-42' },
       }),
     ).toThrow()
+
     expect(() => accountViewSchema.parse({ status: 'anonymous', session: { id: 'secret' } })).toThrow()
   })
 })
@@ -123,6 +129,7 @@ describe('pinnedPlayersSchema', () => {
     expect(parsePinnedPlayersOutput(pinnedPlayers)).toEqual(pinnedPlayers)
     expect(() => parsePinnedPlayersOutput([{ ...pinnedPlayers[0], accountId: signedInView.account.id }])).toThrow()
     expect(() => parsePinnedPlayersOutput([{ ...pinnedPlayers[0], following: true }])).toThrow()
+
     expect(() =>
       parsePinnedPlayersOutput([
         {
@@ -135,6 +142,7 @@ describe('pinnedPlayersSchema', () => {
 
   test('keeps the add cap separate from the legacy collection output cap', () => {
     expect(MAX_PINNED_PLAYERS).toBe(20)
+
     const legacyTwentyOnePlayers = Array.from({ length: 21 }, (_, index) => ({
       ...pinnedPlayer,
       brawlhallaId: index + 1,
@@ -144,6 +152,7 @@ describe('pinnedPlayersSchema', () => {
     }))
 
     expect(parsePinnedPlayersOutput(legacyTwentyOnePlayers)).toHaveLength(21)
+
     expect(() =>
       parsePinnedPlayersOutput(
         Array.from({ length: 101 }, (_, index) => ({
@@ -160,9 +169,11 @@ describe('pinnedPlayersSchema', () => {
   test('requires a complete duplicate-free order payload shape', () => {
     expect(pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
     expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+
     expect(() =>
       pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
     ).toThrow()
+
     expect(() =>
       pinnedPlayerOrderInputSchema.parse({ accountId: signedInView.account.id, brawlhallaIds: [42] }),
     ).toThrow()
@@ -189,6 +200,7 @@ describe('playerShortcutsSchema', () => {
     expect(parsePlayerShortcutsOutput(shortcuts)).toEqual(shortcuts)
     expect(() => parsePlayerShortcutsOutput({ ...shortcuts, accountId: signedInView.account.id })).toThrow()
     expect(() => parsePlayerShortcutsOutput({ ...shortcuts, pins: [...shortcuts.pins, shortcuts.primary] })).toThrow()
+
     expect(() =>
       parsePlayerShortcutsOutput({
         ...shortcuts,
@@ -203,6 +215,7 @@ describe('playerShortcutsSchema', () => {
   test('bounds a duplicate-free complete pin order payload', () => {
     expect(pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [43, 42] })).toEqual({ brawlhallaIds: [43, 42] })
     expect(() => pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: [42, 42] })).toThrow()
+
     expect(() =>
       pinnedPlayerOrderInputSchema.parse({ brawlhallaIds: Array.from({ length: 101 }, (_, index) => index + 1) }),
     ).toThrow()
@@ -236,6 +249,7 @@ describe('primaryPlayerVerificationStateSchema', () => {
     }
 
     expect(parsePrimaryPlayerVerificationStateOutput(state)).toEqual(state)
+
     expect(() =>
       parsePrimaryPlayerVerificationStateOutput({
         ...state,
@@ -251,12 +265,14 @@ describe('primaryPlayerVerificationStateSchema', () => {
       completedAt: '2026-08-10T10:02:00.000Z',
       player: null,
     }
+
     expect(() =>
       parsePrimaryPlayerVerificationStateOutput({
         primaryPlayer: null,
         attempts: [{ ...base, status: 'pending' }],
       }),
     ).toThrow()
+
     expect(() =>
       parsePrimaryPlayerVerificationStateOutput({
         primaryPlayer: null,

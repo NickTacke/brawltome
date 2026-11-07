@@ -53,7 +53,9 @@ const officialNode = {
     legend: { title: 'Hattori', slug: 'hattori' },
   },
 }
+
 const officialResponse = (...nodes: unknown[]) => ({ data: { crossovers: { nodes } } })
+
 const costumes = [
   { costumeName: 'Viking', skinId: 3, ownerHero: 'Viking', isCrossover: false },
   { costumeName: 'Cena', skinId: 408, ownerHero: 'Ninja', isCrossover: true },
@@ -64,6 +66,7 @@ test('requires an explicit complete extract root before refresh', () => {
   expect(() => resolveExtractRoot('research/swz-extract/out')).toThrow(preflightMessage)
 
   const root = mkdtempSync(join(tmpdir(), 'brawltome-extract-'))
+
   try {
     mkdirSync(join(root, 'Game'))
     writeFileSync(join(root, 'Game', '_manifest.json'), '[]')
@@ -143,6 +146,7 @@ test('validates skins against legends before generated files are emitted', () =>
 test('leaves disposable generated outputs untouched when late refresh validation fails', async () => {
   const root = mkdtempSync(join(tmpdir(), 'brawltome-refresh-'))
   const outputDir = join(root, 'generated')
+
   const generatedPaths = ['legends.ts', 'levels.ts', 'powers.ts', 'hurtboxes.ts', 'skins.ts'].map((name) =>
     join(outputDir, name),
   )
@@ -152,6 +156,7 @@ test('leaves disposable generated outputs untouched when late refresh validation
     mkdirSync(join(root, 'Init'))
     mkdirSync(outputDir)
     for (const path of generatedPaths) writeFileSync(path, 'sentinel')
+
     writeFileSync(
       join(root, 'Game', '_manifest.json'),
       JSON.stringify([
@@ -161,36 +166,45 @@ test('leaves disposable generated outputs untouched when late refresh validation
         { i: 3, sniff: 'binary' },
       ]),
     )
+
     writeFileSync(join(root, 'Init', '_manifest.json'), JSON.stringify([{ i: 0, sniff: 'LevelTypes' }]))
+
     writeFileSync(
       join(root, 'Game', 'entry-000.xml'),
       '<Root><HeroType id="1"><HeroID>3</HeroID><HeroName>Viking</HeroName><HeroDisplayName>Bodvar</HeroDisplayName></HeroType><HeroType id="2"><HeroID>3</HeroID><HeroName>Ninja</HeroName><HeroDisplayName>Hattori</HeroDisplayName></HeroType></Root>',
     )
+
     writeFileSync(
       join(root, 'Init', 'entry-000.xml'),
       '<Root><LevelType id="1"><LevelID>1</LevelID><LevelName>TestMap</LevelName><DisplayName>Test Map</DisplayName></LevelType></Root>',
     )
+
     writeFileSync(
       join(root, 'Game', 'entry-001.bin'),
       'powerTypes\nPowerName,PowerID,BaseDamage,VariableImpulse,FixedImpulse,MinimumImpulse,CastTime,FixedRecoverTime,RecoverTime,FixedStunTime,CooldownTime,OnHitCooldownTime,AoERadiusX,AoERadiusY,IsAirPower,IsSignature,IsAntiair,IsMultihit,EndOnHit,CancelGravity,WallCancel,Hurtbox\nTestPower,1,1,0,0,0,1,1,1,0,0,0,0,0,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,FALSE,TestBox\n',
     )
+
     writeFileSync(
       join(root, 'Game', 'entry-002.bin'),
       'hurtboxTypes\nHurtboxName,HurtboxID,AnimClass,AnimName,Width,Height\nTestBox,1,Test,Idle,1,1\n',
     )
+
     writeFileSync(
       join(root, 'Game', 'entry-003.bin'),
       'costumeTypes\nCostumeName,CostumeID,OwnerHero,IsCrossover\nViking,3,Viking,FALSE\n',
     )
 
     let fetchCalls = 0
+
     const fetcher: typeof fetch = Object.assign(
       async () => {
         fetchCalls++
+
         return new Response(JSON.stringify(officialResponse()), { status: 200 })
       },
       { preconnect: () => {} },
     )
+
     await expect(refreshGeneratedData(root, fetcher, outputDir)).rejects.toThrow('legend heroId contains duplicate 3')
     expect(fetchCalls).toBe(1)
     for (const path of generatedPaths) expect(readFileSync(path, 'utf8')).toBe('sentinel')
@@ -203,10 +217,12 @@ describe('official crossover fetch', () => {
   test('posts the exact GraphQL request to the official CMS', async () => {
     let requestUrl = ''
     let requestInit: RequestInit | undefined
+
     const fetcher: typeof fetch = Object.assign(
       async (input: string | URL | Request, init?: RequestInit) => {
         requestUrl = String(input)
         requestInit = init
+
         return new Response(JSON.stringify(officialResponse(officialNode)), { status: 200 })
       },
       { preconnect: () => {} },
@@ -215,11 +231,13 @@ describe('official crossover fetch', () => {
     await fetchOfficialCrossovers(fetcher)
 
     expect(requestUrl).toBe('https://cms.brawlhalla.com/graphql')
+
     expect(requestInit).toEqual({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ query: OFFICIAL_CROSSOVER_QUERY }),
     })
+
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       query: `{
   crossovers(first: 500, where: {orderby: {field: DATE, order: ASC}}) {
@@ -270,6 +288,7 @@ describe('official crossover parsing', () => {
     expect(() => parseOfficialCrossovers(officialResponse({ ...officialNode, title: '  ' }))).toThrow(
       'official crossover row 0 has invalid title',
     )
+
     expect(() =>
       parseOfficialCrossovers(
         officialResponse({
@@ -284,6 +303,7 @@ describe('official crossover parsing', () => {
     expect(() =>
       parseOfficialCrossovers(officialResponse(officialNode, { ...officialNode, title: 'Second', slug: 'john-cena' })),
     ).toThrow('duplicate official crossover slug john-cena')
+
     expect(() =>
       parseOfficialCrossovers(
         officialResponse(officialNode, { ...officialNode, title: 'Jöhn-Cena', slug: 'john-cena-alt' }),
@@ -361,6 +381,7 @@ describe('skin catalog join', () => {
     expect(() => buildSkinCatalog([{ ...costumes[0], ownerHero: 'Missing' }], legends, [], {})).toThrow(
       'skin Viking (3) has unknown owner Missing',
     )
+
     expect(() =>
       buildSkinCatalog([{ ...costumes[1], ownerHero: 'Missing' }], legends, roster(), { Cena: 'john-cena' }),
     ).toThrow('skin Cena (408) has unknown owner Missing')
@@ -370,14 +391,17 @@ describe('skin catalog join', () => {
     expect(() => buildSkinCatalog([{ ...costumes[1], costumeName: 'Unknown' }], legends, [], {})).toThrow(
       'crossover skin Unknown (408) has no official roster entry',
     )
+
     expect(() =>
       buildSkinCatalog(costumes.slice(1), legends, [{ ...roster()[0], legendSlug: 'bodvar' }], {
         Cena: 'john-cena',
       }),
     ).toThrow('crossover skin Cena (408) owner HATTORI conflicts with official bodvar')
+
     expect(() =>
       buildSkinCatalog([costumes[0], { ...costumes[0], costumeName: 'Duplicate' }], legends, [], {}),
     ).toThrow('duplicate skin id 3')
+
     expect(() => buildSkinCatalog(costumes.slice(1), legends, roster(), { Cena: 'missing-slug' })).toThrow(
       'alias Cena targets missing official roster slug missing-slug',
     )

@@ -41,13 +41,16 @@ const admission: AdmissionConfig = {
 
 beforeEach(async () => {
   const configuredUrl = new URL(process.env.DATABASE_URL ?? 'postgres://unset')
+
   if (configuredUrl.hostname !== '127.0.0.1' || configuredUrl.port !== '55436') {
     throw new Error('Statistics tests require dedicated PostgreSQL 127.0.0.1:55436')
   }
+
   database = await createTestDatabase({
     label: 'statistics_cohort',
     modules: [refreshOperationsModule, statisticsModule],
   })
+
   connectionString = database.connectionString
 })
 
@@ -98,8 +101,10 @@ async function enqueue(
     provenance: { source: 'statistics-cohort-reconciliation', requestedBy: 'issue-209' },
     maxAttempts,
   })
+
   await statistics.recordCollectionOperation(intent, accepted.operationId)
   await operations.activateStatisticsCollection(accepted.operationId)
+
   return accepted.operationId
 }
 
@@ -153,15 +158,19 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
     const generation = await statistics.reconcileLaunchCohort(fullSnapshots(1))
+
     expect(generation.state).toBe('insufficient-evidence')
     expect(generation.cells).toHaveLength(18)
     expect(await statistics.collectionIntents()).toEqual([])
     const publicationIntents = await statistics.publicationIntents()
+
     expect(publicationIntents).toEqual([
       expect.objectContaining({ generationId: generation.generationId, product: 'ranked' }),
       expect.objectContaining({ generationId: generation.generationId, product: 'lifetime' }),
     ])
+
     const intent = publicationIntents[0]
+
     const reserved = await operations.reserveStatisticsPublication({
       kind: intent.kind,
       dedupeKey: intent.operationKey,
@@ -171,10 +180,13 @@ describe('Statistics EU Diamond+ production tracer', () => {
       provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
       maxAttempts: 3,
     })
+
     expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
     expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
     const publication = await operations.claim('insufficient-publication', 1_000, admission, 'statistics-publication')
+
     if (!publication || publication.kind !== 'statistics-publication') throw new Error('publication lease missing')
+
     const rejected = await statistics.validateAndPublish({
       operationId: publication.operationId,
       effectOperationId: publication.effectOperationId,
@@ -185,6 +197,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
       generationId: publication.payload.generationId,
       product: publication.payload.product,
     })
+
     expect(rejected.decision?.outcome).toBe('rejected')
     expect(rejected.decision?.reasons).toContainEqual(expect.objectContaining({ code: 'cell-minimum-not-met' }))
   })
@@ -195,6 +208,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const first = createPostgresStatistics(firstClient)
     const second = createPostgresStatistics(database)
     const [left, right] = await Promise.all([first.reconcileCohort(snapshot(1)), second.reconcileCohort(snapshot(2))])
+
     expect(right).toEqual(left)
     expect(left.members).toHaveLength(3)
 
@@ -202,6 +216,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const restartedClient = openTestClient(database.connectionString)
     const restarted = createPostgresStatistics(restartedClient)
     const afterRestart = await restarted.reconcileCohort(snapshot(3))
+
     await restartedClient.close()
 
     expect(afterRestart).toEqual(left)
@@ -211,13 +226,16 @@ describe('Statistics EU Diamond+ production tracer', () => {
   test('repairs missing cross-owner enqueue with exactly two stable independent operations per member', async () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(10))
     const intents = await statistics.collectionIntents()
+
     expect(intents).toHaveLength(6)
     await Promise.all(intents.map((intent) => enqueue(statistics, operations, intent)))
     expect(await statistics.collectionIntents()).toEqual([])
 
     const firstIntent = intents[0]
+
     const repeated = await operations.reserveStatisticsCollection({
       kind: firstIntent.kind,
       dedupeKey: firstIntent.operationKey,
@@ -227,12 +245,18 @@ describe('Statistics EU Diamond+ production tracer', () => {
       provenance: { source: 'statistics-cohort-reconciliation', requestedBy: 'issue-209' },
       maxAttempts: 2,
     })
+
     const audit = await statistics.getCohort()
     const member = audit?.members.find(({ brawlhallaId }) => brawlhallaId === firstIntent.brawlhallaId)
+
     if (!member) throw new Error('reconciled member missing')
+
     const recordedOperationId = firstIntent.product === 'ranked' ? member.rankedOperationId : member.lifetimeOperationId
+
     if (!recordedOperationId) throw new Error('reconciled operation reference missing')
+
     expect(repeated.operationId).toBe(recordedOperationId)
+
     await expect(
       operations.reserveStatisticsCollection({
         kind: firstIntent.kind,
@@ -248,17 +272,20 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('prevents truncating immutable cohort and observation ledgers', async () => {
     const statistics = createPostgresStatistics(database)
+
     await statistics.reconcileCohort(snapshot(15, 1))
     for (const table of ['observations', 'collection_operations', 'cohort_members', 'cohorts']) {
       const mutation = Bun.spawn(
         ['psql', connectionString, '-v', 'ON_ERROR_STOP=1', '-c', `TRUNCATE statistics.${table} CASCADE`],
         { stdout: 'pipe', stderr: 'pipe' },
       )
+
       const [exitCode, stderr] = await Promise.all([
         mutation.exited,
         new Response(mutation.stderr).text(),
         new Response(mutation.stdout).text(),
       ])
+
       expect(exitCode).not.toBe(0)
       expect(stderr).toContain('statistics cohort evidence is immutable')
     }
@@ -267,53 +294,69 @@ describe('Statistics EU Diamond+ production tracer', () => {
   test('tracks ranked success independently while lifetime exhausts bounded retries', async () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(20, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
     const ranked = await operations.claim('ranked-worker', 1_000, admission, 'statistics-ranked-collection')
+
     expect(ranked?.kind).toBe('statistics-ranked-collection')
     if (!ranked || ranked.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
+
     await expect(
       statistics.commitObservation({
         authorization: { ...authorization(ranked), kind: ranked.kind },
         evidence: { legends: [] } as never,
       }),
     ).rejects.toThrow('brawlhallaId')
+
     expect(
       await statistics.commitObservation({
         authorization: { ...authorization(ranked), kind: ranked.kind },
         evidence: rankedEvidence(ranked.payload.brawlhallaId),
       }),
     ).toBe('applied')
+
     expect(await operations.complete(ranked)).toBe('transitioned')
 
     const lifetime = await operations.claim('lifetime-worker', 1_000, admission, 'statistics-lifetime-collection')
+
     if (!lifetime || lifetime.kind !== 'statistics-lifetime-collection') throw new Error('lifetime lease missing')
+
     const retryControl = postgres(connectionString, { max: 1 })
+
     await retryControl`
       UPDATE refresh_operations.operations SET available_at = 'infinity'
       WHERE kind = 'statistics-lifetime-collection' AND id <> ${lifetime.operationId} AND status = 'pending'
     `
+
     await operations.fail(lifetime, { code: 'source_failed', message: 'temporary', retryable: true }, 0)
     const retry = await operations.claim('lifetime-worker', 1_000, admission, 'statistics-lifetime-collection')
+
     if (!retry || retry.kind !== 'statistics-lifetime-collection') throw new Error('lifetime retry missing')
+
     expect(retry.operationId).toBe(lifetime.operationId)
     await operations.fail(retry, { code: 'source_failed', message: 'still broken', retryable: true }, 0)
+
     await retryControl`
       UPDATE refresh_operations.operations SET available_at = clock_timestamp()
       WHERE kind = 'statistics-lifetime-collection' AND available_at = 'infinity'
     `
+
     await retryControl.end()
 
     const after = await statistics.getCohort()
     const observed = after?.members.find(({ brawlhallaId }) => brawlhallaId === ranked.payload.brawlhallaId)
+
     expect(observed?.rankedSucceededAt).not.toBeNull()
     expect(observed?.lifetimeSucceededAt).toBeNull()
 
     const sql = postgres(connectionString, { max: 1 })
+
     try {
       const [failed] = await sql<{ status: string; attempt_count: number }[]>`
         SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${retry.operationId}
       `
+
       expect(failed).toEqual({ status: 'dead_letter', attempt_count: 2 })
     } finally {
       await sql.end()
@@ -323,14 +366,20 @@ describe('Statistics EU Diamond+ production tracer', () => {
   test('does not spend execution attempts on admission deferral and caps replay-inclusive source attempts at three', async () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(23, 1))
     const rankedIntent = (await statistics.collectionIntents()).find(({ product }) => product === 'ranked')
+
     if (!rankedIntent) throw new Error('ranked intent missing')
+
     const operationId = await enqueue(statistics, operations, rankedIntent, 3)
 
     const denied = await operations.claim('admission-denied', 1_000, admission, 'statistics-ranked-collection')
+
     if (!denied || denied.kind !== 'statistics-ranked-collection') throw new Error('denied lease missing')
+
     expect(denied.attemptNumber).toBe(1)
+
     expect(
       await operations.defer(
         denied,
@@ -341,14 +390,18 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
       const lease = await operations.claim('source-worker', 1_000, admission, 'statistics-ranked-collection')
+
       if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('source lease missing')
+
       expect(lease.attemptNumber).toBe(attemptNumber)
+
       expect(
         await statistics.recordCollectionAttempt({
           ...authorization(lease),
           attemptNumber: lease.attemptNumber,
         }),
       ).toBe('recorded')
+
       expect(
         await operations.fail(
           lease,
@@ -359,14 +412,19 @@ describe('Statistics EU Diamond+ production tracer', () => {
     }
 
     const deadLetters = createPostgresDeadLetterOperations(database)
+
     const replay = await deadLetters.replayDeadLetter({
       operationId,
       actorId: 'operator:capacity-test',
       reason: 'verify replay-inclusive source cap',
     })
+
     if (replay.outcome !== 'replayed') throw new Error('Statistics replay missing')
+
     const replayLease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
+
     if (!replayLease || replayLease.kind !== 'statistics-ranked-collection') throw new Error('replay lease missing')
+
     expect(
       await statistics.preflightCollectionAttempt({
         ...authorization(replayLease),
@@ -375,12 +433,14 @@ describe('Statistics EU Diamond+ production tracer', () => {
     ).toBe('capacity-exceeded')
 
     const sql = postgres(connectionString, { max: 1 })
+
     try {
       const [attempts] = await sql<{ count: string }[]>`
         SELECT count(*)::text AS count FROM statistics.collection_attempts
         WHERE cohort_id = ${replayLease.payload.cohortId}
           AND brawlhalla_id = ${replayLease.payload.brawlhallaId} AND product = 'ranked'
       `
+
       expect(attempts.count).toBe('3')
     } finally {
       await sql.end()
@@ -390,23 +450,29 @@ describe('Statistics EU Diamond+ production tracer', () => {
   test('acknowledges an already-applied observation by durable identity when current evidence changes or drifts', async () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(25, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
     const lease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
+
     if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
+
     const durableAuthorization = { ...authorization(lease), kind: lease.kind }
+
     expect(
       await statistics.commitObservation({
         authorization: durableAuthorization,
         evidence: rankedEvidence(lease.payload.brawlhallaId),
       }),
     ).toBe('applied')
+
     expect(
       await statistics.commitObservation({
         authorization: durableAuthorization,
         evidence: { ...rankedEvidence(lease.payload.brawlhallaId), rating: 2200, peakRating: 2300 },
       }),
     ).toBe('already-applied')
+
     expect(
       await statistics.commitObservation({
         authorization: durableAuthorization,
@@ -415,16 +481,19 @@ describe('Statistics EU Diamond+ production tracer', () => {
     ).toBe('already-applied')
 
     const sql = postgres(connectionString, { max: 1 })
+
     try {
       const [stored] = await sql<{ count: string; rating: number }[]>`
         SELECT count(*)::text AS count, max((evidence->>'rating')::integer) AS rating
         FROM statistics.observations
         WHERE effect_operation_id = ${lease.effectOperationId}
       `
+
       expect(stored).toEqual({ count: '1', rating: 2000 })
     } finally {
       await sql.end()
     }
+
     expect(await operations.complete(lease)).toBe('transitioned')
   })
 
@@ -432,20 +501,26 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const statistics = createPostgresStatistics(database)
     const first = createPostgresRefreshOperations({ database })
     const second = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(30, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, first, intent)))
     const expired = await first.claim('expired-worker', 20, admission, 'statistics-lifetime-collection')
+
     if (!expired || expired.kind !== 'statistics-lifetime-collection') throw new Error('expiring lease missing')
+
     await Bun.sleep(35)
     const replacement = await second.claim('replacement-worker', 1_000, admission, 'statistics-lifetime-collection')
+
     if (!replacement || replacement.kind !== 'statistics-lifetime-collection')
       throw new Error('replacement lease missing')
+
     expect(
       await statistics.commitObservation({
         authorization: { ...authorization(expired), kind: expired.kind },
         evidence: lifetimeEvidence(expired.payload.brawlhallaId),
       }),
     ).toBe('lease-lost')
+
     expect(
       await statistics.commitObservation({
         authorization: { ...authorization(replacement), kind: replacement.kind },
@@ -454,6 +529,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     ).toBe('applied')
 
     const blocked = await first.claim('concurrent-worker', 1_000, admission)
+
     expect(blocked).toBeNull()
     await second.complete(replacement)
   })
@@ -461,11 +537,15 @@ describe('Statistics EU Diamond+ production tracer', () => {
   test('recovers a committed final-attempt effect after worker crash without duplicating evidence', async () => {
     const statistics = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     await statistics.reconcileCohort(snapshot(40, 1))
+
     await Promise.all(
       (await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent, 1)),
     )
+
     const setup = postgres(connectionString, { max: 1 })
+
     const [finalAttempt] = await setup<{ id: string }[]>`
       WITH selected AS (
         SELECT id FROM refresh_operations.operations
@@ -478,38 +558,49 @@ describe('Statistics EU Diamond+ production tracer', () => {
       WHERE operation.id = selected.id
       RETURNING operation.id
     `
+
     await setup`
       UPDATE refresh_operations.operations SET available_at = 'infinity'
       WHERE kind = 'statistics-ranked-collection' AND id <> ${finalAttempt.id} AND status = 'pending'
     `
+
     await setup.end()
     const lease = await operations.claim('crashing-worker', 5_000, admission, 'statistics-ranked-collection')
+
     if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('crash lease missing')
+
     expect(lease.operationId).toBe(finalAttempt.id)
+
     expect(
       await statistics.commitObservation({
         authorization: { ...authorization(lease), kind: lease.kind },
         evidence: rankedEvidence(lease.payload.brawlhallaId),
       }),
     ).toBe('applied')
+
     const expire = postgres(connectionString, { max: 1 })
+
     await expire`
       UPDATE refresh_operations.operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${lease.operationId}
     `
+
     await expire.end()
     expect(await operations.claim('restart-worker', 1_000, admission, 'statistics-ranked-collection')).toBeNull()
 
     const sql = postgres(connectionString, { max: 1 })
+
     try {
       const [operation] = await sql<{ status: string; attempt_count: number }[]>`
         SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${lease.operationId}
       `
+
       const [count] = await sql<{ count: string }[]>`
         SELECT count(*)::text AS count FROM statistics.observations
         WHERE effect_operation_id = ${lease.effectOperationId}
       `
+
       expect(operation).toEqual({ status: 'succeeded', attempt_count: 1 })
       expect(count.count).toBe('1')
     } finally {

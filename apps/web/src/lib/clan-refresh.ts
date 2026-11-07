@@ -6,7 +6,9 @@ const CLAN_TTL_MS = 60 * 60 * 1_000
 
 function stale(value: string | null | undefined, now: number): boolean {
   if (!value) return true
+
   const timestamp = new Date(value).getTime()
+
   return !Number.isFinite(timestamp) || now - timestamp > CLAN_TTL_MS
 }
 
@@ -23,6 +25,7 @@ export function hasCompletedClanRefresh(
   pending: PendingClanSections,
 ): boolean {
   if (!next) return false
+
   return (
     (!pending.profile ||
       (!!next.profile.lastSuccessAt && next.profile.lastSuccessAt !== initial?.profile.lastSuccessAt)) &&

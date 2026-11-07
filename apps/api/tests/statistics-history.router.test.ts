@@ -81,6 +81,7 @@ function careerSnapshot(
     ...careerRow,
     medianDamagePerMinute: { numerator: damageNumerator, denominator: '1' },
   }
+
   return {
     snapshotId,
     generationId,
@@ -123,15 +124,19 @@ describe('statistics history routes', () => {
       '10000000-0000-4000-8000-000000000002',
       '2026-08-15T00:00:00.000Z',
     )
+
     const older = legendSnapshot(
       '10000000-0000-4000-8000-000000000011',
       '10000000-0000-4000-8000-000000000012',
       '2026-08-08T00:00:00.000Z',
     )
+
     const calls: unknown[] = []
+
     const caller = callerFor({
       async getLegendMetaHistory(input) {
         calls.push(input)
+
         return { status: 'available', ...input, entries: buildLegendMetaHistory([newer, older]) }
       },
       async getCareerWeaponUsageHistory(filters) {
@@ -140,6 +145,7 @@ describe('statistics history routes', () => {
     })
 
     const output = await caller.legendMetaHistory({ region: 'all', bracket: 'all' })
+
     expect(output).toMatchObject({
       status: 'available',
       filter: { region: 'all', bracket: 'all' },
@@ -155,6 +161,7 @@ describe('statistics history routes', () => {
         { snapshot: { snapshotId: older.snapshotId }, comparisonToPrevious: null },
       ],
     })
+
     expect(calls).toEqual([{ region: 'all', bracket: 'all' }])
   })
 
@@ -165,12 +172,14 @@ describe('statistics history routes', () => {
       '2026-08-15T00:00:00.000Z',
       '2',
     )
+
     const older = careerSnapshot(
       '10000000-0000-4000-8000-000000000031',
       '10000000-0000-4000-8000-000000000032',
       '2026-08-08T00:00:00.000Z',
       '1',
     )
+
     const caller = callerFor({
       async getLegendMetaHistory(input) {
         return { status: 'unavailable', reason: 'not-yet-published', ...input }
@@ -181,11 +190,14 @@ describe('statistics history routes', () => {
     })
 
     const output = await caller.careerWeaponUsageHistory({ region: 'all', bracket: 'all' })
+
     expect(output).toMatchObject({
       status: 'available',
       filters: { region: 'all', bracket: 'all' },
     })
+
     if (output.status === 'unavailable') throw new Error('expected Career history')
+
     expect(output.entries[0]?.comparisonToPrevious).toMatchObject({
       status: 'available',
       previousSnapshotId: older.snapshotId,
@@ -216,11 +228,13 @@ describe('statistics history routes', () => {
       reason: 'not_yet_published',
       filter: { region: 'EU', bracket: 'Platinum' },
     })
+
     await expect(caller.careerWeaponUsageHistory({ region: 'all', bracket: 'all' })).resolves.toEqual({
       status: 'unavailable',
       reason: 'not_yet_published',
       filters: { region: 'all', bracket: 'all' },
     })
+
     await expect(caller.legendMetaHistory({ region: 'EU', bracket: 'Platinum', depth: 20 } as never)).rejects.toThrow()
   })
 })

@@ -7,6 +7,7 @@ import { useReportWebVitals } from 'next/web-vitals'
 import { useEffect, useRef } from 'react'
 
 const vitalNames = ['LCP', 'INP', 'CLS', 'TTFB'] as const
+
 type VitalName = (typeof vitalNames)[number]
 
 export function AnalyticsProvider() {
@@ -16,6 +17,7 @@ export function AnalyticsProvider() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname change is the trigger
   useEffect(() => {
     const referrer = first.current ? referrerDomain(document.referrer, window.location.hostname) : undefined
+
     first.current = false
     track(referrer ? { name: 'pageview', referrerDomain: referrer } : { name: 'pageview' })
   }, [pathname])
@@ -29,15 +31,19 @@ export function AnalyticsProvider() {
   useEffect(() => {
     const onError = (event: ErrorEvent) =>
       track({ name: 'error.client', kind: 'unhandled', message: scrubError(String(event.message)) })
+
     const onRejection = (event: PromiseRejectionEvent) =>
       track({ name: 'error.client', kind: 'rejection', message: scrubError(String(event.reason)) })
+
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flushAnalytics()
     }
+
     window.addEventListener('error', onError)
     window.addEventListener('unhandledrejection', onRejection)
     document.addEventListener('visibilitychange', onVisibility)
     const timer = setInterval(flushAnalytics, 10_000)
+
     return () => {
       window.removeEventListener('error', onError)
       window.removeEventListener('unhandledrejection', onRejection)

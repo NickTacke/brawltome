@@ -125,8 +125,10 @@ export function useGameEvents() {
 
       if (disposed) {
         unlisten()
+
         return
       }
+
       unlistenFn = unlisten
 
       // Now safe to fetch the snapshot. Skip applying it if a live lifecycle
@@ -134,11 +136,13 @@ export function useGameEvents() {
       // state and the snapshot may be stale by the time it resolves).
       try {
         const snapshot = await invoke<DetectionStateSnapshot>('get_detection_state')
+
         if (disposed || sawLifecycleEvent) return
 
         if (snapshot.matchActive) {
           matchActiveRef.current = true
         }
+
         if (!snapshot.attached || snapshot.matchActive) return
 
         if (snapshot.ready) {
@@ -162,15 +166,18 @@ export function useGameEvents() {
       disposed = true
       unlistenFn?.()
       if (timerRef.current) clearTimeout(timerRef.current)
+
       if (statusHideTimerRef.current) clearTimeout(statusHideTimerRef.current)
     }
   }, [])
 
   useEffect(() => {
     const acknowledgement = renderAcknowledgement(acceptanceSampleId, opponents)
+
     if (!acknowledgement) return
 
     let paintedFrame = 0
+
     const committedFrame = requestAnimationFrame(() => {
       paintedFrame = requestAnimationFrame(() => {
         void invoke('complete_acceptance_sample', {
@@ -182,6 +189,7 @@ export function useGameEvents() {
         })
       })
     })
+
     return () => {
       cancelAnimationFrame(committedFrame)
       if (paintedFrame) cancelAnimationFrame(paintedFrame)

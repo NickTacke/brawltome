@@ -19,6 +19,7 @@ export async function initEmojis(rest: REST, clientId: string): Promise<void> {
 export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
   if (!restClient || !appClientId) {
     discordTelemetry.logger.warn('discord.emojis.not_initialized')
+
     return new Map()
   }
 
@@ -27,10 +28,12 @@ export async function loadEmojis(): Promise<Map<string, DiscordEmoji>> {
 
     emojiCache = new Map(response.items.map((e) => [e.name, e]))
     discordTelemetry.logger.info('discord.emojis.loaded', { emojiCount: emojiCache.size })
+
     return emojiCache
   } catch (error) {
     discordTelemetry.logger.error('discord.emojis.failed', error)
     emojiCache = new Map()
+
     return emojiCache
   }
 }
@@ -39,6 +42,7 @@ export function getEmoji(name: string, fallback = ''): string {
   if (!emojiCache) return fallback
 
   const emoji = emojiCache.get(name)
+
   if (emoji) {
     return `<:${emoji.name}:${emoji.id}>`
   }
@@ -48,6 +52,7 @@ export function getEmoji(name: string, fallback = ''): string {
 
 export function getBannerEmoji(tier: string | null): string {
   const baseTier = tier?.split(' ')[0]?.toLowerCase() || 'unranked'
+
   return getEmoji(`banner_${baseTier}`, getTierFallback(baseTier))
 }
 
@@ -62,6 +67,7 @@ function getTierFallback(tier: string): string {
     tin: '⚪',
     unranked: '➖',
   }
+
   return fallbacks[tier] || '➖'
 }
 

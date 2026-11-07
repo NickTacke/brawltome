@@ -15,6 +15,7 @@ export async function resolveInitialAccountTheme(
   loadPreferences: () => Promise<Pick<AccountPreferencesContract, 'theme'>>,
 ): Promise<AccountTheme | undefined> {
   if (!hasSession) return undefined
+
   try {
     return (await loadPreferences()).theme === 'purple' ? 'purple' : undefined
   } catch {
@@ -25,10 +26,13 @@ export async function resolveInitialAccountTheme(
 export function applyAccountTheme(theme: AccountTheme): void {
   const root = document.documentElement
   const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+
   document.cookie = `${ACCOUNT_THEME_COOKIE}=${theme}; Path=/; Max-Age=${theme === 'neutral' ? 0 : ACCOUNT_THEME_COOKIE_MAX_AGE}; SameSite=Lax${secure}`
   if (theme === 'neutral') {
     root.removeAttribute('data-theme')
+
     return
   }
+
   root.dataset.theme = theme
 }

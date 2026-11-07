@@ -50,6 +50,7 @@ export function expectedCompatibilityReasonCodes(
   older: StatisticsHistoryContractSnapshot,
 ): StatisticsHistoryCompatibilityReasonContract['code'][] {
   const reasons: StatisticsHistoryCompatibilityReasonContract['code'][] = []
+
   if (newer.season !== null || older.season !== null) {
     if (newer.season === null || older.season === null) {
       reasons.push('season_mismatch')
@@ -59,21 +60,27 @@ export function expectedCompatibilityReasonCodes(
       reasons.push('season_mismatch')
     }
   }
+
   if (newer.cohortMethodologyVersion !== older.cohortMethodologyVersion) {
     reasons.push('cohort_methodology_mismatch')
   }
+
   if (newer.methodologyVersion !== older.methodologyVersion) {
     reasons.push('metric_methodology_mismatch')
   }
+
   if (newer.scope.region !== older.scope.region || newer.scope.bracket !== older.scope.bracket) {
     reasons.push('scope_mismatch')
   }
+
   return reasons
 }
 
 export function directionFor(change: number | bigint): 'increase' | 'decrease' | 'unchanged' {
   if (change > 0) return 'increase'
+
   if (change < 0) return 'decrease'
+
   return 'unchanged'
 }
 
@@ -87,6 +94,7 @@ export function validateExactHistoryDeltaKeys(
 ): void {
   const expected = new Set(expectedKeys)
   const actual = new Set(actualKeys)
+
   if (
     expected.size !== expectedKeys.length ||
     actual.size !== actualKeys.length ||
@@ -117,10 +125,13 @@ export function validateHistoryStructure(
   if (new Set(entries.map(({ snapshot }) => snapshot.snapshotId)).size !== entries.length) {
     context.addIssue({ code: 'custom', message: 'history snapshot IDs must be unique', path: ['entries'] })
   }
+
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
     const previous = entries[index + 1]
+
     if (!entry) continue
+
     if (!previous) {
       if (entry.comparisonToPrevious !== null) {
         context.addIssue({
@@ -129,16 +140,20 @@ export function validateHistoryStructure(
           path: ['entries', index, 'comparisonToPrevious'],
         })
       }
+
       continue
     }
+
     if (!entry.comparisonToPrevious) {
       context.addIssue({
         code: 'custom',
         message: 'every adjacent history pair requires a comparison result',
         path: ['entries', index, 'comparisonToPrevious'],
       })
+
       continue
     }
+
     if (entry.comparisonToPrevious.previousSnapshotId !== previous.snapshot.snapshotId) {
       context.addIssue({
         code: 'custom',
@@ -146,7 +161,9 @@ export function validateHistoryStructure(
         path: ['entries', index, 'comparisonToPrevious', 'previousSnapshotId'],
       })
     }
+
     const expectedReasons = expectedCompatibilityReasonCodes(entry.snapshot, previous.snapshot)
+
     if (entry.comparisonToPrevious.status === 'available') {
       if (expectedReasons.length > 0) {
         context.addIssue({
@@ -163,7 +180,9 @@ export function validateHistoryStructure(
           path: ['entries', index, 'comparisonToPrevious'],
         })
       }
+
       const actualReasons = entry.comparisonToPrevious.reasons?.map(({ code }) => code) ?? []
+
       if (
         actualReasons.length !== expectedReasons.length ||
         actualReasons.some((reason, reasonIndex) => reason !== expectedReasons[reasonIndex])

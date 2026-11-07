@@ -13,6 +13,7 @@ export type RuntimeProcess = ReturnType<typeof spawnRuntime>
 export async function allocatePort(): Promise<number> {
   const reservation = Bun.serve({ port: 0, fetch: () => new Response('reserved') })
   const port = reservation.port
+
   await reservation.stop(true)
   if (port === undefined) throw new Error('Bun did not allocate a test port')
 
@@ -26,6 +27,7 @@ export function spawnRuntime(entrypoint: string, env: Record<string, string>) {
     stdout: 'pipe',
     stderr: 'pipe',
   })
+
   const stdout = new Response(process.stdout).text()
   const stderr = new Response(process.stderr).text()
 
@@ -39,8 +41,10 @@ export async function waitFor(
   intervalMs = 25,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (await check()) return
+
     await Bun.sleep(intervalMs)
   }
 
@@ -57,19 +61,25 @@ export async function healthStatus(port: number, endpoint: 'live' | 'ready' | 's
 
 export async function waitForRuntimeReady(runtime: RuntimeProcess, port: number, message: string): Promise<void> {
   let lastHealth = 'unreachable'
+
   try {
     await waitFor(
       async () => {
         if (runtime.process.exitCode !== null) {
           const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
+
           throw new Error(`${message} exited during startup\nstdout:\n${stdout}\nstderr:\n${stderr}`)
         }
+
         try {
           const response = await fetch(`http://127.0.0.1:${port}/health/ready`)
+
           lastHealth = `${response.status} ${await response.text()}`
+
           return response.status === 200
         } catch {
           lastHealth = 'unreachable'
+
           return false
         }
       },
@@ -89,12 +99,14 @@ export async function waitForExit(
     runtime.process.exited.then((exitCode) => ({ timedOut: false as const, exitCode })),
     Bun.sleep(timeoutMs).then(() => ({ timedOut: true as const, exitCode: -1 })),
   ])
+
   if (result.timedOut) {
     runtime.process.kill('SIGKILL')
     await runtime.process.exited
   }
 
   const [stdout, stderr] = await Promise.all([runtime.stdout, runtime.stderr])
+
   if (result.timedOut) {
     throw new Error(`Runtime did not exit within ${timeoutMs}ms\nstdout:\n${stdout}\nstderr:\n${stderr}`)
   }
@@ -110,11 +122,13 @@ export async function migrateDatabase(connectionString: string): Promise<void> {
     stdout: 'pipe',
     stderr: 'pipe',
   })
+
   const [exitCode, stdout, stderr] = await Promise.all([
     migration.exited,
     new Response(migration.stdout).text(),
     new Response(migration.stderr).text(),
   ])
+
   if (exitCode !== 0) throw new Error(`Migration failed\nstdout:\n${stdout}\nstderr:\n${stderr}`)
 }
 
@@ -126,6 +140,7 @@ export async function deferLeaderboardSchedules(database: Database): Promise<voi
   for (const definition of leaderboardScheduleDefinitions(config.leaderboard)) {
     await operations.reconcileLeaderboardSchedule(definition)
   }
+
   for (const definition of leaderboardDeepCrawlScheduleDefinitions(config.deepCrawl)) {
     await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
   }

@@ -48,6 +48,7 @@ function AppearanceImage({ player }: { player: ReplayReportPlayer }) {
 
 function PlayerIdentity({ player }: { player: ReplayReportPlayer }) {
   const name = <span className="block break-all text-lg font-black">{player.name}</span>
+
   return (
     <Card className={player.won ? 'border-primary/50' : undefined}>
       <CardContent className="p-4">
@@ -281,6 +282,7 @@ function ReplayDetails({ report }: { report: ReplayReport }) {
 
 export function ReplayReportView({ report }: { report: ReplayReport }) {
   const timestamp = report.playedAt ?? report.analyzedAt
+
   return (
     <article className="space-y-6" aria-label="Selected replay analysis">
       <header className="flex min-w-0 flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -316,6 +318,7 @@ export function ReplayReportView({ report }: { report: ReplayReport }) {
             <div className="grid gap-3 sm:grid-cols-2">
               {team.playerSlots.map((slot) => {
                 const player = report.players.find((candidate) => candidate.slot === slot)
+
                 return player ? <PlayerIdentity key={player.slot} player={player} /> : null
               })}
             </div>

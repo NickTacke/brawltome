@@ -48,17 +48,25 @@ import { createRuntimeTelemetry } from './telemetry'
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
 }
+
 const databaseUrl = process.env.DATABASE_URL
+
 if (!databaseUrl) throw new Error('DATABASE_URL is required')
+
 const refreshTrustSecret = process.env.REFRESH_TRUST_COOKIE_SECRET
+
 if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
   throw new Error('REFRESH_TRUST_COOKIE_SECRET must be set and at least 32 bytes')
 }
+
 const replayBridgeSecret = process.env.REPLAY_BRIDGE_SECRET
+
 if (!replayBridgeSecret || Buffer.byteLength(replayBridgeSecret) < 32) {
   throw new Error('REPLAY_BRIDGE_SECRET must be set and at least 32 bytes')
 }
+
 const authenticatedRefreshIpLimit = Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120)
+
 if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimit < 1) {
   throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
 }
@@ -73,33 +81,41 @@ const database = createApiDatabase(databaseUrl)
 const accountsRuntime = createPostgresAccounts(database)
 const { accounts } = accountsRuntime
 const careerPlayerQueries = createPostgresCareerPlayers(database)
+
 const rankedPlayerQueries = createPostgresRankedPlayers(database, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayerQueries.mainLegendById(brawlhallaId),
 })
+
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(database)
 const profileViews = createPostgresProfileViews(database)
 const leaderboardStandings = createPostgresLeaderboardRanked(database)
 const discovery = createPostgresDiscovery(database)
+
 const playerReferenceQueries = createDatabasePlayerReferenceQueries(
   database,
   (brawlhallaId) => rankedPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => careerPlayerQueries.referenceById(brawlhallaId),
   (brawlhallaId) => leaderboardPlayerNames.referenceById(brawlhallaId),
 )
+
 const refreshOperations = createPostgresRefreshOperations({ database })
 const refreshEvents = createRefreshEventStreams({ source: refreshOperations, telemetry })
+
 const requestAdmission = createPostgresRequestAdmission(database, {
   authenticatedIpLimit: authenticatedRefreshIpLimit,
   sourceLimits: { 'brawlhalla-v0': 180 },
 })
+
 const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
+
 const postgresReadiness = createPostgresReadiness(
   database.sql,
   apiModules.flatMap((module) => module.migrations),
 )
+
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
 
 const lifecycle = createRuntimeLifecycle({
@@ -176,6 +192,7 @@ app.route(
     logger: telemetry.logger,
   }),
 )
+
 app.route(
   '/api/overlay',
   createDesktopRankedRoutes({
@@ -185,10 +202,12 @@ app.route(
     requestAdmission,
   }),
 )
+
 app.route(
   '/internal/operations',
   createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
 )
+
 app.route('/events', createRefreshEventRoutes(refreshEvents))
 app.route('/api', createReplayAnalysisRoutes({ accounts, jobs: replayAnalysisJobs, webOrigin: authConfig.webOrigin }))
 app.route('/internal/replays', createReplayBridgeRoutes({ jobs: replayAnalysisJobs, secret: replayBridgeSecret }))
@@ -200,10 +219,12 @@ app.use(
     createContext: async (_opts, c) => {
       const clientIp = readClientIp(c.req.raw.headers)
       const ua = c.req.header('x-original-ua') ?? c.req.header('user-agent') ?? ''
+
       const isBot =
         /bot|crawl|spider|slurp|facebookexternalhit|meta-webindexer|bingpreview|yandex|baidu|duckduckbot|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider/i.test(
           ua,
         )
+
       const internalSecret = c.req.header('x-internal-secret') ?? undefined
       const discordInternalSecret = c.req.header('x-discord-internal-secret') ?? undefined
 
@@ -246,14 +267,17 @@ app.get('/metrics', async (c) => {
   if (!internalSecretValid(c.req.header('x-metrics-secret'), process.env.METRICS_SCRAPE_SECRET)) {
     return c.json({ error: 'unauthorized' }, 401)
   }
+
   try {
     const [operations, quota] = await Promise.all([
       refreshOperations.inspectTelemetry(),
       requestAdmission.inspectCurrentUsage(),
     ])
+
     for (const item of operations.oldestPending) {
       telemetry.metrics.set('operation_oldest_pending_age_ms', item.ageMs, { work_class: item.workClass })
     }
+
     for (const item of operations.deadLetters) {
       telemetry.metrics.set('operation_dead_letters', item.count, {
         work_class: item.workClass,
@@ -261,9 +285,11 @@ app.get('/metrics', async (c) => {
         reason: item.reason,
       })
     }
+
     for (const item of operations.scheduleLateness) {
       telemetry.metrics.set('schedule_lateness_ms', item.latenessMs, { kind: item.kind })
     }
+
     for (const item of quota.domains) {
       telemetry.metrics.set('source_quota_used', item.used, { domain: item.domain })
       telemetry.metrics.set('source_quota_limit', item.limit, { domain: item.domain })
@@ -271,6 +297,7 @@ app.get('/metrics', async (c) => {
   } catch (error) {
     telemetry.logger.error('metrics.measurement.failed', error)
   }
+
   return c.body(renderPrometheus(telemetry.metrics.snapshot()), 200, {
     'content-type': 'text/plain; version=0.0.4; charset=utf-8',
     'cache-control': 'no-store',
@@ -278,6 +305,7 @@ app.get('/metrics', async (c) => {
 })
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
+
 const instrumentedFetch = instrumentHttpHandler(
   telemetry,
   'api',
@@ -286,20 +314,26 @@ const instrumentedFetch = instrumentHttpHandler(
       request,
       server.current?.requestIP(request)?.address ?? '0.0.0.0',
     )
+
     let pathname: string
+
     try {
       pathname = new URL(verifiedRequest.url).pathname
     } catch {
       return Response.json({ error: 'invalid_request_url' }, { status: 400 })
     }
+
     if (pathname.startsWith('/health/')) return app.fetch(verifiedRequest)
+
     // Event streams outlive Bun's 10 s idle timeout between keep-alives; each stream bounds its own lifetime.
     if (pathname.startsWith('/events/')) server.current?.timeout(request, 0)
 
     const finishWork = lifecycle.startWork()
+
     if (!finishWork) {
       return Response.json({ error: 'service_unavailable' }, { status: 503, headers: { 'retry-after': '1' } })
     }
+
     try {
       return await app.fetch(verifiedRequest)
     } finally {
@@ -311,26 +345,33 @@ const instrumentedFetch = instrumentHttpHandler(
       internalSecretValid(request.headers.get('x-internal-secret') ?? undefined, process.env.INTERNAL_API_SECRET),
   },
 )
+
 server.current = Bun.serve({ port, fetch: instrumentedFetch })
 lifecycle.markReady()
 
 let shutdownRequested = false
+
 function requestShutdown(): void {
   if (shutdownRequested) return
+
   shutdownRequested = true
   // Keep serving while /health/serving reports draining, so Traefik stops routing here before admission stops.
   lifecycle.announceShutdown()
   // End open event streams now: browsers reconnect after the stream's retry delay and land on the replacement once
   // Traefik's serving check drops this container; until then this process answers them with another retry hint.
   refreshEvents.drain()
+
   setTimeout(() => {
     lifecycle.beginShutdown()
+
     void lifecycle.shutdown().then(({ drained, cleanupCompleted, errors }) => {
       if (!drained || !cleanupCompleted) process.exit(1)
+
       if (errors.length > 0) process.exitCode = 1
     })
   }, shutdownAnnounceMs)
 }
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, requestShutdown)
 
 telemetry.logger.info('api.started', { port })

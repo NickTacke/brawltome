@@ -45,6 +45,7 @@ const observedAt = '2026-08-10T12:00:00.000Z'
 
 function interaction(events: string[], query = '77') {
   let reply: InteractionEditReplyOptions | string | undefined
+
   return {
     value: {
       id: 'interaction-77',
@@ -56,11 +57,13 @@ function interaction(events: string[], query = '77') {
       editReply: async (value: InteractionEditReplyOptions | string) => {
         events.push('edit')
         reply = value
+
         return {} as never
       },
     } as unknown as ChatInputCommandInteraction,
     embed: () => {
       const embed = (reply as InteractionEditReplyOptions).embeds?.[0]
+
       return embed && 'toJSON' in embed ? embed.toJSON() : embed
     },
     response: () => reply as InteractionEditReplyOptions,
@@ -70,44 +73,53 @@ function interaction(events: string[], query = '77') {
 describe('Discord clan refresh polling', () => {
   test('keeps polling until every initially stale section advances', async () => {
     const initial = clan(null, null)
+
     const responses = [
       clan('2026-01-01T01:00:00.000Z', null),
       clan('2026-01-01T01:00:00.000Z', '2026-01-01T01:00:00.000Z'),
     ]
+
     let queries = 0
+
     const result = await pollClanUntilSectionsComplete(
       initial,
       2,
       async () => responses[queries++] ?? responses.at(-1) ?? null,
       async () => {},
     )
+
     expect(queries).toBe(2)
     expect(result?.roster?.lastSuccessAt).toBe('2026-01-01T01:00:00.000Z')
   })
 
   test('stops at the bounded poll limit when a section remains unavailable', async () => {
     let queries = 0
+
     await pollClanUntilSectionsComplete(
       null,
       2,
       async () => {
         queries++
+
         return clan('2026-01-01T01:00:00.000Z', null)
       },
       async () => {},
       3,
     )
+
     expect(queries).toBe(3)
   })
 
   test('does not wait past the interaction work deadline', async () => {
     let waits = 0
     let queries = 0
+
     await pollClanUntilSectionsComplete(
       clan(null, null),
       60,
       async () => {
         queries++
+
         return clan(observedAt, observedAt)
       },
       async () => {
@@ -117,6 +129,7 @@ describe('Discord clan refresh polling', () => {
       () => Date.parse(observedAt),
       Date.parse(observedAt) + 1_000,
     )
+
     expect(waits).toBe(0)
     expect(queries).toBe(0)
   })
@@ -127,6 +140,7 @@ describe('/clan canonical command', () => {
     const events: string[] = []
     const fake = interaction(events)
     const cached = clan(observedAt, observedAt)
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -134,6 +148,7 @@ describe('/clan canonical command', () => {
         refreshDiscord: {
           mutate: async () => {
             events.push('refresh')
+
             return { clan: cached, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
           },
         },
@@ -150,6 +165,7 @@ describe('/clan canonical command', () => {
 
   test('preserves canonical member counts in multi-result clan choices', async () => {
     const fake = interaction([], 'Clan')
+
     const cached = {
       ...clan(observedAt, observedAt),
       members: Array.from({ length: 6 }, (_, index) => ({
@@ -161,6 +177,7 @@ describe('/clan canonical command', () => {
         guildPoints: null,
       })),
     }
+
     const client = {
       search: {
         local: {
@@ -184,11 +201,13 @@ describe('/clan canonical command', () => {
     await createClanCommand({ client: client as never, now: () => Date.parse(observedAt) }).execute(fake.value)
 
     const json = JSON.stringify(fake.response().components)
+
     expect(json).toContain('"description":"8 members"')
     expect(json).toContain('"description":"42 members"')
     expect(json).not.toContain('"description":"0 members"')
 
     let selectedReply: InteractionEditReplyOptions | string | undefined
+
     const select = {
       id: 'combined-clan-select',
       user: { id: 'discord-user-77' },
@@ -198,6 +217,7 @@ describe('/clan canonical command', () => {
       deferUpdate: async () => {},
       editReply: async (next: InteractionEditReplyOptions | string) => {
         selectedReply = next
+
         return {} as never
       },
     } as unknown as StringSelectMenuInteraction
@@ -210,6 +230,7 @@ describe('/clan canonical command', () => {
   test('escapes canonical clan names in embed titles', async () => {
     const fake = interaction([])
     const cached = { ...clan(observedAt, observedAt), clanName: '[verify](https://attacker.example) @everyone' }
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -228,6 +249,7 @@ describe('/clan canonical command', () => {
 
   test('escapes upstream member names inside profile links', async () => {
     const fake = interaction([])
+
     const cached = {
       ...clan(observedAt, observedAt),
       members: [
@@ -241,6 +263,7 @@ describe('/clan canonical command', () => {
         },
       ],
     }
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -259,6 +282,7 @@ describe('/clan canonical command', () => {
   test('keeps stale cached clan data visible with rate-limit retry guidance', async () => {
     const fake = interaction([])
     const cached = clan('2026-08-10T10:00:00.000Z', observedAt)
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -284,12 +308,14 @@ describe('/clan canonical command', () => {
     const fresh = clan('2026-08-10T12:01:00.000Z', observedAt)
     let queries = 0
     const alreadyFake = interaction([])
+
     const alreadyClient = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
         byId: {
           query: async () => {
             queries++
+
             return fresh
           },
         },
@@ -305,15 +331,18 @@ describe('/clan canonical command', () => {
         },
       },
     }
+
     await createClanCommand({
       client: alreadyClient as never,
       wait: async () => {},
       now: () => Date.parse(observedAt),
     }).execute(alreadyFake.value)
+
     expect(queries).toBe(1)
     expect(alreadyFake.embed()?.fields?.[0]?.value).toContain('Profile: Updated')
 
     const failedFake = interaction([])
+
     const failedClient = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -321,10 +350,12 @@ describe('/clan canonical command', () => {
         refreshDiscord: { mutate: async () => Promise.reject(new Error('temporary failure')) },
       },
     }
+
     await createClanCommand({
       client: failedClient as never,
       now: () => Date.parse(observedAt),
     }).execute(failedFake.value)
+
     expect(failedFake.embed()?.title).toBe('Clan')
     expect(failedFake.embed()?.description).toContain('Update delayed. Try again')
   })
@@ -332,6 +363,7 @@ describe('/clan canonical command', () => {
   test('keeps non-completing active clan sections visibly refreshing', async () => {
     const fake = interaction([])
     const stale = clan(null, null)
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -363,6 +395,7 @@ describe('/clan canonical command', () => {
   test('does not present an unavailable roster as zero measured members', async () => {
     const fake = interaction([])
     const cached = clan(observedAt, null)
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {
@@ -386,6 +419,7 @@ describe('/clan canonical command', () => {
     const events: string[] = []
     let reply: InteractionEditReplyOptions | string | undefined
     const cached = clan(observedAt, observedAt)
+
     const value = {
       id: 'clan-select-77',
       user: { id: 'discord-user-77' },
@@ -398,15 +432,18 @@ describe('/clan canonical command', () => {
       editReply: async (next: InteractionEditReplyOptions | string) => {
         events.push('edit')
         reply = next
+
         return {} as never
       },
     } as unknown as StringSelectMenuInteraction
+
     const client = {
       clan: {
         byId: { query: async () => cached },
         refreshDiscord: {
           mutate: async () => {
             events.push('refresh')
+
             return { clan: cached, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
           },
         },
@@ -418,11 +455,13 @@ describe('/clan canonical command', () => {
     expect(events[0]).toBe('defer')
     const embed = (reply as InteractionEditReplyOptions).embeds?.[0]
     const json = embed && 'toJSON' in embed ? embed.toJSON() : embed
+
     expect(json?.title).toBe('Clan')
   })
 
   test('does not expose select pagination before a successful roster observation', async () => {
     let reply: InteractionEditReplyOptions | string | undefined
+
     const unavailableRoster = {
       ...clan(observedAt, null),
       members: Array.from({ length: 6 }, (_, index) => ({
@@ -434,6 +473,7 @@ describe('/clan canonical command', () => {
         guildPoints: null,
       })),
     }
+
     const value = {
       id: 'clan-select-unavailable-roster',
       user: { id: 'discord-user-77' },
@@ -443,9 +483,11 @@ describe('/clan canonical command', () => {
       deferUpdate: async () => {},
       editReply: async (next: InteractionEditReplyOptions | string) => {
         reply = next
+
         return {} as never
       },
     } as unknown as StringSelectMenuInteraction
+
     const client = {
       clan: {
         byId: { query: async () => unavailableRoster },
@@ -466,6 +508,7 @@ describe('/clan canonical command', () => {
   test('terminates safely when an expired pagination interaction cannot be answered', async () => {
     let replies = 0
     const expired = Object.assign(new Error('Unknown interaction'), { code: 10062 })
+
     const value = {
       customId: 'clan_page:missing:1',
       reply: async () => {
@@ -480,6 +523,7 @@ describe('/clan canonical command', () => {
 
   test('reports unavailable when no canonical clan data exists', async () => {
     const fake = interaction([])
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       clan: {

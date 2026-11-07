@@ -17,6 +17,7 @@ beforeAll(async () => {
     label: 'player_canonical_name',
     modules: [refreshOperationsModule, playerModule],
   })
+
   connectionString = database.connectionString
 }, 20_000)
 
@@ -56,6 +57,7 @@ describe('canonical Player names', () => {
     const source = createPostgresPlayerDiscoverySource(database)
     const ranked = createPostgresRankedPlayers(database)
     const career = createPostgresCareerPlayers(database)
+
     try {
       await insertCareer(control, 201, 'Imported Legacy', '2024-01-01T00:00:00Z', 'legacy-v2')
       await insertRanked(control, 201, 'Fresh Ranked', '2026-10-05T12:00:00Z')
@@ -63,6 +65,7 @@ describe('canonical Player names', () => {
       await insertRanked(control, 202, 'Older Ranked', '2026-10-01T00:00:00Z')
 
       const facts = new Map((await source.snapshot()).facts.map((fact) => [fact.brawlhallaId, fact]))
+
       expect(facts.get(201)).toMatchObject({ name: 'Fresh Ranked', aliases: ['Imported Legacy'] })
       expect(facts.get(202)).toMatchObject({ name: 'Fresh Career', aliases: ['Older Ranked'] })
 
@@ -70,6 +73,7 @@ describe('canonical Player names', () => {
         name: 'Fresh Ranked',
         observedAt: new Date('2026-10-05T12:00:00Z'),
       })
+
       expect(await career.referenceById(201)).toMatchObject({
         name: 'Imported Legacy',
         observedAt: new Date('2024-01-01T00:00:00Z'),

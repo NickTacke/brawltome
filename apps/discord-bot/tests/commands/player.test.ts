@@ -65,6 +65,7 @@ function careerProfile(freshness: 'fresh' | 'stale' = 'fresh') {
 
 function interaction(events: string[], query = 'Ada') {
   let reply: string | InteractionEditReplyOptions | undefined
+
   return {
     value: {
       id: 'interaction-42',
@@ -76,6 +77,7 @@ function interaction(events: string[], query = 'Ada') {
       editReply: async (value: string | InteractionEditReplyOptions) => {
         events.push('edit')
         reply = value
+
         return {} as never
       },
     } as unknown as ChatInputCommandInteraction,
@@ -97,6 +99,7 @@ function commandClient(options: {
   let rankedQueries = 0
   let careerQueries = 0
   const reference = options.reference === undefined ? { brawlhallaId: 42, name: 'Ada' } : options.reference
+
   return {
     value: {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
@@ -105,18 +108,21 @@ function commandClient(options: {
         rankedById: {
           query: async () => {
             rankedQueries++
+
             return rankedQueries > 1 && options.nextRanked !== undefined ? options.nextRanked : (options.ranked ?? null)
           },
         },
         careerById: {
           query: async () => {
             careerQueries++
+
             return options.career ?? null
           },
         },
         refreshDiscord: {
           mutate: async () => {
             if (options.throwRefresh) throw new Error('temporary transport failure')
+
             return { player: reference, refresh: options.refresh }
           },
         },
@@ -129,6 +135,7 @@ function commandClient(options: {
 
 function embedJson(fake: ReturnType<typeof interaction>) {
   const embed = fake.reply().embeds?.[0]
+
   return embed && 'toJSON' in embed ? embed.toJSON() : embed
 }
 
@@ -136,11 +143,13 @@ describe('/player canonical command', () => {
   test('acknowledges before network work and renders canonical normal state without inventing missing values', async () => {
     const events: string[] = []
     const fake = interaction(events)
+
     const client = {
       search: {
         local: {
           query: async () => {
             events.push('search')
+
             return {
               players: [
                 {
@@ -176,18 +185,22 @@ describe('/player canonical command', () => {
     expect(events[0]).toBe('defer')
     expect(events).toContain('search')
     const embed = embedJson(fake)
+
     expect(embed?.title).toBe('Ada')
+
     expect(embed?.fields?.map((field) => field.name)).toEqual([
       'Competitive Snapshot',
       'Current Season',
       'Career Statistics',
     ])
+
     expect(embed?.fields?.[0]?.value).toContain('**0** rating')
     expect(JSON.stringify(embed)).not.toContain('player.byId')
   })
 
   test('escapes canonical player names in embed titles', async () => {
     const fake = interaction([], '42')
+
     const client = commandClient({
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
       reference: { brawlhallaId: 42, name: '[verify](https://attacker.example) @everyone' },
@@ -203,6 +216,7 @@ describe('/player canonical command', () => {
 
   test('escapes user-controlled Markdown in public not-found output', async () => {
     const fake = interaction([], '[verify](https://attacker.example) @everyone')
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
     }
@@ -216,6 +230,7 @@ describe('/player canonical command', () => {
   test('polls only the stale ranked domain for an already-running refresh', async () => {
     const events: string[] = []
     const fake = interaction(events, '42')
+
     const client = commandClient({
       refresh: {
         outcome: 'alreadyRefreshing',
@@ -237,6 +252,7 @@ describe('/player canonical command', () => {
 
   test('keeps stale cached sections visible when an accepted refresh does not complete in time', async () => {
     const fake = interaction([], '42')
+
     const client = commandClient({
       refresh: { outcome: 'accepted', operationId: crypto.randomUUID(), retry: { kind: 'poll', afterSeconds: 2 } },
       ranked: rankedProfile('stale'),
@@ -253,6 +269,7 @@ describe('/player canonical command', () => {
 
   test('preserves stale cache and canonical retry guidance when rate limited', async () => {
     const fake = interaction([], '42')
+
     const client = commandClient({
       refresh: { outcome: 'rateLimited', retry: { kind: 'after', afterSeconds: 77 } },
       ranked: rankedProfile('stale'),
@@ -268,6 +285,7 @@ describe('/player canonical command', () => {
 
   test('preserves stale cache when the refresh transport is temporarily unavailable', async () => {
     const fake = interaction([], '42')
+
     const client = commandClient({
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
       ranked: rankedProfile('stale'),
@@ -284,6 +302,7 @@ describe('/player canonical command', () => {
   test('bounds a never-resolving initial canonical read before interaction expiry', async () => {
     const fake = interaction([], '42')
     let refreshCalls = 0
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       player: {
@@ -300,11 +319,13 @@ describe('/player canonical command', () => {
         refreshDiscord: {
           mutate: async () => {
             refreshCalls++
+
             return { player: null, refresh: { outcome: 'notNeeded', retry: { kind: 'none' } } }
           },
         },
       },
     }
+
     const started = performance.now()
 
     await createPlayerCommand({ client: client as never, requestTimeoutMs: 1 }).execute(fake.value)
@@ -316,6 +337,7 @@ describe('/player canonical command', () => {
 
   test('preserves cached data when a refresh mutation reaches its request deadline', async () => {
     const fake = interaction([], '42')
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       player: {
@@ -342,6 +364,7 @@ describe('/player canonical command', () => {
   test('bounds a never-resolving poll query and keeps active state visible', async () => {
     const fake = interaction([], '42')
     let rankedQueries = 0
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       player: {
@@ -350,6 +373,7 @@ describe('/player canonical command', () => {
           query: async (_input: unknown, options?: { signal?: AbortSignal }) => {
             rankedQueries++
             if (rankedQueries === 1) return rankedProfile('stale')
+
             return new Promise((_resolve, reject) =>
               options?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
                 once: true,
@@ -382,6 +406,7 @@ describe('/player canonical command', () => {
   test('stops before network work when acknowledgement has already expired', async () => {
     let networkCalls = 0
     const expired = Object.assign(new Error('Unknown interaction'), { code: 10062 })
+
     const value = {
       id: 'expired-interaction',
       user: { id: 'discord-user-42' },
@@ -391,12 +416,14 @@ describe('/player canonical command', () => {
         throw new Error('must not edit')
       },
     } as unknown as ChatInputCommandInteraction
+
     const client = {
       search: { local: { query: async () => ({ players: [], clans: [] }) } },
       player: {
         referenceById: {
           query: async () => {
             networkCalls++
+
             return null
           },
         },
@@ -410,6 +437,7 @@ describe('/player canonical command', () => {
   test('does not retry a final response after the interaction webhook expires', async () => {
     let edits = 0
     const expired = Object.assign(new Error('Unknown webhook'), { code: 10015 })
+
     const value = {
       id: 'expiring-interaction',
       user: { id: 'discord-user-42' },
@@ -420,6 +448,7 @@ describe('/player canonical command', () => {
         throw expired
       },
     } as unknown as ChatInputCommandInteraction
+
     const client = commandClient({
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
       ranked: rankedProfile(),
@@ -433,6 +462,7 @@ describe('/player canonical command', () => {
   test('uses canonical reads and refresh for player select interactions', async () => {
     const events: string[] = []
     let reply: InteractionEditReplyOptions | string | undefined
+
     const value = {
       id: 'player-select-42',
       user: { id: 'discord-user-42' },
@@ -445,9 +475,11 @@ describe('/player canonical command', () => {
       editReply: async (next: InteractionEditReplyOptions | string) => {
         events.push('edit')
         reply = next
+
         return {} as never
       },
     } as unknown as StringSelectMenuInteraction
+
     const client = commandClient({
       refresh: { outcome: 'notNeeded', retry: { kind: 'none' } },
       ranked: rankedProfile(),
@@ -459,6 +491,7 @@ describe('/player canonical command', () => {
     expect(events[0]).toBe('defer')
     const embed = (reply as InteractionEditReplyOptions).embeds?.[0]
     const json = embed && 'toJSON' in embed ? embed.toJSON() : embed
+
     expect(json?.fields?.map((field) => field.name)).toEqual([
       'Competitive Snapshot',
       'Current Season',
@@ -468,6 +501,7 @@ describe('/player canonical command', () => {
 
   test('reports unavailable without inventing a profile when no canonical data exists', async () => {
     const fake = interaction([], '42')
+
     const client = commandClient({
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } },
       reference: null,

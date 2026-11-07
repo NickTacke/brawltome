@@ -5,6 +5,7 @@ import type { Context } from '../src/trpc/context'
 
 function callerFor(getCareerWeaponUsage: CareerWeaponUsageQueries['getCareerWeaponUsage']) {
   const statisticsQueries: CareerWeaponUsageQueries = { getCareerWeaponUsage }
+
   return statisticsRouter.createCaller({ statisticsQueries } as unknown as Context)
 }
 
@@ -72,8 +73,10 @@ const available: CareerWeaponUsageView = {
 describe('statistics.careerWeaponUsage', () => {
   test('forwards current cohort filters through Statistics and maps the canonical output', async () => {
     const calls: unknown[] = []
+
     const caller = callerFor(async (filters) => {
       calls.push(filters)
+
       return available
     })
 
@@ -83,6 +86,7 @@ describe('statistics.careerWeaponUsage', () => {
       staleReasons: [],
       rows: [{ weapon: 'Hammer', medianDamagePerMinute: { numerator: '0', denominator: '1' } }],
     })
+
     expect(calls).toEqual([{ region: 'EU', bracket: 'Diamond+' }])
     await expect(caller.careerWeaponUsage({ region: 'EU', bracket: 'Gold' } as never)).rejects.toThrow()
   })
@@ -93,6 +97,7 @@ describe('statistics.careerWeaponUsage', () => {
       reason: 'not-yet-published',
       filters,
     }))
+
     await expect(unavailable.careerWeaponUsage({ region: 'all', bracket: 'all' })).resolves.toEqual({
       status: 'unavailable',
       reason: 'not_yet_published',
@@ -104,11 +109,14 @@ describe('statistics.careerWeaponUsage', () => {
       status: 'stale',
       staleReasons: ['newer-publication-rejected', 'weekly-publication-overdue'],
     }))
+
     const result = await stale.careerWeaponUsage({ region: 'EU', bracket: 'Diamond+' })
+
     expect(result).toMatchObject({
       status: 'stale',
       staleReasons: ['newer_publication_rejected', 'weekly_publication_overdue'],
     })
+
     expect(result).not.toHaveProperty('latestDecision')
   })
 

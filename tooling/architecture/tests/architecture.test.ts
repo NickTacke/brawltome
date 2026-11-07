@@ -63,6 +63,7 @@ describe('dependency architecture', () => {
 
   it('rejects workspaces without an assigned role', () => {
     const fixture = structuredClone(validFixture)
+
     fixture.workspaces.push({
       name: '@fixture/unknown',
       path: 'packages/unknown',
@@ -83,7 +84,9 @@ describe('dependency architecture', () => {
   it('rejects unapproved package exports', () => {
     const fixture = structuredClone(validFixture)
     const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+
     if (!players) throw new Error('Missing Players fixture')
+
     players.exports.push('./internal/*')
 
     expect(rulesFor(fixture)).toContain('package-export')
@@ -92,21 +95,28 @@ describe('dependency architecture', () => {
   it('allows test-only exports in test files and rejects them elsewhere', () => {
     const fixture = structuredClone(validFixture)
     const gameData = fixture.workspaces.find(({ name }) => name === '@fixture/game-data')
+
     if (!gameData) throw new Error('Missing Game Data fixture')
+
     gameData.exports.push('./testing')
     const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+
     if (!players) throw new Error('Missing Players fixture')
+
     players.sourceFiles.push({
       path: 'packages/players/tests/store.test.ts',
       imports: ['@fixture/game-data/testing'],
       source: '',
     })
+
     const sourceImport = structuredClone(fixture)
+
     sourceImport.workspaces
       .find(({ name }) => name === '@fixture/players')
       ?.sourceFiles.push({ path: 'packages/players/src/store.ts', imports: ['@fixture/game-data/testing'], source: '' })
 
     expect(rulesFor(fixture)).toEqual([])
+
     expect(checkArchitecture(sourceImport, policy).violations).toEqual([
       expect.objectContaining({ rule: 'test-only-import', file: 'packages/players/src/store.ts' }),
     ])
@@ -114,9 +124,11 @@ describe('dependency architecture', () => {
 
   it('applies the test-only rule to imports inside the same package', () => {
     const sourceImport = withImport('@fixture/game-data', '@fixture/game-data/testing')
+
     const testImport = withImport('@fixture/game-data', '@fixture/game-data/testing', {
       file: 'packages/game-data/tests/seed.test.ts',
     })
+
     for (const fixture of [sourceImport, testImport]) {
       fixture.workspaces.find(({ name }) => name === '@fixture/game-data')?.exports.push('./testing')
     }
@@ -124,6 +136,7 @@ describe('dependency architecture', () => {
     expect(checkArchitecture(sourceImport, policy).violations).toEqual([
       expect.objectContaining({ rule: 'test-only-import', file: 'packages/game-data/src/violation.ts' }),
     ])
+
     expect(rulesFor(testImport)).toEqual([])
   })
 
@@ -139,6 +152,7 @@ describe('dependency architecture', () => {
 
   it('enforces workspace-specific role restrictions for narrow tooling', () => {
     const fixture = withImport('@fixture/api', '@fixture/game-data', { dependency: '@fixture/game-data' })
+
     const restrictedPolicy = {
       ...policy,
       workspaceRoleDependencies: { '@fixture/api': ['capability' as const] },
@@ -149,6 +163,7 @@ describe('dependency architecture', () => {
 
   it('does not grant legacy workspaces unrestricted dependencies', () => {
     const fixture = withImport('@fixture/players', '@fixture/api', { dependency: '@fixture/api' })
+
     const legacyPolicy = {
       ...policy,
       roles: { ...policy.roles, '@fixture/players': 'legacy' as const },
@@ -160,7 +175,9 @@ describe('dependency architecture', () => {
   it('rejects forbidden declared dependencies even when source does not import them', () => {
     const fixture = structuredClone(validFixture)
     const web = fixture.workspaces.find(({ name }) => name === '@fixture/web')
+
     if (!web) throw new Error('Missing Web fixture')
+
     web.dependencies.push('@fixture/api')
 
     expect(rulesFor(fixture)).toContain('app-to-app')
@@ -176,15 +193,20 @@ describe('dependency architecture', () => {
 
   it('enforces Clans and Players persistence ownership isolation', async () => {
     const root = resolve(import.meta.dir, '../../..')
+
     const readTree = async (directory: string) => {
       const files: string[] = []
+
       for await (const file of new Bun.Glob('**/*.ts').scan({ cwd: resolve(root, directory), absolute: true })) {
         files.push(await Bun.file(file).text())
       }
+
       return files.join('\n')
     }
+
     const clans = await readTree('packages/modules/clan')
     const players = await readTree('packages/modules/player')
+
     expect(clans).not.toMatch(/@brawltome\/(?:database|player)/)
     expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
   })
@@ -193,6 +215,7 @@ describe('dependency architecture', () => {
     const repositoryRoot = resolve(import.meta.dir, '../../..')
     const repository = readArchitectureRepository(repositoryRoot)
     const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
+
     const packageDocument = JSON.parse(
       readFileSync(resolve(repositoryRoot, 'packages/modules/refresh-operations/package.json'), 'utf8'),
     ) as { scripts?: Record<string, string> }
@@ -214,6 +237,7 @@ describe('dependency architecture', () => {
 
   it('reports named temporary exceptions without allowing new import locations', () => {
     const fixture = withImport('@fixture/web', '@fixture/api', { dependency: '@fixture/api' })
+
     const resultPolicy = {
       ...policy,
       exceptions: [
@@ -229,6 +253,7 @@ describe('dependency architecture', () => {
         },
       ],
     }
+
     const result = checkArchitecture(fixture, resultPolicy)
 
     expect(result.violations).toEqual([])
@@ -238,11 +263,13 @@ describe('dependency architecture', () => {
       dependency: '@fixture/api',
       file: 'apps/web/src/new-api-import.ts',
     })
+
     expect(checkArchitecture(driftedFixture, resultPolicy).violations.map(({ rule }) => rule)).toContain('app-to-app')
   })
 
   it('rejects unscoped exceptions and reports partially stale file scopes', () => {
     const fixture = withImport('@fixture/web', '@fixture/api', { dependency: '@fixture/api' })
+
     const exception = {
       id: 'v2-web-imports-api-router',
       rule: 'app-to-app' as const,
@@ -253,7 +280,9 @@ describe('dependency architecture', () => {
       issue: '#186',
       expiresWhen: 'The transport contracts package owns AppRouter.',
     }
+
     const partial = checkArchitecture(fixture, { ...policy, exceptions: [exception] })
+
     const unscoped = checkArchitecture(fixture, {
       ...policy,
       exceptions: [{ ...exception, files: undefined } as never],

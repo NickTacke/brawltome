@@ -27,6 +27,7 @@ describe('validated leaderboard rows', () => {
         }}
       />,
     )
+
     expect(html).toContain('#3')
     expect(html).not.toContain('Source #')
     expect(html).toContain('aria-label="Ada best legend: bodvar"')
@@ -49,6 +50,7 @@ describe('validated leaderboard rows', () => {
         }}
       />,
     )
+
     expect(html).toContain('#3')
     expect(html).not.toContain('Source #')
     expect(html).toContain('href="/player/42"')
@@ -67,6 +69,7 @@ describe('validated leaderboard rows', () => {
         }}
       />,
     )
+
     expect(html).not.toContain('/player/0')
   })
 })

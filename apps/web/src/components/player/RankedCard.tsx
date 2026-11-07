@@ -18,9 +18,11 @@ export function RankedCard({ player, rankedTeams }: RankedCardProps) {
   const rankedWins = hasOutcomes ? player.rankedWins : 0
   const winrate = rankedGames > 0 ? (rankedWins / rankedGames) * 100 : null
   const teamsTotalWins = rankedTeams.reduce((sum, team) => sum + (team.wins ?? 0), 0)
+
   const knownPeaks = [player.peakRating, ...rankedTeams.map((team) => team.peakRating)].filter(
     (rating): rating is number => typeof rating === 'number' && rating > 0,
   )
+
   const bestRating = knownPeaks.length > 0 ? Math.max(...knownPeaks) : null
   // The leaderboard fallback only covers 1v1, so a total across modes would understate Glory.
   const totalRankedWins = hasOutcomes && player.rankedSource !== 'leaderboard' ? rankedWins + teamsTotalWins : null

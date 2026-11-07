@@ -11,6 +11,7 @@ let connectionString = ''
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)
+
   if (
     configured.protocol !== dedicated.protocol ||
     configured.hostname !== dedicated.hostname ||
@@ -20,6 +21,7 @@ beforeAll(async () => {
   ) {
     throw new Error(`Clan discovery tests require the dedicated server ${dedicatedServer}`)
   }
+
   database = await createTestDatabase({ label: 'clan_discovery_source', modules: [clanModule] })
   connectionString = database.connectionString
 }, 20_000)
@@ -57,48 +59,61 @@ describe('Clans discovery fact source', () => {
     const clans = createPostgresClans(database)
     const source = createPostgresClanDiscoverySource(database)
     const control = postgres(connectionString)
+
     try {
       await clans.publishProfile(profile(42, 'Old Name', '10'), new Date('2024-01-01T00:00:00.000Z'), provenance)
       await clans.publishProfile(profile(84, 'Other Clan', '20'), new Date('2024-01-01T00:00:00.000Z'), provenance)
+
       await clans.publishRoster(42, [member(7)], new Date('2024-01-01T00:01:00.000Z'), {
         source: 'v1-guild-members',
         outcome: 'success',
       })
+
       const initial = await source.snapshot()
+
       expect(initial.facts).toEqual([
         { clanId: 42, clanName: 'Old Name', clanXp: '10', memberCount: 1 },
         { clanId: 84, clanName: 'Other Clan', clanXp: '20', memberCount: 0 },
       ])
+
       expect(initial.pendingEventCount).toBeGreaterThan(0)
       expect(initial.oldestPendingAt).toBeInstanceOf(Date)
 
       const initialEvents = await source.pendingEvents(100)
+
       await source.acknowledgeEvents(initialEvents.map(({ eventId }) => eventId))
       expect(await source.lag()).toBe(0)
 
       await clans.publishProfile(profile(42, 'New Name', '900719925474099312345'), new Date('2024-01-02'), provenance)
+
       await clans.publishRoster(84, [member(7)], new Date('2024-01-02T00:01:00.000Z'), {
         source: 'v1-guild-members',
         outcome: 'success',
       })
+
       const transferEvents = await source.pendingEvents(100)
+
       expect(new Set(transferEvents.map(({ clanId }) => clanId)).has(42)).toBe(true)
       expect(new Set(transferEvents.map(({ clanId }) => clanId)).has(84)).toBe(true)
+
       expect(transferEvents.find(({ clanId }) => clanId === 42)?.fact).toEqual({
         clanId: 42,
         clanName: 'New Name',
         clanXp: '900719925474099312345',
         memberCount: 0,
       })
+
       expect(transferEvents.find(({ clanId }) => clanId === 84)?.fact?.memberCount).toBe(1)
 
       const replayIds = transferEvents.map(({ eventId }) => eventId)
+
       await source.acknowledgeEvents(replayIds)
       await source.replayDeliveredEvents(replayIds)
       expect(await source.lag()).toBe(replayIds.length)
 
       await control`DELETE FROM clans.clans WHERE clan_id = 42`
       const removal = await source.pendingEvents(100)
+
       expect(removal.find(({ clanId }) => clanId === 42)?.fact).toBeNull()
     } finally {
       await control.end()
@@ -109,22 +124,27 @@ describe('Clans discovery fact source', () => {
     const clans = createPostgresClans(database)
     const source = createPostgresClanDiscoverySource(database)
     const control = postgres(connectionString)
+
     try {
       await control`DELETE FROM clans.discovery_outbox`
       await clans.publishProfile(profile(501, 'Trim One', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
       await clans.publishProfile(profile(502, 'Trim Two', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
       const [stale, recent] = await source.pendingEvents(100)
+
       await source.acknowledgeEvents([stale.eventId, recent.eventId])
+
       await control`
         UPDATE clans.discovery_outbox SET delivered_at = clock_timestamp() - interval '25 hours'
         WHERE event_id = ${stale.eventId}
       `
+
       await clans.publishProfile(profile(503, 'Trim Three', '1'), new Date('2024-02-01T00:00:00.000Z'), provenance)
       const [pending] = await source.pendingEvents(100)
 
       await source.acknowledgeEvents(['00000000-0000-4000-8000-000000000000'])
 
       const remaining = await control<{ event_id: string }[]>`SELECT event_id FROM clans.discovery_outbox`
+
       expect(new Set(remaining.map(({ event_id }) => event_id))).toEqual(new Set([recent.eventId, pending.eventId]))
       expect(await source.lag()).toBe(1)
     } finally {

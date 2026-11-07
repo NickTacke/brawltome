@@ -47,6 +47,7 @@ export function prepareChartData(history: RatingHistoryEntry[]): ChartPoint[] {
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     .map((entry) => {
       const ts = new Date(entry.recordedAt)
+
       return {
         ...entry,
         date: formatDate(ts),
@@ -58,6 +59,7 @@ export function prepareChartData(history: RatingHistoryEntry[]): ChartPoint[] {
 export function getCurrentSeason(now: Date, seasons: SeasonDef[] = SEASONS): SeasonDef {
   const sorted = [...seasons].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
   let current = sorted[0]
+
   for (const season of sorted) {
     if (season.startsAt.getTime() <= now.getTime()) {
       current = season
@@ -65,14 +67,17 @@ export function getCurrentSeason(now: Date, seasons: SeasonDef[] = SEASONS): Sea
       break
     }
   }
+
   return current
 }
 
 export function getTierFromRating(rating: number): string {
   const sorted = [...TIER_THRESHOLDS].sort((a, b) => a.minRating - b.minRating)
   let tier = sorted[0]
+
   for (const t of sorted) {
     if (rating >= t.minRating) tier = t
   }
+
   return tier.name
 }

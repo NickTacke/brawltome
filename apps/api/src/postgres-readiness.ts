@@ -23,9 +23,11 @@ export function assertKnownMigrationsApplied(
 
   for (const migration of expected) {
     const appliedChecksum = appliedChecksums.get(migration.identity)
+
     if (appliedChecksum === undefined) {
       throw new Error(`schema migration ${migration.identity} is not applied`)
     }
+
     if (appliedChecksum !== migration.checksum) {
       throw new Error(`schema checksum mismatch for ${migration.identity}`)
     }
@@ -66,9 +68,11 @@ type CancellableQuery<T> = Promise<T> & { cancel(): unknown }
 // pool is saturated don't pile up behind each other
 async function withinTimeout<T>(query: CancellableQuery<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const timedOut = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       cancelQuietly(query)
+
       reject(
         new Error(
           `postgres readiness: the database did not answer within ${timeoutMs} ms (pool busy or database unreachable)`,

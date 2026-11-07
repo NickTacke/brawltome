@@ -35,13 +35,17 @@ function fixedRatio(value: CareerWeaponExactRatioContract, decimalPlaces: number
   const denominator = BigInt(value.denominator)
   const scale = 10n ** BigInt(decimalPlaces)
   const rounded = (numerator * scale * 2n + denominator) / (denominator * 2n)
+
   if (decimalPlaces === 0) return String(rounded)
+
   const digits = String(rounded).padStart(decimalPlaces + 1, '0')
+
   return `${digits.slice(0, -decimalPlaces)}.${digits.slice(-decimalPlaces)}`
 }
 
 function percentage(value: CareerWeaponExactRatioContract | null): string {
   if (!value) return 'Unavailable'
+
   return `${fixedRatio({ numerator: String(BigInt(value.numerator) * 100n), denominator: value.denominator }, 1)}%`
 }
 
@@ -51,9 +55,11 @@ function rate(value: CareerWeaponExactRatioContract | null): string {
 
 function comparisonSummary(row: CareerWeaponUsageRowContract): string {
   if (row.comparison.eligible) return 'Eligible for comparison'
+
   const reasons = row.comparison.reasons.map((reason) =>
     reason === 'contributors-below-30' ? 'fewer than 30 contributors' : 'fewer than 30 aggregate observed held hours',
   )
+
   return `Insufficient data: ${reasons.join(' and ')}`
 }
 
@@ -110,6 +116,7 @@ function StaleNotice({ reasons }: { reasons: ('newer_publication_rejected' | 'we
     reasons.includes('newer_publication_rejected') ? 'A newer weekly snapshot did not pass validation.' : null,
     reasons.includes('weekly_publication_overdue') ? 'The next weekly publication is overdue.' : null,
   ].filter(Boolean)
+
   return (
     <output className="block rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100">
       <strong>Update delayed.</strong> {details.join(' ')} Showing the last valid career observations.
@@ -119,6 +126,7 @@ function StaleNotice({ reasons }: { reasons: ('newer_publication_rejected' | 'we
 
 function SnapshotTable({ view }: { view: Exclude<CareerWeaponUsageOutputContract, { status: 'unavailable' }> }) {
   const coverage = view.coverage ? percentage(view.coverage) : 'Unavailable'
+
   return (
     <>
       <div className="space-y-1 text-sm text-muted-foreground">

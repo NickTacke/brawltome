@@ -51,17 +51,22 @@ export async function pollClanUntilSectionsComplete(
   requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 ): Promise<ClanResponse | null> {
   let clan = initialClan
+
   const pending = {
     profile: stale(clan?.profile.lastSuccessAt, now()),
     roster: stale(clan?.roster?.lastSuccessAt, now()),
   }
+
   const initial = {
     profile: clan?.profile.lastSuccessAt ?? null,
     roster: clan?.roster?.lastSuccessAt ?? null,
   }
+
   for (let attempt = 0; attempt < limit; attempt += 1) {
     const delayMs = afterSeconds * 1_000
+
     if (!Number.isFinite(delayMs) || delayMs < 0 || now() + delayMs >= deadline) break
+
     await wait(delayMs)
     try {
       clan = await runBeforeInteractionDeadline({
@@ -73,6 +78,7 @@ export async function pollClanUntilSectionsComplete(
     } catch {
       break
     }
+
     if (
       clan &&
       (!pending.profile || clan.profile.lastSuccessAt !== initial.profile) &&
@@ -81,6 +87,7 @@ export async function pollClanUntilSectionsComplete(
       break
     }
   }
+
   return clan
 }
 
@@ -99,19 +106,24 @@ async function fetchClan(
 ) {
   const request = <T>(work: (signal: AbortSignal) => Promise<T>) =>
     runBeforeInteractionDeadline({ deadline, requestTimeoutMs, now, work })
+
   let response: ClanRefreshResponse
+
   try {
     response = await request((signal) => client.clan.refreshDiscord.mutate({ id: clanId, discordUserId }, { signal }))
   } catch (error) {
     discordTelemetry.logger.error('discord.clan_refresh.failed', error)
     const clan = await request((signal) => client.clan.byId.query({ id: clanId }, { signal }))
+
     return {
       clan,
       refresh: { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } } as const,
     }
   }
+
   let clan = response.clan
   const retry = response.refresh.retry
+
   if (retry.kind === 'poll') {
     clan = await pollClanUntilSectionsComplete(
       clan,
@@ -124,6 +136,7 @@ async function fetchClan(
       requestTimeoutMs,
     )
   }
+
   return {
     clan: clan ?? (await request((signal) => client.clan.byId.query({ id: clanId }, { signal }))),
     refresh: response.refresh,
@@ -137,6 +150,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     workBudgetMs = INTERACTION_WORK_BUDGET_MS,
   } = dependencies
+
   return {
     data: new SlashCommandBuilder()
       .setName('clan')
@@ -153,6 +167,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
       }
 
       const deadline = now() + workBudgetMs
+
       try {
         // Check if query is a numeric ID
         const numericId = Number.parseInt(query, 10)
@@ -172,6 +187,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
             now,
             work: (signal) => client.search.local.query({ query }, { signal }),
           })
+
           searchResults = results.clans
 
           if (searchResults.length === 0) {
@@ -183,6 +199,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
                 ),
               ],
             })
+
             return
           }
 
@@ -200,6 +217,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
                 : buildErrorEmbed('Clan Unavailable', 'Clan data could not be verified. Try again later.'),
             ],
           })
+
           return
         }
 
@@ -210,6 +228,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
           clan,
           timestamp: Date.now(),
         })
+
         cleanupCache()
 
         // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
@@ -227,6 +246,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
             clanName: c.clanName,
             memberCount: c.memberCount,
           }))
+
           components.push(buildClanSelectMenu(clanOptions, clanId, interaction.id))
         }
 
@@ -236,6 +256,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
         })
       } catch (error) {
         if (handleExpiredInteractionError(error, 'discord.clan_response.expired')) return
+
         discordTelemetry.logger.error('discord.clan_command.failed', error)
 
         if (error instanceof TRPCClientError) {
@@ -252,6 +273,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
                 }),
               'discord.clan_error_response.expired',
             )
+
             return
           }
 
@@ -265,6 +287,7 @@ export function createClanCommand(dependencies: ClanCommandDependencies = {}): C
                 }),
               'discord.clan_error_response.expired',
             )
+
             return
           }
         }
@@ -287,9 +310,11 @@ export const clanCommand = createClanCommand()
 
 export function createClanSelectHandler(dependencies: ClanCommandDependencies = {}) {
   const { now = Date.now, workBudgetMs = INTERACTION_WORK_BUDGET_MS } = dependencies
+
   return async function clanSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     const clanId = Number.parseInt(interaction.values[0], 10)
     const interactionId = interaction.customId.split(':')[1]
+
     if (
       !(await runInteractionResponse(() => interaction.deferUpdate(), 'discord.clan_select_acknowledgement.expired'))
     ) {
@@ -297,8 +322,10 @@ export function createClanSelectHandler(dependencies: ClanCommandDependencies = 
     }
 
     const deadline = now() + workBudgetMs
+
     try {
       const { clan, refresh } = await fetchClan(clanId, interaction.user.id, dependencies, deadline)
+
       if (!clan) {
         await runInteractionResponse(
           () =>
@@ -308,9 +335,12 @@ export function createClanSelectHandler(dependencies: ClanCommandDependencies = 
             }),
           'discord.clan_select_response.expired',
         )
+
         return
       }
+
       const embed = buildClanEmbed(clan, 0, refresh, now())
+
       if (interactionId) {
         clanCache.set(interactionId, { clan, timestamp: now() })
         cleanupCache()
@@ -318,17 +348,23 @@ export function createClanSelectHandler(dependencies: ClanCommandDependencies = 
 
       // biome-ignore lint/suspicious/noExplicitAny: mixed component row types from discord.js
       const responseComponents: any[] = []
+
       if (clan.roster?.lastSuccessAt && clan.members.length > 5 && interactionId) {
         responseComponents.push(buildClanPaginationButtons(interactionId, 0, clan.members.length))
       }
+
       if (interaction.message.components.length > 0) {
         const clans = getClansFromMessage(interaction.message)
+
         if (clans.length > 0) responseComponents.push(buildClanSelectMenu(clans, clanId, interactionId))
       }
+
       await interaction.editReply({ embeds: [embed], components: responseComponents })
     } catch (error) {
       if (handleExpiredInteractionError(error, 'discord.clan_select_response.expired')) return
+
       discordTelemetry.logger.error('discord.clan_select.failed', error)
+
       await runInteractionResponse(
         () =>
           interaction.editReply({
@@ -348,6 +384,7 @@ export async function handleClanPage(interaction: ButtonInteraction): Promise<vo
   const page = Number.parseInt(pageStr, 10)
 
   const cached = clanCache.get(interactionId)
+
   if (!cached || Date.now() - cached.timestamp > CLAN_CACHE_TTL) {
     await runInteractionResponse(
       () =>
@@ -357,6 +394,7 @@ export async function handleClanPage(interaction: ButtonInteraction): Promise<vo
         }),
       'discord.clan_page_response.expired',
     )
+
     return
   }
 
@@ -366,10 +404,12 @@ export async function handleClanPage(interaction: ButtonInteraction): Promise<vo
   // Update components (pagination buttons and preserved select menu)
   const components = interaction.message.components.map((row) => {
     const actionRow = row.toJSON()
+
     if ('components' in actionRow && actionRow.components[0]?.type === 2) {
       // Button (Pagination)
       return buildClanPaginationButtons(interactionId, page, clan.members.length)
     }
+
     return row
   })
 
@@ -386,6 +426,7 @@ export async function handleClanPage(interaction: ButtonInteraction): Promise<vo
 
 function cleanupCache() {
   const now = Date.now()
+
   for (const [key, value] of clanCache.entries()) {
     if (now - value.timestamp > CLAN_CACHE_TTL) {
       clanCache.delete(key)
@@ -398,6 +439,7 @@ function getClansFromMessage(
 ): Array<{ clanId: number; clanName: string; memberCount: number | null }> {
   try {
     if (!('components' in message)) return []
+
     type SelectOption = { label: string; value: string; description?: string }
     type OptionLike = SelectOption | { data: SelectOption }
     type ComponentLike = {
@@ -407,9 +449,11 @@ function getClansFromMessage(
       components?: ComponentLike[]
     }
     const rows = message.components as unknown as ComponentLike[]
+
     const select = rows
       .flatMap((row) => row.components ?? [])
       .find((component) => component.type === 3 || component.data?.type === 3)
+
     if (!select) return []
 
     const options = select.options ?? select.data?.options ?? []
@@ -417,6 +461,7 @@ function getClansFromMessage(
     return options.map((option) => {
       const opt = 'data' in option ? option.data : option
       const memberCount = Number.parseInt(opt.description?.split(' ')[0] ?? '', 10)
+
       return {
         clanId: Number.parseInt(opt.value, 10),
         clanName: opt.label,

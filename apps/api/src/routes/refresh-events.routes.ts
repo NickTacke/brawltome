@@ -9,9 +9,11 @@ export function createRefreshEventRoutes(streams: Pick<RefreshEventStreams, 'ope
   routes.get('/player/:brawlhallaId/refresh', (context) => {
     const raw = context.req.param('brawlhallaId')
     const brawlhallaId = Number(raw)
+
     if (!brawlhallaIdPattern.test(raw) || !Number.isSafeInteger(brawlhallaId)) {
       return context.json({ error: 'invalid_brawlhalla_id' }, 400)
     }
+
     return streams.open({
       brawlhallaId,
       clientIp: context.req.header('x-client-ip') ?? '0.0.0.0',

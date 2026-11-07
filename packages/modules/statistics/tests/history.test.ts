@@ -91,23 +91,27 @@ describe('adjacent statistics snapshot compatibility', () => {
         },
       ],
     })
+
     expect(
       classifyAdjacentSnapshots(
         compatibility({ season: { applicability: 'required', identity: null } }),
         compatibility({ season: { applicability: 'required', identity: null } }),
       ),
     ).toMatchObject({ status: 'incompatible', reasons: [{ code: 'season_identity_unavailable' }] })
+
     expect(
       classifyAdjacentSnapshots(
         compatibility({ season: { applicability: 'required', identity: 'season-39' } }),
         compatibility(),
       ),
     ).toMatchObject({ status: 'incompatible', reasons: [{ code: 'season_mismatch' }] })
+
     expect(classifyAdjacentSnapshots(compatibility(), compatibility())).toEqual({ status: 'compatible' })
   })
 
   test('treats Career season as not applicable and reports every other break in stable order', () => {
     const career = careerSnapshot('career-new', '2026-08-15T00:00:00.000Z').compatibility
+
     expect(classifyAdjacentSnapshots(career, career)).toEqual({ status: 'compatible' })
 
     expect(
@@ -147,6 +151,7 @@ describe('adjacent statistics snapshot compatibility', () => {
 describe('product-specific adjacent deltas', () => {
   test('reproduces exact Legend non-rank metric and arithmetic direction changes', () => {
     const older = legendSnapshot('legend-old', '2026-08-08T00:00:00.000Z')
+
     const newer = legendSnapshot('legend-new', '2026-08-15T00:00:00.000Z', {
       rows: [
         {
@@ -184,6 +189,7 @@ describe('product-specific adjacent deltas', () => {
 
   test('reproduces Career basis-point and normalized signed exact-rational changes', () => {
     const older = careerSnapshot('career-old', '2026-08-08T00:00:00.000Z')
+
     const newer = careerSnapshot('career-new', '2026-08-15T00:00:00.000Z', {
       rows: [
         {
@@ -221,10 +227,13 @@ describe('product-specific adjacent deltas', () => {
   test('never gives missing or stored-ineligible rows metric deltas or directions', () => {
     const eligibleLegend = legendSnapshot('legend-new', '2026-08-15T00:00:00.000Z')
     const fixtureRow = legendSnapshot('fixture', '2026-08-01T00:00:00.000Z').rows[0]
+
     if (!fixtureRow) throw new Error('Legend history fixture row missing')
+
     const insufficientLegend = legendSnapshot('legend-old', '2026-08-08T00:00:00.000Z', {
       rows: [{ ...fixtureRow, eligible: false, rank: null }],
     })
+
     expect(buildLegendMetaHistory([eligibleLegend, insufficientLegend])[0]?.comparisonToPrevious).toEqual({
       status: 'available',
       previousSnapshotId: 'legend-old',
@@ -232,6 +241,7 @@ describe('product-specific adjacent deltas', () => {
     })
 
     const missingCareer = careerSnapshot('career-old', '2026-08-08T00:00:00.000Z', { rows: [] })
+
     expect(
       buildCareerWeaponUsageHistory([careerSnapshot('career-new', '2026-08-15T00:00:00.000Z'), missingCareer])[0]
         ?.comparisonToPrevious,
@@ -246,20 +256,25 @@ describe('product-specific adjacent deltas', () => {
 describe('compatible history traversal', () => {
   test('sorts deterministically, caps at eight snapshots, and never scans past the first break', () => {
     const newest = legendSnapshot('legend-10', '2026-10-10T00:00:00.000Z')
+
     const breakPoint = legendSnapshot('legend-09', '2026-10-09T00:00:00.000Z', {
       compatibility: compatibility({ cohortMethodologyVersion: 'full-launch-cohort-v0' }),
     })
+
     const shouldNotAppear = legendSnapshot('legend-08', '2026-10-08T00:00:00.000Z', {
       compatibility: breakPoint.compatibility,
     })
 
     const broken = buildLegendMetaHistory([shouldNotAppear, breakPoint, newest])
+
     expect(broken.map(({ snapshot }) => snapshot.snapshotId)).toEqual(['legend-10', 'legend-09'])
+
     expect(broken[0]?.comparisonToPrevious).toMatchObject({
       status: 'incompatible',
       previousSnapshotId: 'legend-09',
       reasons: [{ code: 'cohort_methodology_mismatch' }],
     })
+
     expect(broken[1]?.comparisonToPrevious).toBeNull()
 
     const compatible = Array.from({ length: 10 }, (_, index) =>
@@ -268,7 +283,9 @@ describe('compatible history traversal', () => {
         `2026-09-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`,
       ),
     )
+
     const frozenInput = Object.freeze([...compatible])
+
     expect(buildLegendMetaHistory(frozenInput)).toHaveLength(8)
     expect(buildLegendMetaHistory(frozenInput)[0]?.snapshot.snapshotId).toBe('legend-09')
     expect(frozenInput.map(({ snapshotId }) => snapshotId)).toEqual(compatible.map(({ snapshotId }) => snapshotId))
@@ -276,9 +293,11 @@ describe('compatible history traversal', () => {
     const delayedOlderGeneration = legendSnapshot('legend-delayed', '2026-10-11T00:00:00.000Z', {
       sequence: { at: '2026-10-01T00:00:00.000Z', id: 'generation-old' },
     })
+
     const currentGeneration = legendSnapshot('legend-current', '2026-10-10T00:00:00.000Z', {
       sequence: { at: '2026-10-02T00:00:00.000Z', id: 'generation-new' },
     })
+
     expect(buildLegendMetaHistory([delayedOlderGeneration, currentGeneration])[0]?.snapshot.snapshotId).toBe(
       'legend-current',
     )

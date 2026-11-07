@@ -42,6 +42,7 @@ function runtimeWorstCase(totalConcurrency: number): number {
 function sizeFormula(size: (totalConcurrency: number) => number): string {
   const intercept = size(0)
   const slope = size(1) - intercept
+
   if (slope === 0) return String(intercept)
 
   if (slope !== 1) throw new Error(`pool size grows by ${slope} per job slot; extend sizeFormula to write it`)
@@ -53,6 +54,7 @@ function productionSection(): string {
   const contributing = readFileSync(new URL('../../../CONTRIBUTING.md', import.meta.url), 'utf8')
   const start = contributing.indexOf('\n## Production')
   const end = contributing.indexOf('\n## ', start + 1)
+
   if (start === -1) throw new Error('CONTRIBUTING.md has no Production section')
 
   return contributing.slice(start, end === -1 ? undefined : end)
@@ -93,8 +95,10 @@ describe('database pool sizes', () => {
     for (const client of Object.keys(workerPoolSizes(0)) as (keyof WorkerPoolSizes)[]) {
       const formula = sizeFormula((totalConcurrency) => workerPoolSizes(totalConcurrency)[client])
       const cell = listeningWorkerClients.has(client) ? `${formula}, + ${listenerConnections} listener` : formula
+
       expect(section).toContain(`| ${cell} |`)
     }
+
     expect(section).toContain(`| migration runner | ${migrationRunnerConnections} |`)
     expect(section).toContain(`at most ${maxOperationsTotalConcurrency}`)
     expect(section).toContain(`\`OPERATIONS_PROJECTION_CONCURRENCY\` is at most ${maxProjectionConcurrency}`)
@@ -111,9 +115,11 @@ describe('database pool sizes', () => {
     const atBound = readOperationsWorkerConfig({ OPERATIONS_PROJECTION_CONCURRENCY: String(maxProjectionConcurrency) })
 
     expect(atBound.admission.classConcurrency.projection).toBe(maxProjectionConcurrency)
+
     expect(() =>
       readOperationsWorkerConfig({ OPERATIONS_PROJECTION_CONCURRENCY: String(maxProjectionConcurrency + 1) }),
     ).toThrow('OPERATIONS_PROJECTION_CONCURRENCY')
+
     for (let totalConcurrency = 1; totalConcurrency <= maxOperationsTotalConcurrency; totalConcurrency++) {
       expect(workerPoolSizes(totalConcurrency).discovery).toBeGreaterThanOrEqual(maxProjectionConcurrency + 1)
     }
@@ -123,6 +129,7 @@ describe('database pool sizes', () => {
     const atBound = readOperationsWorkerConfig({ OPERATIONS_TOTAL_CONCURRENCY: String(maxOperationsTotalConcurrency) })
 
     expect(atBound.admission.totalConcurrency).toBe(maxOperationsTotalConcurrency)
+
     expect(() =>
       readOperationsWorkerConfig({ OPERATIONS_TOTAL_CONCURRENCY: String(maxOperationsTotalConcurrency + 1) }),
     ).toThrow('OPERATIONS_TOTAL_CONCURRENCY')

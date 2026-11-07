@@ -34,6 +34,7 @@ function readProperty(name: string, initializer: ts.Expression, declaration: Mig
 
   if (name === 'requires' && ts.isArrayLiteralExpression(value)) {
     const identities = value.elements.filter(ts.isStringLiteralLike).map((element) => element.text)
+
     declaration.requires.push(...identities)
   }
 }

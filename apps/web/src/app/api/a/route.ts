@@ -22,19 +22,25 @@ function clientIp(request: Request): string {
 
 export async function POST(request: Request): Promise<Response> {
   let body: unknown = null
+
   try {
     const text = await readBoundedText(request)
+
     if (text === null) {
       webTelemetry.metrics.add('analytics_events_dropped_total', 1, { reason: 'invalid' })
+
       return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
     }
+
     body = JSON.parse(text)
   } catch {
     body = null
   }
+
   ingestBatch(
     { body, ip: clientIp(request), userAgent: request.headers.get('user-agent') ?? '' },
     { telemetry: webTelemetry, salt, limiter, ipLimiter },
   )
+
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
 }

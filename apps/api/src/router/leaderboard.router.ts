@@ -25,6 +25,7 @@ async function enrichLeaderboardEntries(
   const contestants = entries.flatMap((entry) =>
     entry.identity.type === 'fixed-two-vs-two-team' ? [...entry.identity.players] : [entry.identity.player],
   )
+
   const referenceById = new Map(
     await Promise.all(
       [...new Set(contestants.map(({ brawlhallaId }) => brawlhallaId))].map(
@@ -32,20 +33,26 @@ async function enrichLeaderboardEntries(
       ),
     ),
   )
+
   const enrich = (player: Contestant) => {
     const reference = referenceById.get(player.brawlhallaId)
+
     return {
       ...player,
       name: reference?.name ?? player.name,
       bestLegendNameKey: reference?.bestLegendNameKey ?? null,
     }
   }
+
   return entries.map((entry) => {
     const identity = entry.identity
+
     if (identity.type !== 'fixed-two-vs-two-team') {
       return { ...entry, identity: { ...identity, player: enrich(identity.player) } }
     }
+
     const sameAccount = identity.players[0].brawlhallaId === identity.players[1].brawlhallaId
+
     return {
       ...entry,
       identity: {
@@ -76,7 +83,9 @@ export const leaderboardRouter = router({
         snapshotId: input.snapshotId,
       }),
     )
+
     if (output.status === 'unavailable') return output
+
     return parseLeaderboardOutput({
       ...output,
       entries: await enrichLeaderboardEntries(output.entries, ctx.playerReferenceQueries),
@@ -92,7 +101,9 @@ export const leaderboardRouter = router({
         snapshotId: input.snapshotId,
       }),
     )
+
     if (output.status === 'unavailable') return output
+
     return parseLeaderboardRecentActivityOutput({
       ...output,
       entries: await enrichLeaderboardEntries(output.entries, ctx.playerReferenceQueries),

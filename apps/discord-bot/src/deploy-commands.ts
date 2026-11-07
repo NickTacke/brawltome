@@ -31,9 +31,11 @@ async function deployCommands() {
       console.log('Successfully deployed guild commands!')
     } else {
       console.log('Deploying globally (may take up to 1 hour to propagate)')
+
       await rest.put(Routes.applicationCommands(clientId), {
         body: commandsData,
       })
+
       console.log('Successfully deployed global commands!')
     }
   } catch (error) {

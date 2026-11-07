@@ -13,5 +13,6 @@ interface PageProps {
 
 export default async function Page({ searchParams }: PageProps) {
   const [cookieStore, query] = await Promise.all([cookies(), searchParams])
+
   return <MatchesContent previewCookie={cookieStore.get(matchesPreviewCookieName)?.value} query={query} />
 }

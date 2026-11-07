@@ -17,6 +17,7 @@ describe('replay result graphs', () => {
 
   test('labels fixture-backed reports as preview data', () => {
     const previewMatch = getPreviewMatch('preview-final')
+
     if (!previewMatch) throw new Error('Preview fixture is missing')
 
     const html = renderToStaticMarkup(
@@ -28,6 +29,7 @@ describe('replay result graphs', () => {
 
   test('renders the visual report in the approved order with truthful source data', () => {
     const html = renderToStaticMarkup(createElement(ReplayResultView, { job: completedReplayJob }))
+
     const headings = [
       'Event overview',
       'Extended combat',
@@ -39,13 +41,16 @@ describe('replay result graphs', () => {
     ]
 
     const renderedText = html.replaceAll('&amp;', '&')
+
     for (const [index, heading] of headings.entries()) {
       expect(renderedText).toContain(heading)
       const previousHeading = headings[index - 1]
+
       if (previousHeading) {
         expect(renderedText.indexOf(heading)).toBeGreaterThan(renderedText.indexOf(previousHeading))
       }
     }
+
     expect(html.match(/Requires qualified event timeline/g) ?? []).toHaveLength(4)
     expect(html).toContain('Damage progression')
     expect(html).toContain('Best engagement')
@@ -66,6 +71,7 @@ describe('replay result graphs', () => {
     ]) {
       expect(html).toContain(statistic)
     }
+
     expect(html).toContain('nLight')
     expect(html).toContain('18 uses')
     expect(html).toContain('<details')
@@ -81,6 +87,7 @@ describe('replay result graphs', () => {
 
   test('renders unsupported fixture-only observations as unavailable', () => {
     const previewMatch = getPreviewMatch('preview-team')
+
     if (!previewMatch) throw new Error('Preview fixture is missing')
 
     const html = renderToStaticMarkup(
@@ -99,10 +106,14 @@ describe('replay result graphs', () => {
 
   test('renders zero-denominator rates as em dashes', () => {
     const noSummary = structuredClone(completedReplayJob)
+
     if (!noSummary.result) throw new Error('fixture result missing')
+
     delete noSummary.result.extensions[MATCH_SUMMARY_EXTENSION_URI]
     const firstNativePlayer = noSummary.result.core.native.players[0]
+
     if (!firstNativePlayer) throw new Error('fixture native player missing')
+
     Object.assign(firstNativePlayer, {
       kos: 0,
       deaths: 0,
@@ -121,8 +132,11 @@ describe('replay result graphs', () => {
 
   test('consumes capability states and wraps replay-controlled names', () => {
     const previewMatch = getPreviewMatch('preview-final')
+
     if (!previewMatch) throw new Error('Preview fixture is missing')
+
     const report = replayReportFromPreview(previewMatch)
+
     report.capabilities.eventTimeline = true
     report.title = 'X'.repeat(1_024)
     report.winnerLabel = 'Y'.repeat(1_024)
@@ -139,7 +153,9 @@ describe('replay result graphs', () => {
 
     const uploaded = selectUploadedReplay([], pending)
     const selected = selectLoadedReplay(uploaded.selectedId, completedReplayJob)
+
     if (!selected) throw new Error('completed replay was not selected')
+
     const html = renderToStaticMarkup(createElement(ReplayResultView, { job: selected }))
 
     expect(uploaded).toEqual({ jobs: [pending], selectedId: pending.id })

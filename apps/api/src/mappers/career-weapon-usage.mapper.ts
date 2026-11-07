@@ -18,6 +18,7 @@ export function mapCareerWeaponUsageHistoryOutput(
     filters: view.filters,
     entries: view.entries.map(({ snapshot, comparisonToPrevious }) => {
       const { compatibility, data, sequence: _sequence, rows: _rows, ...identity } = snapshot
+
       return {
         snapshot: {
           ...identity,
@@ -41,6 +42,7 @@ export function mapCareerWeaponUsageOutput(view: CareerWeaponUsageView): CareerW
   }
 
   const { latestDecision: _latestDecision, staleReasons, ...snapshot } = view
+
   return parseCareerWeaponUsageOutput({
     ...snapshot,
     staleReasons: staleReasons.map((reason) => reason.replaceAll('-', '_')),

@@ -45,6 +45,7 @@ describe('canonical Clan contract', () => {
       xp: '123',
       guildPoints: null,
     }
+
     expect(clanProfileSchema.parse({ ...profile, members: [member] }).members).toEqual([member])
   })
 
@@ -53,7 +54,9 @@ describe('canonical Clan contract', () => {
       clanProfileSchema.parse({ ...profile, clanLifetimeXp: '19999999999999999999999999999999999999999' })
         .clanLifetimeXp,
     ).toHaveLength(41)
+
     expect(() => clanProfileSchema.parse({ ...profile, clanXp: Number.MAX_SAFE_INTEGER + 1 })).toThrow()
+
     expect(
       clanRefreshResponseSchema.parse({
         clan: profile,

@@ -21,6 +21,7 @@ const workerApplicationNames = [
   'brawltome-operations-worker-renewals',
   'brawltome-operations-worker-discovery',
 ]
+
 const internalSecret = 'database-connections-secret-32-characters'
 const metricsSecret = 'database-connections-metrics-secret-32-chars'
 const workerConfig = readOperationsWorkerConfig({})
@@ -53,6 +54,7 @@ async function connectionCounts(): Promise<ConnectionCounts> {
 async function peakConnectionsDuring(work: Promise<unknown>): Promise<ConnectionCounts> {
   const peak: ConnectionCounts = {}
   let isSettled = false
+
   const settled = work.finally(() => {
     isSettled = true
   })
@@ -61,8 +63,10 @@ async function peakConnectionsDuring(work: Promise<unknown>): Promise<Connection
     for (const [name, count] of Object.entries(await connectionCounts())) {
       peak[name] = Math.max(peak[name] ?? 0, count)
     }
+
     await Bun.sleep(10)
   }
+
   await settled
 
   return peak
@@ -102,6 +106,7 @@ async function burst(port: number, requestsPerKind: number): Promise<void> {
 describe('one database client per process', () => {
   test('the API stays within its pool and listener after a burst across modules', async () => {
     const port = await allocatePort()
+
     const api = spawnRuntime('apps/api/src/serve.ts', {
       DATABASE_URL: database.connectionString,
       INTERNAL_API_SECRET: internalSecret,
@@ -123,6 +128,7 @@ describe('one database client per process', () => {
     } finally {
       api.process.kill('SIGTERM')
       const exited = await waitForExit(api, 5_000)
+
       expect(exited.exitCode, exited.stderr).toBe(0)
     }
 
@@ -133,6 +139,7 @@ describe('one database client per process', () => {
     const port = await allocatePort()
     const sizes = workerPoolSizes(workerConfig.admission.totalConcurrency)
     const operations = createPostgresRefreshOperations({ database })
+
     const accepted = await Promise.all(
       Array.from({ length: 20 }, () =>
         operations.accept({
@@ -144,6 +151,7 @@ describe('one database client per process', () => {
         }),
       ),
     )
+
     const worker = spawnRuntime('apps/api/src/operations-worker.ts', {
       DATABASE_URL: database.connectionString,
       BRAWLHALLA_API_KEY: 'database-connections-test-api-key',
@@ -158,9 +166,11 @@ describe('one database client per process', () => {
 
     try {
       await waitForRuntimeReady(worker, port, 'worker readiness')
+
       const allSucceeded = waitFor(
         async () => {
           const states = await Promise.all(accepted.map(({ operationId }) => operations.inspect(operationId)))
+
           return states.every((state) => state.operation.status === 'succeeded')
         },
         'the queued operations to succeed',
@@ -173,12 +183,14 @@ describe('one database client per process', () => {
       for (const name of Object.keys(peak)) {
         expect(workerApplicationNames).toContain(name)
       }
+
       expect(peak['brawltome-operations-worker']).toBeLessThanOrEqual(sizes.main + listenerConnections)
       expect(peak['brawltome-operations-worker-renewals'] ?? 0).toBeLessThanOrEqual(sizes.renewals)
       expect(peak['brawltome-operations-worker-discovery'] ?? 0).toBeLessThanOrEqual(sizes.discovery)
     } finally {
       worker.process.kill('SIGTERM')
       const exited = await waitForExit(worker, 8_000)
+
       expect(exited.exitCode, exited.stderr).toBe(0)
     }
 
@@ -192,6 +204,7 @@ describe('one database client per process', () => {
       const timeouts = await Promise.all(
         [databases.main, databases.renewals, databases.discovery].map(async ({ sql }) => {
           const [row] = await sql<{ statement_timeout: string }[]>`SHOW statement_timeout`
+
           return row.statement_timeout
         }),
       )
@@ -209,6 +222,7 @@ describe('one database client per process', () => {
 
     try {
       await operations.configureAdmission(workerConfig.admission)
+
       await operations.accept({
         dedupeKey: `renewal-isolation:${randomUUID()}`,
         operationKey: `renewal-isolation-effect:${randomUUID()}`,
@@ -216,13 +230,17 @@ describe('one database client per process', () => {
         payload: { value: 'renewal-isolation' },
         provenance: { source: 'database-connections-test', requestedBy: 'database-connections-test' },
       })
+
       const lease = await operations.claim('renewal-isolation', 30_000, workerConfig.admission)
+
       if (!lease) throw new Error('expected the accepted operation to be claimed')
 
       const mainSize = workerPoolSizes(workerConfig.admission.totalConcurrency).main
+
       const held = Array.from({ length: mainSize }, () =>
         databases.main.sql.begin((transaction) => transaction`SELECT pg_sleep(${holdSeconds})`),
       )
+
       await waitFor(
         async () => (await connectionCounts())['brawltome-operations-worker'] === mainSize,
         'every main connection to be held',

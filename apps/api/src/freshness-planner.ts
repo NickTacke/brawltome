@@ -23,11 +23,15 @@ export type FreshnessPlannerConfig = {
 
 export function readFreshnessPlannerConfig(env: NodeJS.ProcessEnv): FreshnessPlannerConfig {
   const enabled = env.FRESHNESS_PLANNER_ENABLED ?? 'true'
+
   if (enabled !== 'true' && enabled !== 'false') throw new Error('FRESHNESS_PLANNER_ENABLED must be true or false')
+
   const maxUsageRatio = env.FRESHNESS_V0_MAX_USAGE_RATIO === undefined ? 0.5 : Number(env.FRESHNESS_V0_MAX_USAGE_RATIO)
+
   if (!Number.isFinite(maxUsageRatio) || maxUsageRatio <= 0 || maxUsageRatio > 0.8) {
     throw new Error('FRESHNESS_V0_MAX_USAGE_RATIO must be in (0, 0.8]')
   }
+
   return {
     enabled: enabled === 'true',
     maxUsageRatio,
@@ -59,11 +63,13 @@ export type ViewDemand = { brawlhallaId: number; viewDays: number }
 // Merges both demand signals per player: profile view days and on-request refresh days.
 export function mergeViewDemand(...sources: ReadonlyArray<readonly ViewDemand[]>): ViewDemand[] {
   const merged = new Map<number, number>()
+
   for (const source of sources) {
     for (const { brawlhallaId, viewDays } of source) {
       merged.set(brawlhallaId, Math.max(merged.get(brawlhallaId) ?? 0, viewDays))
     }
   }
+
   return [...merged].map(([brawlhallaId, viewDays]) => ({ brawlhallaId, viewDays }))
 }
 
@@ -84,16 +90,24 @@ export function dueRefreshes(input: {
   now: number
 }): DueRefresh[] {
   const due: DueRefresh[] = []
+
   for (const { brawlhallaId, viewDays } of input.demand) {
     const refreshedAt = input.lastRefreshed.get(brawlhallaId) ?? null
+
     if (refreshedAt && input.now - refreshedAt.getTime() <= input.refreshIntervalMs) continue
+
     const attempt = input.attempts.get(brawlhallaId)
+
     if (attempt?.lastPlannedAt && input.now - attempt.lastPlannedAt.getTime() <= input.refreshIntervalMs) continue
+
     if (attempt?.lastFailedAt && input.now - attempt.lastFailedAt.getTime() <= failedBackoffMs) continue
+
     const lastPlayed = input.lastPlayed?.get(brawlhallaId)
     const active = lastPlayed !== undefined && (!refreshedAt || lastPlayed.getTime() > refreshedAt.getTime())
+
     due.push({ brawlhallaId, tier: viewDays >= 2 ? 'repeat' : 'single', refreshedAt, active })
   }
+
   return due.sort(
     (left, right) =>
       Number(left.tier === 'single') - Number(right.tier === 'single') ||
@@ -124,6 +138,7 @@ export function createFreshnessPlanner(deps: {
   now?: () => number
 }) {
   const now = deps.now ?? Date.now
+
   // Attempt history must cover the longest cooldown, not just the demand window, or a short window would let a
   // player's older planned or failed attempt drop out and re-queue them early.
   const attemptHistoryDays = Math.max(
@@ -131,10 +146,13 @@ export function createFreshnessPlanner(deps: {
     Math.ceil(failedBackoffMs / dayMs),
     Math.ceil(deps.config.refreshIntervalMs / dayMs),
   )
+
   let nextRunAt = 0
   let nextTrimAt = 0
+
   const record = (write: (active: Telemetry) => void) => {
     if (!deps.telemetry) return
+
     try {
       write(deps.telemetry)
     } catch {
@@ -147,30 +165,41 @@ export function createFreshnessPlanner(deps: {
       nextTrimAt = now() + viewTrimIntervalMs
       await deps.profileViews.trim({ keepDays: viewRetentionDays })
     }
+
     const usage = await deps.readSourceUsage()
+
     if (!sourceBudgetOpen(usage, deps.config.maxUsageRatio)) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'budget' }))
+
       return 0
     }
+
     // Few in flight at a time keeps V0 calls spread out and the monitoring queue short; a visitor arriving while one
     // is still queued promotes it to interactive work (reserveInteractivePlayerRefresh).
     const slots = deps.config.batch - (await deps.operations.activeRecentlyViewedRefreshes())
+
     if (slots <= 0) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'slots' }))
+
       return 0
     }
+
     const window = { windowDays: deps.config.windowDays }
+
     const [views, requests, attempts] = await Promise.all([
       deps.profileViews.viewDemand({ days: deps.config.windowDays }),
       deps.operations.refreshRequestDemand(window),
       deps.operations.recentFreshnessAttempts({ windowDays: attemptHistoryDays }),
     ])
+
     const demand = mergeViewDemand(views, requests)
     const ids = demand.map(({ brawlhallaId }) => brawlhallaId)
+
     const [lastRefreshed, lastPlayed] = await Promise.all([
       deps.freshness.lastRefreshedById(ids),
       deps.freshness.lastPlayedById?.(ids),
     ])
+
     const due = dueRefreshes({
       demand,
       lastRefreshed,
@@ -179,16 +208,21 @@ export function createFreshnessPlanner(deps: {
       refreshIntervalMs: deps.config.refreshIntervalMs,
       now: now(),
     })
+
     record((active) => {
       for (const tier of ['repeat', 'single'] as const) {
         active.metrics.set('freshness_due_players', due.filter((entry) => entry.tier === tier).length, { tier })
       }
     })
+
     const selected = due.slice(0, slots)
+
     if (selected.length === 0) return 0
+
     const enqueued = new Set(
       await deps.operations.enqueueRecentlyViewedRefreshes(selected.map(({ brawlhallaId }) => brawlhallaId)),
     )
+
     record((active) => {
       for (const { brawlhallaId, tier } of selected) {
         active.metrics.add('freshness_refreshes_total', 1, {
@@ -196,6 +230,7 @@ export function createFreshnessPlanner(deps: {
           outcome: enqueued.has(brawlhallaId) ? 'enqueued' : 'already_active',
         })
       }
+
       active.logger.info('freshness_planner.planned', {
         demand: demand.length,
         due: due.length,
@@ -204,6 +239,7 @@ export function createFreshnessPlanner(deps: {
         sourceUsed: usage.used,
       })
     })
+
     return enqueued.size
   }
 
@@ -211,11 +247,13 @@ export function createFreshnessPlanner(deps: {
     // Never throws: a failed plan only delays background refreshes to the next interval.
     async tick(): Promise<number> {
       if (!deps.config.enabled || now() < nextRunAt) return 0
+
       nextRunAt = now() + deps.config.intervalMs
       try {
         return await plan()
       } catch (error) {
         record((active) => active.logger.error('freshness_planner.plan_failed', error))
+
         return 0
       }
     },

@@ -25,6 +25,7 @@ let database: Database
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)
+
   if (
     configured.protocol !== dedicated.protocol ||
     configured.hostname !== dedicated.hostname ||
@@ -34,15 +35,19 @@ beforeAll(async () => {
   ) {
     throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
   }
+
   const adminUrl = new URL(dedicatedServer)
+
   adminUrl.pathname = '/postgres'
   admin = postgres(adminUrl.toString(), { max: 1 })
   await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
   const databaseUrl = new URL(dedicatedServer)
+
   databaseUrl.pathname = `/${databaseName}`
   connectionString = databaseUrl.toString()
   database = openTestClient(connectionString)
   const setup = postgres(connectionString, { max: 1 })
+
   try {
     await setup.unsafe(`
       CREATE TABLE public.player (
@@ -60,6 +65,7 @@ beforeAll(async () => {
         PRIMARY KEY (brawlhalla_id, key)
       );
     `)
+
     for (const migration of [
       ...playerMigrationInventory,
       ...clanMigrationInventory,
@@ -76,6 +82,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await database?.close()
   if (!admin) return
+
   await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   await admin.end()
 }, 20_000)
@@ -123,12 +130,14 @@ describe('Clan Discovery delivery and reconciliation', () => {
     const control = postgres(connectionString)
     // the operations worker restarts twice below, so it gets a client of its own to close and reopen
     let operationsClient = openTestClient(connectionString)
+
     async function restartOperationsClient(): Promise<Database> {
       await operationsClient.close()
       operationsClient = openTestClient(connectionString)
 
       return operationsClient
     }
+
     let operations = createPostgresRefreshOperations(
       { database: operationsClient },
       {
@@ -139,6 +148,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
         reconciliationEffectApplied: discovery.reconciliationEffectApplied,
       },
     )
+
     const projectionOptions = {
       leaseMs: 10_000,
       retryDelayMs: 0,
@@ -151,8 +161,10 @@ describe('Clan Discovery delivery and reconciliation', () => {
           ? discovery.playerProjectionEffectState(effectId)
           : discovery.clanProjectionEffectState(effectId),
     }
+
     try {
       await clans.publishProfile(profile('Initial Clan', '10'), new Date('2024-01-01'), provenance)
+
       const failedAck = await operations.accept({
         kind: 'clan-discovery-projection',
         dedupeKey: `clan-projection-failed-ack:${randomUUID()}`,
@@ -162,6 +174,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
         provenance: { source: 'integration-test', requestedBy: 'issue-200' },
         maxAttempts: 1,
       })
+
       await runOneRefreshOperation(operations, 'failed-ack-worker', {
         ...projectionOptions,
         executeClanProjection: async (lease) => {
@@ -179,6 +192,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
           )
         },
       })
+
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('pending')
       expect(await source.lag()).toBeGreaterThan(0)
 
@@ -192,6 +206,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
           reconciliationEffectApplied: discovery.reconciliationEffectApplied,
         },
       )
+
       await runOneRefreshOperation(operations, 'restarted-worker', projectionOptions)
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
@@ -205,18 +220,25 @@ describe('Clan Discovery delivery and reconciliation', () => {
         provenance: { source: 'integration-test', requestedBy: 'issue-200' },
         maxAttempts: 1,
       })
+
       const deadLease = await operations.claim('dead-letter-worker', 10_000, admission, 'clan-discovery-projection')
+
       if (!deadLease || deadLease.kind !== 'clan-discovery-projection')
         throw new Error('Expected Clan projection lease')
+
       await operations.fail(deadLease, { code: 'repairable', message: 'repairable', retryable: false }, 0)
       await clans.publishProfile(profile('Current Clan', '900719925474099312345'), new Date('2024-01-02'), provenance)
+
       const replay = await operations.replayDeadLetter({
         operationId: deadLetter.operationId,
         actorId: 'operator:discovery',
         reason: 'projection dependency repaired',
       })
+
       if (replay.outcome !== 'replayed') throw new Error('Expected dead-letter replay')
+
       await runOneRefreshOperation(operations, 'replay-worker', projectionOptions)
+
       expect(await discovery.search('current')).toEqual({
         players: [],
         clans: [{ clanId: 42, clanName: 'Current Clan', clanXp: '900719925474099312345', memberCount: 0 }],
@@ -226,7 +248,9 @@ describe('Clan Discovery delivery and reconciliation', () => {
         UPDATE discovery.terms SET canonical_name = 'Corrupt', display_term = 'Corrupt', normalized_term = 'corrupt'
         WHERE entity_kind = 'clan' AND entity_id = 42
       `
+
       expect(await source.lag()).toBe(0)
+
       const reconciliation = await operations.accept({
         kind: 'discovery-reconciliation',
         dedupeKey: `clan-reconciliation:${randomUUID()}`,
@@ -236,50 +260,65 @@ describe('Clan Discovery delivery and reconciliation', () => {
         provenance: { source: 'integration-test', requestedBy: 'issue-200' },
         maxAttempts: 1,
       })
+
       const reconciliationLease = await operations.claim(
         'crashing-reconciliation-worker',
         10_000,
         admission,
         'discovery-reconciliation',
       )
+
       if (!reconciliationLease || reconciliationLease.kind !== 'discovery-reconciliation') {
         throw new Error('Expected reconciliation lease')
       }
+
       const evidence = await discovery.reconcileClans(source, reconciliationLease.effectOperationId)
+
       expect(evidence).toMatchObject({ exactBefore: false, exactAfter: true, repaired: true })
+
       await control`
         UPDATE refresh_operations.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${reconciliationLease.operationId}
       `
+
       expect(
         await operations.claim('reconciliation-recovery', 10_000, admission, 'discovery-reconciliation'),
       ).toBeNull()
+
       expect((await operations.inspect(reconciliation.operationId)).operation.status).toBe('succeeded')
+
       expect(await discovery.search('current')).toEqual({
         players: [],
         clans: [{ clanId: 42, clanName: 'Current Clan', clanXp: '900719925474099312345', memberCount: 0 }],
       })
 
       let effectStateRead!: () => void
+
       const effectStateWasRead = new Promise<void>((resolve) => {
         effectStateRead = resolve
       })
+
       let releaseRecovery!: () => void
+
       const recoveryMayContinue = new Promise<void>((resolve) => {
         releaseRecovery = resolve
       })
+
       operations = createPostgresRefreshOperations(
         { database: await restartOperationsClient() },
         {
           reconciliationEffectApplied: async (effectOperationId) => {
             const applied = await discovery.reconciliationEffectApplied(effectOperationId)
+
             effectStateRead()
             await recoveryMayContinue
+
             return applied
           },
         },
       )
+
       const rejectedLateEffect = await operations.accept({
         kind: 'discovery-reconciliation',
         dedupeKey: `late-reconciliation:${randomUUID()}`,
@@ -289,22 +328,30 @@ describe('Clan Discovery delivery and reconciliation', () => {
         provenance: { source: 'integration-test', requestedBy: 'issue-200' },
         maxAttempts: 1,
       })
+
       const lateLease = await operations.claim('late-worker', 10_000, admission, 'discovery-reconciliation')
+
       if (!lateLease || lateLease.kind !== 'discovery-reconciliation') throw new Error('Expected late lease')
+
       await control`
         UPDATE refresh_operations.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${lateLease.operationId}
       `
+
       const recovery = operations.claim('final-attempt-recovery', 10_000, admission, 'discovery-reconciliation')
+
       await effectStateWasRead
+
       const lateEffect = discovery.reconcileClans(source, lateLease.effectOperationId, () =>
         operations.discoveryLeaseActive(lateLease),
       )
+
       const lateEffectOutcome = lateEffect.then(
         () => null,
         (error: unknown) => error,
       )
+
       releaseRecovery()
       expect(await recovery).toBeNull()
       expect((await operations.inspect(rejectedLateEffect.operationId)).operation.status).toBe('dead_letter')

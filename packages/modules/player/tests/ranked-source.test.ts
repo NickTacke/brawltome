@@ -123,6 +123,7 @@ describe('V0 ranked snapshot source contract', () => {
       brawlhalla_id_two: completeSnapshot.brawlhalla_id,
       teamname: 'Invalid Self Team',
     }
+
     const decoded = decodeV0RankedSnapshot(
       { ...completeSnapshot, '2v2': [completeSnapshot['2v2'][0], selfTeam, selfTeam] },
       completeSnapshot.brawlhalla_id,
@@ -139,6 +140,7 @@ describe('V0 ranked snapshot source contract', () => {
       region: 4,
       teamname: 'Solo Queue Alternate',
     }
+
     const decoded = decodeV0RankedSnapshot(
       { ...completeSnapshot, legends: [], '2v2': [completeSnapshot['2v2'][1], secondSolo] },
       91913839,
@@ -146,6 +148,7 @@ describe('V0 ranked snapshot source contract', () => {
 
     expect(decoded.rankedLegends).toEqual([])
     expect(decoded.fixedTeams).toEqual([])
+
     expect(decoded.soloQueue.map(({ teamName, region }) => ({ teamName, region }))).toEqual([
       { teamName: 'Solo Queue', region: 'EU' },
       { teamName: 'Solo Queue Alternate', region: 'SEA' },

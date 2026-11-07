@@ -13,14 +13,17 @@ export function LegendMeta() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+
   const filters = useMemo(
     () => parseLegendMetaSearchParams(new URLSearchParams(searchParams.toString())),
     [searchParams],
   )
+
   const { data, error } = useQuery({
     queryKey: ['statistics', 'legend-meta', filters.region, filters.bracket],
     queryFn: () => trpc.statistics.legendMeta.query(filters),
   })
+
   const history = useQuery({
     queryKey: ['statistics', 'legend-meta-history', filters.region, filters.bracket],
     queryFn: () => trpc.statistics.legendMetaHistory.query(filters),

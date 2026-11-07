@@ -14,9 +14,11 @@ function executable(path: string, content: string): void {
 
 function fixture(overrides: Record<string, string> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-quota-test-'))
+
   temporaryDirectories.push(directory)
   const root = join(directory, 'storage')
   const bin = join(directory, 'bin')
+
   mkdirSync(bin)
   for (const name of ['prometheus', 'loki', 'tempo']) mkdirSync(join(root, name), { recursive: true })
 
@@ -26,6 +28,7 @@ function fixture(overrides: Record<string, string> = {}) {
 name=$(basename "$path")
 [ "\${MOCK_UNMOUNTED:-}" != "$name" ]`,
   )
+
   executable(
     join(bin, 'findmnt'),
     `field=''
@@ -46,6 +49,7 @@ else
   echo "/dev/root[/$name]"
 fi`,
   )
+
   executable(
     join(bin, 'df'),
     `mode=$2
@@ -58,6 +62,7 @@ case "$name" in
 esac
 if [ "$mode" = --output=size ]; then printf 'Size\\n%s\\n' "$capacity"; else printf 'Avail\\n%s\\n' "$available"; fi`,
   )
+
   executable(
     join(bin, 'stat'),
     `for argument in "$@"; do path=$argument; done
@@ -67,6 +72,7 @@ elif [ "$name" = prometheus ]; then echo 65534
 else echo 10001
 fi`,
   )
+
   executable(
     join(bin, 'numfmt'),
     `if [ -n "\${MOCK_PROMETHEUS_RETENTION_BYTES:-}" ]; then
@@ -114,12 +120,14 @@ afterEach(() => {
 describe('telemetry quota mount preflight', () => {
   test('accepts three distinct correctly owned quota filesystems with headroom', () => {
     const result = fixture()
+
     expect(result.exitCode, result.stderr.toString()).toBe(0)
     expect(result.stdout.toString()).toContain('three distinct dedicated telemetry filesystems')
   })
 
   test.each(['9GB', '9GiB'])('accepts Prometheus binary retention size %s', (retentionSize) => {
     const quota = '12884901888'
+
     const result = fixture({
       OBSERVABILITY_METRICS_QUOTA_BYTES: quota,
       MOCK_PROMETHEUS_CAPACITY: quota,
@@ -191,6 +199,7 @@ describe('telemetry quota mount preflight', () => {
   for (const testCase of failureCases) {
     test(testCase.name, () => {
       const result = fixture(testCase.env)
+
       expect(result.exitCode).not.toBe(0)
       expect(result.stderr.toString()).toContain(testCase.message)
     })

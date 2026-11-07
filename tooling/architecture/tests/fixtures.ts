@@ -94,6 +94,7 @@ export function withImport(
 ): ArchitectureRepository {
   const fixture = structuredClone(base)
   const workspace = fixture.workspaces.find(({ name }) => name === importer)
+
   if (!workspace) throw new Error(`Unknown fixture workspace: ${importer}`)
 
   workspace.sourceFiles.push({
@@ -101,18 +102,22 @@ export function withImport(
     imports: [specifier],
     source: '',
   })
+
   if (options.dependency && !workspace.dependencies.includes(options.dependency)) {
     workspace.dependencies.push(options.dependency)
   }
+
   return fixture
 }
 
 export function cycleFixture(): ArchitectureRepository {
   const fixture = structuredClone(base)
   const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
+
   if (!players) throw new Error('Missing Players fixture')
 
   players.dependencies.push('@fixture/rankings')
   players.sourceFiles.push({ path: 'packages/players/src/cycle.ts', imports: ['@fixture/rankings'], source: '' })
+
   return fixture
 }

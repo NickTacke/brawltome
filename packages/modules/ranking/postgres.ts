@@ -113,6 +113,7 @@ function storedIdentity(identity: PublishedLeaderboardIdentity) {
       player_two_name: identity.players[1].name,
     }
   }
+
   return {
     identity_kind: identity.type,
     player_one_id: identity.player.brawlhallaId,
@@ -124,18 +125,25 @@ function storedIdentity(identity: PublishedLeaderboardIdentity) {
 
 function publishedIdentity(row: StoredIdentityRow): PublishedLeaderboardIdentity {
   const first = { brawlhallaId: row.player_one_id, name: row.player_one_name }
+
   if (row.identity_kind === 'fixed-two-vs-two-team') {
     if (row.player_two_id === null || row.player_two_name === null) throw new Error('stored fixed team is incomplete')
+
     return {
       type: row.identity_kind,
       players: [first, { brawlhallaId: row.player_two_id, name: row.player_two_name }],
     }
   }
+
   if (row.player_two_id !== null || row.player_two_name !== null)
     throw new Error('stored player identity has a teammate')
+
   if (row.identity_kind === 'one-vs-one-player') return { type: row.identity_kind, player: first }
+
   if (row.identity_kind === 'solo-two-vs-two-player') return { type: row.identity_kind, player: first }
+
   if (row.identity_kind === 'three-vs-three-player') return { type: row.identity_kind, player: first }
+
   throw new Error('stored leaderboard identity is unsupported')
 }
 
@@ -144,26 +152,34 @@ function publishedProvenance(
 ): Extract<LeaderboardView, { status: 'fresh' | 'stale' }>['provenance'] {
   if (snapshot.source === 'brawlhalla-v1-ranked-leaderboard') {
     if (snapshot.page_depth === null) throw new Error('stored V1 leaderboard provenance has no page depth')
+
     let pageDepth = snapshot.page_depth
     const scopePageDepths = snapshot.provenance.scopePageDepths
+
     if (scopePageDepths !== undefined) {
       if (typeof scopePageDepths !== 'object' || scopePageDepths === null || Array.isArray(scopePageDepths)) {
         throw new Error('stored V1 leaderboard scope depths are invalid')
       }
+
       const scopePageDepth = (scopePageDepths as Record<string, unknown>)[snapshot.scope]
+
       if (!Number.isSafeInteger(scopePageDepth) || (scopePageDepth as number) < 1) {
         throw new Error('stored V1 leaderboard scope depth is invalid')
       }
+
       pageDepth = scopePageDepth as number
     }
+
     return {
       source: snapshot.source,
       contractVersion: snapshot.source_contract_version,
       pageDepth,
     }
   }
+
   const sourceChecksum = snapshot.provenance.sourceChecksum
   const importedAt = snapshot.provenance.importedAt
+
   if (
     typeof sourceChecksum !== 'string' ||
     !/^[a-f0-9]{64}$/u.test(sourceChecksum) ||
@@ -172,6 +188,7 @@ function publishedProvenance(
   ) {
     throw new Error('stored legacy leaderboard provenance is invalid')
   }
+
   return {
     source: snapshot.source,
     contractVersion: snapshot.source_contract_version,
@@ -201,6 +218,7 @@ export function createPostgresRanking(
         ${authorization.leaseToken}
       ) AS active
     `
+
     return result?.active === true
   }
 
@@ -217,11 +235,13 @@ export function createPostgresRanking(
         ${authorization.leaseToken}
       ) AS result
     `
+
     return result?.result ?? 'lease-lost'
   }
 
   async function playerValhallanEvidenceById(brawlhallaId: number): Promise<PlayerValhallanEvidence | null> {
     if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1) throw new Error('brawlhallaId must be positive')
+
     const rows = await client<
       Array<{
         mode: '1v1' | '2v2' | 'solo2v2'
@@ -249,7 +269,9 @@ export function createPostgresRanking(
       WHERE row.tier LIKE 'Valhallan%'
         AND (row.player_one_id = ${brawlhallaId} OR row.player_two_id = ${brawlhallaId})
     `
+
     if (rows.length === 0) return null
+
     return {
       oneVsOne: rows.some((row) => row.mode === '1v1'),
       fixedTwoVsTwoTeams: rows
@@ -273,10 +295,12 @@ export function createPostgresRanking(
     validateMode(input.mode)
     validateScope(input.region)
     const { page, pageSize } = boundedPagination(input.page, input.pageSize)
+
     // One repeatable-read snapshot so retention cannot delete the selected snapshot between the
     // metadata read and the row read.
     return client.begin('isolation level repeatable read read only', async (transaction) => {
       const sql = transaction as unknown as typeof client
+
       const [snapshot] = await sql<SnapshotRow[]>`
       SELECT snapshot.id AS snapshot_id, snapshot.generation_id, snapshot.mode, snapshot.scope,
              generation.observed_at, generation.published_at, generation.expected_next_publication_at,
@@ -303,6 +327,7 @@ export function createPostgresRanking(
       ORDER BY generation.schedule_window_at DESC, generation.id DESC
       LIMIT 1
     `
+
       await options.afterMetadataRead?.()
       if (!snapshot) {
         return {
@@ -315,6 +340,7 @@ export function createPostgresRanking(
       }
 
       const offset = (page - 1) * pageSize
+
       const entries = await sql<StandingRow[]>`
       SELECT standing, source_rank, identity_kind, player_one_id, player_one_name,
              player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier
@@ -324,10 +350,13 @@ export function createPostgresRanking(
       OFFSET ${offset}
       LIMIT ${pageSize}
     `
+
       const now = input.now ?? new Date()
+
       const stale =
         now >= snapshot.expected_next_publication_at ||
         (snapshot.latest_failure_at !== null && snapshot.latest_failure_at > snapshot.published_at)
+
       return {
         status: stale ? 'stale' : 'fresh',
         snapshotId: snapshot.snapshot_id,
@@ -369,10 +398,12 @@ export function createPostgresRanking(
     validateMode(input.mode)
     validateScope(input.region)
     const { page, pageSize } = boundedPagination(input.page, input.pageSize)
+
     // One repeatable-read snapshot so retention cannot delete the selected snapshot between the
     // metadata read and the row read.
     return client.begin('isolation level repeatable read read only', async (transaction) => {
       const sql = transaction as unknown as typeof client
+
       const [interval] = await sql<ActivityIntervalRow[]>`
       WITH current_generation AS (
         SELECT generation.*
@@ -426,6 +457,7 @@ export function createPostgresRanking(
        AND previous_snapshot.mode = current_endpoint.mode
        AND previous_snapshot.scope = current_endpoint.scope
     `
+
       await options.afterMetadataRead?.()
       if (!interval) {
         return {
@@ -437,7 +469,9 @@ export function createPostgresRanking(
           pageSize,
         }
       }
+
       const offset = (page - 1) * pageSize
+
       const entries = await sql<ActivityStandingRow[]>`
       SELECT current.standing, current.identity_kind, current.player_one_id, current.player_one_name,
              current.player_two_id, current.player_two_name, current.region, current.rating,
@@ -460,7 +494,9 @@ export function createPostgresRanking(
       OFFSET ${offset}
       LIMIT ${pageSize}
     `
+
       let totalRows = entries[0]?.total_count ?? 0
+
       if (entries.length === 0 && offset > 0) {
         const [count] = await sql<{ total_count: number }[]>`
         SELECT count(*)::integer AS total_count
@@ -473,16 +509,22 @@ export function createPostgresRanking(
           AND current.losses >= previous.losses
           AND current.wins + current.losses > previous.wins + previous.losses
       `
+
         totalRows = count?.total_count ?? 0
       }
+
       const now = input.now ?? new Date()
+
       const publicationIntervalMs =
         interval.expected_next_publication_at.getTime() - interval.schedule_window_at.getTime()
+
       const stale = now.getTime() >= interval.expected_next_publication_at.getTime() + publicationIntervalMs
       const provenance = publishedProvenance(interval)
+
       if (provenance.source !== 'brawlhalla-v1-ranked-leaderboard') {
         throw new Error('recent activity requires official leaderboard provenance')
       }
+
       return {
         status: stale ? 'stale' : 'fresh',
         mode: interval.mode,
@@ -526,27 +568,36 @@ export function createPostgresRanking(
     ): Promise<PublicationResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         if (candidate.operationKey !== authorization.operationKey) throw new Error('candidate operation key mismatch')
+
         if (leaderboardModeFromOperationKind(authorization.operationKind) !== candidate.mode) {
           throw new Error('candidate mode does not match operation kind')
         }
+
         const requiredScopes: LeaderboardScope[] = ['all', ...regionalLeaderboardScopes]
+
         if (candidate.snapshots.size !== requiredScopes.length) throw new Error('candidate must contain ten scopes')
+
         for (const scope of requiredScopes) {
           const rows = candidate.snapshots.get(scope)
+
           if (!rows || (scope === 'all' && rows.length === 0)) throw new Error(`candidate scope ${scope} is empty`)
         }
 
         const effect = await recordOperationEffect(sql, authorization)
+
         if (effect === 'lease-lost' || effect === 'effect-conflict') return effect
 
         const effectOperationId = authorization.effectOperationId ?? authorization.operationId
+
         const [existing] = await sql<{ operation_id: string; operation_key: string; mode: LeaderboardMode }[]>`
           SELECT operation_id, operation_key, mode
           FROM rankings.generations
           WHERE operation_key = ${candidate.operationKey} OR operation_id = ${effectOperationId}
           LIMIT 1
         `
+
         if (existing) {
           return existing.operation_id === effectOperationId &&
             existing.operation_key === candidate.operationKey &&
@@ -554,9 +605,11 @@ export function createPostgresRanking(
             ? ('already-published' as const)
             : ('effect-conflict' as const)
         }
+
         if (effect === 'already-applied') throw new Error('leaderboard effect exists without its Ranking generation')
 
         const generationId = randomUUID()
+
         await sql`
           INSERT INTO rankings.generations
             (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
@@ -572,14 +625,19 @@ export function createPostgresRanking(
                scopePageDepths: candidate.scopePageDepths,
              })})
         `
+
         for (const scope of requiredScopes) {
           const rows = candidate.snapshots.get(scope)
+
           if (!rows) throw new Error(`candidate scope ${scope} disappeared during publication`)
+
           const snapshotId = randomUUID()
+
           await sql`
             INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
             VALUES (${snapshotId}, ${generationId}, ${candidate.mode}, ${scope}, ${rows.length})
           `
+
           const storedRows = rows.map((row, index) => ({
             snapshot_id: snapshotId,
             mode: candidate.mode,
@@ -594,6 +652,7 @@ export function createPostgresRanking(
             losses: row.losses,
             tier: row.tier,
           }))
+
           for (let offset = 0; offset < storedRows.length; offset += 500) {
             await sql`
               INSERT INTO rankings.snapshot_rows ${sql(
@@ -618,7 +677,9 @@ export function createPostgresRanking(
             `
           }
         }
+
         await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+
         return 'published' as const
       })
     },
@@ -631,8 +692,10 @@ export function createPostgresRanking(
       input: RankingRetentionInput,
     ): Promise<RankingRetentionResult> {
       const { retentionHours, maxGenerations } = validateRankingRetentionInput(input)
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [lease] = await sql<{ active: boolean }[]>`
           SELECT refresh_operations.lock_active_ranking_retention_lease(
             ${authorization.operationId},
@@ -640,7 +703,9 @@ export function createPostgresRanking(
             ${authorization.leaseToken}
           ) AS active
         `
+
         if (lease?.active !== true) return { outcome: 'lease-lost' as const }
+
         const [expired] = await sql<{ deleted_generations: number; expirable_generations: number }[]>`
           SELECT deleted_generations, expirable_generations
           FROM rankings.expire_v1_generations(
@@ -648,6 +713,7 @@ export function createPostgresRanking(
             ${maxGenerations}::integer
           )
         `
+
         const [completed] = await sql<{ completed: boolean }[]>`
           SELECT refresh_operations.complete_ranking_retention_lease(
             ${authorization.operationId},
@@ -655,8 +721,10 @@ export function createPostgresRanking(
             ${authorization.leaseToken}
           ) AS completed
         `
+
         // The lease row has been locked since the check above, so completion cannot lose it; fail loudly if it did.
         if (completed?.completed !== true) throw new Error('ranking retention lease changed while its row was locked')
+
         return {
           outcome: 'completed' as const,
           deletedGenerations: expired?.deleted_generations ?? 0,
@@ -671,13 +739,17 @@ export function createPostgresRanking(
     ) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         if (leaderboardModeFromOperationKind(authorization.operationKind) !== failure.mode) {
           throw new Error('failure mode does not match operation kind')
         }
+
         if (!(await lockAuthorizedOperation(sql, authorization))) return 'lease-lost' as const
+
         const scheduleWindowAt = authorization.scheduleWindowAt
           ? new Date(authorization.scheduleWindowAt)
           : failure.checkedAt
+
         await sql`
           INSERT INTO rankings.collection_failures
             (id, mode, scope, operation_key, schedule_window_at, checked_at, code, message)
@@ -685,6 +757,7 @@ export function createPostgresRanking(
             (${randomUUID()}, ${failure.mode}, ${failure.scope}, ${authorization.operationKey}, ${scheduleWindowAt},
              ${failure.checkedAt}, ${failure.code}, ${failure.message})
         `
+
         return 'recorded' as const
       })
     },

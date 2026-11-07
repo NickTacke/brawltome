@@ -16,16 +16,20 @@ function backupName(hoursAgo: number): string {
 
 function fixture(hoursAgo = 1) {
   const root = mkdtempSync(join(tmpdir(), 'brawltome-backup-integrity-'))
+
   temporaryDirectories.push(root)
   const remote = join(root, 'remote')
   const metrics = join(root, 'metrics', 'backup.prom')
   const bin = join(root, 'bin')
   const rclone = join(bin, 'rclone')
   const name = backupName(hoursAgo)
+
   Bun.spawnSync(['mkdir', '-p', remote, bin, join(root, 'metrics')])
   const compressed = Bun.spawnSync(['gzip', '-c'], { stdin: Buffer.from('verified backup fixture') })
+
   expect(compressed.exitCode).toBe(0)
   writeFileSync(join(remote, name), compressed.stdout)
+
   writeFileSync(
     rclone,
     `#!/usr/bin/env bash
@@ -69,15 +73,18 @@ case "$command" in
 esac
 `,
   )
+
   chmodSync(rclone, 0o755)
   for (const [command, body] of [
     ['flock', '#!/bin/sh\nexit 0\n'],
     ['sha256sum', '#!/bin/sh\nsleep "${FAKE_SHA256_DELAY:-0}"\nexec shasum -a 256 "$@"\n'],
   ] as const) {
     const path = join(bin, command)
+
     writeFileSync(path, body)
     chmodSync(path, 0o755)
   }
+
   const env = {
     ...process.env,
     BACKUP_REMOTE: 'R2',
@@ -92,6 +99,7 @@ esac
     RCLONE_BIN: rclone,
     RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: 'must-not-appear',
   }
+
   return { env, metrics, name, remote }
 }
 
@@ -99,13 +107,16 @@ const failureReasons = ['stale', 'uploading', 'missing', 'hash_invalid', 'sideca
 
 function failureReason(metrics: string): string[] {
   const active: string[] = []
+
   for (const reason of failureReasons) {
     const match = readFileSync(metrics, 'utf8').match(
       new RegExp(`^brawltome_postgres_backup_integrity_failure_reason\\{reason="${reason}"\\} ([01])$`, 'm'),
     )
+
     expect(match, `missing ${reason} series`).not.toBeNull()
     if (match?.[1] === '1') active.push(reason)
   }
+
   return active
 }
 
@@ -118,9 +129,11 @@ describe('recurring backup integrity verifier', () => {
     const { env, metrics, name, remote } = fixture()
 
     const created = run(env)
+
     expect(created.exitCode, created.stderr.toString()).toBe(0)
     const sidecar = readFileSync(join(remote, `${name}.sha256`), 'utf8')
     const [hash, sidecarName] = sidecar.trimEnd().split('  ')
+
     expect(hash).toMatch(/^[a-f0-9]{64}$/)
     expect(sidecarName).toBe(name)
     expect(sidecar.endsWith('\n')).toBe(true)
@@ -128,20 +141,24 @@ describe('recurring backup integrity verifier', () => {
     expect(failureReason(metrics)).toEqual([])
 
     const verified = run(env)
+
     expect(verified.exitCode, verified.stderr.toString()).toBe(0)
     expect(readFileSync(join(remote, `${name}.sha256`), 'utf8')).toBe(sidecar)
   })
 
   test('rejects a checksum mismatch without leaking credentials', () => {
     const { env, metrics, name, remote } = fixture()
+
     expect(run(env).exitCode).toBe(0)
     writeFileSync(join(remote, `${name}.sha256`), `${'0'.repeat(64)}  ${name}\n`)
 
     const result = run(env)
+
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr.toString()).toContain('checksum sidecar does not match')
     expect(`${result.stdout}${result.stderr}`).not.toContain('must-not-appear')
     const failedMetrics = readFileSync(metrics, 'utf8')
+
     expect(failedMetrics).toContain('brawltome_postgres_backup_integrity_ok 0')
     expect(failedMetrics).toMatch(/brawltome_postgres_backup_integrity_latest_verified_timestamp_seconds [1-9][0-9]*/)
     expect(failureReason(metrics)).toEqual(['sidecar_mismatch'])
@@ -152,6 +169,7 @@ describe('recurring backup integrity verifier', () => {
     const missingRemoteEnv: Record<string, string | undefined> = { ...env, BACKUP_REMOTE: undefined }
 
     const result = run(missingRemoteEnv)
+
     expect(result.exitCode).not.toBe(0)
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
     expect(failureReason(metrics)).toEqual(['config'])
@@ -161,6 +179,7 @@ describe('recurring backup integrity verifier', () => {
     const { env, metrics } = fixture(9)
 
     const result = run(env)
+
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr.toString()).toContain('Latest backup is stale')
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 0')
@@ -171,6 +190,7 @@ describe('recurring backup integrity verifier', () => {
     const { env, metrics } = fixture()
 
     const recovered = run({ ...env, FAKE_CAT_FAILURES: '2' })
+
     expect(recovered.exitCode, recovered.stderr.toString()).toBe(0)
     expect(recovered.stderr.toString()).toContain('attempt 3 of 3')
     expect(readFileSync(metrics, 'utf8')).toContain('brawltome_postgres_backup_integrity_ok 1')
@@ -180,6 +200,7 @@ describe('recurring backup integrity verifier', () => {
     const { env, metrics } = fixture()
 
     const result = run({ ...env, FAKE_CAT_FAILURES: '3' })
+
     expect(result.exitCode).not.toBe(0)
     expect(result.stderr.toString()).toContain('could not be read and validated')
     expect(failureReason(metrics)).toEqual(['hash_invalid'])
@@ -187,15 +208,18 @@ describe('recurring backup integrity verifier', () => {
 
   test('labels in-progress uploads, missing backups, and corrupt archives', () => {
     const uploading = fixture(0)
+
     expect(run(uploading.env).exitCode).not.toBe(0)
     expect(failureReason(uploading.metrics)).toEqual(['uploading'])
 
     const missing = fixture()
+
     rmSync(join(missing.remote, missing.name))
     expect(run(missing.env).exitCode).not.toBe(0)
     expect(failureReason(missing.metrics)).toEqual(['missing'])
 
     const corrupt = fixture()
+
     writeFileSync(join(corrupt.remote, corrupt.name), 'not gzip')
     expect(run(corrupt.env).exitCode).not.toBe(0)
     expect(failureReason(corrupt.metrics)).toEqual(['hash_invalid'])

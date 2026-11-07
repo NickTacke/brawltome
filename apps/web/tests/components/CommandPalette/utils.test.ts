@@ -14,6 +14,7 @@ describe('buildCommands', () => {
       playerResults: [],
       clanResults: [],
     })
+
     expect(result).toHaveLength(2)
     expect(result[0].kind).toBe('nav')
     expect(result[0].id).toBe('nav-/')
@@ -40,6 +41,7 @@ describe('buildCommands', () => {
       ],
       clanResults: [{ clanId: 1, clanName: 'Test Clan', clanXp: '10', memberCount: 1 }],
     })
+
     expect(result).toHaveLength(2)
     expect(result[0].kind).toBe('player')
     expect(result[0].id).toBe('p-1')
@@ -56,6 +58,7 @@ describe('buildCommands', () => {
       playerResults: [],
       clanResults: [],
     })
+
     expect(result).toEqual([])
   })
 
@@ -76,6 +79,7 @@ describe('buildCommands', () => {
       ],
       clanResults: [{ clanId: 99, clanName: 'Clan', clanXp: '0', memberCount: 0 }],
     })
+
     expect(result.map((c) => c.kind)).toEqual(['player', 'clan'])
   })
 })

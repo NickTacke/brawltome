@@ -69,13 +69,16 @@ export function parseLeaderboardSearchParams(
 // has to wait when the URL does not already name both.
 export function shouldWaitForPreferences(params: URLSearchParams, preferencesLoading: boolean): boolean {
   if (!preferencesLoading) return false
+
   const bracket = params.get('bracket')
   const region = params.get('region')
+
   const urlPinsScope =
     bracket !== null &&
     region !== null &&
     (BRACKET_IDS as readonly string[]).includes(bracket) &&
     (REGION_IDS as readonly string[]).includes(region)
+
   return !urlPinsScope
 }
 
@@ -85,7 +88,9 @@ export function preferencesForLeaderboardUpdate(
   signedIn: boolean,
 ): AccountPreferencesUpdateContract | null {
   if (!signedIn || (next.bracket === undefined && next.region === undefined)) return null
+
   const merged = { ...current, ...next }
+
   return {
     leaderboardBracket: merged.bracket,
     leaderboardRegion: merged.region,
@@ -106,14 +111,19 @@ export function playerHref(brawlhallaId: number): string | null {
 
 export function snapshotNotice(status: 'fresh' | 'stale' | 'unavailable' | null): string | null {
   if (status === 'stale') return null
+
   if (status === 'unavailable') return 'Leaderboard unavailable until the first validated collection succeeds.'
+
   return null
 }
 
 export function getRankStyle(rank: number): string {
   if (rank === 1) return 'text-yellow-500 font-black text-xl'
+
   if (rank === 2) return 'text-slate-400 font-black text-xl'
+
   if (rank === 3) return 'text-amber-700 font-black text-xl'
+
   return 'text-muted-foreground font-mono'
 }
 
@@ -122,7 +132,9 @@ export function leaderboardPageFeatures(
   next: { bracket?: unknown; region?: unknown; page?: number },
 ): Array<'leaderboard.page_next' | 'leaderboard.page_depth_5plus'> {
   if (next.page === undefined || next.bracket !== undefined || next.region !== undefined) return []
+
   if (next.page <= currentPage) return []
+
   return currentPage < 5 && next.page >= 5
     ? ['leaderboard.page_next', 'leaderboard.page_depth_5plus']
     : ['leaderboard.page_next']

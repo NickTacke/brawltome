@@ -12,6 +12,7 @@ beforeAll(async () => {
     label: 'player_ranked_history',
     modules: [refreshOperationsModule, playerModule],
   })
+
   connectionString = database.connectionString
 }, 20_000)
 
@@ -23,12 +24,14 @@ describe('ranked rating history', () => {
   test('returns imported V2 history after newer V0 points with the right source labels', async () => {
     const control = postgres(connectionString, { max: 1 })
     const ranked = createPostgresRankedPlayers(database)
+
     try {
       await control`
         INSERT INTO players.ranked_profiles
           (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
         VALUES (42, 'Fresh V0', '2026-08-03T00:00:00Z', '2026-08-03T00:00:00Z', 'US-E', 1900, 1950, 'Diamond', 60, 110)
       `
+
       await control`
         INSERT INTO players.ranked_rating_history
           (brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at, history_source, legacy_source_key,
@@ -38,6 +41,7 @@ describe('ranked rating history', () => {
           (42, 1600, 1650, NULL, 30, 60, '2026-06-01T00:00:00Z', 'v2-legacy', 'player:42:2', 2),
           (42, 1500, 1550, NULL, 20, 40, '2026-05-01T00:00:00Z', 'v2-legacy', 'player:42:1', 1)
       `
+
       await control`
         INSERT INTO players.ranked_rating_history
           (brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at)
@@ -47,6 +51,7 @@ describe('ranked rating history', () => {
       const profile = await ranked.byId(42)
 
       expect(profile?.snapshot?.oneVsOne.rating).toBe(1900)
+
       expect(profile?.snapshot?.ratingHistory.map(({ rating, source }) => ({ rating, source }))).toEqual([
         { rating: 1900, source: 'v0-player-snapshot' },
         { rating: 1700, source: 'legacy-v2' },

@@ -10,17 +10,21 @@ const temporaryDirectories: string[] = []
 
 function fixture(overrides: Record<string, string> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-postgres-storage-'))
+
   temporaryDirectories.push(directory)
   const bin = join(directory, 'bin')
   const data = join(directory, 'postgres')
+
   mkdirSync(bin)
   mkdirSync(data)
 
   const executable = (name: string, body: string) => {
     const path = join(bin, name)
+
     writeFileSync(path, `#!/bin/sh\n${body}\n`)
     chmodSync(path, 0o755)
   }
+
   executable(
     'findmnt',
     `case "$*" in
@@ -30,8 +34,10 @@ function fixture(overrides: Record<string, string> = {}) {
 *'-o OPTIONS'*) printf '%s\n' "\${MOCK_OPTIONS}" ;;
 esac`,
   )
+
   executable('blockdev', `printf '%s\n' "\${MOCK_SIZE}"`)
   executable('losetup', `printf '%s\n' "\${MOCK_BACKING}"`)
+
   executable(
     'stat',
     `case "$*" in
@@ -42,6 +48,7 @@ esac`,
 *) printf '%s\n' "\${MOCK_DEVICE}" ;;
 esac`,
   )
+
   executable('df', `printf 'Avail\n%s\n' "\${MOCK_AVAILABLE}"`)
 
   return {
@@ -73,6 +80,7 @@ afterEach(() => {
 describe('PostgreSQL storage preflight', () => {
   test('accepts the dedicated quota-backed mount', () => {
     const result = spawnSync('sh', [preflight], { encoding: 'utf8', ...fixture() })
+
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('PostgreSQL storage preflight passed')
   })
@@ -90,16 +98,19 @@ describe('PostgreSQL storage preflight', () => {
     ['sparse backing', { MOCK_ALLOCATED_BLOCKS: '1' }, 'backing file is sparse'],
   ])('rejects %s drift', (_name, override, message) => {
     const result = spawnSync('sh', [preflight], { encoding: 'utf8', ...fixture(override) })
+
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(message)
   })
 
   test('rejects arguments and unsafe numeric configuration', () => {
     const withArgument = spawnSync('sh', [preflight, '--force'], { encoding: 'utf8', ...fixture() })
+
     const unsafeQuota = spawnSync('sh', [preflight], {
       encoding: 'utf8',
       ...fixture({ POSTGRES_QUOTA_BYTES: '01' }),
     })
+
     expect(withArgument.status).toBe(64)
     expect(unsafeQuota.status).toBe(1)
   })

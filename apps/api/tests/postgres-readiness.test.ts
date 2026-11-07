@@ -39,6 +39,7 @@ describe('postgres readiness', () => {
     await expect(readiness.check()).rejects.toThrow(
       'postgres readiness: the database did not answer within 20 ms (pool busy or database unreachable)',
     )
+
     expect(performance.now() - startedAt).toBeLessThan(500)
     // a timed-out probe leaves the queue, so probes during saturation don't pile up
     expect(pool.cancelledQueries()).toBe(1)

@@ -20,32 +20,42 @@ export function createDiscoveryReconciliationBackoff(options: {
 
   function stateFor(owner: ReconciliationOwner): OwnerState {
     let state = states.get(owner)
+
     if (!state) {
       state = { operationId: null, consecutiveFailures: 0, cooldownUntil: 0 }
       states.set(owner, state)
     }
+
     return state
   }
 
   return {
     async shouldEnqueue(owner: ReconciliationOwner): Promise<boolean> {
       const state = stateFor(owner)
+
       if (now() < state.cooldownUntil) return false
+
       if (state.operationId === null) return true
+
       const status = await options.operationStatus(state.operationId)
+
       if (status === 'dead_letter') {
         state.operationId = null
         state.consecutiveFailures++
         const cooldownMs = Math.min(options.maxMs, options.baseMs * 2 ** (state.consecutiveFailures - 1))
+
         state.cooldownUntil = now() + cooldownMs
+
         return false
       }
+
       if (status === 'succeeded') {
         state.operationId = null
         state.consecutiveFailures = 0
       } else if (status === null) {
         state.operationId = null
       }
+
       return true
     },
 

@@ -8,6 +8,7 @@ import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle, pla
 
 function PlayerLink({ brawlhallaId, name }: { brawlhallaId: number; name: string }) {
   const href = playerHref(brawlhallaId)
+
   return href ? (
     <Link href={href} prefetch={false} className="hover:text-primary">
       {fixEncoding(name)}
@@ -21,6 +22,7 @@ export function SoloLeaderboardRow({ entry }: { entry: SoloLeaderboardEntry }) {
   const winrate = entry.games > 0 ? (entry.wins / entry.games) * 100 : null
   const player = entry.identity.player
   const href = playerHref(player.brawlhallaId)
+
   const content = (children: React.ReactNode) =>
     href ? (
       <Link href={href} prefetch={false} className="block w-full h-full p-4">
@@ -105,6 +107,7 @@ export function SoloLeaderboardRow({ entry }: { entry: SoloLeaderboardEntry }) {
 export function TeamLeaderboardRow({ entry }: { entry: TeamLeaderboardEntry }) {
   const winrate = entry.games > 0 ? (entry.wins / entry.games) * 100 : 0
   const [first, second] = entry.identity.players
+
   return (
     <TableRow className="border-border transition-colors group h-16">
       <TableCell className={`text-center ${getRankStyle(entry.standing)}`}>#{entry.standing}</TableCell>

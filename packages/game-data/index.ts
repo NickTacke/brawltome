@@ -15,8 +15,10 @@ export type CurrentOneVsOneBracket = 'Platinum' | 'Diamond+'
 
 export function currentOneVsOneBracket(rating: number): CurrentOneVsOneBracket | null {
   if (!Number.isSafeInteger(rating) || rating < CURRENT_ONE_VS_ONE_PLATINUM_MIN_RATING) return null
+
   return rating < CURRENT_ONE_VS_ONE_DIAMOND_MIN_RATING ? 'Platinum' : 'Diamond+'
 }
+
 export {
   aggregateWeapons,
   createLegendReferenceIndex,
@@ -54,22 +56,28 @@ export const getHurtboxByName = (name: string): Hurtbox | undefined => hurtboxBy
 export const getSkinById = (id: number): Skin | undefined => skinById.get(id)
 export const getCrossoverSkinById = (id: number): Skin | undefined => {
   const skin = skinById.get(id)
+
   return skin?.isCrossover ? skin : undefined
 }
 
 export const crossoverSkinIdsByLegend: ReadonlyMap<number, readonly number[]> = (() => {
   const grouped = new Map<number, number[]>()
+
   for (const skin of skins) {
     if (!skin.isCrossover) continue
+
     const ids = grouped.get(skin.legendId) ?? []
+
     ids.push(skin.skinId)
     grouped.set(skin.legendId, ids)
   }
+
   return grouped
 })()
 
 export function resolvePlayerAppearance(legendId: number, skinId: number): PlayerAppearance {
   const legend = getLegendById(legendId)
+
   if (!legend) {
     return {
       kind: 'legend',
@@ -84,6 +92,7 @@ export function resolvePlayerAppearance(legendId: number, skinId: number): Playe
 
   const baseImageUrl = legendAvatarUrl(legendSlug(legend.heroId, legend.displayName))
   const skin = getSkinById(skinId)
+
   if (!skin) {
     return {
       kind: 'legend',
@@ -95,6 +104,7 @@ export function resolvePlayerAppearance(legendId: number, skinId: number): Playe
       diagnostic: { code: 'unknown_skin', legendId, skinId },
     }
   }
+
   if (skin.legendId !== legendId) {
     return {
       kind: 'legend',
@@ -106,6 +116,7 @@ export function resolvePlayerAppearance(legendId: number, skinId: number): Playe
       diagnostic: { code: 'skin_legend_mismatch', legendId, skinId },
     }
   }
+
   if (skin.isCrossover && skin.displayName && skin.imageUrl) {
     return {
       kind: 'crossover',
@@ -117,6 +128,7 @@ export function resolvePlayerAppearance(legendId: number, skinId: number): Playe
       diagnostic: null,
     }
   }
+
   return {
     kind: 'legend',
     legendId,

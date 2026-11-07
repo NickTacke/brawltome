@@ -14,5 +14,6 @@ export function TrackDeadEnd({ kind }: { kind: DeadEndKind }) {
   useEffect(() => {
     trackDeadEndOnce(kind, track)
   }, [kind])
+
   return null
 }

@@ -78,11 +78,14 @@ type MemberRow = {
 
 export function createPostgresClans(database: Database) {
   const client = database.sql
+
   const ensureIdentity = async (sql: typeof client, clanId: number) => {
     await sql`INSERT INTO clans.clans (clan_id) VALUES (${clanId}) ON CONFLICT DO NOTHING`
   }
+
   const effectState = async (sql: typeof client, effect?: ClanRefreshEffect) => {
     if (!effect) return 'execute' as const
+
     const [state] = await sql<{ lease_token: string | number; applied_at: Date | null; active: boolean }[]>`
       SELECT lease_token, applied_at,
              revoked_at IS NULL AND lease_expires_at > clock_timestamp() AS active
@@ -90,11 +93,15 @@ export function createPostgresClans(database: Database) {
       WHERE operation_id = ${effect.operationId} AND section = ${effect.section}
       FOR UPDATE
     `
+
     if (!state || Number(state.lease_token) !== effect.leaseToken || !state.active) return 'fenced' as const
+
     return state.applied_at ? ('already-applied' as const) : ('execute' as const)
   }
+
   const markEffectApplied = async (sql: typeof client, effect?: ClanRefreshEffect) => {
     if (!effect) return true
+
     const applied = await sql<{ operation_id: string }[]>`
       UPDATE clans.refresh_effects SET applied_at = clock_timestamp()
       WHERE operation_id = ${effect.operationId} AND section = ${effect.section}
@@ -102,8 +109,10 @@ export function createPostgresClans(database: Database) {
         AND revoked_at IS NULL AND lease_expires_at > clock_timestamp()
       RETURNING operation_id
     `
+
     return applied.length === 1
   }
+
   const requireEffectApplied = async (sql: typeof client, effect?: ClanRefreshEffect) => {
     if (!(await markEffectApplied(sql, effect))) throw new Error('Clan refresh lease expired before publication')
   }
@@ -112,6 +121,7 @@ export function createPostgresClans(database: Database) {
     async prepareRefreshEffect(effect: ClanRefreshEffect): Promise<ClanEffectPreparation> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const prepared = await sql<{ lease_token: string | number; applied_at: Date | null; active: boolean }[]>`
           INSERT INTO clans.refresh_effects (operation_id, section, lease_token, lease_expires_at)
           VALUES (${effect.operationId}, ${effect.section}, ${effect.leaseToken}, ${effect.leaseExpiresAt})
@@ -134,10 +144,13 @@ export function createPostgresClans(database: Database) {
           RETURNING lease_token, applied_at,
                     revoked_at IS NULL AND lease_expires_at > clock_timestamp() AS active
         `
+
         if (prepared[0]) {
           if (!prepared[0].active) return 'fenced'
+
           return prepared[0].applied_at ? 'already-applied' : 'execute'
         }
+
         const [existing] = await sql<{ lease_token: string | number; applied_at: Date | null; active: boolean }[]>`
           SELECT lease_token, applied_at,
                  revoked_at IS NULL AND lease_expires_at > clock_timestamp() AS active
@@ -145,7 +158,9 @@ export function createPostgresClans(database: Database) {
           WHERE operation_id = ${effect.operationId} AND section = ${effect.section}
           FOR UPDATE
         `
+
         if (Number(existing.lease_token) > effect.leaseToken || !existing.active) return 'fenced'
+
         return existing.applied_at ? 'already-applied' : 'execute'
       })
     },
@@ -172,16 +187,20 @@ export function createPostgresClans(database: Database) {
         JOIN clans.profile_state state ON state.clan_id = profile.clan_id
         WHERE profile.clan_id = ${clanId}
       `
+
       if (!profile) return null
+
       const [roster] = await client<RosterStateRow[]>`
         SELECT checked_at, check_provenance, last_success_at, last_success_provenance
         FROM clans.roster_state WHERE clan_id = ${clanId}
       `
+
       const members = await client<MemberRow[]>`
         SELECT brawlhalla_id, name, rank, join_date, xp::text, guild_points::text
         FROM clans.members WHERE clan_id = ${clanId}
         ORDER BY xp DESC, brawlhalla_id
       `
+
       return {
         clanId: profile.clan_id,
         clanName: profile.clan_name,
@@ -234,6 +253,7 @@ export function createPostgresClans(database: Database) {
         JOIN clans.profiles profile ON profile.clan_id = member.clan_id
         WHERE member.brawlhalla_id = ${brawlhallaId}
       `
+
       return membership
         ? {
             clanId: membership.clan_id,
@@ -254,15 +274,21 @@ export function createPostgresClans(database: Database) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         const effectResult = await effectState(sql, effect)
+
         if (effectResult !== 'execute') return effectResult
+
         await ensureIdentity(sql, profile.clanId)
+
         const [state] = await sql<{ last_success_at: Date | null }[]>`
           SELECT last_success_at FROM clans.profile_state WHERE clan_id = ${profile.clanId} FOR UPDATE
         `
+
         if (state?.last_success_at && state.last_success_at > checkedAt) {
           await requireEffectApplied(sql, effect)
+
           return 'superseded'
         }
+
         await sql`
           INSERT INTO clans.profiles
             (clan_id, clan_name, clan_create_date, clan_xp, clan_lifetime_xp, notice, tags,
@@ -278,6 +304,7 @@ export function createPostgresClans(database: Database) {
             discord_invite_code = EXCLUDED.discord_invite_code, guild_points = EXCLUDED.guild_points,
             is_recruiting = EXCLUDED.is_recruiting
         `
+
         await sql`
           INSERT INTO clans.profile_state
             (clan_id, checked_at, check_provenance, last_success_at, last_success_provenance)
@@ -291,7 +318,9 @@ export function createPostgresClans(database: Database) {
             last_success_at = EXCLUDED.last_success_at,
             last_success_provenance = EXCLUDED.last_success_provenance
         `
+
         await requireEffectApplied(sql, effect)
+
         return 'applied'
       })
     },
@@ -299,8 +328,11 @@ export function createPostgresClans(database: Database) {
     async recordProfileCheck(clanId: number, checkedAt: Date, provenance: ClanProvenance, effect?: ClanRefreshEffect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         if ((await effectState(sql, effect)) !== 'execute') return false
+
         await ensureIdentity(sql, clanId)
+
         await sql`
           INSERT INTO clans.profile_state (clan_id, checked_at, check_provenance)
           VALUES (${clanId}, ${checkedAt}, ${sql.json(provenance)})
@@ -308,6 +340,7 @@ export function createPostgresClans(database: Database) {
             checked_at = EXCLUDED.checked_at, check_provenance = EXCLUDED.check_provenance
           WHERE clans.profile_state.checked_at <= EXCLUDED.checked_at
         `
+
         return true
       })
     },
@@ -322,16 +355,23 @@ export function createPostgresClans(database: Database) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
         const effectResult = await effectState(sql, effect)
+
         if (effectResult !== 'execute') return effectResult
+
         await ensureIdentity(sql, clanId)
+
         const [state] = await sql<{ last_success_at: Date | null }[]>`
           SELECT last_success_at FROM clans.roster_state WHERE clan_id = ${clanId} FOR UPDATE
         `
+
         if (state?.last_success_at && state.last_success_at > checkedAt) {
           await requireEffectApplied(sql, effect)
+
           return 'superseded'
         }
+
         const memberIds = members.map(({ brawlhallaId }) => brawlhallaId)
+
         if (memberIds.length === 0) {
           await sql`
             DELETE FROM clans.members
@@ -343,6 +383,7 @@ export function createPostgresClans(database: Database) {
             WHERE clan_id = ${clanId} AND brawlhalla_id NOT IN ${sql(memberIds)}
               AND (observed_at IS NULL OR observed_at <= ${checkedAt})
           `
+
           for (const member of members) {
             await sql`
               INSERT INTO clans.members
@@ -357,6 +398,7 @@ export function createPostgresClans(database: Database) {
             `
           }
         }
+
         await sql`
           INSERT INTO clans.roster_state
             (clan_id, checked_at, check_provenance, last_success_at, last_success_provenance)
@@ -371,7 +413,9 @@ export function createPostgresClans(database: Database) {
             last_success_at = EXCLUDED.last_success_at,
             last_success_provenance = EXCLUDED.last_success_provenance
         `
+
         await requireEffectApplied(sql, effect)
+
         return 'applied'
       })
     },
@@ -379,8 +423,11 @@ export function createPostgresClans(database: Database) {
     async recordRosterCheck(clanId: number, checkedAt: Date, provenance: ClanProvenance, effect?: ClanRefreshEffect) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         if ((await effectState(sql, effect)) !== 'execute') return false
+
         await ensureIdentity(sql, clanId)
+
         await sql`
           INSERT INTO clans.roster_state (clan_id, checked_at, check_provenance)
           VALUES (${clanId}, ${checkedAt}, ${sql.json(provenance)})
@@ -388,6 +435,7 @@ export function createPostgresClans(database: Database) {
             checked_at = EXCLUDED.checked_at, check_provenance = EXCLUDED.check_provenance
           WHERE clans.roster_state.checked_at IS NULL OR clans.roster_state.checked_at <= EXCLUDED.checked_at
         `
+
         return true
       })
     },

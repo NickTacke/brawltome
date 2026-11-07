@@ -2,18 +2,22 @@ import { brawlhallaIdSchema, nullablePlayerReferenceSchema } from './player-refe
 import { z } from './zod'
 
 const retryAfterSecondsSchema = z.number().int().min(1).max(86_400).meta({ format: 'int32' })
+
 const pollGuidanceSchema = z
   .object({ kind: z.literal('poll'), afterSeconds: retryAfterSecondsSchema })
   .strict()
   .meta({ id: 'RefreshPollGuidance' })
+
 const noRetryGuidanceSchema = z
   .object({ kind: z.literal('none') })
   .strict()
   .meta({ id: 'RefreshNoRetryGuidance' })
+
 const verifyGuidanceSchema = z
   .object({ kind: z.literal('verify') })
   .strict()
   .meta({ id: 'RefreshVerifyGuidance' })
+
 const retryAfterGuidanceSchema = z
   .object({ kind: z.literal('after'), afterSeconds: retryAfterSecondsSchema })
   .strict()
@@ -37,6 +41,7 @@ export const discordUserIdSchema = z
   .regex(/^\d{17,20}$/, 'must be a Discord snowflake')
   .refine((value) => {
     const snowflake = BigInt(value)
+
     return snowflake > 0n && snowflake <= MAX_DISCORD_SNOWFLAKE
   }, 'must be a positive unsigned 64-bit Discord snowflake')
 

@@ -25,8 +25,10 @@ export default async function Page({ searchParams }: PageProps) {
   const [params, cookieStore] = await Promise.all([searchParams, cookies()])
   const remembered = parseQueuePreference(cookieStore.get(QUEUE_PREFERENCE_COOKIE)?.value)
   const filters = parseQueueSearchParams(params, remembered)
+
   try {
     const trpc = await getServerTrpc()
+
     const view = await trpc.leaderboard.recentActivity.query({
       mode: filters.mode,
       region: filters.region,
@@ -34,9 +36,11 @@ export default async function Page({ searchParams }: PageProps) {
       pageSize: PAGE_SIZE,
       snapshotId: filters.snapshotId,
     })
+
     return <QueueView view={view} filters={filters} />
   } catch (error) {
     console.error('[queue route]', error)
+
     return <QueueLoadError filters={filters} />
   }
 }

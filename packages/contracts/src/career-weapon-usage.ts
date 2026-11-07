@@ -27,6 +27,7 @@ const utcDateTimeSchema = z.iso
   .datetime({ offset: false })
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
+
 const nonnegativeInt32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32' })
 const nonnegativeIntegerString = z.string().regex(/^(0|[1-9][0-9]*)$/, 'must be a non-negative integer string')
 const positiveIntegerString = z.string().regex(/^[1-9][0-9]*$/, 'must be a positive integer string')
@@ -39,6 +40,7 @@ export const careerWeaponExactRatioSchema = z
   .strict()
 
 const comparisonReasonSchema = z.enum(['contributors-below-30', 'aggregate-held-time-below-30-hours'])
+
 const comparisonSchema = z.discriminatedUnion('eligible', [
   z.object({ eligible: z.literal(true), reasons: z.tuple([]) }).strict(),
   z.object({ eligible: z.literal(false), reasons: z.array(comparisonReasonSchema).min(1).max(2) }).strict(),
@@ -62,13 +64,16 @@ export const careerWeaponUsageRowSchema = z
     if (row.contributorCount > row.observedPlayers) {
       context.addIssue({ code: 'custom', message: 'contributors must not exceed observed players' })
     }
+
     const hasBothRates = row.medianDamagePerMinute !== null && row.medianKosPerHour !== null
+
     if (row.comparison.eligible !== hasBothRates) {
       context.addIssue({ code: 'custom', message: 'comparison eligibility must match rate availability' })
     }
   })
 
 const filtersSchema = careerWeaponUsageInputSchema
+
 const observationWindowSchema = z
   .object({
     startsAt: utcDateTimeSchema,
@@ -78,6 +83,7 @@ const observationWindowSchema = z
   .refine(({ startsAt, endsAt }) => new Date(endsAt).getTime() > new Date(startsAt).getTime(), {
     message: 'observation window end must follow its start',
   })
+
 const staleReasonSchema = z.enum(['newer_publication_rejected', 'weekly_publication_overdue'])
 
 const availableFields = {
@@ -108,9 +114,11 @@ function availableSchema<Status extends 'fresh' | 'stale'>(status: Status) {
       if (snapshot.successfulObservations > snapshot.selectedPlayers) {
         context.addIssue({ code: 'custom', message: 'successful observations must not exceed selected players' })
       }
+
       if (snapshot.rows.some((row) => row.observedPlayers > snapshot.successfulObservations)) {
         context.addIssue({ code: 'custom', message: 'weapon observations must not exceed successful observations' })
       }
+
       if (new Set(snapshot.rows.map(({ weapon }) => weapon)).size !== snapshot.rows.length) {
         context.addIssue({ code: 'custom', message: 'weapon rows must be unique' })
       }
@@ -137,7 +145,9 @@ function exactRatioMatches(
   denominator: bigint,
 ): boolean {
   if (denominator === 0n) return ratio === null
+
   if (!ratio) return false
+
   return BigInt(ratio.numerator) * denominator === numerator * BigInt(ratio.denominator)
 }
 
@@ -161,25 +171,32 @@ const careerWeaponHistorySnapshotSchema = z
     if (snapshot.successfulObservations > snapshot.selectedPlayers) {
       context.addIssue({ code: 'custom', message: 'successful observations must not exceed selected players' })
     }
+
     if (
       !exactRatioMatches(snapshot.coverage, BigInt(snapshot.successfulObservations), BigInt(snapshot.selectedPlayers))
     ) {
       context.addIssue({ code: 'custom', message: 'coverage must reproduce successful and selected players' })
     }
+
     if (snapshot.rows.some((row) => row.observedPlayers > snapshot.successfulObservations)) {
       context.addIssue({ code: 'custom', message: 'weapon observations must not exceed successful observations' })
     }
+
     if (new Set(snapshot.rows.map(({ weapon }) => weapon)).size !== snapshot.rows.length) {
       context.addIssue({ code: 'custom', message: 'weapon rows must be unique' })
     }
+
     const totalHeldSeconds = BigInt(snapshot.totalHeldSeconds)
+
     if (snapshot.rows.reduce((total, row) => total + BigInt(row.heldTimeSeconds), 0n) !== totalHeldSeconds) {
       context.addIssue({ code: 'custom', message: 'weapon rows must reproduce total held seconds' })
     }
+
     for (const row of snapshot.rows) {
       if (!exactRatioMatches(row.prevalence, BigInt(row.observedPlayers), BigInt(snapshot.successfulObservations))) {
         context.addIssue({ code: 'custom', message: 'prevalence must reproduce weapon and successful observations' })
       }
+
       if (!exactRatioMatches(row.heldTimeShare, BigInt(row.heldTimeSeconds), totalHeldSeconds)) {
         context.addIssue({ code: 'custom', message: 'held-time share must reproduce weapon and total held seconds' })
       }
@@ -187,6 +204,7 @@ const careerWeaponHistorySnapshotSchema = z
   })
 
 const signedIntegerString = z.string().regex(/^-?(0|[1-9][0-9]*)$/, 'must be a signed integer string')
+
 const signedExactRatioSchema = z
   .object({ numerator: signedIntegerString, denominator: positiveIntegerString })
   .strict()
@@ -196,6 +214,7 @@ const signedExactRatioSchema = z
     const absoluteNumerator = numerator < 0n ? -numerator : numerator
     let left = absoluteNumerator
     let right = denominator
+
     while (right !== 0n) [left, right] = [right, left % right]
     if ((numerator === 0n && denominator !== 1n) || (numerator !== 0n && left !== 1n)) {
       context.addIssue({ code: 'custom', message: 'signed exact ratio must use normalized terms' })
@@ -257,6 +276,7 @@ const careerWeaponHistoryComparisonSchema = z.union([
 function roundedBasisPoints(ratio: { numerator: string; denominator: string }): number {
   const numerator = BigInt(ratio.numerator)
   const denominator = BigInt(ratio.denominator)
+
   return Number((numerator * 20_000n + denominator) / (denominator * 2n))
 }
 
@@ -266,11 +286,16 @@ function normalizedDifference(
 ): { numerator: string; denominator: string } {
   const numerator =
     BigInt(newer.numerator) * BigInt(older.denominator) - BigInt(older.numerator) * BigInt(newer.denominator)
+
   const denominator = BigInt(newer.denominator) * BigInt(older.denominator)
+
   if (numerator === 0n) return { numerator: '0', denominator: '1' }
+
   let left = numerator < 0n ? -numerator : numerator
   let right = denominator
+
   while (right !== 0n) [left, right] = [right, left % right]
+
   return { numerator: String(numerator / left), denominator: String(denominator / left) }
 }
 
@@ -299,9 +324,12 @@ const careerWeaponHistoryAvailableSchema = z
       })),
       context,
     )
+
     for (let index = 0; index < history.entries.length; index += 1) {
       const entry = history.entries[index]
+
       if (!entry) continue
+
       if (
         entry.snapshot.scope.region !== history.filters.region ||
         entry.snapshot.scope.bracket !== history.filters.bracket
@@ -312,11 +340,16 @@ const careerWeaponHistoryAvailableSchema = z
           path: ['entries', index, 'snapshot', 'scope'],
         })
       }
+
       const previous = history.entries[index + 1]
+
       if (!previous || entry.comparisonToPrevious?.status !== 'available') continue
+
       const previousRows = new Map(previous.snapshot.rows.map((row) => [row.weapon, row]))
+
       const expectedDeltaWeapons = entry.snapshot.rows.flatMap((row) => {
         const previousRow = previousRows.get(row.weapon)
+
         return row.comparison.eligible &&
           previousRow?.comparison.eligible &&
           row.prevalence !== null &&
@@ -330,17 +363,22 @@ const careerWeaponHistoryAvailableSchema = z
           ? [row.weapon]
           : []
       })
+
       validateExactHistoryDeltaKeys(
         expectedDeltaWeapons,
         entry.comparisonToPrevious.deltas.map(({ weapon }) => weapon),
         context,
         ['entries', index, 'comparisonToPrevious', 'deltas'],
       )
+
       for (let deltaIndex = 0; deltaIndex < entry.comparisonToPrevious.deltas.length; deltaIndex += 1) {
         const delta = entry.comparisonToPrevious.deltas[deltaIndex]
+
         if (!delta) continue
+
         const currentRow = entry.snapshot.rows.find(({ weapon }) => weapon === delta.weapon)
         const previousRow = previousRows.get(delta.weapon)
+
         if (
           currentRow?.comparison.eligible !== true ||
           previousRow?.comparison.eligible !== true ||
@@ -358,10 +396,13 @@ const careerWeaponHistoryAvailableSchema = z
             message: 'Career history deltas require stored eligibility and complete metrics in both snapshots',
             path: ['entries', index, 'comparisonToPrevious', 'deltas', deltaIndex],
           })
+
           continue
         }
+
         const damage = normalizedDifference(currentRow.medianDamagePerMinute, previousRow.medianDamagePerMinute)
         const kos = normalizedDifference(currentRow.medianKosPerHour, previousRow.medianKosPerHour)
+
         if (
           delta.prevalence.changeBasisPoints !==
             roundedBasisPoints(currentRow.prevalence) - roundedBasisPoints(previousRow.prevalence) ||

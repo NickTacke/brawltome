@@ -35,5 +35,6 @@ export function hasPinnedPlayerLimitReached(
 ): boolean {
   const isPinned = pinnedPlayers.some(({ brawlhallaId }) => brawlhallaId === playerId)
   const managedPinnedCount = pinnedPlayers.filter(({ brawlhallaId }) => brawlhallaId !== primaryPlayerId).length
+
   return !isPinned && managedPinnedCount >= MAX_PINNED_PLAYERS
 }

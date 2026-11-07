@@ -33,6 +33,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
     (position: number, viaAlias: boolean) => {
       track({ name: 'search.selected', source: 'bar', position: Math.min(position, 100), viaAlias })
       if (onBlur) onBlur()
+
       setQuery('')
       setError(null)
     },
@@ -47,12 +48,15 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
         if (onBlur) onBlur()
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
+
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onBlur])
 
   useEffect(() => {
     let cancelled = false
+
     setError(null)
     setVisiblePlayerCount(5)
 
@@ -60,15 +64,18 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
       setIsSearching(false)
       setPlayerResults([])
       setClanResults([])
+
       return
     }
 
     setIsSearching(true)
     const started = performance.now()
+
     trpc.search.local
       .query({ query: debouncedQuery })
       .then((data) => {
         if (cancelled) return
+
         track({
           name: 'search.performed',
           source: 'bar',
@@ -77,6 +84,7 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
           aliasResults: Math.min(data.players.filter((p) => p.matchedAlias).length, 100),
           latencyMs: Math.min(Math.round(performance.now() - started), 600000),
         })
+
         setPlayerResults(data.players)
         setClanResults(data.clans)
         setShowClans(false)
@@ -87,11 +95,13 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
       })
       .catch(() => {
         if (cancelled) return
+
         track({
           name: 'search.failed',
           source: 'bar',
           latencyMs: Math.min(Math.round(performance.now() - started), 600000),
         })
+
         setIsSearching(false)
         setError('Search failed.')
       })
@@ -104,9 +114,11 @@ export function SearchBar({ onFocus, onBlur }: SearchBarProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const isIdLike = /^\d{5,}$/.test(query)
+
       if (isIdLike) {
         router.push(`/player/${query}`)
         if (onBlur) onBlur()
+
         setQuery('')
       }
     }

@@ -4,6 +4,7 @@ import { getPendingClanSections, hasCompletedClanRefresh } from '../../src/lib/c
 
 function clan(profileSuccess: string | null, rosterSuccess: string | null): ClanProfileContract {
   const provenance = { source: 'v1-guild-stats', outcome: 'success' } as const
+
   return {
     clanId: 77,
     clanName: 'Clan',
@@ -34,6 +35,7 @@ function clan(profileSuccess: string | null, rosterSuccess: string | null): Clan
 describe('clan refresh sections', () => {
   test('identifies stale sections independently', () => {
     const now = Date.UTC(2026, 0, 1, 2)
+
     expect(getPendingClanSections(clan('2026-01-01T01:30:00.000Z', '2026-01-01T00:00:00.000Z'), now)).toEqual({
       profile: false,
       roster: true,
@@ -43,9 +45,11 @@ describe('clan refresh sections', () => {
   test('waits for every section that was pending at request start', () => {
     const initial = clan('2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
     const pending = { profile: true, roster: true }
+
     expect(
       hasCompletedClanRefresh(initial, clan('2026-01-01T02:00:00.000Z', '2026-01-01T00:00:00.000Z'), pending),
     ).toBe(false)
+
     expect(
       hasCompletedClanRefresh(initial, clan('2026-01-01T02:00:00.000Z', '2026-01-01T02:00:00.000Z'), pending),
     ).toBe(true)

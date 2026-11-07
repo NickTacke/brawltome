@@ -43,15 +43,18 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
     let completed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       commitProofEffect: async () => 'applied' as const,
       complete: async () => {
         completed = true
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -65,11 +68,13 @@ describe('refresh operations worker source retry', () => {
         telemetry,
       }),
     ).toBe(true)
+
     await telemetry.flush(50)
 
     expect(completed).toBe(true)
     expect(sink.records.some((record) => record.attributes?.operationId === lease.operationId)).toBe(true)
     const metricText = JSON.stringify(telemetry.metrics.snapshot())
+
     expect(metricText).not.toContain(lease.operationId)
     expect(metricText).toContain('operation_attempts_total')
 
@@ -82,13 +87,16 @@ describe('refresh operations worker source retry', () => {
       },
       drainIntervalMs: 0,
     })
+
     completed = false
+
     await runOneRefreshOperation(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
       telemetry: failingTelemetry,
     })
+
     await expect(failingTelemetry.shutdown(5)).resolves.toBeUndefined()
     expect(completed).toBe(true)
   })
@@ -109,7 +117,9 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -127,8 +137,10 @@ describe('refresh operations worker source retry', () => {
     })
 
     const attempts = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_attempts_total')
+
     expect(attempts?.series[0]?.labels.outcome).toBe('lease_lost')
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
     expect(failures?.series[0]?.labels.failure_category).toBe('lease_lost')
   })
 
@@ -148,14 +160,17 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       fail: async () => 'transitioned' as const,
     }
+
     const failedRecords = async (error: Error) => {
       const sink = createMemorySink()
       const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+
       await runOneRefreshOperation(operations as never, 'worker', {
         leaseMs: 1_000,
         retryDelayMs: 10,
@@ -165,13 +180,16 @@ describe('refresh operations worker source retry', () => {
           throw error
         },
       })
+
       await telemetry.flush(50)
+
       return sink.records.filter((record) => record.event === 'operation.attempt.failed')
     }
 
     const [sourceFailure] = await failedRecords(
       new LeaderboardSourceError('source_contract_invalid', 'GET https://x/?api_key=leaked-key failed', false),
     )
+
     expect(sourceFailure?.error).toMatchObject({ code: 'source_contract_invalid' })
     expect(sourceFailure?.attributes).toMatchObject({ failureCode: 'source_contract_invalid' })
     expect(JSON.stringify(sourceFailure)).not.toContain('leaked-key')
@@ -179,11 +197,13 @@ describe('refresh operations worker source retry', () => {
     const [postgresFailure] = await failedRecords(
       Object.assign(new Error('relation "secret_table" does not exist'), { code: '42P01' }),
     )
+
     expect(postgresFailure?.error).toMatchObject({ code: '42P01' })
     expect(postgresFailure?.attributes).toMatchObject({ failureCode: '42P01' })
     expect(JSON.stringify(postgresFailure)).not.toContain('secret_table')
 
     const [genericFailure] = await failedRecords(new Error('execution failed'))
+
     expect(genericFailure?.attributes).toMatchObject({ failureCode: 'proof_execution_failed' })
   })
 
@@ -203,7 +223,9 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -230,6 +252,7 @@ describe('refresh operations worker source retry', () => {
     })
 
     const sourceMetrics = telemetry.metrics.snapshot().find(({ name }) => name === 'source_calls_total')
+
     expect(sourceMetrics?.series[0]?.labels).toEqual({ domain: 'brawlhalla-v1', outcome: 'succeeded' })
     expect(JSON.stringify(sourceMetrics)).not.toContain(lease.operationId)
   })
@@ -250,9 +273,11 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     const reservations: string[] = []
     const waits: number[] = []
     let sourceCalls = 0
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -267,6 +292,7 @@ describe('refresh operations worker source retry', () => {
       sourceAdmission: {
         admitSource: async ({ reservationKey }) => {
           reservations.push(reservationKey)
+
           return reservations.length === 1
             ? ({ outcome: 'rate-limited', retryAfterSeconds: 12 } as const)
             : ({ outcome: 'admitted', deduplicated: false } as const)
@@ -284,6 +310,7 @@ describe('refresh operations worker source retry', () => {
         fetchPage: async ({ region }) => {
           sourceCalls += 1
           const id = sourceCalls
+
           return {
             rankings: [
               {
@@ -325,20 +352,24 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     const reservations: string[] = []
     const retryWaits: number[] = []
     const calls: string[] = []
     let completed = false
     let deferred = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       complete: async () => {
         completed = true
+
         return 'transitioned' as const
       },
       defer: async () => {
         deferred = true
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -351,6 +382,7 @@ describe('refresh operations worker source retry', () => {
       sourceAdmission: {
         admitSource: async ({ reservationKey }) => {
           reservations.push(reservationKey)
+
           return { outcome: 'admitted', deduplicated: false }
         },
         pauseSource: async () => {},
@@ -368,10 +400,13 @@ describe('refresh operations worker source retry', () => {
           if (region === 'EU' && calls.filter((called) => called === 'EU').length === 1) {
             throw new LeaderboardSourceError('source_transport_failed', 'socket reset', true)
           }
+
           if (region === 'SEA' && calls.filter((called) => called === 'SEA').length <= 2) {
             throw new LeaderboardSourceError('source_unavailable', 'V1 leaderboard returned 504', true)
           }
+
           const id = calls.length
+
           return {
             rankings: [
               {
@@ -417,13 +452,16 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     let sourceCalls = 0
     let deferred: OperationFailure | undefined
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       defer: async (_lease: OperationLease, failure: OperationFailure) => {
         deferred = failure
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -456,6 +494,7 @@ describe('refresh operations worker source retry', () => {
 
   test('defers retryable leaderboard source outages without consuming the final attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -471,18 +510,22 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     let deferredMs: number | undefined
     let failed = false
     let sourceCalls = 0
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       defer: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
         deferredMs = retryDelayMs
+
         return 'transitioned' as const
       },
       fail: async () => {
         failed = true
+
         return 'transitioned' as const
       },
     }
@@ -514,11 +557,13 @@ describe('refresh operations worker source retry', () => {
     expect(deferredMs).toBe(60_000)
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
   test('defers inconsistent leaderboard identity without consuming the final attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -534,12 +579,15 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     let deferred: { failure: OperationFailure; retryDelayMs: number } | undefined
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
         deferred = { failure, retryDelayMs }
+
         return 'transitioned' as const
       },
     }
@@ -577,7 +625,9 @@ describe('refresh operations worker source retry', () => {
       },
       retryDelayMs: 60_000,
     })
+
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
@@ -597,10 +647,12 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 4,
       scheduleWindowAt: null,
     }
+
     const sections: string[] = []
     const callers: string[] = []
     let eligibilityChecked = false
     let completed = false
+
     await runOneRefreshOperation(
       {
         claim: async () => lease,
@@ -609,6 +661,7 @@ describe('refresh operations worker source retry', () => {
         commitInteractiveSection: async () => 'transitioned' as const,
         complete: async () => {
           completed = true
+
           return 'transitioned' as const
         },
         fail: async () => 'transitioned' as const,
@@ -624,6 +677,7 @@ describe('refresh operations worker source retry', () => {
         },
         isPrimaryMonitoringTarget: async () => {
           eligibilityChecked = true
+
           return false
         },
         executeSection: async (_lease, section, admitSourceCall, caller) => {
@@ -660,10 +714,12 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: '2026-08-10T00:00:00.000Z',
     }
+
     const sections: string[] = []
     const callers: string[] = []
     let sourceAdmissions = 0
     let completed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -671,6 +727,7 @@ describe('refresh operations worker source retry', () => {
       commitInteractiveSection: async () => 'transitioned' as const,
       complete: async () => {
         completed = true
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -683,6 +740,7 @@ describe('refresh operations worker source retry', () => {
       sourceAdmission: {
         admitSource: async () => {
           sourceAdmissions++
+
           return { outcome: 'admitted', deduplicated: false }
         },
         pauseSource: async () => {},
@@ -702,6 +760,7 @@ describe('refresh operations worker source retry', () => {
 
     sections.length = 0
     completed = false
+
     await runOneRefreshOperation(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
@@ -715,9 +774,11 @@ describe('refresh operations worker source retry', () => {
         sections.push(section)
       },
     })
+
     expect(sections).toEqual([])
     expect(completed).toBe(true)
   })
+
   test('executes player projection work through the durable projection class', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
@@ -734,13 +795,16 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let executed = false
     let completed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       complete: async () => {
         completed = true
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -772,6 +836,7 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     const leases: OperationLease[] = [
       {
         ...common,
@@ -788,10 +853,12 @@ describe('refresh operations worker source retry', () => {
         payload: { owner: 'clan' },
       },
     ]
+
     const operationIds = leases.map(({ operationId }) => operationId)
     const executed: string[] = []
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
+
     const operations = {
       claim: async () => leases.shift() ?? null,
       renew: async () => 'renewed' as const,
@@ -807,6 +874,7 @@ describe('refresh operations worker source retry', () => {
         executed.push(`${lease.kind}:${lease.payload.owner}`)
       },
     }
+
     await runOneRefreshOperation(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
@@ -814,6 +882,7 @@ describe('refresh operations worker source retry', () => {
       telemetry,
       ...executors,
     })
+
     await runOneRefreshOperation(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
@@ -821,12 +890,14 @@ describe('refresh operations worker source retry', () => {
       telemetry,
       ...executors,
     })
+
     await telemetry.flush(50)
 
     expect(executed).toEqual(['clan-discovery-projection', 'discovery-reconciliation:clan'])
     expect(sink.records.some(({ attributes }) => attributes?.kind === 'clan-discovery-projection')).toBe(true)
     expect(sink.records.some(({ attributes }) => attributes?.kind === 'discovery-reconciliation')).toBe(true)
     const metrics = JSON.stringify(telemetry.metrics.snapshot())
+
     expect(metrics).toContain('clan-discovery-projection')
     expect(metrics).toContain('discovery-reconciliation')
     for (const operationId of operationIds) expect(metrics).not.toContain(operationId)
@@ -848,18 +919,22 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 1,
       scheduleWindowAt: null,
     }
+
     let retried = false
     let failed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       complete: async () => 'transitioned' as const,
       retryAppliedDiscoveryProjection: async () => {
         retried = true
+
         return 'transitioned' as const
       },
       fail: async () => {
         failed = true
+
         return 'transitioned' as const
       },
     }
@@ -896,19 +971,23 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let deferredMs: number | undefined
     let failed = false
     let recorded = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       defer: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
         deferredMs = retryDelayMs
+
         return 'transitioned' as const
       },
       complete: async () => 'transitioned' as const,
       fail: async () => {
         failed = true
+
         return 'transitioned' as const
       },
     }
@@ -926,6 +1005,7 @@ describe('refresh operations worker source retry', () => {
         preflightCollectionAttempt: async () => 'allowed',
         recordCollectionAttempt: async () => {
           recorded = true
+
           return 'recorded'
         },
       } as never,
@@ -941,6 +1021,7 @@ describe('refresh operations worker source retry', () => {
 
   test('consumes an attempt for an upstream Statistics 429 after recording its immutable fence', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -956,18 +1037,22 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let deferred = false
     let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       defer: async () => {
         deferred = true
+
         return 'transitioned' as const
       },
       complete: async () => 'transitioned' as const,
       fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
         failed = { failure, retryDelayMs }
+
         return 'transitioned' as const
       },
     }
@@ -995,13 +1080,16 @@ describe('refresh operations worker source retry', () => {
       failure: { code: 'source_rate_limited', message: 'Upstream source is rate limited', retryable: true },
       retryDelayMs: 37_000,
     })
+
     expect(deferred).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
     expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
   })
 
   test('defers clan source admission without consuming its execution attempt', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -1017,8 +1105,10 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let deferred: { failure: OperationFailure; retryDelayMs: number } | undefined
     let failed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -1028,10 +1118,12 @@ describe('refresh operations worker source retry', () => {
       complete: async () => 'transitioned' as const,
       defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
         deferred = { failure, retryDelayMs }
+
         return 'transitioned' as const
       },
       fail: async () => {
         failed = true
+
         return 'transitioned' as const
       },
     }
@@ -1055,8 +1147,10 @@ describe('refresh operations worker source retry', () => {
       failure: { code: 'source_rate_limited', message: 'Source admission is rate limited', retryable: true },
       retryDelayMs: 37_000,
     })
+
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
     expect(failures?.series[0]?.labels.failure_category).toBe('admission_deferred')
   })
 
@@ -1076,9 +1170,11 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     })
+
     const run = async (operationLease: OperationLease, error: Error) => {
       const transitions: Array<{ kind: 'defer' | 'fail'; code: string; retryDelayMs: number }> = []
       const paused: Array<[string, number]> = []
+
       await runOneRefreshOperation(
         {
           claim: async () => operationLease,
@@ -1088,10 +1184,12 @@ describe('refresh operations worker source retry', () => {
           complete: async () => 'transitioned' as const,
           defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
             transitions.push({ kind: 'defer', code: failure.code, retryDelayMs })
+
             return 'transitioned' as const
           },
           fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
             transitions.push({ kind: 'fail', code: failure.code, retryDelayMs })
+
             return 'transitioned' as const
           },
         } as never,
@@ -1112,8 +1210,10 @@ describe('refresh operations worker source retry', () => {
           },
         },
       )
+
       return { transitions, paused }
     }
+
     const unavailable = new BhApiHttpError(
       'Brawlhalla API error: 503 Service Unavailable for /player/42/ranked',
       503,
@@ -1125,6 +1225,7 @@ describe('refresh operations worker source retry', () => {
       transitions: [{ kind: 'defer', code: 'source_unavailable', retryDelayMs: 120_000 }],
       paused: [['brawlhalla-v0', 120]],
     })
+
     expect(
       (await run(lease(1), new Error('Ranked refresh failed', { cause: unavailable }))).transitions[0],
     ).toMatchObject({ kind: 'defer', code: 'source_unavailable' })
@@ -1133,6 +1234,7 @@ describe('refresh operations worker source retry', () => {
       lease(3),
       new BhApiHttpError('Brawlhalla API error: 500 Internal Server Error', 500, 'brawlhalla-v0'),
     )
+
     expect(broken.transitions[0]?.kind).toBe('fail')
     expect(broken.paused).toEqual([])
   })
@@ -1153,14 +1255,17 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let renewals = 0
     let revoked = false
     let committed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       renewWithAuthority: async () => {
         renewals++
+
         return renewals === 1
           ? ({ outcome: 'renewed', leaseExpiresAt: new Date(Date.now() + 60_000) } as const)
           : ({ outcome: 'lease-lost' } as const)
@@ -1168,6 +1273,7 @@ describe('refresh operations worker source retry', () => {
       beginInteractiveSection: async () => 'execute' as const,
       commitInteractiveSection: async () => {
         committed = true
+
         return 'transitioned' as const
       },
       complete: async () => 'transitioned' as const,
@@ -1212,13 +1318,16 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let built = false
     let completed = false
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
       complete: async () => {
         completed = true
+
         return 'transitioned' as const
       },
       fail: async () => 'transitioned' as const,
@@ -1233,6 +1342,7 @@ describe('refresh operations worker source retry', () => {
           preflightLegendMetaPublication: async () => 'missing' as const,
           buildAndPublishLegendMeta: async () => {
             built = true
+
             return { result: 'applied' as const, decision: null }
           },
         } as never,
@@ -1241,6 +1351,7 @@ describe('refresh operations worker source retry', () => {
         },
       }),
     ).toBe(true)
+
     expect(built).toBe(true)
     expect(completed).toBe(true)
   })
@@ -1251,6 +1362,7 @@ describe('refresh operations worker source retry', () => {
       ['lease-lost', 'lease_lost'],
     ] as const) {
       const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
       const lease: OperationLease = {
         operationId: crypto.randomUUID(),
         effectOperationId: crypto.randomUUID(),
@@ -1266,6 +1378,7 @@ describe('refresh operations worker source retry', () => {
         maxAttempts: 3,
         scheduleWindowAt: null,
       }
+
       const operations = {
         claim: async () => lease,
         renew: async () => 'renewed' as const,
@@ -1286,10 +1399,12 @@ describe('refresh operations worker source retry', () => {
       })
 
       const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
       expect(failures?.series[0]?.labels).toEqual({
         kind: 'statistics-legend-meta-publication',
         failure_category: expectedCategory,
       })
+
       expect(telemetry.stats().seriesDropped).toBe(0)
     }
   })
@@ -1310,8 +1425,10 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: null,
     }
+
     let deferred = false
     let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
+
     const operations = {
       claim: async () => lease,
       renew: async () => 'renewed' as const,
@@ -1321,10 +1438,12 @@ describe('refresh operations worker source retry', () => {
       complete: async () => 'transitioned' as const,
       defer: async () => {
         deferred = true
+
         return 'transitioned' as const
       },
       fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
         failed = { failure, retryDelayMs }
+
         return 'transitioned' as const
       },
     }
@@ -1340,6 +1459,7 @@ describe('refresh operations worker source retry', () => {
       syncClanLeaseAuthority: async () => {},
       executeClanSection: async (_lease, section, admitSourceCall) => {
         if (section === 'profile') throw new Error('generic profile failure')
+
         await admitSourceCall('brawlhalla-v1')
       },
     })
@@ -1348,11 +1468,13 @@ describe('refresh operations worker source retry', () => {
       failure: { code: 'clan_refresh_failed', message: 'generic profile failure', retryable: true },
       retryDelayMs: 10,
     })
+
     expect(deferred).toBe(false)
   })
 
   test('backs off retryable execution failures exponentially so a brief source hiccup is not dead-lettered', async () => {
     const delays: number[] = []
+
     for (const attemptNumber of [1, 2, 3]) {
       const lease: OperationLease = {
         operationId: crypto.randomUUID(),
@@ -1369,12 +1491,14 @@ describe('refresh operations worker source retry', () => {
         maxAttempts: 4,
         scheduleWindowAt: null,
       }
+
       await runOneRefreshOperation(
         {
           claim: async () => lease,
           renew: async () => 'renewed' as const,
           fail: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
             delays.push(retryDelayMs)
+
             return 'transitioned' as const
           },
         } as never,
@@ -1396,6 +1520,7 @@ describe('refresh operations worker source retry', () => {
 
   test('jitters retry delays within the configured ratio and never beyond the maximum', () => {
     const policy = { baseDelayMs: 2_000, multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2 }
+
     expect(retryDelayForAttempt(1, { ...policy, random: () => 0 })).toBe(1_600)
     expect(retryDelayForAttempt(1, { ...policy, random: () => 0.999_999 })).toBe(2_399)
     expect(retryDelayForAttempt(2, { ...policy, random: () => 0 })).toBe(4_800)
@@ -1403,6 +1528,7 @@ describe('refresh operations worker source retry', () => {
     expect(retryDelayForAttempt(20, { ...policy, random: () => 0.5 })).toBe(15_000)
     expect(retryDelayForAttempt(2, { ...policy, multiplier: 1, jitterRatio: 0, random: Math.random })).toBe(2_000)
     let total = 0
+
     for (let attempt = 1; attempt < 4; attempt++) total += retryDelayForAttempt(attempt, { ...policy, random: () => 1 })
     expect(total).toBeLessThan(30_000)
   })
@@ -1423,6 +1549,7 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     })
+
     const run = async (
       lease: OperationLease,
       published: 'published' | 'already-published' | 'effect-conflict',
@@ -1436,15 +1563,18 @@ describe('refresh operations worker source retry', () => {
       }) => Promise<{ changed: number }> = async () => ({ changed: 0 }),
     ) => {
       let completed = false
+
       const operations = {
         claim: async () => lease,
         renew: async () => 'renewed' as const,
         complete: async () => {
           completed = true
+
           return 'transitioned' as const
         },
         fail: async () => 'transitioned' as const,
       }
+
       await runOneRefreshOperation(operations as never, 'worker', {
         leaseMs: 1_000,
         retryDelayMs: 10,
@@ -1462,6 +1592,7 @@ describe('refresh operations worker source retry', () => {
         leaderboardSource: {
           fetchPage: async ({ region }) => {
             const base = (regionIndex.get(region) ?? 0) * 10 + 1
+
             return {
               rankings: [
                 {
@@ -1489,13 +1620,17 @@ describe('refresh operations worker source retry', () => {
           },
         },
       })
+
       return completed
     }
+
     const regionIndex = new Map(['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'].map((r, i) => [r, i]))
 
     const applied: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }> = []
+
     const record = async (input: { observedAt: Date; players: Array<{ brawlhallaId: number; name: string }> }) => {
       applied.push(input)
+
       return { changed: input.players.length }
     }
 
@@ -1537,7 +1672,9 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     }
+
     type Progress = { windowAt: Date; nextPage: number; totalPages: number }
+
     const run = async (
       totalPages: number,
       input: {
@@ -1554,20 +1691,24 @@ describe('refresh operations worker source retry', () => {
       const standingWrites: Array<Array<{ brawlhallaId: number; games: number }>> = []
       const transitions: string[] = []
       let progress: Progress | null = input.saved ?? null
+
       await runOneRefreshOperation(
         {
           claim: async () => lease,
           renew: async () => 'renewed' as const,
           complete: async () => {
             transitions.push('complete')
+
             return 'transitioned' as const
           },
           defer: async (_lease: OperationLease, failure: OperationFailure) => {
             transitions.push(`defer:${failure.code}`)
+
             return 'transitioned' as const
           },
           fail: async (_lease: OperationLease, failure: OperationFailure) => {
             transitions.push(`fail:${failure.code}`)
+
             return 'transitioned' as const
           },
         } as never,
@@ -1600,12 +1741,14 @@ describe('refresh operations worker source retry', () => {
           leaderboardPlayerNames: {
             applyLeaderboardNames: async ({ players }) => {
               nameWrites.push(players.length)
+
               return { changed: 0 }
             },
           },
           leaderboardRanked: {
             applyLeaderboardRanked: async ({ players }) => {
               standingWrites.push(players)
+
               return { changed: players.length }
             },
           },
@@ -1615,7 +1758,9 @@ describe('refresh operations worker source retry', () => {
               expect(region).toBe('AUS')
               fetched.push(page)
               if (page === input.failOnPage) throw input.failure
+
               if (totalPages === 0) return { rankings: [], totalPages: 0 }
+
               return {
                 totalPages,
                 rankings: [
@@ -1635,13 +1780,16 @@ describe('refresh operations worker source retry', () => {
           },
         },
       )
+
       return { fetched, nameWrites, standingWrites, transitions, progress, waits }
     }
 
     const crawl = await run(45)
+
     expect(crawl.fetched).toEqual(Array.from({ length: 45 }, (_, index) => index + 1))
     expect(crawl.nameWrites).toEqual([20, 20, 5])
     expect(crawl.standingWrites.map((chunk) => chunk.length)).toEqual([20, 20, 5])
+
     expect(crawl.standingWrites[0][0]).toEqual({
       brawlhallaId: 1,
       region: 'AUS',
@@ -1651,10 +1799,12 @@ describe('refresh operations worker source retry', () => {
       wins: 3,
       games: 5,
     })
+
     expect(crawl.transitions).toEqual(['complete'])
     expect(crawl.progress).toMatchObject({ nextPage: 46, totalPages: 45 })
 
     const empty = await run(0)
+
     expect(empty).toMatchObject({ fetched: [1], nameWrites: [], transitions: ['complete'] })
 
     // A malformed deep page is skipped rather than failing the region.
@@ -1662,6 +1812,7 @@ describe('refresh operations worker source retry', () => {
       failOnPage: 30,
       failure: new LeaderboardSourceError('source_contract_invalid', 'rating exceeds best_rating', false),
     })
+
     expect(skipped.nameWrites).toEqual([20, 20, 4])
     expect(skipped.transitions).toEqual(['complete'])
 
@@ -1670,6 +1821,7 @@ describe('refresh operations worker source retry', () => {
       failOnPage: 31,
       failure: new LeaderboardSourceError('source_contract_invalid', 'requested page 31 exceeds total_pages 30', false),
     })
+
     expect(shrank.fetched.at(-1)).toBe(31)
     expect(shrank.nameWrites).toEqual([20, 10])
     expect(shrank.transitions).toEqual(['complete'])
@@ -1679,24 +1831,30 @@ describe('refresh operations worker source retry', () => {
       failOnPage: 3,
       failure: new LeaderboardSourceError('source_unavailable', 'maintenance', true),
     })
+
     expect(unavailable.transitions).toEqual(['defer:source_unavailable'])
+
     const badFirst = await run(45, {
       failOnPage: 1,
       failure: new LeaderboardSourceError('source_contract_invalid', 'bad page', false),
     })
+
     expect(badFirst.transitions).toEqual(['fail:source_contract_invalid'])
 
     // The page delay paces the crawl between pages, not after the last one.
     const paced = await run(5, { pageDelayMs: 400 })
+
     expect(paced.waits).toEqual([400, 400, 400, 400])
     expect(paced.transitions).toEqual(['complete'])
 
     // Slices yield the leaderboard slot and the next attempt resumes where the last chunk stopped.
     const firstSlice = await run(100, { slicePages: 40 })
+
     expect(firstSlice.fetched).toEqual(Array.from({ length: 40 }, (_, index) => index + 1))
     expect(firstSlice.transitions).toEqual(['defer:deep_crawl_yield'])
     expect(firstSlice.progress).toMatchObject({ nextPage: 41, totalPages: 100 })
     const resumed = await run(100, { slicePages: 100, saved: firstSlice.progress as Progress })
+
     expect(resumed.fetched[0]).toBe(41)
     expect(resumed.fetched).toHaveLength(60)
     expect(resumed.transitions).toEqual(['complete'])
@@ -1718,10 +1876,12 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     })
+
     const run = async (mode: 'solo2v2' | '2v2', totalPages = 1) => {
       const writes: string[] = []
       const modes: string[] = []
       let saved: { mode: string } | undefined
+
       await runOneRefreshOperation(
         {
           claim: async () => leaseFor(mode),
@@ -1747,24 +1907,28 @@ describe('refresh operations worker source retry', () => {
           leaderboardPlayerNames: {
             applyLeaderboardNames: async () => {
               writes.push('names')
+
               return { changed: 0 }
             },
           },
           leaderboardRanked: {
             applyLeaderboardRanked: async () => {
               writes.push('1v1')
+
               return { changed: 0 }
             },
           },
           leaderboardTeamModes: {
             applyLeaderboardSoloQueue: async ({ players }) => {
               writes.push(`solo:${players.length}`)
+
               return { changed: players.length }
             },
             applyLeaderboardTeams: async ({ teams }) => {
               writes.push(
                 `teams:${teams.map(({ brawlhallaIdOne, brawlhallaIdTwo }) => `${brawlhallaIdOne}+${brawlhallaIdTwo}`)}`,
               )
+
               return { changed: teams.length }
             },
           },
@@ -1772,6 +1936,7 @@ describe('refresh operations worker source retry', () => {
             fetchPage: async ({ mode: requested, region }) => {
               modes.push(requested)
               expect(region).toBe('EU')
+
               return {
                 totalPages,
                 rankings: [
@@ -1800,6 +1965,7 @@ describe('refresh operations worker source retry', () => {
           },
         },
       )
+
       return { writes, modes, saved }
     }
 
@@ -1808,6 +1974,7 @@ describe('refresh operations worker source retry', () => {
       modes: ['solo2v2'],
       saved: expect.objectContaining({ mode: 'solo2v2' }),
     })
+
     expect(await run('2v2')).toEqual({
       writes: ['teams:5+6'],
       modes: ['2v2'],
@@ -1817,14 +1984,18 @@ describe('refresh operations worker source retry', () => {
 
   test('propagates published 1v1 standings without failing the publication', async () => {
     const standings: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; rating: number }> }> = []
+
     const recordStandings = async (input: {
       observedAt: Date
       players: Array<{ brawlhallaId: number; rating: number }>
     }) => {
       standings.push(input)
+
       return { changed: input.players.length }
     }
+
     const noNames = async () => ({ changed: 0 })
+
     const lease = (kind: 'leaderboard-1v1' | 'leaderboard-2v2'): OperationLease => ({
       operationId: crypto.randomUUID(),
       effectOperationId: crypto.randomUUID(),
@@ -1840,18 +2011,22 @@ describe('refresh operations worker source retry', () => {
       maxAttempts: 3,
       scheduleWindowAt: new Date().toISOString(),
     })
+
     const regionIndex = new Map(['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'].map((r, i) => [r, i]))
+
     const run = (
       operationLease: OperationLease,
       applyLeaderboardRanked: typeof recordStandings | (() => Promise<never>),
     ) => {
       let completed = false
+
       return runOneRefreshOperation(
         {
           claim: async () => operationLease,
           renew: async () => 'renewed' as const,
           complete: async () => {
             completed = true
+
             return 'transitioned' as const
           },
           fail: async () => 'transitioned' as const,
@@ -1874,6 +2049,7 @@ describe('refresh operations worker source retry', () => {
           leaderboardSource: {
             fetchPage: async ({ region }) => {
               const id = (regionIndex.get(region) ?? 0) * 10 + 1
+
               return {
                 rankings: [
                   {
@@ -1910,6 +2086,7 @@ describe('refresh operations worker source retry', () => {
     expect(await run(lease('leaderboard-1v1'), recordStandings)).toBe(true)
     expect(standings).toHaveLength(1)
     expect(standings[0].players).toHaveLength(9)
+
     expect(standings[0].players).toContainEqual({
       brawlhallaId: 41,
       region: 'AUS',

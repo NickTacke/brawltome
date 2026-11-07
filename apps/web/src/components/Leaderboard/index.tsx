@@ -61,6 +61,7 @@ export function Leaderboard() {
     () => parseLeaderboardSearchParams(urlParams, effectivePreferences),
     [urlParams, effectivePreferences],
   )
+
   const { bracket, region, page } = filters
 
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
@@ -77,16 +78,22 @@ export function Leaderboard() {
   const updateFilters = useCallback(
     (next: Partial<LeaderboardFilters>) => {
       const merged: LeaderboardFilters = { ...filters, ...next }
+
       if (next.bracket !== undefined) track({ name: 'feature.used', feature: 'leaderboard.mode' })
+
       if (next.region !== undefined) track({ name: 'feature.used', feature: 'leaderboard.region' })
+
       for (const feature of leaderboardPageFeatures(filters.page, next)) track({ name: 'feature.used', feature })
       const qs = buildLeaderboardQueryString(merged)
+
       router.push(`${pathname}?${qs}`, { scroll: false })
 
       const preferenceUpdate = preferencesForLeaderboardUpdate(filters, next, account !== null)
+
       if (preferenceUpdate && account) {
         setPreferenceError(null)
         setPreferencesSaving(true)
+
         void saveAccountPreferences(queryClient, account.id, preferenceUpdate)
           .catch((cause: unknown) => {
             console.error('[preferences] failed to save leaderboard defaults', cause)
@@ -104,6 +111,7 @@ export function Leaderboard() {
     let cancelled = false
     const scopeKey = `${bracket}:${region}`
     const scopeChanged = snapshotRef.current?.scopeKey !== scopeKey
+
     setIsLoading(true)
     setFailed(false)
     setKnownLastPage(null)
@@ -124,6 +132,7 @@ export function Leaderboard() {
     request
       .then((data) => {
         if (cancelled) return
+
         setSnapshotStatus(data.status)
         if (data.status === 'unavailable') {
           snapshotRef.current = null
@@ -134,11 +143,13 @@ export function Leaderboard() {
           setEntries(data.entries)
           setKnownLastPage(data.hasMore ? null : data.page)
         }
+
         setFetchedKey(`${bracket}:${region}:${page}`)
         setIsLoading(false)
       })
       .catch((cause: unknown) => {
         if (cancelled) return
+
         console.error(`[leaderboard] request version ${requestVersion} failed`, cause)
         setFailed(true)
         setIsLoading(false)
@@ -256,8 +267,10 @@ export function Leaderboard() {
               entries.map((entry) => {
                 if (isTeamEntry(entry)) {
                   const [first, second] = entry.identity.players
+
                   return <TeamLeaderboardRow key={`${first.brawlhallaId}-${second.brawlhallaId}`} entry={entry} />
                 }
+
                 return <SoloLeaderboardRow key={entry.identity.player.brawlhallaId} entry={entry} />
               })
             ) : (

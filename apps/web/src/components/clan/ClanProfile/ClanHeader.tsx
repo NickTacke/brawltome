@@ -16,6 +16,7 @@ interface ClanHeaderProps {
 
 export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProps) {
   const [relativeUpdated, setRelativeUpdated] = useState<string | null>(null)
+
   const updateDelayed =
     clan.profile.checkedAt !== null &&
     clan.profile.lastSuccessAt !== null &&
@@ -23,8 +24,10 @@ export function ClanHeader({ clan, id, memberCount, refreshing }: ClanHeaderProp
 
   useEffect(() => {
     if (!clan.profile.lastSuccessAt) return
+
     setRelativeUpdated(timeAgo(clan.profile.lastSuccessAt))
     const intervalId = setInterval(() => setRelativeUpdated(timeAgo(clan.profile.lastSuccessAt as string)), 60_000)
+
     return () => clearInterval(intervalId)
   }, [clan.profile.lastSuccessAt])
 

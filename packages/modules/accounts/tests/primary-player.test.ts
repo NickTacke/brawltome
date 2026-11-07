@@ -34,10 +34,13 @@ function createStore(): AccountsStore {
     },
     async beginPrimaryPlayerVerification(input) {
       const existing = idempotency.get(input.idempotencyKey)
+
       if (existing?.accountId !== undefined && existing.accountId !== input.accountId) {
         throw new Error('Steam proof was already used by another account')
       }
+
       if (existing) return attempts.get(existing.attemptId) as PrimaryPlayerVerificationAttempt
+
       const attempt: PrimaryPlayerVerificationAttempt = {
         id: input.attemptId,
         status: 'pending',
@@ -45,21 +48,27 @@ function createStore(): AccountsStore {
         completedAt: null,
         player: null,
       }
+
       attempts.set(attempt.id, attempt)
       steamIds.set(attempt.id, input.steamId)
       idempotency.set(input.idempotencyKey, { accountId: input.accountId, attemptId: attempt.id })
       state = { ...state, attempts: [attempt, ...state.attempts] }
+
       return attempt
     },
     async findPrimaryPlayerVerificationAttempt(attemptId) {
       const attempt = attempts.get(attemptId)
       const steamId = steamIds.get(attemptId)
+
       return attempt && steamId ? { attempt, steamId } : null
     },
     async completePrimaryPlayerVerification(input) {
       const current = attempts.get(input.attemptId)
+
       if (!current) throw new Error('Unknown Primary Player verification attempt')
+
       if (current.status !== 'pending') return current
+
       const attempt: PrimaryPlayerVerificationAttempt = input.evidence
         ? {
             ...current,
@@ -68,7 +77,9 @@ function createStore(): AccountsStore {
             player: { brawlhallaId: input.evidence.brawlhallaId, name: input.evidence.name },
           }
         : { ...current, status: 'failed', completedAt: input.completedAt }
+
       attempts.set(attempt.id, attempt)
+
       state = {
         primaryPlayer:
           attempt.status === 'verified' && input.evidence
@@ -80,6 +91,7 @@ function createStore(): AccountsStore {
             : state.primaryPlayer,
         attempts: state.attempts.map((item) => (item.id === attempt.id ? attempt : item)),
       }
+
       return attempt
     },
     async getPrimaryPlayerVerificationState() {
@@ -122,6 +134,7 @@ describe('Primary Player verification', () => {
       steamId: '76561198000000000',
       idempotencyKey: 'openid-response-nonce',
     })
+
     const replay = await accounts.beginPrimaryPlayerVerification({
       accountId,
       steamId: '76561198000000000',
@@ -138,6 +151,7 @@ describe('Primary Player verification', () => {
       now: () => startedAt,
       generateId: () => '5f689990-dc60-4d70-bd1c-7b49b89786b7',
     })
+
     const attempt = await accounts.beginPrimaryPlayerVerification({
       accountId,
       steamId: '76561198000000000',
@@ -145,6 +159,7 @@ describe('Primary Player verification', () => {
     })
 
     const failed = await accounts.resolvePrimaryPlayerVerification(attempt.id, { resolve: async () => null })
+
     const replay = await accounts.resolvePrimaryPlayerVerification(attempt.id, {
       resolve: async () => ({
         brawlhallaId: 42,

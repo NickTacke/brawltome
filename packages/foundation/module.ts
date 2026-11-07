@@ -9,15 +9,18 @@ export type BrawltomeModule = {
 
 export function checkModuleList(modules: readonly BrawltomeModule[]): void {
   const loadedNames = new Set<string>()
+
   for (const module of modules) {
     if (loadedNames.has(module.name)) {
       throw new Error(`module ${module.name} is listed twice`)
     }
+
     loadedNames.add(module.name)
   }
 
   for (const module of modules) {
     const missingName = module.dependsOn.find((name) => !loadedNames.has(name))
+
     if (missingName) {
       throw new Error(`module ${module.name} depends on ${missingName}, which is not loaded`)
     }
@@ -33,9 +36,11 @@ function checkMigrationOwners(modules: readonly BrawltomeModule[]): void {
 
   for (const module of modules) {
     const owner = singleMigrationOwner(module)
+
     if (owner === undefined) continue
 
     const otherModuleName = moduleNameByOwner.get(owner)
+
     if (otherModuleName !== undefined) {
       throw new Error(`modules ${otherModuleName} and ${module.name} both own migrations under ${owner}`)
     }
@@ -61,6 +66,7 @@ function checkNoCycle(modules: readonly BrawltomeModule[]): void {
 
   for (const module of modules) {
     const cycle = findCycle(module.name, [], dependenciesByName, acyclicNames)
+
     if (cycle) {
       throw new Error(`modules depend on each other in a cycle: ${cycle.join(' -> ')}`)
     }
@@ -83,8 +89,10 @@ function findCycle(
   }
 
   const pathWithName = [...path, name]
+
   for (const dependency of dependenciesByName.get(name) ?? []) {
     const cycle = findCycle(dependency, pathWithName, dependenciesByName, acyclicNames)
+
     if (cycle) {
       return cycle
     }

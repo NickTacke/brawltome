@@ -20,6 +20,7 @@ function isInt32(value: number, minimum: number): boolean {
 
 function observationsById(players: readonly LeaderboardRankedObservation[]): LeaderboardRankedObservation[] {
   const observations = new Map<number, LeaderboardRankedObservation>()
+
   for (const player of players) {
     if (
       !isInt32(player.brawlhallaId, 1) ||
@@ -31,8 +32,10 @@ function observationsById(players: readonly LeaderboardRankedObservation[]): Lea
     ) {
       continue
     }
+
     if (!observations.has(player.brawlhallaId)) observations.set(player.brawlhallaId, player)
   }
+
   return [...observations.values()].sort((left, right) => left.brawlhallaId - right.brawlhallaId)
 }
 
@@ -88,9 +91,11 @@ export type LeaderboardTeamObservation = {
 // One observation per unordered pair, stored with the lower id first.
 function teamObservations(teams: readonly LeaderboardTeamObservation[]): LeaderboardTeamObservation[] {
   const byPair = new Map<string, LeaderboardTeamObservation>()
+
   for (const team of teams) {
     const one = Math.min(team.brawlhallaIdOne, team.brawlhallaIdTwo)
     const two = Math.max(team.brawlhallaIdOne, team.brawlhallaIdTwo)
+
     if (
       !isInt32(one, 1) ||
       !isInt32(two, 1) ||
@@ -103,9 +108,12 @@ function teamObservations(teams: readonly LeaderboardTeamObservation[]): Leaderb
     ) {
       continue
     }
+
     const key = `${one}:${two}`
+
     if (!byPair.has(key)) byPair.set(key, { ...team, brawlhallaIdOne: one, brawlhallaIdTwo: two })
   }
+
   return [...byPair.values()].sort(
     (left, right) => left.brawlhallaIdOne - right.brawlhallaIdOne || left.brawlhallaIdTwo - right.brawlhallaIdTwo,
   )
@@ -123,16 +131,19 @@ export function createPostgresLeaderboardRanked(database: Database) {
       players: readonly LeaderboardRankedObservation[]
     }): Promise<{ changed: number }> {
       const observations = observationsById(input.players)
+
       if (observations.length === 0) return { changed: 0 }
 
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
+
         const changed = await upsertStandings(
           sql,
           sql`players.leaderboard_ranked_observations`,
           observations,
           input.observedAt,
         )
+
         if (changed.length === 0) return { changed: 0 }
 
         // Search shows rating and region, so republish these identities to discovery.
@@ -148,6 +159,7 @@ export function createPostgresLeaderboardRanked(database: Database) {
           FROM unnest(${changed.map(({ brawlhalla_id }) => brawlhalla_id)}::integer[]) AS changed(brawlhalla_id)
           CROSS JOIN version
         `
+
         return { changed: changed.length }
       })
     },
@@ -169,6 +181,7 @@ export function createPostgresLeaderboardRanked(database: Database) {
         FROM players.leaderboard_ranked_observations
         WHERE brawlhalla_id = ${brawlhallaId}
       `
+
       return row
         ? {
             brawlhallaId,
@@ -189,13 +202,16 @@ export function createPostgresLeaderboardRanked(database: Database) {
       players: readonly LeaderboardRankedObservation[]
     }): Promise<{ changed: number }> {
       const observations = observationsById(input.players)
+
       if (observations.length === 0) return { changed: 0 }
+
       const changed = await upsertStandings(
         client,
         client`players.leaderboard_solo_queue_observations`,
         observations,
         input.observedAt,
       )
+
       return { changed: changed.length }
     },
 
@@ -205,7 +221,9 @@ export function createPostgresLeaderboardRanked(database: Database) {
       teams: readonly LeaderboardTeamObservation[]
     }): Promise<{ changed: number }> {
       const teams = teamObservations(input.teams)
+
       if (teams.length === 0) return { changed: 0 }
+
       const changed = await client<{ brawlhalla_id_one: number }[]>`
         INSERT INTO players.leaderboard_team_observations AS current
           (brawlhalla_id_one, brawlhalla_id_two, region, rating, peak_rating, tier, wins, games, observed_at)
@@ -235,6 +253,7 @@ export function createPostgresLeaderboardRanked(database: Database) {
               (EXCLUDED.region, EXCLUDED.rating, EXCLUDED.peak_rating, EXCLUDED.tier, EXCLUDED.wins, EXCLUDED.games)
         RETURNING brawlhalla_id_one
       `
+
       return { changed: changed.length }
     },
   }

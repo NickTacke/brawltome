@@ -10,11 +10,13 @@ import type { Context } from '../src/trpc/context'
 
 function callerFor(getLegendMeta: StatisticsQueries['getLegendMeta']) {
   const statisticsQueries: StatisticsQueries = { getLegendMeta }
+
   return statisticsRouter.createCaller({ statisticsQueries } as unknown as Context)
 }
 
 function availableResult() {
   let playerId = 1
+
   const artifact = buildLegendMetaArtifact({
     snapshotId: '10000000-0000-4000-8000-000000000001',
     generationId: '10000000-0000-4000-8000-000000000002',
@@ -42,9 +44,13 @@ function availableResult() {
       })),
     ),
   })
+
   const slice = artifact.slices.find(({ region, bracket }) => region === 'EU' && bracket === 'Platinum')
+
   if (!slice) throw new Error('fixture slice missing')
+
   const { slices: _slices, ...snapshot } = artifact
+
   return {
     ...snapshot,
     status: 'fresh' as const,
@@ -58,12 +64,15 @@ function availableResult() {
 describe('statistics.legendMeta', () => {
   test('forwards independent filters only to the Statistics capability and maps explicit insufficiency', async () => {
     const calls: unknown[] = []
+
     const caller = callerFor(async (input) => {
       calls.push(input)
+
       return availableResult()
     })
 
     const output = await caller.legendMeta({ region: 'EU', bracket: 'Platinum' })
+
     expect(output).toMatchObject({
       status: 'fresh',
       filter: { region: 'EU', bracket: 'Platinum' },
@@ -79,6 +88,7 @@ describe('statistics.legendMeta', () => {
         },
       ],
     })
+
     expect(calls).toEqual([{ region: 'EU', bracket: 'Platinum' }])
   })
 
@@ -99,7 +109,9 @@ describe('statistics.legendMeta', () => {
   test('rejects malformed producer output and unknown filter fields', async () => {
     const malformed = callerFor(async () => {
       const result = availableResult()
+
       result.slice.rows[0].pickShare.basisPoints = 9_999
+
       return result
     })
 

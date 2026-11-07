@@ -12,13 +12,16 @@ interface PageProps {
 
 const parseClanId = (value: string): number | null => {
   if (!/^[1-9]\d*$/.test(value)) return null
+
   const id = Number(value)
+
   return Number.isSafeInteger(id) && id <= 2_147_483_647 ? id : null
 }
 
 const getClan = cache(async (id: number) => {
   try {
     const trpc = await getServerTrpc()
+
     return await trpc.clan.byId.query({ id })
   } catch {
     return null

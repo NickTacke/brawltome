@@ -4,6 +4,7 @@ import { getPendingPlayerSections, hasCompletedPlayerRefresh } from '../../src/l
 describe('canonical player section polling', () => {
   test('uses independent canonical last-success timestamps and an inclusive twelve-hour career boundary', () => {
     const now = Date.parse('2026-08-10T10:00:00Z')
+
     const player = {
       currentSeason: { lastSuccessAt: '2026-08-10T09:00:00Z' },
       career: { lastSuccessAt: '2026-08-09T22:00:00Z' },
@@ -16,10 +17,12 @@ describe('canonical player section polling', () => {
 
   test('always refreshes recent imported history and completes when canonical source replaces it', () => {
     const observedAt = '2026-08-10T10:00:00Z'
+
     const historical = {
       currentSeason: { lastSuccessAt: observedAt },
       career: { lastSuccessAt: observedAt, snapshotSource: 'legacy-v2' as const },
     }
+
     const canonical = {
       currentSeason: { lastSuccessAt: observedAt },
       career: { lastSuccessAt: observedAt, snapshotSource: 'v0-player-snapshot' as const },
@@ -34,10 +37,12 @@ describe('canonical player section polling', () => {
       currentSeason: { lastSuccessAt: '2026-08-10T09:00:00Z' },
       career: { lastSuccessAt: '2026-08-09T22:00:00Z' },
     }
+
     const rankedOnly = {
       currentSeason: { lastSuccessAt: '2026-08-10T10:00:00Z' },
       career: { lastSuccessAt: '2026-08-09T22:00:00Z' },
     }
+
     const both = {
       currentSeason: { lastSuccessAt: '2026-08-10T10:00:00Z' },
       career: { lastSuccessAt: '2026-08-10T10:00:00Z' },

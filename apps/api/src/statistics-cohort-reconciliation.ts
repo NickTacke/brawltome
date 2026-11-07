@@ -12,12 +12,16 @@ export async function loadLaunchCohortCandidates(
   region: LaunchCohortRegion = 'EU',
 ): Promise<CohortCandidateSnapshot | null> {
   const first = await ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 100 })
+
   if (first.status === 'unavailable') return null
+
   if (first.mode !== '1v1' || first.region !== region) {
     throw new Error(`Statistics cohort requires the ${region} 1v1 Ranking snapshot`)
   }
+
   const candidates: CohortCandidateSnapshot['candidates'] = []
   let page = first
+
   for (;;) {
     if (
       page.snapshotId !== first.snapshotId ||
@@ -27,13 +31,17 @@ export async function loadLaunchCohortCandidates(
     ) {
       throw new Error('Statistics leaderboard pagination crossed immutable generation identity')
     }
+
     for (const entry of page.entries) {
       if (entry.identity.type !== 'one-vs-one-player') {
         throw new Error('Statistics 1v1 snapshot contains a non-player identity')
       }
+
       candidates.push({ brawlhallaId: entry.identity.player.brawlhallaId, rating: entry.rating })
     }
+
     if (!page.hasMore) break
+
     const next = await ranking.getLeaderboard({
       mode: '1v1',
       region,
@@ -41,9 +49,12 @@ export async function loadLaunchCohortCandidates(
       pageSize: page.pageSize,
       snapshotId: first.snapshotId,
     })
+
     if (next.status === 'unavailable') throw new Error('pinned Statistics leaderboard snapshot disappeared')
+
     page = next
   }
+
   return {
     snapshotId: first.snapshotId,
     generationId: first.generationId,
@@ -58,6 +69,7 @@ export async function loadFullLaunchCohortCandidates(
   ranking: Pick<RankingQueries, 'getLeaderboard'>,
 ): Promise<CohortCandidateSnapshot[] | null> {
   const snapshots = await Promise.all(launchCohortRegions.map((region) => loadLaunchCohortCandidates(ranking, region)))
+
   return snapshots.some((snapshot) => snapshot === null) ? null : (snapshots as CohortCandidateSnapshot[])
 }
 
@@ -70,8 +82,10 @@ async function launchSourceMayHaveChanged(
   const heads = await Promise.all(
     launchCohortRegions.map((region) => ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 1 })),
   )
+
   // Matches the full load: an unavailable region leaves nothing to reconcile.
   if (heads.some((head) => head.status === 'unavailable')) return false
+
   return heads.some((head) => head.status !== 'unavailable' && head.generationId !== sourceGenerationId)
 }
 
@@ -84,6 +98,7 @@ export async function reconcileStatisticsCohort(
   const state = await statistics.reconciliationState()
   let launchState = state.launch
   const needsLaunchSnapshot = !launchState || launchState.decisionCount === 2
+
   if (
     !state.legacyCohortExists ||
     (needsLaunchSnapshot && (await launchSourceMayHaveChanged(ranking, launchState?.sourceGenerationId)))
@@ -91,38 +106,47 @@ export async function reconcileStatisticsCohort(
     const candidates = await Promise.all(
       launchCohortRegions.map((region) => loadLaunchCohortCandidates(ranking, region)),
     )
+
     const euSnapshot = candidates.find((snapshot) => snapshot?.region === 'EU')
+
     if (!state.legacyCohortExists && euSnapshot) {
       await statistics.reconcileCohort(euSnapshot)
       reconciled++
     }
+
     const completeCandidates = candidates.every((snapshot) => snapshot !== null)
       ? (candidates as CohortCandidateSnapshot[])
       : null
+
     const sourceGenerations = new Set(completeCandidates?.map(({ generationId }) => generationId))
+
     if (
       needsLaunchSnapshot &&
       completeCandidates &&
       (sourceGenerations.size !== 1 || completeCandidates[0].generationId !== launchState?.sourceGenerationId)
     ) {
       const launch = await statistics.reconcileLaunchCohort(completeCandidates)
+
       launchState = {
         generationId: launch.generationId,
         sourceGenerationId: launch.sourceGenerationId,
         decisionCount: launch.decisions.length,
         cohortIds: launch.cells.map(({ cohortId }) => cohortId),
       }
+
       reconciled++
     }
   }
 
   const awaitingCollections = await operations.listAwaitingStatisticsCollections()
   const boundCollectionOperationIds = new Set(await statistics.boundCollectionOperationIds(awaitingCollections))
+
   for (const operationId of awaitingCollections) {
     if (boundCollectionOperationIds.has(operationId)) await operations.activateStatisticsCollection(operationId)
   }
 
   const launchCohortIds = new Set(launchState?.cohortIds ?? [])
+
   for (const intent of await statistics.collectionIntents()) {
     const accepted = await operations.reserveStatisticsCollection({
       kind: intent.kind,
@@ -136,18 +160,22 @@ export async function reconcileStatisticsCohort(
       },
       maxAttempts: 3,
     })
+
     await statistics.recordCollectionOperation(intent, accepted.operationId)
     if ((await operations.activateStatisticsCollection(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Statistics collection could not be activated after owner binding')
     }
+
     if (accepted.outcome === 'accepted') reconciled++
   }
 
   const awaitingPublications = await operations.listAwaitingStatisticsPublications()
   const boundPublicationOperationIds = new Set(await statistics.boundPublicationOperationIds(awaitingPublications))
+
   for (const operationId of awaitingPublications) {
     if (boundPublicationOperationIds.has(operationId)) await operations.activateStatisticsPublication(operationId)
   }
+
   for (const intent of await statistics.publicationIntents()) {
     const accepted = await operations.reserveStatisticsPublication({
       kind: intent.kind,
@@ -158,18 +186,23 @@ export async function reconcileStatisticsCohort(
       provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
       maxAttempts: 3,
     })
+
     if ((await statistics.recordPublicationOperation(intent, accepted.operationId)) === 'collection-active') continue
+
     if ((await operations.activateStatisticsPublication(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Statistics publication could not be activated after owner binding')
     }
+
     if (accepted.outcome === 'accepted') reconciled++
   }
 
   const awaitingLegendMeta = await operations.listAwaitingStatisticsLegendMetaPublications()
   const boundLegendMeta = new Set(await statistics.boundLegendMetaPublicationOperationIds(awaitingLegendMeta))
+
   for (const operationId of awaitingLegendMeta) {
     if (boundLegendMeta.has(operationId)) await operations.activateStatisticsLegendMetaPublication(operationId)
   }
+
   for (const intent of await statistics.legendMetaPublicationIntents()) {
     const accepted = await operations.reserveStatisticsLegendMetaPublication({
       kind: intent.kind,
@@ -180,11 +213,14 @@ export async function reconcileStatisticsCohort(
       provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
       maxAttempts: 3,
     })
+
     await statistics.recordLegendMetaPublicationOperation(intent, accepted.operationId)
     if ((await operations.activateStatisticsLegendMetaPublication(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Legend Meta publication could not be activated after owner binding')
     }
+
     if (accepted.outcome === 'accepted') reconciled++
   }
+
   return reconciled
 }

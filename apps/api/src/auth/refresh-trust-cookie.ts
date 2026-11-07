@@ -19,16 +19,21 @@ export function issueRefreshTrust(
   validateSecret(secret)
   const issuedAt = Math.floor(now.getTime() / 1000)
   const payload = `v1.${issuedAt}.${issuedAt + REFRESH_TRUST_TTL_SECONDS}.${createNonce()}`
+
   return `${payload}.${signature(payload, secret)}`
 }
 
 export function verifyRefreshTrust(token: string | null | undefined, secret: string, now = new Date()): boolean {
   validateSecret(secret)
   if (!token) return false
+
   const parts = token.split('.')
+
   if (parts.length !== 5 || parts[0] !== 'v1' || !parts[3]) return false
+
   const issuedAt = Number(parts[1])
   const expiresAt = Number(parts[2])
+
   if (
     !Number.isSafeInteger(issuedAt) ||
     !Number.isSafeInteger(expiresAt) ||
@@ -36,11 +41,15 @@ export function verifyRefreshTrust(token: string | null | undefined, secret: str
   ) {
     return false
   }
+
   const nowSeconds = Math.floor(now.getTime() / 1000)
+
   if (issuedAt > nowSeconds || nowSeconds >= expiresAt) return false
+
   const payload = parts.slice(0, 4).join('.')
   const expected = Buffer.from(signature(payload, secret))
   const provided = Buffer.from(parts[4])
+
   return expected.length === provided.length && timingSafeEqual(expected, provided)
 }
 

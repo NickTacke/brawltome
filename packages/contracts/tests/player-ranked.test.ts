@@ -49,6 +49,7 @@ const profile: PlayerRankedProfileContract = {
 describe('Player ranked profile contract', () => {
   test('preserves measured zero, nullable placement, separate Solo Queue, and freshness evidence', () => {
     expect(parsePlayerRankedProfileOutput(profile)).toEqual(profile)
+
     expect(
       parsePlayerRankedProfileOutput({
         ...profile,

@@ -42,13 +42,16 @@ const admission: AdmissionConfig = {
 
 beforeAll(async () => {
   const configuredUrl = new URL(process.env.DATABASE_URL ?? 'postgres://unset')
+
   if (configuredUrl.hostname !== '127.0.0.1' || configuredUrl.port !== '55436') {
     throw new Error('Statistics #210 tests require dedicated PostgreSQL 127.0.0.1:55436')
   }
+
   database = await createTestDatabase({
     label: 'statistics_full_cohort',
     modules: [refreshOperationsModule, statisticsModule],
   })
+
   connectionString = database.connectionString
 })
 
@@ -59,6 +62,7 @@ afterAll(async () => {
 function snapshots(generation: number): CohortCandidateSnapshot[] {
   return launchCohortRegions.map((region, regionIndex) => {
     const base = generation * 10_000_000 + regionIndex * 100_000
+
     return {
       snapshotId: `00000000-0000-4000-8000-${String(generation * 100 + regionIndex + 1).padStart(12, '0')}`,
       generationId: `10000000-0000-4000-8000-${String(generation).padStart(12, '0')}`,
@@ -83,6 +87,7 @@ async function seedTerminalProduct(
 ) {
   const sql = postgres(connectionString, { max: 1 })
   const kind = product === 'ranked' ? 'statistics-ranked-collection' : 'statistics-lifetime-collection'
+
   try {
     await sql`
       WITH candidates AS (
@@ -106,6 +111,7 @@ async function seedTerminalProduct(
              observation_window_starts_at + interval '1 hour', observation_window_starts_at + interval '2 hours'
       FROM candidates
     `
+
     await sql`
       INSERT INTO statistics.collection_operations (cohort_id, brawlhalla_id, product, operation_id)
       SELECT cohort.id, member.brawlhalla_id, ${product}, operation.id
@@ -115,6 +121,7 @@ async function seedTerminalProduct(
         ON operation.operation_key = 'statistics:' || cohort.id::text || ':' || member.brawlhalla_id::text || ':' || ${product}
       WHERE cohort.generation_id = ${generation.generationId}
     `
+
     await sql`
       INSERT INTO statistics.collection_attempts
         (cohort_id, brawlhalla_id, product, operation_id, effect_operation_id,
@@ -128,6 +135,7 @@ async function seedTerminalProduct(
       JOIN refresh_operations.operations operation ON operation.id = collection.operation_id
       WHERE cohort.generation_id = ${generation.generationId} AND collection.product = ${product}
     `
+
     await sql`
       INSERT INTO statistics.observations
         (cohort_id, brawlhalla_id, product, effect_operation_id, operation_key,
@@ -190,11 +198,13 @@ async function seedTerminalProduct(
 
 async function expectPostgresRejection(action: () => Promise<void>, message: string): Promise<void> {
   let failure: unknown
+
   try {
     await action()
   } catch (error) {
     failure = error
   }
+
   expect(failure).toBeInstanceOf(Error)
   expect((failure as Error).message.toLowerCase()).toContain(message.toLowerCase())
 }
@@ -208,7 +218,9 @@ async function bindPublication(
   const intent = (await statistics.publicationIntents()).find(
     (candidate) => candidate.generationId === generationId && candidate.product === product,
   )
+
   if (!intent) throw new Error(`missing ${product} publication intent`)
+
   const reserved = await operations.reserveStatisticsPublication({
     kind: intent.kind,
     dedupeKey: intent.operationKey,
@@ -218,8 +230,10 @@ async function bindPublication(
     provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
     maxAttempts: 3,
   })
+
   expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
   expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
+
   return reserved.operationId
 }
 
@@ -232,7 +246,9 @@ async function bindLegendMetaPublication(
   const intent = (await statistics.legendMetaPublicationIntents()).find(
     (candidate) => candidate.generationId === generationId,
   )
+
   if (!intent) throw new Error('missing Legend Meta publication intent')
+
   const reserved = await operations.reserveStatisticsLegendMetaPublication({
     kind: intent.kind,
     dedupeKey: intent.operationKey,
@@ -242,8 +258,10 @@ async function bindLegendMetaPublication(
     provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
     maxAttempts,
   })
+
   await statistics.recordLegendMetaPublicationOperation(intent, reserved.operationId)
   expect(await operations.activateStatisticsLegendMetaPublication(reserved.operationId)).toBe('transitioned')
+
   return reserved.operationId
 }
 
@@ -253,6 +271,7 @@ async function bindPublicationFixture(
   product: 'ranked' | 'lifetime',
 ) {
   const operationKey = `statistics:${generationId}:publication:${product}`
+
   const reserved = await operations.reserveStatisticsPublication({
     kind: 'statistics-publication',
     dedupeKey: operationKey,
@@ -262,7 +281,9 @@ async function bindPublicationFixture(
     provenance: { source: 'statistics-publication-ordering-fixture', requestedBy: 'issue-211' },
     maxAttempts: 1,
   })
+
   const sql = postgres(connectionString, { max: 1 })
+
   try {
     await sql`
       INSERT INTO statistics.publication_operations (generation_id, product, operation_id)
@@ -271,6 +292,7 @@ async function bindPublicationFixture(
   } finally {
     await sql.end()
   }
+
   return reserved.operationId
 }
 
@@ -281,6 +303,7 @@ async function insertAcceptedPublicationFixture(input: {
   templateGenerationId: string
 }) {
   const sql = postgres(connectionString, { max: 1 })
+
   try {
     await sql`
       INSERT INTO statistics.publication_decisions
@@ -300,9 +323,11 @@ async function insertAcceptedPublicationFixture(input: {
 async function cloneCareerSnapshotFixture(input: { generationId: string; templateGenerationId: string }) {
   const sql = postgres(connectionString, { max: 1 })
   const snapshotId = randomUUID()
+
   try {
     await sql.begin(async (transaction) => {
       const tx = transaction as unknown as typeof sql
+
       await tx`
         INSERT INTO statistics.career_weapon_usage_snapshots
           (id, generation_id, cohort_methodology_version, methodology_version,
@@ -316,6 +341,7 @@ async function cloneCareerSnapshotFixture(input: { generationId: string; templat
         WHERE decision.generation_id = ${input.generationId}
           AND decision.product = 'lifetime' AND decision.decision = 'accepted'
       `
+
       await tx`
         INSERT INTO statistics.career_weapon_usage_scopes
           (snapshot_id, region, bracket, selected_players, successful_observations, total_held_seconds)
@@ -326,6 +352,7 @@ async function cloneCareerSnapshotFixture(input: { generationId: string; templat
           WHERE generation_id = ${input.templateGenerationId}
         )
       `
+
       await tx`
         INSERT INTO statistics.career_weapon_usage_rows
           (snapshot_id, region, bracket, weapon, observed_players, held_time_seconds,
@@ -342,6 +369,7 @@ async function cloneCareerSnapshotFixture(input: { generationId: string; templat
           WHERE generation_id = ${input.templateGenerationId}
         )
       `
+
       await tx`
         UPDATE statistics.career_weapon_usage_snapshots
         SET sealed_at = clock_timestamp()
@@ -351,6 +379,7 @@ async function cloneCareerSnapshotFixture(input: { generationId: string; templat
   } finally {
     await sql.end()
   }
+
   return snapshotId
 }
 
@@ -396,14 +425,17 @@ describe('Statistics full launch cohort publication', () => {
     let statistics = createPostgresStatistics(statisticsClient)
     const concurrent = createPostgresStatistics(database)
     const operations = createPostgresRefreshOperations({ database })
+
     const [first, duplicate] = await Promise.all([
       statistics.reconcileLaunchCohort(snapshots(1)),
       concurrent.reconcileLaunchCohort(snapshots(1)),
     ])
+
     expect(duplicate.generationId).toBe(first.generationId)
     expect(first.cells).toHaveLength(18)
     expect(first.cells.every((cell) => cell.selectedPlayers === 125 && cell.state === 'ready')).toBe(true)
     expect(first.selectedPlayers).toBe(2_250)
+
     expect(first.progress.ranked).toMatchObject({
       product: 'ranked',
       selectedPlayers: 2_250,
@@ -411,18 +443,22 @@ describe('Statistics full launch cohort publication', () => {
       sourceAttempts: 0,
       successes: 0,
     })
+
     expect(first.progress.ranked.cells).toHaveLength(18)
     expect(first.progress.lifetime).toMatchObject({ product: 'lifetime', selectedPlayers: 2_250, successes: 0 })
     expect(first.observationWindow.startsAt).not.toBe(first.sourceObservedAt)
+
     expect(
       new Date(first.observationWindow.endsAt).getTime() - new Date(first.observationWindow.startsAt).getTime(),
     ).toBe(7 * 24 * 60 * 60 * 1_000)
+
     expect(first.capacityEnvelope).toMatchObject({
       plannedRequests: 4_500,
       maximumSourceAttempts: 13_500,
       quotaUnitsPerWindow: 150,
       quotaWindowSeconds: 900,
     })
+
     expect(await statistics.collectionIntents()).toHaveLength(500)
 
     await seedTerminalProduct(first, 'ranked', 119)
@@ -431,6 +467,7 @@ describe('Statistics full launch cohort publication', () => {
 
     const replayControl = postgres(connectionString, { max: 1 })
     const replayOperations = createPostgresDeadLetterOperations(database)
+
     try {
       const bindings = await replayControl<
         { cohort_id: string; brawlhalla_id: string | number; operation_id: string }[]
@@ -442,6 +479,7 @@ describe('Statistics full launch cohort publication', () => {
         ORDER BY collection.cohort_id, collection.brawlhalla_id
         LIMIT 2
       `
+
       await expectPostgresRejection(async () => {
         await replayControl`
           INSERT INTO statistics.collection_attempts
@@ -450,6 +488,7 @@ describe('Statistics full launch cohort publication', () => {
             ${bindings[1].operation_id}, ${bindings[1].operation_id}, 999, 1)
         `
       }, 'collection attempt operation identity conflicts')
+
       await expectPostgresRejection(async () => {
         await replayControl`
           INSERT INTO statistics.publication_operations (generation_id, product, operation_id)
@@ -467,16 +506,20 @@ describe('Statistics full launch cohort publication', () => {
           AND operation.replayed_from_operation_id IS NULL
         LIMIT 1
       `
+
       const firstReplay = await replayOperations.replayDeadLetter({
         operationId: rankedRoot.id,
         actorId: 'operator:statistics-210',
         reason: 'prepare descendant replay race',
       })
+
       if (!firstReplay.replayOperationId) throw new Error('first replay operation missing')
+
       await replayControl`
         UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE id = ${firstReplay.replayOperationId}
       `
+
       await replayControl.unsafe(`
         CREATE FUNCTION refresh_operations.pause_statistics_descendant_replay() RETURNS trigger
         LANGUAGE plpgsql AS $$
@@ -489,8 +532,11 @@ describe('Statistics full launch cohort publication', () => {
         BEFORE INSERT ON refresh_operations.operations
         FOR EACH ROW EXECUTE FUNCTION refresh_operations.pause_statistics_descendant_replay();
       `)
+
       const rankedIntent = (await statistics.publicationIntents()).find(({ product }) => product === 'ranked')
+
       if (!rankedIntent) throw new Error('ranked publication intent missing')
+
       const reserved = await operations.reserveStatisticsPublication({
         kind: rankedIntent.kind,
         dedupeKey: rankedIntent.operationKey,
@@ -500,18 +546,23 @@ describe('Statistics full launch cohort publication', () => {
         provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
         maxAttempts: 3,
       })
+
       const descendantReplay = replayOperations.replayDeadLetter({
         operationId: firstReplay.replayOperationId,
         actorId: 'operator:statistics-210',
         reason: 'race publication sealing',
       })
+
       await Bun.sleep(50)
+
       const [replayed, sealResult] = await Promise.all([
         descendantReplay,
         statistics.recordPublicationOperation(rankedIntent, reserved.operationId),
       ])
+
       expect(sealResult).toBe('collection-active')
       if (!replayed.replayOperationId) throw new Error('descendant replay operation missing')
+
       await replayControl`
         UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE id = ${replayed.replayOperationId}
@@ -521,6 +572,7 @@ describe('Statistics full launch cohort publication', () => {
         DROP TRIGGER IF EXISTS pause_statistics_descendant_replay ON refresh_operations.operations;
         DROP FUNCTION IF EXISTS refresh_operations.pause_statistics_descendant_replay();
       `)
+
       await replayControl.end()
     }
 
@@ -528,10 +580,12 @@ describe('Statistics full launch cohort publication', () => {
     await bindPublication(statistics, operations, first.generationId, 'lifetime')
 
     const sealedControl = postgres(connectionString, { max: 1 })
+
     const [lifetimePublication] = await sealedControl<{ operation_id: string }[]>`
       SELECT operation_id FROM statistics.publication_operations
       WHERE generation_id = ${first.generationId} AND product = 'lifetime'
     `
+
     await expectPostgresRejection(async () => {
       await sealedControl`
         INSERT INTO statistics.publication_decisions
@@ -542,6 +596,7 @@ describe('Statistics full launch cohort publication', () => {
           '[]'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb)
       `
     }, 'publication decision operation identity conflicts')
+
     const [sealedCollection] = await sealedControl<{ id: string }[]>`
       SELECT operation.id
       FROM refresh_operations.operations operation
@@ -551,8 +606,10 @@ describe('Statistics full launch cohort publication', () => {
         AND collection.product = 'ranked' AND operation.status = 'dead_letter'
       LIMIT 1
     `
+
     await sealedControl.end()
     const sealedDeadLetters = createPostgresDeadLetterOperations(database)
+
     await expect(
       sealedDeadLetters.replayDeadLetter({
         operationId: sealedCollection.id,
@@ -562,17 +619,24 @@ describe('Statistics full launch cohort publication', () => {
     ).rejects.toThrow('sealed by publication validation')
 
     const expired = await operations.claim('expired-publication', 20, admission, 'statistics-publication')
+
     if (!expired || expired.kind !== 'statistics-publication') throw new Error('publication lease missing')
+
     await Bun.sleep(35)
     const replacement = await operations.claim('replacement-publication', 10_000, admission, 'statistics-publication')
+
     if (!replacement || replacement.kind !== 'statistics-publication') throw new Error('replacement lease missing')
+
     expect((await statistics.validateAndPublish(publicationAuthorization(expired))).result).toBe('lease-lost')
+
     const concurrentPublication = await Promise.all([
       statistics.validateAndPublish(publicationAuthorization(replacement)),
       concurrent.validateAndPublish(publicationAuthorization(replacement)),
     ])
+
     expect(concurrentPublication.map(({ result }) => result).sort()).toEqual(['already-applied', 'applied'])
     const accepted = concurrentPublication.find(({ result }) => result === 'applied')
+
     expect(accepted?.decision).toMatchObject({
       outcome: 'accepted',
       progress: {
@@ -584,32 +648,41 @@ describe('Statistics full launch cohort publication', () => {
       observationWindow: first.observationWindow,
       capacityEnvelope: first.capacityEnvelope,
     })
+
     expect(accepted?.decision?.progress.cells).toHaveLength(18)
+
     expect(
       accepted?.decision?.progress.cells.every(
         (cell) => cell.operations === 125 && cell.sourceAttempts === 125 && cell.successes === 119,
       ),
     ).toBe(true)
+
     await operations.complete(replacement)
 
     const careerLease = await operations.claim('career-publication-worker', 10_000, admission, 'statistics-publication')
+
     if (!careerLease || careerLease.kind !== 'statistics-publication') {
       throw new Error('Career publication lease missing')
     }
+
     const concurrentCareerPublication = await Promise.all([
       statistics.validateAndPublish(publicationAuthorization(careerLease)),
       concurrent.validateAndPublish(publicationAuthorization(careerLease)),
     ])
+
     expect(concurrentCareerPublication.map(({ result }) => result).sort()).toEqual(['already-applied', 'applied'])
     expect(concurrentCareerPublication.find(({ result }) => result === 'applied')?.decision?.outcome).toBe('accepted')
     await operations.complete(careerLease)
     const completedFirst = await statistics.getLaunchCohort(first.generationId)
+
     expect(completedFirst?.decisions).toHaveLength(2)
+
     expect(completedFirst?.progress.ranked).toMatchObject({
       operations: 2_250,
       sourceAttempts: 2_250,
       successes: 2_142,
     })
+
     expect(completedFirst?.progress.lifetime).toMatchObject({
       operations: 2_250,
       sourceAttempts: 2_250,
@@ -617,54 +690,69 @@ describe('Statistics full launch cohort publication', () => {
     })
 
     const legendMetaOperationId = await bindLegendMetaPublication(statistics, operations, first.generationId, 2)
+
     const expiredLegendMeta = await operations.claim(
       'expired-legend-meta',
       20,
       admission,
       'statistics-legend-meta-publication',
     )
+
     if (!expiredLegendMeta || expiredLegendMeta.kind !== 'statistics-legend-meta-publication') {
       throw new Error('Legend Meta publication lease missing')
     }
+
     await Bun.sleep(35)
+
     const replacementLegendMeta = await operations.claim(
       'replacement-legend-meta',
       10_000,
       admission,
       'statistics-legend-meta-publication',
     )
+
     if (!replacementLegendMeta || replacementLegendMeta.kind !== 'statistics-legend-meta-publication') {
       throw new Error('replacement Legend Meta publication lease missing')
     }
+
     expect((await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(expiredLegendMeta))).result).toBe(
       'lease-lost',
     )
+
     const concurrentLegendMeta = await Promise.all([
       statistics.buildAndPublishLegendMeta(legendMetaAuthorization(replacementLegendMeta)),
       concurrent.buildAndPublishLegendMeta(legendMetaAuthorization(replacementLegendMeta)),
     ])
+
     expect(concurrentLegendMeta.map(({ result }) => result).sort()).toEqual(['already-applied', 'applied'])
+
     expect(concurrentLegendMeta.find(({ result }) => result === 'applied')?.decision).toMatchObject({
       generationId: first.generationId,
       outcome: 'accepted',
       reasons: [],
     })
+
     const recoveryControl = postgres(connectionString, { max: 1 })
+
     await recoveryControl`
       UPDATE refresh_operations.operations
       SET lease_expires_at = clock_timestamp() - interval '1 millisecond'
       WHERE id = ${legendMetaOperationId}
     `
+
     await recoveryControl.end()
+
     expect(
       await operations.claim('legend-meta-effect-recovery', 10_000, admission, 'statistics-legend-meta-publication'),
     ).toBeNull()
+
     expect((await operations.inspect(legendMetaOperationId)).operation).toMatchObject({
       status: 'succeeded',
       attempt_count: 2,
     })
 
     const initialLegendHistory = await statistics.getLegendMetaHistory({ region: 'all', bracket: 'all' })
+
     expect(initialLegendHistory).toMatchObject({
       status: 'available',
       region: 'all',
@@ -678,6 +766,7 @@ describe('Statistics full launch cohort publication', () => {
     })
 
     const allLegendMeta = await statistics.getLegendMeta({ region: 'all', bracket: 'all' })
+
     expect(allLegendMeta).toMatchObject({
       status: 'fresh',
       generationId: first.generationId,
@@ -690,7 +779,9 @@ describe('Statistics full launch cohort publication', () => {
         coverage: { numerator: 2_142, denominator: 2_250, basisPoints: 9_520 },
       },
     })
+
     if (allLegendMeta.status === 'unavailable') throw new Error('Legend Meta publication missing')
+
     expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
       rank: 1,
       eligible: true,
@@ -702,7 +793,9 @@ describe('Statistics full launch cohort publication', () => {
       adoption: { numerator: 2_142, denominator: 2_142, basisPoints: 10_000 },
       winRate: { numerator: 10_710, denominator: 21_420, basisPoints: 5_000 },
     })
+
     const euPlatinum = await statistics.getLegendMeta({ region: 'EU', bracket: 'Platinum' })
+
     expect(euPlatinum).toMatchObject({
       status: 'fresh',
       slice: {
@@ -712,9 +805,11 @@ describe('Statistics full launch cohort publication', () => {
         coverage: { numerator: 119, denominator: 125, basisPoints: 9_520 },
       },
     })
+
     const overdueStatistics = createPostgresStatistics(database, {
       now: () => new Date('2100-01-01T00:00:00.000Z'),
     })
+
     await expect(overdueStatistics.getLegendMeta({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
       status: 'stale',
       staleReason: 'publication-overdue',
@@ -722,6 +817,7 @@ describe('Statistics full launch cohort publication', () => {
     })
 
     const initialCareerHistory = await statistics.getCareerWeaponUsageHistory({ region: 'all', bracket: 'all' })
+
     expect(initialCareerHistory).toMatchObject({
       status: 'available',
       filters: { region: 'all', bracket: 'all' },
@@ -734,6 +830,7 @@ describe('Statistics full launch cohort publication', () => {
     })
 
     const freshCareer = await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })
+
     expect(freshCareer).toMatchObject({
       status: 'fresh',
       generationId: first.generationId,
@@ -749,7 +846,9 @@ describe('Statistics full launch cohort publication', () => {
       totalHeldSeconds: '11566800',
       filters: { region: 'all', bracket: 'all' },
     })
+
     if (!freshCareer || freshCareer.status === 'unavailable') throw new Error('Career publication missing')
+
     expect(freshCareer.rows.find(({ weapon }) => weapon === 'Hammer')).toEqual({
       weapon: 'Hammer',
       observedPlayers: 2_142,
@@ -762,12 +861,14 @@ describe('Statistics full launch cohort publication', () => {
       medianKosPerHour: { numerator: '1', denominator: '1' },
       comparison: { eligible: true, reasons: [] },
     })
+
     expect(freshCareer.rows.find(({ weapon }) => weapon === 'Sword')).toMatchObject({
       observedPlayers: 2_142,
       heldTimeShare: { numerator: '1', denominator: '3' },
       medianDamagePerMinute: { numerator: '0', denominator: '1' },
       medianKosPerHour: { numerator: '0', denominator: '1' },
     })
+
     expect(await statistics.getCareerWeaponUsage({ region: 'EU', bracket: 'Diamond+' })).toMatchObject({
       status: 'fresh',
       selectedPlayers: 125,
@@ -775,14 +876,17 @@ describe('Statistics full launch cohort publication', () => {
       coverage: { numerator: '119', denominator: '125' },
       filters: { region: 'EU', bracket: 'Diamond+' },
     })
+
     const overdueCareer = createPostgresStatistics(database, {
       now: () => new Date(new Date(freshCareer.expectedNextPublicationAt).getTime() + 1),
     })
+
     expect(await overdueCareer.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
       status: 'stale',
       generationId: first.generationId,
       latestDecision: { generationId: first.generationId, outcome: 'accepted' },
     })
+
     for (const statement of [
       "UPDATE statistics.publication_decisions SET decision = 'rejected'",
       'DELETE FROM statistics.publication_decisions',
@@ -807,25 +911,32 @@ describe('Statistics full launch cohort publication', () => {
         stdout: 'pipe',
         stderr: 'pipe',
       })
+
       const [exitCode, stderr] = await Promise.all([
         mutation.exited,
         new Response(mutation.stderr).text(),
         new Response(mutation.stdout).text(),
       ])
+
       expect(exitCode).not.toBe(0)
       expect(stderr).toContain('statistics cohort evidence is immutable')
     }
 
     const secondSnapshots = snapshots(2)
     const duplicatedPlayerId = secondSnapshots[1]?.candidates[0]?.brawlhallaId
+
     if (!duplicatedPlayerId || !secondSnapshots[0]?.candidates[124]) throw new Error('duplicate fixture missing')
+
     secondSnapshots[0].candidates[124].brawlhallaId = duplicatedPlayerId
     const second = await statistics.reconcileLaunchCohort(secondSnapshots)
+
     expect(second.generationId).not.toBe(first.generationId)
     await seedTerminalProduct(second, 'ranked', 118)
     await seedTerminalProduct(second, 'lifetime', 119)
     const rejectedOperationId = await bindPublication(statistics, operations, second.generationId, 'ranked')
+
     await bindPublication(statistics, operations, second.generationId, 'lifetime')
+
     expect(
       await runOneRefreshOperation(operations, 'rejected-publication-worker', {
         leaseMs: 10_000,
@@ -834,6 +945,7 @@ describe('Statistics full launch cohort publication', () => {
         statistics,
       }),
     ).toBe(true)
+
     expect(
       await runOneRefreshOperation(operations, 'rejected-career-publication-worker', {
         leaseMs: 10_000,
@@ -844,12 +956,15 @@ describe('Statistics full launch cohort publication', () => {
     ).toBe(true)
 
     const publication = await statistics.getPublication('ranked')
+
     expect(publication).toMatchObject({
       stale: true,
       active: { generationId: first.generationId, outcome: 'accepted' },
       latestDecision: { generationId: second.generationId, outcome: 'rejected' },
     })
+
     expect(publication?.latestDecision.reasons).toContainEqual({ code: 'overall-coverage-below-95-percent' })
+
     expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
       status: 'stale',
       generationId: first.generationId,
@@ -862,49 +977,61 @@ describe('Statistics full launch cohort publication', () => {
 
     const third = await statistics.reconcileLaunchCohort(snapshots(3))
     const thirdRankedOperationId = await bindPublicationFixture(operations, third.generationId, 'ranked')
+
     await insertAcceptedPublicationFixture({
       generationId: third.generationId,
       operationId: thirdRankedOperationId,
       product: 'ranked',
       templateGenerationId: first.generationId,
     })
+
     const thirdLifetimeOperationId = await bindPublicationFixture(operations, third.generationId, 'lifetime')
+
     await insertAcceptedPublicationFixture({
       generationId: third.generationId,
       operationId: thirdLifetimeOperationId,
       product: 'lifetime',
       templateGenerationId: first.generationId,
     })
+
     const thirdCareerSnapshotId = await cloneCareerSnapshotFixture({
       generationId: third.generationId,
       templateGenerationId: first.generationId,
     })
+
     await bindLegendMetaPublication(statistics, operations, third.generationId)
+
     const acceptedThirdLegendMeta = await operations.claim(
       'accepted-third-legend-meta',
       10_000,
       admission,
       'statistics-legend-meta-publication',
     )
+
     if (!acceptedThirdLegendMeta || acceptedThirdLegendMeta.kind !== 'statistics-legend-meta-publication') {
       throw new Error('third Legend Meta publication lease missing')
     }
+
     expect(await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(acceptedThirdLegendMeta))).toMatchObject({
       result: 'applied',
       decision: { generationId: third.generationId, outcome: 'accepted' },
     })
+
     await operations.complete(acceptedThirdLegendMeta)
 
     await bindLegendMetaPublication(statistics, operations, second.generationId)
+
     const rejectedLegendMeta = await operations.claim(
       'rejected-legend-meta',
       10_000,
       admission,
       'statistics-legend-meta-publication',
     )
+
     if (!rejectedLegendMeta || rejectedLegendMeta.kind !== 'statistics-legend-meta-publication') {
       throw new Error('rejected Legend Meta publication lease missing')
     }
+
     expect(await statistics.buildAndPublishLegendMeta(legendMetaAuthorization(rejectedLegendMeta))).toMatchObject({
       result: 'applied',
       decision: {
@@ -914,12 +1041,15 @@ describe('Statistics full launch cohort publication', () => {
         snapshotId: null,
       },
     })
+
     await operations.complete(rejectedLegendMeta)
+
     await expect(statistics.getLegendMeta({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
       status: 'fresh',
       staleReason: null,
       generationId: third.generationId,
     })
+
     await expect(statistics.getLegendMetaHistory({ region: 'all', bracket: 'all' })).resolves.toMatchObject({
       status: 'available',
       entries: [
@@ -937,19 +1067,27 @@ describe('Statistics full launch cohort publication', () => {
         },
       ],
     })
+
     const compatibleCareerHistory = await statistics.getCareerWeaponUsageHistory({ region: 'all', bracket: 'all' })
+
     if (compatibleCareerHistory.status === 'unavailable') throw new Error('Career history missing')
+
     expect(compatibleCareerHistory.entries).toHaveLength(2)
+
     expect(compatibleCareerHistory.entries[0]?.snapshot).toMatchObject({
       snapshotId: thirdCareerSnapshotId,
       generationId: third.generationId,
     })
+
     const careerComparison = compatibleCareerHistory.entries[0]?.comparisonToPrevious
+
     expect(careerComparison).toMatchObject({
       status: 'available',
       previousSnapshotId: freshCareer.snapshotId,
     })
+
     if (careerComparison?.status !== 'available') throw new Error('compatible Career delta missing')
+
     expect(careerComparison.deltas.find(({ weapon }) => weapon === 'Hammer')).toMatchObject({
       prevalence: { changeBasisPoints: 0, direction: 'unchanged' },
       medianDamagePerMinute: {
@@ -957,26 +1095,32 @@ describe('Statistics full launch cohort publication', () => {
         direction: 'unchanged',
       },
     })
+
     expect(compatibleCareerHistory.entries[1]).toMatchObject({
       snapshot: { snapshotId: freshCareer.snapshotId, generationId: first.generationId },
       comparisonToPrevious: null,
     })
 
     const control = postgres(connectionString, { max: 1 })
+
     await control`
       UPDATE refresh_operations.operations
       SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
           completed_at = clock_timestamp()
       WHERE id = ${rejectedOperationId}
     `
+
     await control.end()
     const deadLetters = createPostgresDeadLetterOperations(database)
+
     const replay = await deadLetters.replayDeadLetter({
       operationId: rejectedOperationId,
       actorId: 'operator:statistics-210',
       reason: 'verify immutable publication replay',
     })
+
     expect(replay.outcome).toBe('replayed')
+
     expect(
       await runOneRefreshOperation(operations, 'publication-replay-worker', {
         leaseMs: 10_000,
@@ -985,12 +1129,14 @@ describe('Statistics full launch cohort publication', () => {
         statistics,
       }),
     ).toBe(true)
+
     expect((await statistics.getLaunchCohort(second.generationId))?.decisions).toHaveLength(2)
 
     await statisticsClient.close()
     statisticsClient = openTestClient(database.connectionString)
     statistics = createPostgresStatistics(statisticsClient)
     expect((await statistics.getPublication('ranked'))?.active?.generationId).toBe(third.generationId)
+
     expect(await statistics.getCareerWeaponUsage({ region: 'all', bracket: 'all' })).toMatchObject({
       status: 'fresh',
       snapshotId: thirdCareerSnapshotId,

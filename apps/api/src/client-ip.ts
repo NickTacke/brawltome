@@ -7,9 +7,12 @@ function withoutIpv4MappedPrefix(address: string): string {
 
 function trustedProxyAddress(peerAddress: string): boolean {
   if (peerAddress === '::1') return true
+
   const address = withoutIpv4MappedPrefix(peerAddress)
   const octets = address.split('.').map(Number)
+
   if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) return false
+
   return (
     octets[0] === 10 ||
     octets[0] === 127 ||
@@ -20,6 +23,7 @@ function trustedProxyAddress(peerAddress: string): boolean {
 
 // https://www.cloudflare.com/ips/ (checked 2026-10-07).
 const cloudflareRanges = new BlockList()
+
 for (const range of [
   '173.245.48.0/20',
   '103.21.244.0/22',
@@ -45,27 +49,32 @@ for (const range of [
   '2c0f:f248::/32',
 ]) {
   const [network, prefix] = range.split('/')
+
   cloudflareRanges.addSubnet(network, Number(prefix), isIP(network) === 6 ? 'ipv6' : 'ipv4')
 }
 
 function cloudflareAddress(address: string): boolean {
   const normalized = withoutIpv4MappedPrefix(address)
   const family = isIP(normalized)
+
   return family !== 0 && cloudflareRanges.check(normalized, family === 6 ? 'ipv6' : 'ipv4')
 }
 
 function validIp(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed && isIP(trimmed) ? trimmed : null
 }
 
 export function requestWithVerifiedClientIp(request: Request, peerAddress: string): Request {
   let clientIp = peerAddress
+
   if (trustedProxyAddress(peerAddress)) {
     const cloudflareVisitor = validIp(request.headers.get('cf-connecting-ip'))
     // Traefik replaces X-Real-Ip with the address that connected to it, so a client cannot forge it. Through Traefik,
     // only a Cloudflare edge may name the visitor; anyone reaching the origin directly is charged to their own address.
     const ingressPeer = validIp(request.headers.get('x-real-ip'))
+
     if (ingressPeer) {
       clientIp = cloudflareAddress(ingressPeer) && cloudflareVisitor ? cloudflareVisitor : ingressPeer
     } else {
@@ -73,8 +82,11 @@ export function requestWithVerifiedClientIp(request: Request, peerAddress: strin
       clientIp = cloudflareVisitor ?? validIp(request.headers.get('x-forwarded-for')?.split(',')[0]) ?? peerAddress
     }
   }
+
   const headers = new Headers(request.headers)
+
   headers.set('x-client-ip', clientIp)
+
   return new Request(request, { headers })
 }
 

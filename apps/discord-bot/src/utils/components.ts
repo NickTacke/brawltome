@@ -38,6 +38,7 @@ function getEmojiForSelect(legendNameKey: string): ComponentEmojiResolvable | un
   if (emoji) {
     return { id: emoji.id, name: emoji.name }
   }
+
   return undefined
 }
 
@@ -67,6 +68,7 @@ export function buildPlayerSelectMenu(
         // Try to add legend emoji
         if (p.bestLegendNameKey) {
           const emoji = getEmojiForSelect(p.bestLegendNameKey)
+
           if (emoji) {
             option.setEmoji(emoji)
           }
@@ -128,5 +130,6 @@ export function buildClanPaginationButtons(
 
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str
+
   return `${str.slice(0, maxLength - 3)}...`
 }

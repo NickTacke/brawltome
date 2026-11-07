@@ -8,6 +8,7 @@ import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-out
 export function generateContractOpenApi() {
   const registry = new OpenAPIRegistry()
   const desktopRankedResponseSchema = registry.register('DesktopRankedLookup', desktopRankedLookupSchema)
+
   registry.register('RefreshOutcome', refreshOutcomeSchema)
   registry.register('PlayerRefreshResponse', playerRefreshResponseSchema)
   registry.register('PlayerCareerProfile', playerCareerProfileSchema)
@@ -49,6 +50,7 @@ export function serializeContractOpenApi(document: ReturnType<typeof generateCon
 
 function sortObject(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortObject)
+
   if (!value || typeof value !== 'object') return value
 
   return Object.fromEntries(

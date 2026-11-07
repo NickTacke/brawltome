@@ -48,7 +48,9 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
         ON CONFLICT (account_id) WHERE status IN ('pending', 'processing') DO NOTHING
         RETURNING id, status, file_name, created_at, updated_at, failure
       `
+
       if (!row) throw new ActiveReplayJobError('Account already has an active replay job')
+
       return summary(row)
     },
 
@@ -60,6 +62,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
         ORDER BY created_at DESC, id DESC
         LIMIT ${limit}
       `
+
       return rows.map(summary)
     },
 
@@ -69,7 +72,9 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
         FROM replay_analysis.jobs
         WHERE account_id = ${accountId} AND id = ${id}
       `
+
       if (!row) return null
+
       return { ...summary(row), result: row.result ?? null } satisfies ReplayJobDetail
     },
 
@@ -93,7 +98,9 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
         WHERE job.id = candidate.id
         RETURNING job.id, job.lease_token, job.replay_bytes, job.replay_digest
       `
+
       if (!row) return null
+
       return {
         id: row.id,
         leaseToken: row.lease_token,
@@ -105,6 +112,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
     async complete(id, leaseToken, replayDigest, result) {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [job] = await sql<
           { lease_active: boolean; lease_token: string | null; replay_digest: string; status: ReplayJobStatus }[]
         >`
@@ -113,10 +121,14 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
           WHERE id = ${id}
           FOR UPDATE
         `
+
         if (!job) return 'not-found' as const
+
         if (job.status !== 'processing' || job.lease_token !== leaseToken || !job.lease_active)
           return 'lease-lost' as const
+
         if (job.replay_digest !== replayDigest) return 'digest-mismatch' as const
+
         const updated = await sql<{ id: string }[]>`
           UPDATE replay_analysis.jobs
           SET status = 'completed', result = ${sql.json(result as never)}, failure = NULL,
@@ -126,6 +138,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
             AND lease_expires_at > clock_timestamp()
           RETURNING id
         `
+
         return updated.length > 0 ? ('completed' as const) : ('lease-lost' as const)
       })
     },
@@ -140,6 +153,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
           AND lease_expires_at > clock_timestamp()
         RETURNING id
       `
+
       return rows.length > 0
     },
 
@@ -152,6 +166,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
           AND lease_expires_at > clock_timestamp()
         RETURNING id
       `
+
       return rows.length > 0
     },
 
@@ -164,6 +179,7 @@ export function createPostgresReplayAnalysisJobs(database: Database): ReplayAnal
           AND lease_expires_at > clock_timestamp()
         RETURNING id
       `
+
       return rows.length > 0
     },
   }

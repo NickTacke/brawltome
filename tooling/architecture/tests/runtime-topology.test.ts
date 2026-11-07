@@ -33,6 +33,7 @@ describe('PostgreSQL-only runtime topology', () => {
       stdout: 'pipe',
       stderr: 'pipe',
     })
+
     expect(result.exitCode, result.stderr.toString()).toBe(1)
     expect(result.stdout.toString()).toBe('')
   })
@@ -44,8 +45,10 @@ describe('PostgreSQL-only runtime topology', () => {
       stdout: 'pipe',
       stderr: 'pipe',
     })
+
     expect(result.exitCode, result.stderr.toString()).toBe(0)
     const topology = JSON.parse(result.stdout.toString()) as { services: Record<string, unknown> }
+
     expect(Object.keys(topology.services)).toEqual(['postgres'])
     expect(JSON.stringify(topology)).not.toContain(forbiddenPort)
     expect(JSON.stringify(topology)).not.toContain(forbiddenEnvironment)

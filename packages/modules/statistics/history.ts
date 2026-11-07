@@ -82,12 +82,15 @@ export function classifyAdjacentSnapshots(
       reasons.push(compatibilityReasons.season_mismatch)
     }
   }
+
   if (newer.cohortMethodologyVersion !== older.cohortMethodologyVersion) {
     reasons.push(compatibilityReasons.cohort_methodology_mismatch)
   }
+
   if (newer.metricMethodologyVersion !== older.metricMethodologyVersion) {
     reasons.push(compatibilityReasons.metric_methodology_mismatch)
   }
+
   if (newer.scope.region !== older.scope.region || newer.scope.bracket !== older.scope.bracket) {
     reasons.push(compatibilityReasons.scope_mismatch)
   }
@@ -120,6 +123,7 @@ function chronologicalDescending<Snapshot extends HistorySnapshot>(snapshots: re
     const leftSequence = left.sequence ?? { at: left.publishedAt, id: left.snapshotId }
     const rightSequence = right.sequence ?? { at: right.publishedAt, id: right.snapshotId }
     const timeDifference = Date.parse(rightSequence.at) - Date.parse(leftSequence.at)
+
     return timeDifference || rightSequence.id.localeCompare(leftSequence.id)
   })
 }
@@ -135,15 +139,20 @@ function buildHistory<Snapshot extends HistorySnapshot, Delta>(
   for (let index = 0; index < entries.length - 1; index += 1) {
     const current = entries[index]
     const previous = entries[index + 1]
+
     if (!current || !previous) break
+
     const compatibility = classifyAdjacentSnapshots(current.snapshot.compatibility, previous.snapshot.compatibility)
+
     if (compatibility.status === 'incompatible') {
       current.comparisonToPrevious = {
         ...compatibility,
         previousSnapshotId: previous.snapshot.snapshotId,
       }
+
       return entries.slice(0, index + 2)
     }
+
     current.comparisonToPrevious = {
       status: 'available',
       previousSnapshotId: previous.snapshot.snapshotId,
@@ -156,7 +165,9 @@ function buildHistory<Snapshot extends HistorySnapshot, Delta>(
 
 function direction(change: number | bigint): StatisticsHistoryDirection {
   if (change > 0) return 'increase'
+
   if (change < 0) return 'decrease'
+
   return 'unchanged'
 }
 
@@ -188,8 +199,10 @@ function legendMetaDeltas(
   older: LegendMetaHistorySnapshot,
 ): LegendMetaHistoryDelta[] {
   const olderRows = new Map(older.rows.map((row) => [row.legend.legendId, row]))
+
   return newer.rows.flatMap((row): LegendMetaHistoryDelta[] => {
     const previous = olderRows.get(row.legend.legendId)
+
     if (
       !row.eligible ||
       !previous?.eligible ||
@@ -204,10 +217,12 @@ function legendMetaDeltas(
     ) {
       return []
     }
+
     const pickShare = row.pickShareBasisPoints - previous.pickShareBasisPoints
     const adoption = row.adoptionBasisPoints - previous.adoptionBasisPoints
     const winRate = row.winRateBasisPoints - previous.winRateBasisPoints
     const medianRating = row.medianRating - previous.medianRating
+
     return [
       {
         legend: row.legend,
@@ -255,7 +270,9 @@ export type CareerWeaponHistoryDelta = {
 function greatestCommonDivisor(left: bigint, right: bigint): bigint {
   let a = left < 0n ? -left : left
   let b = right < 0n ? -right : right
+
   while (b !== 0n) [a, b] = [b, a % b]
+
   return a
 }
 
@@ -266,14 +283,18 @@ function exactDifference(newer: CareerWeaponHistoryRatio, older: CareerWeaponHis
   const olderDenominator = BigInt(older.denominator)
   const numerator = newerNumerator * olderDenominator - olderNumerator * newerDenominator
   const denominator = newerDenominator * olderDenominator
+
   if (numerator === 0n) return { numerator: '0', denominator: '1' }
+
   const divisor = greatestCommonDivisor(numerator, denominator)
+
   return { numerator: String(numerator / divisor), denominator: String(denominator / divisor) }
 }
 
 function roundedBasisPoints(ratio: CareerWeaponHistoryRatio): number {
   const numerator = BigInt(ratio.numerator)
   const denominator = BigInt(ratio.denominator)
+
   return Number((numerator * 20_000n + denominator) / (denominator * 2n))
 }
 
@@ -286,8 +307,10 @@ function careerWeaponDeltas(
   older: CareerWeaponHistorySnapshot,
 ): CareerWeaponHistoryDelta[] {
   const olderRows = new Map(older.rows.map((row) => [row.weapon, row]))
+
   return newer.rows.flatMap((row): CareerWeaponHistoryDelta[] => {
     const previous = olderRows.get(row.weapon)
+
     if (
       !row.eligible ||
       !previous?.eligible ||
@@ -302,10 +325,12 @@ function careerWeaponDeltas(
     ) {
       return []
     }
+
     const prevalence = roundedBasisPoints(row.prevalence) - roundedBasisPoints(previous.prevalence)
     const heldTimeShare = roundedBasisPoints(row.heldTimeShare) - roundedBasisPoints(previous.heldTimeShare)
     const damage = exactDifference(row.medianDamagePerMinute, previous.medianDamagePerMinute)
     const kos = exactDifference(row.medianKosPerHour, previous.medianKosPerHour)
+
     return [
       {
         weapon: row.weapon,

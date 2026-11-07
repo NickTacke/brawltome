@@ -5,6 +5,7 @@ export const LEGEND_META_METHODOLOGY_VERSION = 'current-season-legend-meta-v1'
 export const LEGEND_META_MINIMUM_PLAYERS = 30
 export const LEGEND_META_MINIMUM_GAMES = 200
 export const LEGEND_META_PUBLICATION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000
+
 const LEGEND_META_FORMULAS = {
   pickShare: 'Observed legend games divided by all observed legend games in the selected filter.',
   adoption:
@@ -153,12 +154,15 @@ export type LegendMetaCell = {
 
 function nonnegativeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative safe integer`)
+
   return value
 }
 
 function checkedAdd(left: number, right: number, name: string): number {
   const result = left + right
+
   if (!Number.isSafeInteger(result)) throw new Error(`${name} exceeds safe integer precision`)
+
   return result
 }
 
@@ -172,16 +176,22 @@ function exactRatio(numerator: number, denominator: number): ExactRatio {
 
 function utcTimestamp(value: string, name: string): number {
   if (!value.endsWith('Z')) throw new Error(`${name} must be a UTC timestamp`)
+
   const timestamp = Date.parse(value)
+
   if (!Number.isFinite(timestamp)) throw new Error(`${name} must be a valid timestamp`)
+
   return timestamp
 }
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null
+
   const ordered = [...values].sort((left, right) => left - right)
   const middle = Math.floor(ordered.length / 2)
+
   if (ordered.length % 2 === 1) return ordered[middle] ?? null
+
   return ((ordered[middle - 1] ?? 0) + (ordered[middle] ?? 0)) / 2
 }
 
@@ -189,12 +199,14 @@ export function wilsonInterval95(wins: number, games: number): WilsonInterval | 
   nonnegativeInteger(wins, 'wins')
   nonnegativeInteger(games, 'games')
   if (wins > games) throw new Error('wins cannot exceed games')
+
   if (games === 0) return null
 
   const probability = wins / games
   const zSquared = WILSON_95_Z * WILSON_95_Z
   const denominator = 1 + zSquared / games
   const center = (probability + zSquared / (2 * games)) / denominator
+
   const margin =
     (WILSON_95_Z * Math.sqrt((probability * (1 - probability) + zSquared / (4 * games)) / games)) / denominator
 
@@ -210,20 +222,26 @@ export function aggregateLegendMetaSlice(input: {
   observations: readonly LegendMetaObservedPlayer[]
 }): LegendMetaSlice {
   const selectedPlayers = nonnegativeInteger(input.selectedPlayers, 'selectedPlayers')
+
   if (input.observations.length > selectedPlayers) throw new Error('observed players cannot exceed selected players')
 
   const legendById = new Map<number, LegendMetaLegend>()
+
   for (const legend of input.legends) {
     requirePositiveInteger(legend.legendId, 'legendId')
     if (!legend.name || !legend.slug) throw new Error('legend reference requires a name and slug')
+
     if (legendById.has(legend.legendId)) throw new Error(`duplicate legend reference ${legend.legendId}`)
+
     legendById.set(legend.legendId, legend)
   }
 
   const observedPlayerIds = new Set<number>()
+
   const aggregates = new Map<number, { players: number; games: number; wins: number; ratings: number[] }>(
     input.legends.map(({ legendId }) => [legendId, { players: 0, games: 0, wins: 0, ratings: [] }]),
   )
+
   let observedLegendGames = 0
 
   for (const observation of input.observations) {
@@ -232,21 +250,27 @@ export function aggregateLegendMetaSlice(input: {
     if (observedPlayerIds.has(observation.brawlhallaId)) {
       throw new Error(`duplicate observed player ${observation.brawlhallaId}`)
     }
+
     observedPlayerIds.add(observation.brawlhallaId)
     const observedLegendIds = new Set<number>()
+
     for (const observedLegend of observation.legends) {
       requirePositiveInteger(observedLegend.legendId, 'observed legend ID')
       const aggregate = aggregates.get(observedLegend.legendId)
+
       if (!aggregate || !legendById.has(observedLegend.legendId)) {
         throw new LegendMetaBuildError('unknown-legend', observedLegend.legendId)
       }
+
       if (observedLegendIds.has(observedLegend.legendId)) {
         throw new Error(`duplicate observed legend ${observedLegend.legendId}`)
       }
+
       observedLegendIds.add(observedLegend.legendId)
       nonnegativeInteger(observedLegend.games, 'legend games')
       nonnegativeInteger(observedLegend.wins, 'legend wins')
       if (observedLegend.wins > observedLegend.games) throw new Error('wins cannot exceed games')
+
       aggregate.games = checkedAdd(aggregate.games, observedLegend.games, 'legend games')
       aggregate.wins = checkedAdd(aggregate.wins, observedLegend.wins, 'legend wins')
       observedLegendGames = checkedAdd(observedLegendGames, observedLegend.games, 'observed legend games')
@@ -259,8 +283,11 @@ export function aggregateLegendMetaSlice(input: {
 
   const rows = input.legends.map((legend): LegendMetaRow => {
     const aggregate = aggregates.get(legend.legendId)
+
     if (!aggregate) throw new Error(`legend aggregate ${legend.legendId} disappeared`)
+
     const eligible = aggregate.players >= LEGEND_META_MINIMUM_PLAYERS && aggregate.games >= LEGEND_META_MINIMUM_GAMES
+
     return {
       legend,
       playerCount: aggregate.players,
@@ -277,15 +304,20 @@ export function aggregateLegendMetaSlice(input: {
   })
 
   const eligibleRows = rows.filter(({ eligible }) => eligible)
+
   eligibleRows.sort((left, right) => {
     const exactComparison =
       BigInt(right.pickShare.numerator) * BigInt(left.pickShare.denominator) -
       BigInt(left.pickShare.numerator) * BigInt(right.pickShare.denominator)
+
     if (exactComparison !== 0n) return exactComparison > 0n ? 1 : -1
+
     return left.legend.legendId - right.legend.legendId
   })
+
   for (const [index, row] of eligibleRows.entries()) {
     const previous = eligibleRows[index - 1]
+
     row.rank =
       previous &&
       BigInt(previous.pickShare.numerator) * BigInt(row.pickShare.denominator) ===
@@ -318,19 +350,25 @@ export function buildLegendMetaArtifact(input: {
   if (input.cells.length !== launchCohortRegions.length * launchCohortBrackets.length) {
     throw new Error('Legend Meta requires exactly 18 launch cells')
   }
+
   const cellsByKey = new Map<string, LegendMetaCell>()
   const observedAcrossCells = new Set<number>()
+
   for (const cell of input.cells) {
     const key = `${cell.region}:${cell.bracket}`
+
     if (cellsByKey.has(key)) throw new Error('Legend Meta requires exactly one row per launch cell')
+
     cellsByKey.set(key, cell)
     for (const observation of cell.observations) {
       if (observedAcrossCells.has(observation.brawlhallaId)) {
         throw new LegendMetaBuildError('duplicate-player-across-cells')
       }
+
       observedAcrossCells.add(observation.brawlhallaId)
     }
   }
+
   for (const region of launchCohortRegions) {
     for (const bracket of launchCohortBrackets) {
       if (!cellsByKey.has(`${region}:${bracket}`)) {
@@ -343,19 +381,24 @@ export function buildLegendMetaArtifact(input: {
   const startsAt = utcTimestamp(input.observationWindow.startsAt, 'observation window start')
   const endsAt = utcTimestamp(input.observationWindow.endsAt, 'observation window end')
   const publishedAt = utcTimestamp(input.publishedAt, 'publication time')
+
   if (endsAt <= startsAt) throw new Error('observation window end must follow its start')
+
   const seasonIdentity = input.seasonIdentity ?? null
+
   if (seasonIdentity !== null && (seasonIdentity.length < 1 || seasonIdentity.length > 200)) {
     throw new Error('season identity must contain between 1 and 200 characters')
   }
 
   const regions: LegendMetaFilterRegion[] = ['all', ...launchCohortRegions]
   const brackets: LegendMetaFilterBracket[] = ['all', ...launchCohortBrackets]
+
   const slices = regions.flatMap((region) =>
     brackets.map((bracket): LegendMetaArtifactSlice => {
       const included = input.cells.filter(
         (cell) => (region === 'all' || cell.region === region) && (bracket === 'all' || cell.bracket === bracket),
       )
+
       const aggregated = aggregateLegendMetaSlice({
         legends: input.legends,
         selectedPlayers: included.reduce(
@@ -364,6 +407,7 @@ export function buildLegendMetaArtifact(input: {
         ),
         observations: included.flatMap((cell) => cell.observations),
       })
+
       return { region, bracket, ...aggregated }
     }),
   )

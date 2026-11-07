@@ -33,6 +33,7 @@ describe('sortWeapons', () => {
       [W({ weapon: 'A', timeHeld: 100 }), W({ weapon: 'B', timeHeld: 300 }), W({ weapon: 'C', timeHeld: 200 })],
       'timePlayed',
     )
+
     expect(result.map((w) => w.weapon)).toEqual(['B', 'C', 'A'])
   })
 
@@ -41,6 +42,7 @@ describe('sortWeapons', () => {
       [W({ weapon: 'A', games: 10 }), W({ weapon: 'B', games: 30 }), W({ weapon: 'C', games: 20 })],
       'games',
     )
+
     expect(result.map((w) => w.weapon)).toEqual(['B', 'C', 'A'])
   })
 
@@ -53,6 +55,7 @@ describe('sortWeapons', () => {
       ],
       'winrate',
     )
+
     expect(result.map((w) => w.weapon)).toEqual(['B', 'A', 'C'])
   })
 
@@ -61,6 +64,7 @@ describe('sortWeapons', () => {
       [W({ weapon: 'A', damage: 100 }), W({ weapon: 'B', damage: 300 }), W({ weapon: 'C', damage: 200 })],
       'damage',
     )
+
     expect(result.map((w) => w.weapon)).toEqual(['B', 'C', 'A'])
   })
 
@@ -69,11 +73,13 @@ describe('sortWeapons', () => {
       [W({ weapon: 'A', KOs: 10 }), W({ weapon: 'B', KOs: 30 }), W({ weapon: 'C', KOs: 20 })],
       'kos',
     )
+
     expect(result.map((w) => w.weapon)).toEqual(['B', 'C', 'A'])
   })
 
   it('does not mutate the input array', () => {
     const input = [W({ weapon: 'A', timeHeld: 100 }), W({ weapon: 'B', timeHeld: 300 })]
+
     sortWeapons(input, 'timePlayed')
     expect(input.map((w) => w.weapon)).toEqual(['A', 'B'])
   })
@@ -102,6 +108,7 @@ describe('computeWeaponDerived', () => {
         },
       }),
     )
+
     expect(result.winrate).toBeCloseTo(60, 2)
     expect(result.dps).toBeCloseTo(50000 / 36000, 5)
     expect(result.avgKos).toBeCloseTo(2, 2)

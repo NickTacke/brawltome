@@ -33,6 +33,7 @@ export function LegendMetaHistory({
       </section>
     )
   }
+
   if (loading || !history) {
     return (
       <output aria-live="polite" className="mx-auto block w-full max-w-7xl rounded-xl border border-border p-4">
@@ -40,6 +41,7 @@ export function LegendMetaHistory({
       </output>
     )
   }
+
   if (history.status === 'unavailable') {
     return (
       <section aria-labelledby="legend-history-heading" className="mx-auto w-full max-w-7xl space-y-3">

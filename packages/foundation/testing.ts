@@ -28,6 +28,7 @@ export async function createTestDatabase({ label, modules }: CreateTestDatabaseO
   const databaseName = testDatabaseName(label)
 
   const serverUrl = process.env.DATABASE_URL
+
   if (!serverUrl) {
     throw new Error(`DATABASE_URL is required for Postgres tests (${label})`)
   }
@@ -39,6 +40,7 @@ export async function createTestDatabase({ label, modules }: CreateTestDatabaseO
   await runAsAdmin(serverUrl, `CREATE DATABASE "${databaseName}"`)
   const dropDatabase = () => runAsAdmin(serverUrl, `DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   const connectionString = withDatabaseName(serverUrl, databaseName)
+
   await migrateOrDrop(connectionString, migrations, dropDatabase)
 
   const database = openTestClient(connectionString)
@@ -83,6 +85,7 @@ async function closeAndDrop(
 async function failureOf(run: () => Promise<unknown>): Promise<unknown> {
   try {
     await run()
+
     return undefined
   } catch (error) {
     return error
@@ -96,6 +99,7 @@ function testDatabaseName(label: string): string {
 
   const suffix = randomBytes(6).toString('hex')
   const databaseName = `bt_${label}_${process.pid}_${suffix}`
+
   if (Buffer.byteLength(databaseName) > maxNameBytes) {
     throw new Error(`test database label ${label} is too long for the ${maxNameBytes}-byte Postgres name limit`)
   }
@@ -105,6 +109,7 @@ function testDatabaseName(label: string): string {
 
 function withDatabaseName(serverUrl: string, databaseName: string): string {
   const url = new URL(serverUrl)
+
   url.pathname = `/${databaseName}`
 
   return url.toString()
@@ -113,6 +118,7 @@ function withDatabaseName(serverUrl: string, databaseName: string): string {
 // CREATE and DROP DATABASE can't run inside the database they touch, so they go through postgres
 async function runAsAdmin(serverUrl: string, statement: string): Promise<void> {
   const admin = postgres(withDatabaseName(serverUrl, 'postgres'), { max: 1 })
+
   try {
     await admin.unsafe(statement)
   } finally {
@@ -131,6 +137,7 @@ async function migrateOrDrop(
   } catch (error) {
     await dropDatabase()
     const databaseName = new URL(connectionString).pathname.slice(1)
+
     throw new Error(`migrate test database ${databaseName}: ${errorMessage(error)}`, { cause: error })
   }
 }

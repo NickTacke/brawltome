@@ -65,15 +65,19 @@ function validTopology(): TopologyFixture {
       user: '10001:10001',
     },
   }
+
   const networks = {
     application: { external: true, name: 'brawltome' },
     'dokploy-network': { external: true, name: 'dokploy-network' },
     notifications: { external: true, name: 'brawltome-notifications' },
     observability: { external: true, name: 'brawltome-observability' },
   }
+
   const service = (name: string, serviceNetworks: string[], secrets?: FixtureService['secrets']): FixtureService => {
     const identity = identities[name]
+
     if (!identity) throw new Error(`unknown fixture service: ${name}`)
+
     return {
       ...identity,
       networks: Object.fromEntries(serviceNetworks.map((network) => [network, null])),
@@ -197,6 +201,7 @@ describe('rendered Dokploy observability topology', () => {
 
   test("accepts Dokploy's injected project default network on grafana only", () => {
     const topology = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+
     topology.networks.default = { name: 'brawltome-observability-bc1eng_default' }
     topology.services.grafana.networks.default = null
     expect(verifyRenderedTopology(topology)).toEqual([])
@@ -204,14 +209,17 @@ describe('rendered Dokploy observability topology', () => {
 
   test('rejects the default network on other services or as an external network', () => {
     const onPrometheus = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+
     onPrometheus.networks.default = { name: 'brawltome-observability-bc1eng_default' }
     onPrometheus.services.grafana.networks.default = null
     onPrometheus.services.prometheus.networks.default = null
+
     expect(verifyRenderedTopology(onPrometheus)).toEqual(
       expect.arrayContaining(['prometheus networks must be exactly: application, observability']),
     )
 
     const external = validTopology() as TopologyFixture & { networks: Record<string, unknown> }
+
     external.networks.default = { external: true, name: 'brawltome' }
     external.services.grafana.networks.default = null
     expect(verifyRenderedTopology(external)).not.toEqual([])
@@ -219,6 +227,7 @@ describe('rendered Dokploy observability topology', () => {
 
   test('rejects exposure and network drift introduced after source rendering', () => {
     const topology = validTopology()
+
     topology.services.prometheus.networks.public = null
     topology.services.prometheus.labels = { 'traefik.enable': 'true' }
     topology.services.grafana.ports = [{ published: '3000', target: 3000 }]
@@ -241,7 +250,9 @@ describe('rendered Dokploy observability topology', () => {
   test('rejects route, authentication, service, and application-network drift', () => {
     const topology = validTopology()
     const grafana = topology.services.grafana
+
     if (!grafana.labels || !grafana.environment) throw new Error('invalid test fixture')
+
     grafana.labels['traefik.docker.network'] = 'default'
     grafana.labels['traefik.http.routers.observability-web.rule'] = 'Host(`wrong.example`)'
     grafana.labels['traefik.http.services.observability-web.loadbalancer.server.port'] = '9090'
@@ -249,6 +260,7 @@ describe('rendered Dokploy observability topology', () => {
     topology.services.extra = { image: 'extra', networks: {}, user: '0:0' }
 
     const violations = verifyRenderedTopology(topology, 'expected-application-network')
+
     expect(violations).toEqual(
       expect.arrayContaining([
         expect.stringContaining('services must be exactly'),
@@ -263,9 +275,13 @@ describe('rendered Dokploy observability topology', () => {
     const topology = validTopology() as unknown as Record<string, Record<string, unknown>>
     const services = topology.services as Record<string, unknown>
     const networks = topology.networks as Record<string, unknown>
+
     services.alertmanager = null
-    ;(services.prometheus as Record<string, unknown>).labels = 'traefik.enable=true'
-    ;(services.tempo as Record<string, unknown>).ports = {}
+    const prometheus = services.prometheus as Record<string, unknown>
+    const tempo = services.tempo as Record<string, unknown>
+
+    prometheus.labels = 'traefik.enable=true'
+    tempo.ports = {}
     networks.public = { external: true, name: 'public' }
 
     expect(verifyRenderedTopology(topology)).toEqual(
@@ -281,7 +297,9 @@ describe('rendered Dokploy observability topology', () => {
   test('rejects removed authentication and admin-secret protections', () => {
     const topology = validTopology()
     const grafana = topology.services.grafana
+
     if (!grafana.environment) throw new Error('invalid test fixture')
+
     Reflect.deleteProperty(grafana.environment, 'GF_AUTH_ANONYMOUS_ENABLED')
     Reflect.deleteProperty(grafana.environment, 'GF_USERS_ALLOW_SIGN_UP')
     grafana.environment.GF_AUTH_PROXY_ENABLED = 'true'
@@ -301,6 +319,7 @@ describe('rendered Dokploy observability topology', () => {
 
   test('rejects image, user, and canonicalized secret-shadowing mount drift', () => {
     const topology = validTopology()
+
     topology.services.grafana.image = 'attacker/image:latest'
     topology.services.grafana.user = '0:0'
     topology.services.grafana.volumes = [{ target: '/tmp/../run' }]
@@ -320,14 +339,18 @@ describe('rendered Dokploy observability topology', () => {
 
   test('rejects alert relay mounts beyond its read-only code and state directory', () => {
     const topology = validTopology()
+
     topology.services['alert-relay'].volumes?.push({ type: 'bind', source: '/', target: '/host' })
+
     expect(verifyRenderedTopology(topology)).toContain(
       'alert-relay volumes must be exactly its read-only code and the state directory',
     )
 
     const writableCode = validTopology()
     const code = writableCode.services['alert-relay'].volumes?.[0]
+
     if (code) code.read_only = false
+
     expect(verifyRenderedTopology(writableCode)).toContain(
       'alert-relay volumes must be exactly its read-only code and the state directory',
     )
@@ -336,10 +359,12 @@ describe('rendered Dokploy observability topology', () => {
   test('rejects an alert relay whose primary network could be the notifications overlay', () => {
     const message = 'alert-relay must give the observability network a higher priority than notifications'
     const unprioritized = validTopology()
+
     unprioritized.services['alert-relay'].networks = { notifications: null, observability: null }
     expect(verifyRenderedTopology(unprioritized)).toContain(message)
 
     const inverted = validTopology()
+
     inverted.services['alert-relay'].networks = { notifications: { priority: 200 }, observability: { priority: 100 } }
     expect(verifyRenderedTopology(inverted)).toContain(message)
     expect(verifyRenderedTopology(validTopology())).not.toContain(message)
@@ -348,9 +373,12 @@ describe('rendered Dokploy observability topology', () => {
   test('rejects widened and case-variant Traefik routes', () => {
     const topology = validTopology()
     const labels = topology.services.grafana.labels
+
     if (!labels) throw new Error('invalid test fixture')
+
     labels['traefik.http.routers.observability-web.rule'] =
       'Host(`observability.brawltome.app`) || Host(`evil.example`)'
+
     labels['Traefik.http.routers.evil.rule'] = 'Host(`evil.example`)'
 
     expect(verifyRenderedTopology(topology)).toContain(

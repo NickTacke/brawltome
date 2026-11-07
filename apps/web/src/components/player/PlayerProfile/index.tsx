@@ -29,16 +29,19 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const queryClient = useQueryClient()
   const { account } = useAccount()
   const { state: primaryPlayerState, isLoading: primaryPlayerLoading, isError: primaryPlayerError } = usePrimaryPlayer()
+
   const {
     pinnedPlayers,
     isLoading: pinnedPlayersLoading,
     isError: pinnedPlayersQueryError,
     isReady: pinnedPlayersReady,
   } = usePinnedPlayers(account?.id)
+
   const [pinnedPlayerPending, setPinnedPlayerPending] = useState(false)
   const [optimisticPinned, setOptimisticPinned] = useState<boolean | null>(null)
   const [pinnedPlayerError, setPinnedPlayerError] = useState<string | null>(null)
   const [pinnedPlayerStatus, setPinnedPlayerStatus] = useState('')
+
   const {
     data: player,
     error,
@@ -57,8 +60,10 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   useEffect(() => {
     void recordProfileViewAction(Number(id))
     const viewedAt = Date.now()
+
     const sectionAge = (lastSuccessAt: string | null | undefined) =>
       dataAgeBucket(lastSuccessAt ? new Date(lastSuccessAt) : null, viewedAt)
+
     track({
       name: 'profile.viewed',
       dataAge: dataAgeBucket(getPlayerDataUpdatedAt(firstRenderDataRef.current), viewedAt),
@@ -71,6 +76,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
           : 'none',
     })
   }, [id])
+
   const brawlhallaId = Number(id)
   const primaryPlayerKnown = !primaryPlayerLoading && !primaryPlayerError
   const primaryPlayerId = primaryPlayerKnown ? (primaryPlayerState?.primaryPlayer?.brawlhallaId ?? null) : null
@@ -78,6 +84,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   const isPinned = optimisticPinned ?? queriedIsPinned
   const isPrimaryPlayer = primaryPlayerId === brawlhallaId
   const pinnedPlayerLimitReached = hasPinnedPlayerLimitReached(pinnedPlayers, primaryPlayerId, brawlhallaId)
+
   const showPinnedPlayerButton = shouldShowPinnedPlayerButton({
     accountSignedIn: Boolean(account),
     pinnedPlayersReady,
@@ -94,8 +101,11 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   async function togglePinnedPlayer() {
     if (!account || !Number.isInteger(brawlhallaId) || brawlhallaId < 1) return
+
     if (!primaryPlayerKnown || isPrimaryPlayer || pinnedPlayerLimitReached) return
+
     const nextPinned = !isPinned
+
     setOptimisticPinned(nextPinned)
     setPinnedPlayerPending(true)
     setPinnedPlayerError(null)
@@ -108,6 +118,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
         await pinPlayer(queryClient, account.id, brawlhallaId)
         setPinnedPlayerStatus('Pinned player to Pinned Players.')
       }
+
       setOptimisticPinned(null)
     } catch {
       setOptimisticPinned(null)
@@ -125,6 +136,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
   }
 
   const updatedAt = getPlayerDataUpdatedAt(displayPlayer)
+
   const refreshNotice = getPlayerRefreshNotice(refreshStatus, {
     hasData: Boolean(displayPlayer),
     secondsLeft,
@@ -133,6 +145,7 @@ export function PlayerProfile({ initialData, id }: PlayerProfileProps) {
 
   function retryWithTracking() {
     if (!displayPlayer || refreshStatus.kind === 'gaveUp') track({ name: 'deadend', kind: 'try_again_clicked' })
+
     retry()
   }
 

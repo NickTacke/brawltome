@@ -5,6 +5,7 @@ describe('web readiness', () => {
   test('is ready only when the internal API is ready', async () => {
     const result = await checkWebReadiness('http://api:3000', async (input) => {
       expect(input).toBe('http://api:3000/health/ready')
+
       return new Response('{"status":"ready"}', { status: 200 })
     })
 

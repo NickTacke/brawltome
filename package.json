@@ -13,8 +13,8 @@
     "build": "bun run --filter '*' build",
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck",
-    "lint": "biome check .",
-    "lint:fix": "biome check --fix .",
+    "lint": "biome check . && eslint .",
+    "lint:fix": "eslint --fix . && biome check --fix .",
     "format": "biome format --write .",
     "analytics:review": "bun run --filter @brawltome/analytics-review review --",
     "architecture:check": "bun run --filter @brawltome/architecture check",
@@ -27,6 +27,9 @@
     "db:migrate": "bun run --filter @brawltome/database-migrations migrate"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0"
+    "@biomejs/biome": "^1.9.0",
+    "@stylistic/eslint-plugin": "5.10.0",
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint": "10.14.0"
   }
 }

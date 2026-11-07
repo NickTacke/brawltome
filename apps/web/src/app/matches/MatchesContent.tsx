@@ -21,10 +21,13 @@ export function MatchesContent({
   query?: MatchesPreviewQuery
 }) {
   if (!matchesPreviewCookieAuthorized(previewCookie)) return <WorkInProgress slug="matches" />
+
   if (one(query.analyze) === '1') return <ReplayAnalysisPage />
 
   const matchId = one(query.match)
   const playerId = one(query.player)
+
   if (matchId && playerId) return <MatchesPreview notice="Choose one preview view at a time." />
+
   return <MatchesPreview matchId={matchId} playerId={playerId} />
 }

@@ -37,6 +37,7 @@ describe('computeRefreshState', () => {
 describe('player refresh sections', () => {
   it('starts a stats-only refresh when ranked data is still fresh', () => {
     const now = Date.UTC(2026, 0, 1, 12)
+
     const pending = getPendingPlayerSections(
       {
         currentSeason: { lastSuccessAt: new Date(now - 30 * 60_000) },
@@ -53,6 +54,7 @@ describe('player refresh sections', () => {
       currentSeason: { lastSuccessAt: new Date(1_000) },
       career: { lastSuccessAt: new Date(1_000) },
     }
+
     const next = {
       currentSeason: { lastSuccessAt: new Date(2_000) },
       career: { lastSuccessAt: new Date(1_000) },
@@ -66,6 +68,7 @@ describe('player refresh sections', () => {
       currentSeason: { lastSuccessAt: new Date(1_000) },
       career: { lastSuccessAt: new Date(1_000) },
     }
+
     const pending = { ranked: true, stats: true }
 
     expect(
@@ -75,6 +78,7 @@ describe('player refresh sections', () => {
         pending,
       ),
     ).toBe(false)
+
     expect(
       hasCompletedPlayerRefresh(
         initial,
@@ -94,6 +98,7 @@ describe('player refresh sections', () => {
         pending,
       ),
     ).toBe(false)
+
     expect(
       hasCompletedPlayerRefresh(
         null,

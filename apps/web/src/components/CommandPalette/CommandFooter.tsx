@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 export function CommandFooter() {
   const [isMac, setIsMac] = useState(false)
+
   useEffect(() => {
     setIsMac(/Mac|iPad|iPhone|iPod/.test(navigator.platform))
   }, [])

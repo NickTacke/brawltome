@@ -31,7 +31,9 @@ function buildUrl(bracket: Bracket, page: number, region: string): string {
 
 async function fetchOnce(url: string): Promise<PageResponse> {
   const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })
+
   if (!res.ok) throw new Error(`leaderboard endpoint ${res.status} for ${url}`)
+
   return (await res.json()) as PageResponse
 }
 
@@ -46,19 +48,24 @@ export async function fetchLeaderboardPage(opts: {
 }): Promise<PageResponse> {
   const url = buildUrl(opts.bracket, opts.page, opts.region)
   let lastErr: unknown
+
   for (let attempt = 0; attempt <= RETRY_BACKOFFS_MS.length; attempt++) {
     try {
       return await fetchOnce(url)
     } catch (err) {
       lastErr = err
       if (attempt === RETRY_BACKOFFS_MS.length) break
+
       const delay = jitter(RETRY_BACKOFFS_MS[attempt])
+
       console.warn(
         `[sweep] page retry ${attempt + 1}/${RETRY_BACKOFFS_MS.length} after error: ${(err as Error).message} (${url})`,
       )
+
       await new Promise((r) => setTimeout(r, delay))
     }
   }
+
   throw new Error(
     `fetchLeaderboardPage failed after ${RETRY_BACKOFFS_MS.length + 1} attempts for ${url}: ${(lastErr as Error).message}`,
     { cause: lastErr },

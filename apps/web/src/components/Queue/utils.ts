@@ -37,6 +37,7 @@ export function parseQueueSearchParams(
   defaults: QueuePreference = defaultQueuePreference,
 ): QueueFilters {
   const snapshotId = scalar(params.snapshotId)
+
   return {
     mode: parseEnum(scalar(params.mode), BRACKET_IDS, defaults.mode),
     region: parseEnum(scalar(params.region), REGION_IDS, defaults.region),
@@ -49,6 +50,7 @@ export function parseQueuePreference(value: string | undefined): QueuePreference
   const [version, rawMode, rawRegion, extra] = value?.split('.') ?? []
   const mode = BRACKET_IDS.find((candidate) => candidate === rawMode)
   const region = REGION_IDS.find((candidate) => candidate === rawRegion)
+
   return version === 'v1' && mode && region && extra === undefined ? { mode, region } : undefined
 }
 

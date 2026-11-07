@@ -21,7 +21,9 @@ interface LeaderboardObservation extends OneVsOneValues {
 
 function validTime(value: string | Date | null | undefined): number | null {
   if (!value) return null
+
   const time = new Date(value).getTime()
+
   return Number.isNaN(time) ? null : time
 }
 
@@ -41,19 +43,23 @@ export function oneVsOneFreshness(
   standing: LeaderboardObservation | null | undefined,
 ): SectionFreshness | null {
   const snapshot = currentSeason?.snapshot
+
   if (!snapshot) return standing && validTime(standing.observedAt) !== null ? leaderboard(standing) : null
 
   const refreshed = refreshFreshness(currentSeason.lastSuccessAt)
   const observedAt = validTime(standing?.observedAt)
   const refreshedAt = validTime(currentSeason.lastSuccessAt)
+
   if (!standing || observedAt === null || (refreshedAt !== null && observedAt <= refreshedAt)) return refreshed
 
   const shown = snapshot.oneVsOne
+
   const overlaid =
     shown.rating === standing.rating &&
     shown.peakRating === standing.peakRating &&
     shown.wins === standing.wins &&
     shown.games === standing.games
+
   return overlaid ? leaderboard(standing) : refreshed
 }
 
@@ -67,6 +73,7 @@ function leaderboard(standing: LeaderboardObservation): SectionFreshness {
  */
 export function freshnessLabel(freshness: SectionFreshness, now: Date = new Date()) {
   const age = timeAgo(freshness.at, now)
+
   return freshness.source === 'leaderboard'
     ? { prefix: 'From leaderboard', compactPrefix: 'Leaderboard', age }
     : { prefix: 'Updated', compactPrefix: null, age }

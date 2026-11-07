@@ -22,16 +22,21 @@ export class RequestQueue {
     if (!Number.isFinite(opts.minSpacingMs) || opts.minSpacingMs < 0) {
       throw new RangeError('minSpacingMs must be a finite number >= 0')
     }
+
     if (!Number.isInteger(opts.sustainedLimit) || opts.sustainedLimit < 1) {
       throw new RangeError('sustainedLimit must be an integer >= 1')
     }
+
     if (!Number.isFinite(opts.sustainedWindowMs) || opts.sustainedWindowMs < 1) {
       throw new RangeError('sustainedWindowMs must be a finite number >= 1')
     }
+
     const headroom = opts.onDemandHeadroom ?? 0
+
     if (!Number.isInteger(headroom) || headroom < 0 || headroom >= opts.sustainedLimit) {
       throw new RangeError('onDemandHeadroom must be an integer in [0, sustainedLimit)')
     }
+
     this.minSpacingMs = opts.minSpacingMs
     this.sustainedLimit = opts.sustainedLimit
     this.sustainedWindowMs = opts.sustainedWindowMs
@@ -40,16 +45,19 @@ export class RequestQueue {
 
   private effectiveLimit(caller: Caller): number {
     if (caller === 'on-demand') return this.sustainedLimit
+
     return Math.max(1, this.sustainedLimit - this.onDemandHeadroom)
   }
 
   get remainingOnDemand(): number {
     this.pruneTimestamps()
+
     return Math.max(0, this.effectiveLimit('on-demand') - this.timestamps.length)
   }
 
   get remainingBackground(): number {
     this.pruneTimestamps()
+
     return Math.max(0, this.effectiveLimit('background') - this.timestamps.length)
   }
 
@@ -63,6 +71,7 @@ export class RequestQueue {
 
   pause(durationMs: number): void {
     if (!Number.isFinite(durationMs) || durationMs <= 0) return
+
     this.pausedUntil = Math.max(this.pausedUntil, Date.now() + durationMs)
   }
 
@@ -75,15 +84,21 @@ export class RequestQueue {
 
   private async processNext(): Promise<void> {
     if (this.processing) return
+
     if (this.pending.length === 0) return
+
     this.processing = true
 
     while (this.pending.length > 0) {
       const next = this.pending[0]
+
       await this.waitForSlot(next.caller)
       const popped = this.pending.shift()
+
       if (!popped) break
+
       const now = Date.now()
+
       this.lastRequestTime = now
       this.timestamps.push(now)
       popped.resolve(now - popped.enqueuedAt)
@@ -97,14 +112,17 @@ export class RequestQueue {
 
     while (this.isPaused) {
       const pauseWait = this.pausedUntil - Date.now()
+
       if (pauseWait > 0) await Bun.sleep(pauseWait)
     }
 
     const sinceLast = Date.now() - this.lastRequestTime
+
     if (this.lastRequestTime > 0 && sinceLast < this.minSpacingMs) {
       await Bun.sleep(this.minSpacingMs - sinceLast)
       while (this.isPaused) {
         const pauseWait = this.pausedUntil - Date.now()
+
         if (pauseWait > 0) await Bun.sleep(pauseWait)
       }
     }
@@ -112,12 +130,16 @@ export class RequestQueue {
     while (true) {
       while (this.isPaused) {
         const pauseWait = this.pausedUntil - Date.now()
+
         if (pauseWait > 0) await Bun.sleep(pauseWait)
       }
+
       this.pruneTimestamps()
       if (this.timestamps.length < limit) break
+
       const oldest = this.timestamps[0]
       const sustainedWait = oldest + this.sustainedWindowMs - Date.now()
+
       if (sustainedWait > 0) await Bun.sleep(sustainedWait)
     }
   }
@@ -125,6 +147,7 @@ export class RequestQueue {
   private pruneTimestamps(): void {
     const cutoff = Date.now() - this.sustainedWindowMs
     let i = 0
+
     while (i < this.timestamps.length && this.timestamps[i] < cutoff) i++
     if (i > 0) this.timestamps.splice(0, i)
   }

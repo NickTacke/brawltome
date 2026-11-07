@@ -35,6 +35,7 @@ function ratioTitle(ratio: { numerator: number; denominator: number }): string {
 
 function uncertainty(interval: { lowerBasisPoints: number; upperBasisPoints: number } | null): string {
   if (!interval) return 'Unavailable'
+
   return `${percentage(interval.lowerBasisPoints)}–${percentage(interval.upperBasisPoints)}`
 }
 
@@ -44,6 +45,7 @@ function formattedRating(rating: number | null): string {
 
 function MetricBar({ basisPoints }: { basisPoints: number | null }) {
   if (basisPoints === null) return <span className="text-muted-foreground">Unavailable</span>
+
   return (
     <div className="ml-auto w-24 space-y-1 text-right">
       <span className="font-mono font-semibold text-foreground">{percentage(basisPoints)}</span>

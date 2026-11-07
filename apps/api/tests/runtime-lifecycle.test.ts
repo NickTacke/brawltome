@@ -29,6 +29,7 @@ const testAdmission = {
 describe('runtime lifecycle', () => {
   test('separates process liveness from dependency and lifecycle readiness', async () => {
     let databaseAvailable = false
+
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 100,
       readinessProbes: [
@@ -40,11 +41,13 @@ describe('runtime lifecycle', () => {
         },
       ],
     })
+
     const health = createHealthRoutes(lifecycle)
 
     expect((await health.request('/live')).status).toBe(200)
     expect((await health.request('/ready')).status).toBe(503)
     lifecycle.markReady()
+
     expect(await (await health.request('/ready')).json()).toEqual({
       status: 'unready',
       reason: 'dependency',
@@ -72,6 +75,7 @@ describe('runtime lifecycle', () => {
     expect(await (await health.request('/ready')).json()).toEqual({ status: 'unready', reason: 'draining' })
     expect((await health.request('/live')).status).toBe(200)
     const finishWork = lifecycle.startWork()
+
     expect(finishWork).not.toBeNull()
     finishWork?.()
 
@@ -83,6 +87,7 @@ describe('runtime lifecycle', () => {
   test('synchronously stops admission and drains active work before bounded cleanup', async () => {
     const events: string[] = []
     let finishWork: (() => void) | undefined
+
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 100,
       cleanupReserveMs: 25,
@@ -96,9 +101,12 @@ describe('runtime lifecycle', () => {
         },
       ],
     })
+
     lifecycle.markReady()
     const release = lifecycle.startWork()
+
     if (!release) throw new Error('work should be accepted')
+
     const work = new Promise<void>((resolve) => {
       finishWork = () => {
         events.push('work-finished')
@@ -108,6 +116,7 @@ describe('runtime lifecycle', () => {
     })
 
     const shutdown = lifecycle.shutdown()
+
     expect(events).toEqual(['admission-stopped'])
     expect(lifecycle.startWork()).toBeNull()
     finishWork?.()
@@ -120,6 +129,7 @@ describe('runtime lifecycle', () => {
 
   test('bounds drain time and still attempts cleanup', async () => {
     let closed = false
+
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 200,
       cleanupReserveMs: 50,
@@ -132,6 +142,7 @@ describe('runtime lifecycle', () => {
         },
       ],
     })
+
     lifecycle.markReady()
     expect(lifecycle.startWork()).not.toBeNull()
 
@@ -141,6 +152,7 @@ describe('runtime lifecycle', () => {
 
   test('does not become ready when shutdown begins during an asynchronous probe', async () => {
     let finishProbe: (() => void) | undefined
+
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 100,
       readinessProbes: [
@@ -153,8 +165,10 @@ describe('runtime lifecycle', () => {
         },
       ],
     })
+
     lifecycle.markReady()
     const readiness = lifecycle.readiness()
+
     lifecycle.beginShutdown()
     finishProbe?.()
     expect(await readiness).toEqual({ ready: false, reason: 'draining' })
@@ -162,12 +176,15 @@ describe('runtime lifecycle', () => {
 
   test('operations worker stops new claims and drains the active claim', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
+
     lifecycle.markReady()
     let claims = 0
     let finishClaim: (() => void) | undefined
+
     const activeClaim = new Promise<void>((resolve) => {
       finishClaim = resolve
     })
+
     const worker = runOperationsWorker({
       operations: {
         configureAdmission: async () => undefined,
@@ -185,12 +202,14 @@ describe('runtime lifecycle', () => {
       runOne: async () => {
         claims++
         await activeClaim
+
         return true
       },
     })
 
     await Bun.sleep(1)
     const shutdown = lifecycle.shutdown()
+
     expect(claims).toBe(1)
     finishClaim?.()
     await worker
@@ -200,16 +219,20 @@ describe('runtime lifecycle', () => {
 
   test('tracks reconciliation through drain and starts none after shutdown', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 200, cleanupReserveMs: 40 })
+
     lifecycle.markReady()
     let reconciliations = 0
     let startReconciliation: (() => void) | undefined
     let finishReconciliation: (() => void) | undefined
+
     const started = new Promise<void>((resolve) => {
       startReconciliation = resolve
     })
+
     const activeReconciliation = new Promise<void>((resolve) => {
       finishReconciliation = resolve
     })
+
     const worker = runOperationsWorker({
       operations: {
         configureAdmission: async () => undefined,
@@ -228,6 +251,7 @@ describe('runtime lifecycle', () => {
         reconciliations++
         startReconciliation?.()
         await activeReconciliation
+
         return 0
       },
       runOne: async () => false,
@@ -235,10 +259,13 @@ describe('runtime lifecycle', () => {
 
     await started
     let shutdownSettled = false
+
     const shutdown = lifecycle.shutdown().then((result) => {
       shutdownSettled = true
+
       return result
     })
+
     await Bun.sleep(5)
     expect(shutdownSettled).toBe(false)
     expect(reconciliations).toBe(1)
@@ -250,9 +277,11 @@ describe('runtime lifecycle', () => {
 
   test('reports a stall once when every worker loop is blocked on a hung dependency', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
+
     lifecycle.markReady()
     const hung = new Promise<never>(() => {})
     const stalls: number[] = []
+
     void runOperationsWorker({
       operations: {
         configureAdmission: async () => undefined,
@@ -291,8 +320,10 @@ describe('runtime lifecycle', () => {
         },
       ],
     })
+
     lifecycle.markReady()
     const stalls: number[] = []
+
     const worker = runOperationsWorker({
       operations: {
         configureAdmission: async () => undefined,
@@ -323,14 +354,17 @@ describe('runtime lifecycle', () => {
     const query = () => (isAnswering ? Promise.resolve([]) : new Promise(() => {}))
     const sql = (() => Object.assign(query(), { cancel: () => undefined })) as unknown as Sql
     const readiness = createPostgresReadiness(sql, [], { timeoutMs: 5 })
+
     const lifecycle = createRuntimeLifecycle({
       shutdownDeadlineMs: 100,
       cleanupReserveMs: 20,
       readinessProbes: [{ name: 'postgres-schema', check: readiness.check }],
     })
+
     lifecycle.markReady()
     const stalls: number[] = []
     let runs = 0
+
     const worker = runOperationsWorker({
       operations: {
         configureAdmission: async () => undefined,
@@ -348,6 +382,7 @@ describe('runtime lifecycle', () => {
       },
       runOne: async () => {
         runs++
+
         return false
       },
       onStall: (stalledForMs) => stalls.push(stalledForMs),
@@ -367,6 +402,7 @@ describe('runtime lifecycle', () => {
   test('records a failed schedule materialization before generic loop handling', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
     const telemetry = createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 })
+
     lifecycle.markReady()
 
     await runOperationsWorker({
@@ -392,11 +428,13 @@ describe('runtime lifecycle', () => {
     })
 
     const metric = telemetry.metrics.snapshot().find(({ name }) => name === 'schedule_materializations_total')
+
     expect(metric?.series).toContainEqual({ labels: { outcome: 'failed' }, value: 1 })
   })
 
   test('polls for work when PostgreSQL listener registration fails', async () => {
     const lifecycle = createRuntimeLifecycle({ shutdownDeadlineMs: 100, cleanupReserveMs: 20 })
+
     lifecycle.markReady()
     let claims = 0
     let listenerAttempts = 0
@@ -407,6 +445,7 @@ describe('runtime lifecycle', () => {
         configureAdmission: async () => undefined,
         materializeDueSchedules: async () => {
           materializations++
+
           return { occurrencesCreated: 0 }
         },
       } as never,
@@ -427,6 +466,7 @@ describe('runtime lifecycle', () => {
       runOne: async () => {
         claims++
         lifecycle.beginShutdown()
+
         return false
       },
     })

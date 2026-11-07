@@ -12,9 +12,11 @@ const utcDateTimeSchema = z.iso
   .datetime({ offset: false })
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
+
 const positiveInt32 = z.int().positive().max(2_147_483_647).meta({ format: 'int32' })
 const nonnegativeInt32 = z.int().min(0).max(2_147_483_647).meta({ format: 'int32' })
 const signedInt32 = z.int().min(-2_147_483_648).max(2_147_483_647).meta({ format: 'int32' })
+
 const playerNameSchema = z
   .string()
   .refine((name) => [...name].length <= 256, 'Player name must contain at most 256 Unicode characters')
@@ -191,6 +193,7 @@ const activity1v1EntrySchema = activityEntrySchema(oneVsOneIdentitySchema)
 const activityFixed2v2EntrySchema = activityEntrySchema(fixedTwoVsTwoIdentitySchema)
 const activitySolo2v2EntrySchema = activityEntrySchema(soloTwoVsTwoIdentitySchema)
 const activity3v3EntrySchema = activityEntrySchema(threeVsThreeIdentitySchema)
+
 export const leaderboardRecentActivityEntrySchema = z.union([
   activity1v1EntrySchema,
   activityFixed2v2EntrySchema,

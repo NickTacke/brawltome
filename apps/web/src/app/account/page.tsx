@@ -77,7 +77,9 @@ function AccountPageInner() {
   const error = searchParams.get('error')
 
   if (isLoading) return <LoadingState />
+
   if (!account) return <SignedOutState error={error} />
+
   return <SignedInState account={account} />
 }
 

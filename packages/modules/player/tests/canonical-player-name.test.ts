@@ -13,6 +13,7 @@ describe('selectCanonicalPlayerName', () => {
         career: { name: 'Original', observedAt: older },
       })?.name,
     ).toBe('Renamed')
+
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
@@ -42,6 +43,7 @@ describe('selectCanonicalPlayerName', () => {
         leaderboard: { name: 'Cached Old', observedAt: newer },
       })?.name,
     ).toBe('Current V0')
+
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
@@ -61,6 +63,7 @@ describe('selectCanonicalPlayerName', () => {
         leaderboard: { name: 'Climber', observedAt: newer },
       })?.name,
     ).toBe('Climber')
+
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
@@ -85,6 +88,7 @@ describe('selectCanonicalPlayerName', () => {
     expect(
       selectCanonicalPlayerName({ brawlhallaId: 42, ranked: { name: 'Ranked' }, career: { name: 'Career' } })?.name,
     ).toBe('Career')
+
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
@@ -92,6 +96,7 @@ describe('selectCanonicalPlayerName', () => {
         career: { name: 'Career', observedAt: newer },
       })?.name,
     ).toBe('Career')
+
     expect(
       selectCanonicalPlayerName({
         brawlhallaId: 42,
@@ -110,6 +115,7 @@ describe('selectCanonicalPlayerName', () => {
         leaderboard: { name: '​', observedAt: newer },
       })?.name,
     ).toBe('Career')
+
     expect(selectCanonicalPlayerName({ brawlhallaId: 42, ranked: null, career: null, leaderboard: null })).toBeNull()
   })
 })

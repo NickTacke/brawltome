@@ -7,6 +7,7 @@ describe('Discord API readiness monitor', () => {
     let succeeds = true
     let scheduledCheck: (() => Promise<boolean>) | undefined
     let stopped = false
+
     const monitor = createApiReadinessMonitor({
       verify: async () => succeeds,
       now: () => now,
@@ -14,6 +15,7 @@ describe('Discord API readiness monitor', () => {
       maxAgeMs: 250,
       schedule: (check) => {
         scheduledCheck = check
+
         return () => {
           stopped = true
         }

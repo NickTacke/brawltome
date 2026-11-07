@@ -60,9 +60,11 @@ const profile: PlayerCareerProfileContract = {
 describe('Player career profile contract', () => {
   test('preserves guild membership, measured zero, exact damage, collections, and freshness', () => {
     expect(parsePlayerCareerProfileOutput(profile)).toEqual(profile)
+
     expect(
       parsePlayerCareerProfileOutput({ ...profile, snapshot: { ...profile.snapshot, guild: null } }),
     ).toMatchObject({ snapshot: { guild: null } })
+
     expect(
       parsePlayerCareerProfileOutput({
         ...profile,

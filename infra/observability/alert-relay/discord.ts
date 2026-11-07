@@ -59,24 +59,31 @@ export class DiscordClient {
 
   async post(body: MessageBody): Promise<string> {
     const url = new URL(this.options.webhookUrl)
+
     url.searchParams.set('wait', 'true')
     const response = await this.send('POST', url, body)
     const message = (await response.json()) as { id?: unknown }
+
     if (typeof message.id !== 'string') throw new DiscordError(response.status, 'Discord response had no message id')
+
     return message.id
   }
 
   // Returns false when the message no longer exists, so the caller can post a replacement.
   async edit(messageId: string, body: MessageBody): Promise<boolean> {
     const url = new URL(this.options.webhookUrl)
+
     url.pathname = `${url.pathname.replace(/\/$/, '')}/messages/${encodeURIComponent(messageId)}`
     // Edits may only toggle SUPPRESS_EMBEDS, so creation-only flags are dropped.
     const { flags: _flags, ...edit } = body
+
     try {
       await this.send('PATCH', url, edit)
+
       return true
     } catch (error) {
       if (error instanceof DiscordError && error.status === 404) return false
+
       throw error
     }
   }
@@ -88,8 +95,10 @@ export class DiscordClient {
   ): Promise<Response> {
     let rateLimited = 0
     let failed = 0
+
     for (;;) {
       let response: Response
+
       try {
         response = await this.fetch(url, {
           method,
@@ -100,33 +109,43 @@ export class DiscordClient {
       } catch {
         failed++
         if (failed > this.maxFailureRetries) throw new DiscordError(0, `Discord ${method} failed: network error`)
+
         const delay = backoff(failed)
+
         this.log('warn', 'discord request failed, retrying', { method, reason: 'network', delayMs: delay })
         await this.sleep(delay)
         continue
       }
 
       if (response.ok) return response
+
       if (response.status === 429) {
         rateLimited++
         const delay = await retryAfterMs(response)
+
         if (rateLimited > this.maxRateLimitRetries) throw new DiscordError(429, `Discord ${method} stayed rate limited`)
+
         this.log('warn', 'discord rate limited, retrying', { method, delayMs: delay })
         await this.sleep(delay)
         continue
       }
+
       if (response.status >= 500) {
         failed++
         if (failed > this.maxFailureRetries) {
           throw new DiscordError(response.status, `Discord ${method} failed with ${response.status}`)
         }
+
         const delay = backoff(failed)
+
         this.log('warn', 'discord request failed, retrying', { method, status: response.status, delayMs: delay })
         await this.sleep(delay)
         continue
       }
+
       // Other 4xx responses will not succeed on retry. The body explains why, without echoing the token.
       const detail = (await response.text().catch(() => '')).slice(0, 300)
+
       throw new DiscordError(response.status, `Discord ${method} rejected with ${response.status}: ${detail}`)
     }
   }
@@ -138,14 +157,19 @@ function backoff(attempt: number): number {
 
 async function retryAfterMs(response: Response): Promise<number> {
   let seconds: number | undefined
+
   try {
     const body = (await response.json()) as { retry_after?: unknown }
+
     if (typeof body.retry_after === 'number') seconds = body.retry_after
   } catch {}
+
   if (seconds === undefined) {
     const header = Number(response.headers.get('retry-after'))
+
     if (Number.isFinite(header)) seconds = header
   }
+
   // A small margin past the advertised reset avoids hitting the same bucket again.
   return Math.min(Math.max((seconds ?? 1) * 1_000, 0) + 100, 60_000)
 }
@@ -154,6 +178,7 @@ async function retryAfterMs(response: Response): Promise<number> {
 export function pageMentions(mention: string): AllowedMentions {
   const users = [...mention.matchAll(/<@!?(\d+)>/g)].map((match) => match[1] as string)
   const roles = [...mention.matchAll(/<@&(\d+)>/g)].map((match) => match[1] as string)
+
   return {
     parse: /@(everyone|here)\b/.test(mention) ? ['everyone'] : [],
     ...(users.length > 0 ? { users } : {}),

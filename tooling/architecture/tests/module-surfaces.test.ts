@@ -37,6 +37,7 @@ function isQueryableDrizzleObject(value: unknown): boolean {
 
 function isPlainContainer(value: unknown): value is Record<string, unknown> | unknown[] {
   if (Array.isArray(value)) return true
+
   if (typeof value !== 'object' || value === null) return false
 
   const prototype = Object.getPrototypeOf(value)
@@ -53,6 +54,7 @@ function isModuleNamespace(value: unknown): value is Record<string, unknown> {
 // seen stops the walk at a namespace or object it has already visited, so import cycles end
 function findDrizzleExports(value: unknown, path: string, seen = new Set<unknown>()): string[] {
   if (isQueryableDrizzleObject(value)) return [path]
+
   if (!(isPlainContainer(value) || isModuleNamespace(value)) || seen.has(value)) return []
 
   seen.add(value)

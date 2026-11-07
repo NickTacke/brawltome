@@ -17,6 +17,7 @@ function executable(path: string, content: string): void {
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-dokploy-wrapper-'))
+
   temporaryDirectories.push(directory)
   const log = join(directory, 'curl.log')
   const deployMarker = join(directory, 'deployed')
@@ -36,12 +37,14 @@ case "$*" in
 esac
 `,
   )
+
   executable(
     join(directory, 'git'),
     `#!/bin/sh
 printf '%s\trefs/tags/%s\n' '${commit}' '${sourceRef}'
 `,
   )
+
   executable(
     join(directory, 'docker'),
     `#!/bin/sh
@@ -49,6 +52,7 @@ cat >/dev/null
 printf '%s' '{}'
 `,
   )
+
   executable(
     join(directory, 'bun'),
     `#!/bin/sh
@@ -94,6 +98,7 @@ describe('Dokploy observability deployment wrapper', () => {
 
   test('rejects compose IDs before making an API request', () => {
     const { env, log } = fixture()
+
     env.DOKPLOY_OBSERVABILITY_COMPOSE_ID = 'approved?composeId=other'
     const result = spawnSync('bash', [wrapper], { cwd: repositoryRoot, encoding: 'utf8', env })
 
@@ -106,6 +111,7 @@ describe('Dokploy observability deployment wrapper', () => {
     const { deployMarker, env, log } = fixture()
     const curlPath = `${env.PATH.split(':')[0]}/curl`
     const curl = readFileSync(curlPath, 'utf8').replace(`"branch":"${sourceRef}"`, '"branch":"feature/legacy-rewrite"')
+
     writeFileSync(curlPath, curl)
 
     const result = spawnSync('bash', [wrapper], { cwd: repositoryRoot, encoding: 'utf8', env })

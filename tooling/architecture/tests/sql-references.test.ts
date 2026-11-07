@@ -188,8 +188,11 @@ describe('cross-module-sql rule', () => {
   function withRankingsFile(path: string, source: string) {
     const fixture = structuredClone(validFixture)
     const rankings = fixture.workspaces.find(({ name }) => name === '@fixture/rankings')
+
     if (!rankings) throw new Error('Missing Rankings fixture')
+
     rankings.sourceFiles.push({ path, imports: [], source })
+
     return fixture
   }
 
@@ -208,6 +211,7 @@ describe('cross-module-sql rule', () => {
         importPath: 'players',
       }),
     ])
+
     expect(violations[0]?.message).toContain('lines 1, 2')
   })
 
@@ -234,7 +238,9 @@ describe('cross-module-sql rule', () => {
   it('does not check workspaces that are not modules', () => {
     const fixture = structuredClone(validFixture)
     const api = fixture.workspaces.find(({ name }) => name === '@fixture/api')
+
     if (!api) throw new Error('Missing API fixture')
+
     api.sourceFiles.push({ path: 'apps/api/src/query.ts', imports: [], source: reachingIntoPlayers })
 
     expect(checkArchitecture(fixture, policy).violations).toEqual([])
@@ -285,11 +291,14 @@ describe('cross-module-sql rule in migrations', () => {
     const fixture = structuredClone(validFixture)
     const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
     const rankings = fixture.workspaces.find(({ name }) => name === '@fixture/rankings')
+
     if (!players || !rankings) throw new Error('Missing Players or Rankings fixture')
 
     const playersMigration = migrationSource('players/0001').replace(/rankings\.entries/, 'players.names')
+
     players.sourceFiles.push({ path: 'packages/players/migrations/0001.ts', imports: [], source: playersMigration })
     rankings.sourceFiles.push({ path: 'packages/rankings/migrations/0002.ts', imports: [], source: rankingsMigration })
+
     return fixture
   }
 
@@ -307,6 +316,7 @@ describe('cross-module-sql rule in migrations', () => {
         importPath: 'players',
       }),
     ])
+
     expect(violations[0]?.message).toContain('rankings/0002')
     expect(violations[0]?.message).toContain('requires')
   })
@@ -322,6 +332,7 @@ describe('cross-module-sql rule in migrations', () => {
       "'players/0001'],",
       "'players/0001'] as const,",
     )
+
     const fixture = fixtureWithMigrations(source)
 
     expect(source).toContain('as const')

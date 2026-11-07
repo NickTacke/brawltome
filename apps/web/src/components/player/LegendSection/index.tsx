@@ -27,22 +27,31 @@ export function LegendSection({ allLegends, rankedLegends, rankedAvailable, upda
   const toggleLegend = (id: number) => {
     if (expandedLegendId === id) {
       setExpandedLegendId(null)
+
       return
     }
+
     setOpenedLegendIds((prev) => {
       if (prev.has(id)) return prev
+
       const next = new Set(prev)
+
       next.add(id)
+
       return next
     })
+
     setExpandedLegendId(id)
   }
 
   const sortedLegends = useMemo(() => {
     const legendByCanonicalId = new Map<number, PlayerData>()
+
     const canonicalLegends: RankedLegend[] = allLegends.map((legend: PlayerData) => {
       const ranked = rankedLegends.find((r: PlayerData) => r.legendId === legend.legendId)
+
       legendByCanonicalId.set(legend.legendId, legend)
+
       return {
         legendId: legend.legendId,
         games: legend.games ?? 0,
@@ -54,6 +63,7 @@ export function LegendSection({ allLegends, rankedLegends, rankedAvailable, upda
         peakElo: ranked?.peakRating ?? 0,
       }
     })
+
     return sortLegends(canonicalLegends, sortKey)
       .map((c) => legendByCanonicalId.get(c.legendId))
       .filter((l): l is PlayerData => l !== undefined)
@@ -65,6 +75,7 @@ export function LegendSection({ allLegends, rankedLegends, rankedAvailable, upda
     if (showAllLegends) {
       legendsRef.current?.scrollIntoView({ behavior: 'auto' })
     }
+
     setShowAllLegends(!showAllLegends)
   }
 

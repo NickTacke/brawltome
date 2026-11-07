@@ -8,11 +8,13 @@ describe('POST /api/a', () => {
   test('answers 204 for malformed bodies', async () => {
     const { POST } = await import('../../../src/app/api/a/route')
     const response = await POST(new Request('http://localhost/api/a', { method: 'POST', body: 'not json' }))
+
     expect(response.status).toBe(204)
   })
 
   test('answers 204 for a valid body', async () => {
     const { POST } = await import('../../../src/app/api/a/route')
+
     const response = await POST(
       new Request('http://localhost/api/a', {
         method: 'POST',
@@ -20,6 +22,7 @@ describe('POST /api/a', () => {
         headers: { 'cf-connecting-ip': '203.0.113.9', 'user-agent': 'x' },
       }),
     )
+
     expect(response.status).toBe(204)
   })
 
@@ -27,17 +30,23 @@ describe('POST /api/a', () => {
     const { POST } = await import('../../../src/app/api/a/route')
     const { webTelemetry } = await import('../../../src/lib/web-telemetry-registry')
     const before = droppedInvalid(webTelemetry)
+
     const request = new Request('http://localhost/api/a', {
       method: 'POST',
       body: JSON.stringify(validBody),
       headers: { 'content-length': '64001' },
     })
+
     let read = false
+
     request.text = async () => {
       read = true
+
       return ''
     }
+
     const response = await POST(request)
+
     expect(response.status).toBe(204)
     expect(read).toBe(false)
     expect(droppedInvalid(webTelemetry)).toBe(before + 1)
@@ -48,6 +57,7 @@ describe('POST /api/a', () => {
     const { webTelemetry } = await import('../../../src/lib/web-telemetry-registry')
     const before = droppedInvalid(webTelemetry)
     let pulled = 0
+
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {
         pulled += 1
@@ -55,12 +65,15 @@ describe('POST /api/a', () => {
         if (pulled > 1000) controller.close()
       },
     })
+
     const request = new Request('http://localhost/api/a', {
       method: 'POST',
       body: stream,
       duplex: 'half',
     } as RequestInit)
+
     const response = await POST(request)
+
     expect(response.status).toBe(204)
     expect(pulled).toBeLessThan(20)
     expect(droppedInvalid(webTelemetry)).toBe(before + 1)
@@ -70,5 +83,6 @@ describe('POST /api/a', () => {
 function droppedInvalid(telemetry: { metrics: { snapshot(): Array<{ name: string; series?: unknown }> } }): number {
   const metric = telemetry.metrics.snapshot().find((m) => m.name === 'analytics_events_dropped_total')
   const series = (metric?.series ?? []) as Array<{ labels: Record<string, string>; value: number }>
+
   return series.filter((s) => s.labels.reason === 'invalid').reduce((sum, s) => sum + s.value, 0)
 }

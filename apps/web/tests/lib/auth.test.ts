@@ -4,6 +4,7 @@ import type { AccountPreferencesContract, AccountPreferencesUpdateContract } fro
 let preferenceMutation: (update: AccountPreferencesUpdateContract) => Promise<unknown> = async () => {
   throw new Error('preference mutation not configured')
 }
+
 mock.module('../../src/lib/trpc', () => ({
   trpc: {
     account: {
@@ -21,6 +22,7 @@ const {
 } = await import('../../src/lib/auth')
 
 const originalFetch = globalThis.fetch
+
 afterEach(() => {
   globalThis.fetch = originalFetch
 })
@@ -30,33 +32,42 @@ describe('saveAccountPreferences', () => {
     const updates: AccountPreferencesUpdateContract[] = []
     let firstStarted!: () => void
     let releaseFirst!: () => void
+
     const firstStartedPromise = new Promise<void>((resolve) => {
       firstStarted = resolve
     })
+
     const firstReleasePromise = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     let preferences: AccountPreferencesContract = {
       version: 2 as const,
       leaderboardBracket: '1v1' as const,
       leaderboardRegion: 'all' as const,
       theme: 'neutral' as const,
     }
+
     preferenceMutation = async (update) => {
       updates.push(update)
       if (updates.length === 1) {
         firstStarted()
         await firstReleasePromise
       }
+
       preferences = { ...preferences, ...update }
+
       return preferences
     }
 
     const cachedPreferences: unknown[] = []
+
     const queryClient = {
       setQueryData: mock((_key: unknown, value: unknown) => cachedPreferences.push(value)),
     } as unknown as Parameters<typeof saveAccountPreferences>[0]
+
     const first = saveAccountPreferences(queryClient, 'account-id', { theme: 'purple' })
+
     await firstStartedPromise
     const second = saveAccountPreferences(queryClient, 'account-id', { leaderboardRegion: 'EU' })
 
@@ -64,6 +75,7 @@ describe('saveAccountPreferences', () => {
     releaseFirst()
     await Promise.all([first, second])
     expect(updates).toEqual([{ theme: 'purple' }, { leaderboardRegion: 'EU' }])
+
     expect(cachedPreferences.at(-1)).toEqual({
       version: 2,
       leaderboardBracket: '1v1',
@@ -76,6 +88,7 @@ describe('saveAccountPreferences', () => {
 describe('parseAccountResponse', () => {
   test('parses canonical anonymous and signed-in views', () => {
     expect(parseAccountResponse({ status: 'anonymous' })).toEqual({ status: 'anonymous' })
+
     expect(
       parseAccountResponse({
         status: 'signedIn',
@@ -108,6 +121,7 @@ describe('parseAccountPreferencesResponse', () => {
       leaderboardRegion: 'SEA',
       theme: 'purple',
     } as const
+
     expect(parseAccountPreferencesResponse(preferences)).toEqual(preferences)
     expect(() => parseAccountPreferencesResponse({ ...preferences, theme: 'dark' })).toThrow()
   })
@@ -127,7 +141,9 @@ describe('parsePrimaryPlayerResponse', () => {
         },
       ],
     }
+
     expect(parsePrimaryPlayerResponse(state)).toEqual(state)
+
     expect(() =>
       parsePrimaryPlayerResponse({
         ...state,
@@ -142,6 +158,7 @@ describe('signOut', () => {
     globalThis.fetch = mock(async () => new Response(null, { status: 204 })) as unknown as typeof fetch
     const invalidations: unknown[] = []
     const removals: unknown[] = []
+
     const queryClient = {
       async invalidateQueries(options: unknown) {
         invalidations.push(options)
@@ -154,6 +171,7 @@ describe('signOut', () => {
     await signOut(queryClient)
 
     expect(invalidations).toEqual([{ queryKey: ['account', 'current'] }, { queryKey: ['account', 'primaryPlayer'] }])
+
     expect(removals).toEqual([
       { queryKey: ['account', 'preferences'] },
       { queryKey: ['account', 'pinnedPlayers'] },
@@ -164,6 +182,7 @@ describe('signOut', () => {
   test('rejects failed revocation without invalidating signed-in state', async () => {
     globalThis.fetch = mock(async () => new Response(null, { status: 500 })) as unknown as typeof fetch
     const invalidateQueries = mock(async () => {})
+
     const queryClient = {
       invalidateQueries,
       removeQueries: mock(() => {}),

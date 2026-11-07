@@ -22,6 +22,7 @@ export function usePlayerShortcuts(accountId: string | null | undefined) {
     queryFn: async () => parsePlayerShortcutsResponse(await trpc.account.playerShortcuts.query()),
     enabled: Boolean(accountId),
   })
+
   return {
     shortcuts: query.data ?? null,
     isLoading: Boolean(accountId) && query.isLoading,
@@ -64,6 +65,7 @@ export function createPlayerShortcutNavigation(
   if (!shortcuts) return []
 
   const items: PlayerShortcutNavigationItem[] = []
+
   if (shortcuts.primary) {
     items.push({
       kind: 'primary',
@@ -73,8 +75,10 @@ export function createPlayerShortcutNavigation(
       avatarUrl: avatarUrl(shortcuts.primary.mainLegend?.legendNameKey),
     })
   }
+
   for (const pin of shortcuts.pins) {
     const label = pin.name ?? `Player ID ${pin.brawlhallaId}`
+
     items.push({
       kind: 'pin',
       href: `/player/${pin.brawlhallaId}`,
@@ -83,5 +87,6 @@ export function createPlayerShortcutNavigation(
       avatarUrl: avatarUrl(pin.mainLegend?.legendNameKey),
     })
   }
+
   return items
 }

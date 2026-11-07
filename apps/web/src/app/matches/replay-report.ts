@@ -117,9 +117,11 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
   const nativeBySlot = new Map(core.native.players.map((player) => [player.slot, player]))
   const payloadBySlot = new Map(nativeExtension.data.players.map((player) => [player.slot, player.payload]))
   const summaryBySlot = new Map(summary?.data.players.map((player) => [player.slot, player]) ?? [])
+
   const equipmentSummaryBySlotAndKey = new Map(
     summary?.data.equipment.map((equipment) => [`${equipment.slot}:${equipment.key}`, equipment]) ?? [],
   )
+
   const playerBySlot = new Map(replay.players.map((player) => [player.slot, player]))
   const winningTeamId = replay.outcome.winningTeamId
   const winners = winningTeamId === null ? [] : replay.players.filter((player) => player.teamId === winningTeamId)
@@ -129,14 +131,17 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
     const native = nativeBySlot.get(player.slot)
     const playerSummary = summaryBySlot.get(player.slot)
     const equipmentEntries = Object.entries(payloadBySlot.get(player.slot)?.Equipment ?? {})
+
     const equipment = equipmentEntries.map(([key, counters]) => {
       const summaryRow = equipmentSummaryBySlotAndKey.get(`${player.slot}:${key}`)
+
       return {
         key,
         heldTimeShare: summaryRow ? summaryRow.heldTimeShare : safeRatio(counters.TimeHeld, replay.durationMs),
         enemyDamage: Object.values(counters.Powers ?? {}).reduce((total, power) => total + power.EnemyDamage, 0),
       }
     })
+
     const powers = equipmentEntries.flatMap(([equipmentKey, counters]) =>
       Object.entries(counters.Powers ?? {}).map(([key, power]) => ({
         key,
@@ -151,6 +156,7 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
         enemyKosPerUse: safeRatio(power.EnemyKOs, power.Uses),
       })),
     )
+
     const positioningTotal = native ? native.groundTimeMs + native.airTimeMs + native.wallTimeMs : 0
 
     return {
@@ -206,8 +212,10 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
 
   const teamScores = new Map(replay.teamScores.map(({ teamId, score }) => [String(teamId), score]))
   const teams = new Map<string, ReplayReportTeam>()
+
   for (const player of players) {
     const team = teams.get(player.teamId)
+
     if (team) team.playerSlots.push(player.slot)
     else {
       teams.set(player.teamId, {
@@ -218,6 +226,7 @@ export function replayReportFromJob(job: ReplayJobDetailContract): ReplayReport 
       })
     }
   }
+
   const teamList = [...teams.values()]
   const namesBySlot = new Map(players.map(({ slot, name }) => [slot, name]))
 

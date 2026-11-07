@@ -39,7 +39,9 @@ function requireConfiguration(
   mode: DiscordSmokeEnvironment,
 ): { token: string; clientId: string; apiUrl: string; scope: CommandScope; artifactPath: string } {
   const missing = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'API_URL'].filter((name) => !environment[name])
+
   if (mode === 'staging-guild' && !environment.DISCORD_GUILD_ID) missing.push('DISCORD_GUILD_ID')
+
   if (missing.length > 0) throw new Error(`Missing required smoke configuration: ${missing.join(', ')}`)
 
   return {
@@ -61,12 +63,16 @@ async function defaultListCommands(input: {
   scope: CommandScope
 }): Promise<readonly RegisteredCommand[]> {
   const rest = new REST().setToken(input.token)
+
   const route =
     input.scope.kind === 'guild'
       ? Routes.applicationGuildCommands(input.clientId, input.scope.guildId)
       : Routes.applicationCommands(input.clientId)
+
   const result = await rest.get(route)
+
   if (!Array.isArray(result)) throw new Error('Discord command registration response was invalid')
+
   return result.filter(
     (command): command is RegisteredCommand =>
       Boolean(command) && typeof command === 'object' && typeof (command as { name?: unknown }).name === 'string',
@@ -86,9 +92,11 @@ async function assertHealth(
 ): Promise<void> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 2_000)
+
   try {
     const response = await fetcher(`${apiUrl}${path}`, { signal: controller.signal })
     const body = (await response.json().catch(() => null)) as { status?: unknown } | null
+
     if (!response.ok || body?.status !== expected) throw new Error(`API ${expected} smoke check failed`)
   } finally {
     clearTimeout(timeout)
@@ -109,6 +117,7 @@ export async function runDiscordSmoke(
   const registered = await listCommands(configuration)
   const names = new Set(registered.map((command) => command.name))
   const missingCommands = requiredCommands.filter((name) => !names.has(name))
+
   if (missingCommands.length > 0) {
     throw new Error(`Missing registered Discord commands: ${missingCommands.join(', ')}`)
   }
@@ -135,12 +144,15 @@ export async function runDiscordSmoke(
       { command: '/status', status: 'pending', requiredEvidence: 'Live, ready, and degraded response' },
     ],
   }
+
   await writeArtifact(configuration.artifactPath, `${JSON.stringify(artifact, null, 2)}\n`)
+
   return artifact
 }
 
 if (import.meta.main) {
   const mode = process.argv[2]
+
   if (mode !== 'staging-guild' && mode !== 'production') {
     console.error('Usage: bun run src/smoke.ts <staging-guild|production>')
     process.exitCode = 1

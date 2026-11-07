@@ -66,12 +66,14 @@ export function toPlayerShortcuts(
   const mapShortcut = (brawlhallaId: number, fallbackName: string | null = null) => {
     const playerFacts = facts.get(brawlhallaId)
     const mainLegend = playerFacts?.currentSeason?.snapshot?.mainLegend ?? null
+
     return {
       brawlhallaId,
       name: playerFacts?.player?.name ?? fallbackName,
       mainLegend: mainLegend ? { legendNameKey: mainLegend.legendNameKey, source: mainLegend.source } : null,
     }
   }
+
   return parsePlayerShortcutsOutput({
     primary: shortcuts.primaryPlayer
       ? mapShortcut(shortcuts.primaryPlayer.brawlhallaId, shortcuts.primaryPlayer.name)

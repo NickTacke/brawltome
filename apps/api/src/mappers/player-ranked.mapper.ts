@@ -3,6 +3,7 @@ import type { RankedPlayerProfile } from '@brawltome/player'
 
 export function mapPlayerRankedProfile(profile: RankedPlayerProfile | null): PlayerRankedProfileContract | null {
   if (!profile) return null
+
   return parsePlayerRankedProfileOutput({
     ...profile,
     checkedAt: profile.checkedAt.toISOString(),

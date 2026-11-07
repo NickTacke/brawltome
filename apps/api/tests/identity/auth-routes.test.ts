@@ -10,6 +10,7 @@ import { Hono } from 'hono'
 import { type CreateAuthRoutesDeps, createAuthRoutes } from '../../src/auth/routes'
 
 const originalFetch = globalThis.fetch
+
 afterEach(() => {
   globalThis.fetch = originalFetch
 })
@@ -30,10 +31,12 @@ function makeFakes() {
   const actorAdmissions: unknown[] = []
   let admissionOutcome: 'admitted' | 'rate-limited' = 'admitted'
   let operationOutcome: 'accepted' | 'already-active' = 'accepted'
+
   const accounts: Accounts = {
     async signInWithDiscord(profile) {
       profiles.push(profile)
       sessions.add('raw-session-token')
+
       return {
         account: { ...account, displayName: profile.displayName },
         sessionToken: 'raw-session-token',
@@ -42,6 +45,7 @@ function makeFakes() {
     },
     async authenticate(sessionToken) {
       authenticatedTokens.push(sessionToken)
+
       return sessionToken && sessions.has(sessionToken)
         ? {
             status: 'signedIn',
@@ -62,6 +66,7 @@ function makeFakes() {
     },
     async beginPrimaryPlayerVerification(input) {
       verificationAttempts.push(input)
+
       return {
         id: '5f689990-dc60-4d70-bd1c-7b49b89786b7',
         status: 'pending',
@@ -90,9 +95,11 @@ function makeFakes() {
       return { primaryPlayer: null, pinnedPlayers: [] }
     },
   }
+
   const requestAdmission = {
     async admitActor(actor: unknown, reservationKey?: string) {
       actorAdmissions.push({ actor, reservationKey })
+
       return admissionOutcome === 'admitted'
         ? ({ outcome: 'admitted' } as const)
         : ({ outcome: 'rate-limited', retryAfterSeconds: 60 } as const)
@@ -101,9 +108,11 @@ function makeFakes() {
       return false
     },
   }
+
   const verificationOperations: CreateAuthRoutesDeps['verificationOperations'] = {
     async accept(input) {
       queuedVerifications.push(input)
+
       return { outcome: operationOutcome, operationId: 'operation-1' }
     },
   }
@@ -133,6 +142,7 @@ function buildApp(
   logger?: CreateAuthRoutesDeps['logger'],
 ) {
   const app = new Hono()
+
   app.route(
     '/auth',
     createAuthRoutes({
@@ -151,6 +161,7 @@ function buildApp(
       },
     }),
   )
+
   return app
 }
 
@@ -159,14 +170,18 @@ describe('GET /auth/discord/login', () => {
     const app = buildApp(makeFakes())
 
     const res = await app.request('/auth/discord/login')
+
     expect(res.status).toBe(302)
     const location = res.headers.get('location') ?? ''
+
     expect(location).toStartWith('https://discord.com/api/oauth2/authorize')
     const setCookie = res.headers.get('set-cookie') ?? ''
+
     expect(setCookie).toContain('brawltome_oauth_state=')
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('SameSite=Lax')
     const state = new URL(location).searchParams.get('state')
+
     expect(state).toBeTruthy()
     expect(setCookie).toContain(`brawltome_oauth_state=${state}`)
   })
@@ -175,15 +190,18 @@ describe('GET /auth/discord/login', () => {
 describe('GET /auth/discord/callback', () => {
   it('error redirects when state is missing or mismatched', async () => {
     const app = buildApp(makeFakes())
+
     const res = await app.request('/auth/discord/callback?code=x&state=wrong', {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
+
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/account?error=state')
 
     const multibyte = await app.request(`/auth/discord/callback?code=x&state=${encodeURIComponent('éééééééé')}`, {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
+
     expect(multibyte.status).toBe(302)
     expect(multibyte.headers.get('location')).toBe('http://localhost:3001/account?error=state')
   })
@@ -191,18 +209,24 @@ describe('GET /auth/discord/callback', () => {
   it('maps the verified Discord profile through Accounts and preserves the session cookie', async () => {
     const fakes = makeFakes()
     const observedDomains: string[] = []
+
     const app = buildApp(fakes, async (domain, work) => {
       observedDomains.push(domain)
+
       return work()
     })
+
     globalThis.fetch = mock(async (url) => {
       const value = String(url)
+
       if (value.includes('/oauth2/token')) {
         return new Response(JSON.stringify({ access_token: 'at' }), { status: 200 })
       }
+
       if (value.includes('/users/@me')) {
         return new Response(JSON.stringify({ id: '42', username: 'coolguy', avatar: 'abc' }), { status: 200 })
       }
+
       return new Response('not mocked', { status: 500 })
     }) as unknown as typeof fetch
 
@@ -213,6 +237,7 @@ describe('GET /auth/discord/callback', () => {
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/')
     const setCookie = res.headers.get('set-cookie') ?? ''
+
     expect(setCookie).toContain('brawltome_session=raw-session-token')
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('Max-Age=2592000')
@@ -222,11 +247,13 @@ describe('GET /auth/discord/callback', () => {
 
   it('redirects to the discord error state on upstream failure', async () => {
     const app = buildApp(makeFakes())
+
     globalThis.fetch = mock(async () => new Response('nope', { status: 400 })) as unknown as typeof fetch
 
     const res = await app.request('/auth/discord/callback?code=x&state=expected', {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
+
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('http://localhost:3001/account?error=discord')
   })
@@ -236,6 +263,7 @@ describe('GET /auth/discord/callback', () => {
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'auth-test', sink, drainIntervalMs: 0 })
     const app = buildApp(makeFakes(), undefined, telemetry.logger)
+
     globalThis.fetch = mock(
       async () => new Response(JSON.stringify({ access_token: canary, private_payload: canary }), { status: 400 }),
     ) as unknown as typeof fetch
@@ -243,6 +271,7 @@ describe('GET /auth/discord/callback', () => {
     const res = await app.request('/auth/discord/callback?code=x&state=expected', {
       headers: { cookie: 'brawltome_oauth_state=expected' },
     })
+
     await telemetry.flush(50)
     const output = JSON.stringify(sink.records)
 
@@ -256,6 +285,7 @@ describe('GET /auth/discord/callback', () => {
 function steamCallbackUrl(state: string): URL {
   const callback = new URL('http://localhost/auth/steam/callback')
   const claimedId = 'https://steamcommunity.com/openid/id/76561198000000000'
+
   callback.searchParams.set('state', state)
   callback.searchParams.set('openid.ns', 'http://specs.openid.net/auth/2.0')
   callback.searchParams.set('openid.mode', 'id_res')
@@ -265,24 +295,32 @@ function steamCallbackUrl(state: string): URL {
   callback.searchParams.set('openid.claimed_id', claimedId)
   callback.searchParams.set('openid.identity', claimedId)
   callback.searchParams.set('openid.response_nonce', `${new Date().toISOString().slice(0, 19)}Znonce`)
+
   return callback
 }
 
 describe('GET /auth/steam/callback', () => {
   it('preserves an existing session cookie through authenticated admission and queues one privacy-safe attempt', async () => {
     const fakes = makeFakes()
+
     fakes.sessions.add('raw-session-token')
     const observedDomains: string[] = []
+
     const app = buildApp(fakes, async (domain, work) => {
       observedDomains.push(domain)
+
       return work()
     })
+
     const start = await app.request('/auth/steam/link', {
       headers: { cookie: 'brawltome_session=raw-session-token' },
     })
+
     const stateCookie = start.headers.get('set-cookie') ?? ''
     const state = /brawltome_steam_state=([^;]+)/.exec(stateCookie)?.[1]
+
     if (!state) throw new Error('Expected Steam state cookie')
+
     globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
 
     const response = await app.request(steamCallbackUrl(state).toString(), {
@@ -296,12 +334,14 @@ describe('GET /auth/steam/callback', () => {
     expect(response.headers.get('set-cookie') ?? '').not.toContain('brawltome_session=')
     expect(fakes.authenticatedTokens).toEqual(['raw-session-token'])
     expect(observedDomains).toEqual(['steam'])
+
     expect(fakes.actorAdmissions).toEqual([
       {
         actor: { kind: 'authenticated', accountId: account.id, ip: '203.0.113.10' },
         reservationKey: expect.stringMatching(/^primary-player:[a-f0-9]{64}$/),
       },
     ])
+
     expect(fakes.verificationAttempts).toEqual([
       {
         accountId: account.id,
@@ -309,6 +349,7 @@ describe('GET /auth/steam/callback', () => {
         idempotencyKey: expect.stringMatching(/^[a-f0-9]{64}$/),
       },
     ])
+
     expect(fakes.queuedVerifications).toEqual([
       {
         kind: 'proof',
@@ -324,14 +365,19 @@ describe('GET /auth/steam/callback', () => {
 
   it('treats an already-active durable verification as an idempotent success', async () => {
     const fakes = makeFakes()
+
     fakes.sessions.add('raw-session-token')
     fakes.setOperationOutcome('already-active')
     const app = buildApp(fakes)
+
     const start = await app.request('/auth/steam/link', {
       headers: { cookie: 'brawltome_session=raw-session-token' },
     })
+
     const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+
     if (!state) throw new Error('Expected Steam state cookie')
+
     globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
 
     const response = await app.request(steamCallbackUrl(state).toString(), {
@@ -344,14 +390,20 @@ describe('GET /auth/steam/callback', () => {
 
   it('rejects a signed Steam response that is not bound to the current callback state', async () => {
     const fakes = makeFakes()
+
     fakes.sessions.add('raw-session-token')
     const app = buildApp(fakes)
+
     const start = await app.request('/auth/steam/link', {
       headers: { cookie: 'brawltome_session=raw-session-token' },
     })
+
     const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+
     if (!state) throw new Error('Expected Steam state cookie')
+
     const replay = steamCallbackUrl(state)
+
     replay.searchParams.set('openid.return_to', 'http://localhost:3000/auth/steam/callback?state=captured-old-state')
     globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
 
@@ -366,14 +418,19 @@ describe('GET /auth/steam/callback', () => {
 
   it('remains account and IP rate-limited without creating an attempt', async () => {
     const fakes = makeFakes()
+
     fakes.sessions.add('raw-session-token')
     fakes.setAdmissionOutcome('rate-limited')
     const app = buildApp(fakes)
+
     const start = await app.request('/auth/steam/link', {
       headers: { cookie: 'brawltome_session=raw-session-token' },
     })
+
     const state = /brawltome_steam_state=([^;]+)/.exec(start.headers.get('set-cookie') ?? '')?.[1]
+
     if (!state) throw new Error('Expected Steam state cookie')
+
     globalThis.fetch = mock(async () => new Response('is_valid:true', { status: 200 })) as unknown as typeof fetch
 
     const response = await app.request(steamCallbackUrl(state).toString(), {
@@ -392,6 +449,7 @@ describe('GET /auth/steam/callback', () => {
 describe('POST /auth/signout', () => {
   it('revokes the session through Accounts and clears the cookie', async () => {
     const fakes = makeFakes()
+
     fakes.sessions.add('raw-token')
     const app = buildApp(fakes)
 
@@ -403,15 +461,18 @@ describe('POST /auth/signout', () => {
     expect(res.status).toBe(204)
     expect(fakes.sessions.has('raw-token')).toBe(false)
     const setCookie = res.headers.get('set-cookie') ?? ''
+
     expect(setCookie).toContain('brawltome_session=')
     expect(setCookie).toContain('Max-Age=0')
   })
 
   it('returns failure and preserves the cookie when revocation fails', async () => {
     const fakes = makeFakes()
+
     fakes.accounts.signOut = async () => {
       throw new Error('database unavailable')
     }
+
     const app = buildApp(fakes)
 
     const res = await app.request('/auth/signout', {
@@ -426,20 +487,25 @@ describe('POST /auth/signout', () => {
 
   it('returns 204 when there is no cookie', async () => {
     const app = buildApp(makeFakes())
+
     const res = await app.request('/auth/signout', {
       method: 'POST',
       headers: { origin: 'http://localhost:3001' },
     })
+
     expect(res.status).toBe(204)
   })
 
   it('rejects requests from a disallowed or missing origin', async () => {
     const app = buildApp(makeFakes())
+
     const disallowed = await app.request('/auth/signout', {
       method: 'POST',
       headers: { origin: 'http://evil.example.com' },
     })
+
     const missing = await app.request('/auth/signout', { method: 'POST' })
+
     expect(disallowed.status).toBe(403)
     expect(missing.status).toBe(403)
   })

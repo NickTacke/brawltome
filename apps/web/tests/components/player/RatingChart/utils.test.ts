@@ -23,6 +23,7 @@ describe('prepareChartData', () => {
         recordedAt: new Date(Date.UTC(2026, 2, 15)),
       },
     ])
+
     expect(result).toHaveLength(1)
     expect(result[0].rating).toBe(1500)
     expect(typeof result[0].date).toBe('string')
@@ -47,6 +48,7 @@ describe('prepareChartData', () => {
         recordedAt: new Date(Date.UTC(2026, 2, 15)),
       },
     ])
+
     expect(result.map((p) => p.rating)).toEqual([1500, 1600])
   })
 
@@ -69,6 +71,7 @@ describe('prepareChartData', () => {
         recordedAt: new Date(Date.UTC(2026, 2, 15)).toISOString(),
       },
     ])
+
     expect(result).toHaveLength(1)
     expect(result[0].rating).toBe(1600)
   })
@@ -80,7 +83,9 @@ describe('getCurrentSeason', () => {
       { id: 39, name: 'Season 39', startsAt: new Date(Date.UTC(2025, 11, 1)) },
       { id: 40, name: 'Season 40', startsAt: new Date(Date.UTC(2026, 2, 25)) },
     ]
+
     const now = new Date(Date.UTC(2026, 3, 1))
+
     expect(getCurrentSeason(now, seasons).id).toBe(40)
   })
 
@@ -89,19 +94,23 @@ describe('getCurrentSeason', () => {
       { id: 39, name: 'Season 39', startsAt: new Date(Date.UTC(2025, 11, 1)) },
       { id: 40, name: 'Season 40', startsAt: new Date(Date.UTC(2026, 2, 25)) },
     ]
+
     const now = new Date(Date.UTC(2026, 1, 1))
+
     expect(getCurrentSeason(now, seasons).id).toBe(39)
   })
 
   it('returns first season for dates before any season starts', () => {
     const seasons = [{ id: 39, name: 'Season 39', startsAt: new Date(Date.UTC(2025, 11, 1)) }]
     const now = new Date(Date.UTC(2025, 5, 1))
+
     expect(getCurrentSeason(now, seasons).id).toBe(39)
   })
 
   it('uses the SEASONS config by default', () => {
     expect(SEASONS.length).toBeGreaterThan(0)
     const result = getCurrentSeason(new Date('2026-06-24T14:00:00Z'))
+
     expect(result).toMatchObject({ id: 41, name: 'Season 41' })
   })
 })
@@ -110,6 +119,7 @@ describe('getTierFromRating', () => {
   it('returns the lowest tier for ratings below first threshold', () => {
     const sorted = [...TIER_THRESHOLDS].sort((a, b) => a.minRating - b.minRating)
     const lowest = sorted[0]
+
     expect(getTierFromRating(lowest.minRating - 1)).toBe(lowest.name)
   })
 
@@ -122,6 +132,7 @@ describe('getTierFromRating', () => {
   it('returns the highest tier for ratings above the cap', () => {
     const sorted = [...TIER_THRESHOLDS].sort((a, b) => a.minRating - b.minRating)
     const top = sorted[sorted.length - 1]
+
     expect(getTierFromRating(top.minRating + 1000)).toBe(top.name)
   })
 })

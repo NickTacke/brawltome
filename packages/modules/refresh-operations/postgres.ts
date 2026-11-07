@@ -169,24 +169,31 @@ function toLease(row: OperationRow): OperationLease {
     maxAttempts: row.max_attempts,
     scheduleWindowAt: row.scheduled_window_at?.toISOString() ?? null,
   }
+
   if (isLeaderboardKind(row.kind)) {
     if (row.work_class !== 'leaderboard' || !('pageDepth' in row.payload)) {
       throw new Error('invalid durable leaderboard operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (isDiscoveryProjectionKind(row.kind)) {
     if (row.work_class !== 'projection' || !('batchSize' in row.payload)) {
       throw new Error('invalid durable discovery projection operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'discovery-reconciliation') {
     if (row.work_class !== 'projection' || !('owner' in row.payload)) {
       throw new Error('invalid durable discovery reconciliation operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'interactive-player-refresh') {
     if (
       (row.work_class !== 'interactive' && row.work_class !== 'primary-monitoring') ||
@@ -195,78 +202,103 @@ function toLease(row: OperationRow): OperationLease {
     ) {
       throw new Error('invalid durable player refresh operation')
     }
+
     if (row.work_class === 'primary-monitoring') {
       if ('assignmentId' in row.payload) {
         return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
       }
+
       if ('cohort' in row.payload && row.payload.cohort === recentlyViewedCohort) {
         return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
       }
+
       throw new Error('invalid durable Primary monitoring operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'clan-refresh') {
     if (row.work_class !== 'interactive' || !('clanId' in row.payload)) {
       throw new Error('invalid durable clan refresh operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'ranked-player-pulse') {
     if (row.work_class !== 'primary-monitoring' || !('brawlhallaId' in row.payload) || 'staleSections' in row.payload) {
       throw new Error('invalid durable ranked player pulse operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'player-name-verification') {
     if (row.work_class !== 'maintenance' || !('playerName' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable player name verification operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'ranking-retention') {
     if (row.work_class !== 'maintenance' || !('retentionHours' in row.payload) || !('maxGenerations' in row.payload)) {
       throw new Error('invalid durable ranking retention operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'leaderboard-deep-crawl') {
     if (row.work_class !== 'leaderboard' || !('region' in row.payload) || !('intervalMs' in row.payload)) {
       throw new Error('invalid durable leaderboard deep crawl operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (isStatisticsCollectionKind(row.kind)) {
     if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
       throw new Error('invalid durable statistics collection operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'statistics-publication') {
     if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || !('product' in row.payload)) {
       throw new Error('invalid durable statistics publication operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind === 'statistics-legend-meta-publication') {
     if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || 'product' in row.payload) {
       throw new Error('invalid durable Statistics Legend Meta publication operation')
     }
+
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
+
   if (row.kind !== 'proof' || !('value' in row.payload)) throw new Error('invalid durable proof operation')
+
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
 function validateDispositionInput(input: DeadLetterDispositionInput) {
   const actorId = input.actorId.trim()
   const reason = input.reason.trim()
+
   if ([...actorId].length < 1 || [...actorId].length > 200) {
     throw new Error('actorId must contain between 1 and 200 characters')
   }
+
   if ([...reason].length < 1 || [...reason].length > 500) {
     throw new Error('reason must contain between 1 and 500 characters')
   }
+
   return { actorId, reason }
 }
 
@@ -283,6 +315,7 @@ function toDispositionResult(row: {
       replayOperationId: row.replay_operation_id,
     }
   }
+
   return {
     outcome: 'already-disposed',
     disposition: 'discarded',
@@ -293,14 +326,18 @@ function toDispositionResult(row: {
 
 function parseFirstDueAt(value: string): Date {
   if (!utcDateTime.test(value)) throw new Error('firstDueAt must be an ISO-8601 UTC timestamp ending in Z')
+
   const parsed = new Date(value)
+
   const normalized = value.replace(
     /(?:\.(\d{1,3}))?Z$/,
     (_, fraction: string | undefined) => `.${(fraction ?? '').padEnd(3, '0')}Z`,
   )
+
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== normalized) {
     throw new Error('firstDueAt must be a valid timestamp')
   }
+
   return parsed
 }
 
@@ -325,50 +362,65 @@ function validateScheduleIdentity(input: {
   if (!input.scheduleKey || input.scheduleKey.length > 200) {
     throw new Error('scheduleKey must contain between 1 and 200 characters')
   }
+
   if (!input.operationKeyPrefix || input.operationKeyPrefix.length > 200) {
     throw new Error('operationKeyPrefix must contain between 1 and 200 characters')
   }
+
   if (!Number.isSafeInteger(input.intervalMs) || input.intervalMs <= 0) {
     throw new Error('intervalMs must be a positive safe integer')
   }
+
   return parseFirstDueAt(input.firstDueAt)
 }
 
 function validateSchedule(input: CreateSchedule): Date {
   const firstDueAt = validateScheduleIdentity(input)
   const kind = input.kind ?? 'proof'
+
   if (isLeaderboardKind(kind)) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
+
     if (payload.intervalMs !== input.intervalMs) {
       throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
     }
   }
+
   if (kind === 'ranking-retention') {
     if (input.workClass !== 'maintenance') throw new Error('ranking retention requires maintenance work class')
+
     validateRankingRetentionPayload(input.payload as { retentionHours: number; maxGenerations: number })
   }
+
   if (kind === 'leaderboard-deep-crawl') {
     if (input.workClass !== 'leaderboard') throw new Error('leaderboard deep crawl requires leaderboard work class')
+
     const payload = validateLeaderboardDeepCrawlPayload(input.payload as LeaderboardDeepCrawlPayload)
+
     if (payload.intervalMs !== input.intervalMs) {
       throw new Error('leaderboard deep crawl payload intervalMs must match the schedule intervalMs')
     }
   }
+
   return firstDueAt
 }
 
 function validatePrimaryMonitoringSchedule(input: PrimaryMonitoringScheduleDefinition): Date {
   const firstDueAt = validateScheduleIdentity(input)
   const { payload } = input
+
   if (input.resourceKey !== `player:${payload.brawlhallaId}`) {
     throw new Error('Primary monitoring requires a canonical player resource key')
   }
+
   if (!Number.isSafeInteger(payload.brawlhallaId) || payload.brawlhallaId <= 0) {
     throw new Error('Primary monitoring requires a positive safe Brawlhalla ID')
   }
+
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.assignmentId)) {
     throw new Error('Primary monitoring requires a UUID assignmentId')
   }
+
   return firstDueAt
 }
 
@@ -390,6 +442,7 @@ function admissionConfigHash(config: AdmissionConfig): {
   hash: string
 } {
   const document = admissionConfigDocument(config)
+
   return { document, hash: createHash('sha256').update(JSON.stringify(document)).digest('hex') }
 }
 
@@ -406,15 +459,19 @@ function chooseBackgroundClass(
 
   for (const workClass of eligible) {
     const weight = config.backgroundWeights[workClass]
+
     totalWeight += weight
     const score = (stored.get(workClass) ?? 0) + weight
+
     nextCredits.set(workClass, score)
     if (score > selectedScore) {
       selected = workClass
       selectedScore = score
     }
   }
+
   nextCredits.set(selected, (nextCredits.get(selected) ?? 0) - totalWeight)
+
   return { selected, nextCredits }
 }
 
@@ -446,18 +503,24 @@ export function createPostgresRefreshOperations(
   ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
     return client.begin(async (transaction) => {
       const sql = transaction as unknown as typeof client
+
       await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
+
       const [existing] = await sql<{ id: string; enabled: boolean }[]>`
         SELECT id, enabled FROM refresh_operations.schedules
         WHERE schedule_key = ${scheduleKey} AND kind = ${kind}
         FOR UPDATE
       `
+
       if (!existing) return { outcome: 'absent' as const }
+
       if (!existing.enabled) return { outcome: 'already-disabled' as const }
+
       await sql`
         UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
         WHERE id = ${existing.id}
       `
+
       return { outcome: 'disabled' as const }
     })
   }
@@ -467,9 +530,12 @@ export function createPostgresRefreshOperations(
     options: { reenable?: boolean } = {},
   ): Promise<CreateScheduleResult> {
     const firstDueAt = validateSchedule(input)
+
     return client.begin(async (transaction) => {
       const sql = transaction as unknown as typeof client
+
       await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
+
       const [existing] = await sql<{ id: string; enabled: boolean; matches: boolean }[]>`
         SELECT id, enabled,
           kind = ${input.kind}
@@ -484,14 +550,18 @@ export function createPostgresRefreshOperations(
         WHERE schedule_key = ${input.scheduleKey}
         FOR UPDATE
       `
+
       if (existing?.matches && options.reenable && !existing.enabled) {
         await sql`
           UPDATE refresh_operations.schedules SET enabled = true, updated_at = clock_timestamp()
           WHERE id = ${existing.id}
         `
+
         return { outcome: 'reconciled' as const, scheduleId: existing.id }
       }
+
       if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
+
       if (existing) {
         await sql`
           UPDATE refresh_operations.schedules
@@ -501,7 +571,9 @@ export function createPostgresRefreshOperations(
           WHERE id = ${existing.id}
         `
       }
+
       const scheduleId = randomUUID()
+
       await sql`
         INSERT INTO refresh_operations.schedules
           (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
@@ -511,6 +583,7 @@ export function createPostgresRefreshOperations(
            ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
            ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
       `
+
       return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
     })
   }
@@ -520,8 +593,10 @@ export function createPostgresRefreshOperations(
     input: DeadLetterDispositionInput,
   ): Promise<DeadLetterDispositionResult> {
     const { actorId, reason } = validateDispositionInput(input)
+
     return client.begin(async (transaction) => {
       const sql = transaction as unknown as typeof client
+
       const [target] = await sql<
         {
           id: string
@@ -545,21 +620,25 @@ export function createPostgresRefreshOperations(
         WHERE id = ${input.operationId} AND status = 'dead_letter'
         FOR UPDATE
       `
+
       if (!target) {
         return { outcome: 'not-found', disposition: null, actionId: null, replayOperationId: null }
       }
+
       if (isStatisticsCollectionKind(target.kind)) {
         await sql`
           SELECT id FROM refresh_operations.operations
           WHERE id = ${target.effect_operation_id}
           FOR UPDATE
         `
+
         const [sealed] = await sql<{ sealed: boolean }[]>`
           SELECT EXISTS (
             SELECT 1 FROM refresh_operations.statistics_collection_seals seal
             WHERE seal.collection_operation_id = ${target.effect_operation_id}
           ) AS sealed
         `
+
         if (sealed?.sealed) throw new Error('Statistics collection replay is sealed by publication validation')
       }
 
@@ -574,12 +653,15 @@ export function createPostgresRefreshOperations(
         FROM refresh_operations.dead_letter_actions
         WHERE target_operation_id = ${target.id}
       `
+
       if (existing) return toDispositionResult(existing)
 
       const actionId = randomUUID()
       let replayOperationId: string | null = null
+
       if (disposition === 'replayed') {
         replayOperationId = randomUUID()
+
         await sql`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload_version,
@@ -592,15 +674,19 @@ export function createPostgresRefreshOperations(
              ${target.max_attempts}, ${target.lease_token}, ${target.id}, ${target.origin_schedule_occurrence_id})
         `
       }
+
       await sql`
         INSERT INTO refresh_operations.dead_letter_actions
           (id, target_operation_id, disposition, actor_id, reason, replay_operation_id)
         VALUES (${actionId}, ${target.id}, ${disposition}, ${actorId}, ${reason}, ${replayOperationId})
       `
+
       if (replayOperationId) {
         await sql`SELECT pg_notify(${wakeupChannel}, ${replayOperationId})`
+
         return { outcome: 'replayed', disposition: 'replayed', actionId, replayOperationId }
       }
+
       return { outcome: 'discarded', disposition: 'discarded', actionId, replayOperationId: null }
     })
   }
@@ -609,26 +695,33 @@ export function createPostgresRefreshOperations(
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
       validateAdmissionConfig(admission)
       const policy = admissionConfigHash(admission)
+
       await client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         await sql`SELECT pg_advisory_xact_lock(${admissionLockId})`
+
         const [active] = await sql<{ count: string | number }[]>`
           SELECT count(*)::bigint AS count
           FROM refresh_operations.operations
           WHERE status = 'leased' AND lease_expires_at > clock_timestamp()
         `
+
         const [existing] = await sql<{ config_hash: string }[]>`
           SELECT config_hash FROM refresh_operations.admission_policy WHERE singleton FOR UPDATE
         `
+
         if (existing && existing.config_hash !== policy.hash && Number(active.count) > 0) {
           throw new Error('admission configuration cannot change while operations are actively leased')
         }
+
         await sql`
           INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
           VALUES (true, ${policy.hash}, ${sql.json(policy.document)})
           ON CONFLICT (singleton) DO UPDATE
           SET config_hash = EXCLUDED.config_hash, config = EXCLUDED.config, updated_at = clock_timestamp()
         `
+
         if (existing && existing.config_hash !== policy.hash) {
           await sql`UPDATE refresh_operations.admission_classes SET credit = 0, updated_at = clock_timestamp()`
         }
@@ -646,6 +739,7 @@ export function createPostgresRefreshOperations(
             OR (${brawlhallaId ?? null}::bigint IS NOT NULL AND resource_key = ${brawlhallaId ? `player:${brawlhallaId}` : null}))
           AND status IN ('awaiting_admission', 'pending', 'leased')
       `
+
       return active
         ? {
             operationId: active.id,
@@ -664,6 +758,7 @@ export function createPostgresRefreshOperations(
         WHERE kind = 'clan-refresh' AND dedupe_key = ${dedupeKey}
           AND status IN ('awaiting_admission', 'pending', 'leased')
       `
+
       return active
         ? {
             operationId: active.id,
@@ -679,6 +774,7 @@ export function createPostgresRefreshOperations(
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
+
           await sql`
             UPDATE refresh_operations.operations
             SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
@@ -687,6 +783,7 @@ export function createPostgresRefreshOperations(
             WHERE kind = 'interactive-player-refresh' AND dedupe_key = ${input.dedupeKey}
               AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
           `
+
           // A visitor outranks the background: a queued recently viewed refresh for this player becomes interactive
           // work, so the visitor waits on interactive priority instead of behind the monitoring queue.
           await sql`
@@ -696,8 +793,10 @@ export function createPostgresRefreshOperations(
               AND status = 'pending' AND work_class = 'primary-monitoring'
               AND payload->>'cohort' = ${recentlyViewedCohort}
           `
+
           const operationId = randomUUID()
           const reservationToken = randomUUID()
+
           const [inserted] = await sql<{ id: string }[]>`
             INSERT INTO refresh_operations.operations
               (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
@@ -711,15 +810,19 @@ export function createPostgresRefreshOperations(
             ON CONFLICT DO NOTHING
             RETURNING id
           `
+
           if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
+
           const [active] = await sql<{ id: string }[]>`
             SELECT id FROM refresh_operations.operations
             WHERE kind = 'interactive-player-refresh'
               AND (dedupe_key = ${input.dedupeKey} OR resource_key = ${`player:${input.brawlhallaId}`})
               AND status IN ('awaiting_admission', 'pending', 'leased')
           `
+
           return active ? { outcome: 'already-active' as const, operationId: active.id } : null
         })
+
         if (result) return result
       }
     },
@@ -730,6 +833,7 @@ export function createPostgresRefreshOperations(
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
+
           await sql`
             UPDATE refresh_operations.operations
             SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
@@ -738,8 +842,10 @@ export function createPostgresRefreshOperations(
             WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
               AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
           `
+
           const operationId = randomUUID()
           const reservationToken = randomUUID()
+
           const [inserted] = await sql<{ id: string }[]>`
             INSERT INTO refresh_operations.operations
               (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
@@ -753,14 +859,18 @@ export function createPostgresRefreshOperations(
               WHERE status IN ('awaiting_admission', 'pending', 'leased')
             DO NOTHING RETURNING id
           `
+
           if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
+
           const [active] = await sql<{ id: string }[]>`
             SELECT id FROM refresh_operations.operations
             WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
               AND status IN ('awaiting_admission', 'pending', 'leased')
           `
+
           return active ? { outcome: 'already-active' as const, operationId: active.id } : null
         })
+
         if (result) return result
       }
     },
@@ -768,6 +878,7 @@ export function createPostgresRefreshOperations(
     async activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations
           SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
@@ -777,8 +888,11 @@ export function createPostgresRefreshOperations(
             AND reservation_expires_at > clock_timestamp()
           RETURNING id
         `
+
         if (!updated) return 'lease-lost' as const
+
         await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
         return 'transitioned' as const
       })
     },
@@ -786,6 +900,7 @@ export function createPostgresRefreshOperations(
     async activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations
           SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
@@ -794,8 +909,11 @@ export function createPostgresRefreshOperations(
             AND status = 'awaiting_admission'
           RETURNING id
         `
+
         if (!updated) return 'lease-lost' as const
+
         await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
         return 'transitioned' as const
       })
     },
@@ -814,6 +932,7 @@ export function createPostgresRefreshOperations(
           AND status = 'awaiting_admission' AND reservation_token = ${reservationToken}
         RETURNING id
       `
+
       return updated ? 'transitioned' : 'lease-lost'
     },
 
@@ -827,6 +946,7 @@ export function createPostgresRefreshOperations(
           AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
         RETURNING id
       `
+
       return updated ? 'transitioned' : 'lease-lost'
     },
 
@@ -834,18 +954,24 @@ export function createPostgresRefreshOperations(
       if (input.dedupeKey !== input.operationKey) {
         throw new Error('statistics collection dedupeKey must equal its stable operationKey')
       }
+
       if (input.workClass !== 'global-statistics') {
         throw new Error('statistics collection requires global-statistics work class')
       }
+
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.cohortId)) {
         throw new Error('statistics collection cohortId must be a UUID')
       }
+
       if (!Number.isSafeInteger(input.payload.brawlhallaId) || input.payload.brawlhallaId <= 0) {
         throw new Error('statistics collection brawlhallaId must be a positive safe integer')
       }
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 209))`
+
         const [existing] = await sql<{ id: string; matches: boolean }[]>`
           SELECT id,
             kind = ${input.kind}
@@ -860,11 +986,15 @@ export function createPostgresRefreshOperations(
             AND replayed_from_operation_id IS NULL
           FOR UPDATE
         `
+
         if (existing) {
           if (!existing.matches) throw new Error('statistics collection operation key has a different definition')
+
           return { outcome: 'already-active' as const, operationId: existing.id }
         }
+
         const operationId = randomUUID()
+
         await sql`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
@@ -874,6 +1004,7 @@ export function createPostgresRefreshOperations(
              'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
              ${input.maxAttempts ?? 3}, 'awaiting_binding')
         `
+
         return { outcome: 'accepted' as const, operationId }
       })
     },
@@ -886,12 +1017,14 @@ export function createPostgresRefreshOperations(
         ORDER BY created_at, id
         LIMIT 500
       `
+
       return rows.map((row) => row.id)
     },
 
     async activateStatisticsCollection(operationId: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations
           SET status = 'pending', updated_at = clock_timestamp()
@@ -900,15 +1033,19 @@ export function createPostgresRefreshOperations(
             AND status = 'awaiting_binding'
           RETURNING id
         `
+
         if (updated) {
           await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
           return 'transitioned' as const
         }
+
         const [existing] = await sql<{ status: string }[]>`
           SELECT status FROM refresh_operations.operations
           WHERE id = ${operationId}
             AND kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
         `
+
         return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
           ? ('transitioned' as const)
           : ('lease-lost' as const)
@@ -919,20 +1056,26 @@ export function createPostgresRefreshOperations(
       if (input.dedupeKey !== input.operationKey) {
         throw new Error('statistics publication dedupeKey must equal its stable operationKey')
       }
+
       if (input.workClass !== 'global-statistics') {
         throw new Error('statistics publication requires global-statistics work class')
       }
+
       if (
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.generationId)
       ) {
         throw new Error('statistics publication generationId must be a UUID')
       }
+
       if (input.payload.product !== 'ranked' && input.payload.product !== 'lifetime') {
         throw new Error('statistics publication product is unsupported')
       }
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 210))`
+
         const [existing] = await sql<{ id: string; matches: boolean }[]>`
           SELECT id, kind = 'statistics-publication'
             AND dedupe_key = ${input.dedupeKey}
@@ -945,11 +1088,15 @@ export function createPostgresRefreshOperations(
             AND replayed_from_operation_id IS NULL
           FOR UPDATE
         `
+
         if (existing) {
           if (!existing.matches) throw new Error('statistics publication operation key has a different definition')
+
           return { outcome: 'already-active' as const, operationId: existing.id }
         }
+
         const operationId = randomUUID()
+
         await sql`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
@@ -958,6 +1105,7 @@ export function createPostgresRefreshOperations(
              ${input.operationKey}, 'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
              ${input.maxAttempts ?? 3}, 'awaiting_binding')
         `
+
         return { outcome: 'accepted' as const, operationId }
       })
     },
@@ -968,25 +1116,31 @@ export function createPostgresRefreshOperations(
         WHERE kind = 'statistics-publication' AND status = 'awaiting_binding'
         ORDER BY created_at, id LIMIT 100
       `
+
       return rows.map(({ id }) => id)
     },
 
     async activateStatisticsPublication(operationId: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations SET status = 'pending', updated_at = clock_timestamp()
           WHERE id = ${operationId} AND kind = 'statistics-publication' AND status = 'awaiting_binding'
           RETURNING id
         `
+
         if (updated) {
           await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
           return 'transitioned' as const
         }
+
         const [existing] = await sql<{ status: string }[]>`
           SELECT status FROM refresh_operations.operations
           WHERE id = ${operationId} AND kind = 'statistics-publication'
         `
+
         return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
           ? ('transitioned' as const)
           : ('lease-lost' as const)
@@ -999,17 +1153,22 @@ export function createPostgresRefreshOperations(
       if (input.dedupeKey !== input.operationKey) {
         throw new Error('Statistics Legend Meta publication dedupeKey must equal its stable operationKey')
       }
+
       if (input.workClass !== 'global-statistics') {
         throw new Error('Statistics Legend Meta publication requires global-statistics work class')
       }
+
       if (
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.generationId)
       ) {
         throw new Error('Statistics Legend Meta publication generationId must be a UUID')
       }
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 211))`
+
         const [existing] = await sql<{ id: string; matches: boolean }[]>`
           SELECT id, kind = 'statistics-legend-meta-publication'
             AND dedupe_key = ${input.dedupeKey}
@@ -1022,11 +1181,15 @@ export function createPostgresRefreshOperations(
             AND replayed_from_operation_id IS NULL
           FOR UPDATE
         `
+
         if (existing) {
           if (!existing.matches) throw new Error('Statistics Legend Meta operation key has a different definition')
+
           return { outcome: 'already-active' as const, operationId: existing.id }
         }
+
         const operationId = randomUUID()
+
         await sql`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
@@ -1035,6 +1198,7 @@ export function createPostgresRefreshOperations(
              ${input.operationKey}, 'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
              ${input.maxAttempts ?? 3}, 'awaiting_binding')
         `
+
         return { outcome: 'accepted' as const, operationId }
       })
     },
@@ -1045,25 +1209,31 @@ export function createPostgresRefreshOperations(
         WHERE kind = 'statistics-legend-meta-publication' AND status = 'awaiting_binding'
         ORDER BY created_at, id LIMIT 100
       `
+
       return rows.map(({ id }) => id)
     },
 
     async activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations SET status = 'pending', updated_at = clock_timestamp()
           WHERE id = ${operationId} AND kind = 'statistics-legend-meta-publication' AND status = 'awaiting_binding'
           RETURNING id
         `
+
         if (updated) {
           await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
           return 'transitioned' as const
         }
+
         const [existing] = await sql<{ status: string }[]>`
           SELECT status FROM refresh_operations.operations
           WHERE id = ${operationId} AND kind = 'statistics-legend-meta-publication'
         `
+
         return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
           ? ('transitioned' as const)
           : ('lease-lost' as const)
@@ -1083,6 +1253,7 @@ export function createPostgresRefreshOperations(
           AND coalesce(last_error->>'code', '') NOT IN ('actor_rate_limited', 'admission_reservation_expired')
         GROUP BY 1
       `
+
       return rows.map((row) => ({ brawlhallaId: row.brawlhalla_id, viewDays: row.view_days }))
     },
 
@@ -1096,6 +1267,7 @@ export function createPostgresRefreshOperations(
           AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
         GROUP BY 1
       `
+
       return rows.map((row) => ({
         brawlhallaId: row.brawlhalla_id,
         lastPlannedAt: row.last_planned_at,
@@ -1111,6 +1283,7 @@ export function createPostgresRefreshOperations(
           AND payload->>'cohort' = ${recentlyViewedCohort}
           AND status IN ('awaiting_admission', 'pending', 'leased')
       `
+
       return row.count
     },
 
@@ -1118,11 +1291,14 @@ export function createPostgresRefreshOperations(
     // visitor's included) is skipped: the active-resource index allows one at a time.
     async enqueueRecentlyViewedRefreshes(brawlhallaIds: readonly number[]): Promise<number[]> {
       const enqueued: number[] = []
+
       for (const brawlhallaId of brawlhallaIds) {
         if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
           throw new Error('recently viewed refresh brawlhallaId must be a positive 32-bit integer')
         }
+
         const operationId = randomUUID()
+
         const inserted = await client<{ id: string }[]>`
           INSERT INTO refresh_operations.operations
             (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
@@ -1134,50 +1310,67 @@ export function createPostgresRefreshOperations(
           ON CONFLICT DO NOTHING
           RETURNING id
         `
+
         if (!inserted[0]) continue
+
         await client`SELECT pg_notify(${wakeupChannel}, ${operationId})`
         enqueued.push(brawlhallaId)
       }
+
       return enqueued
     },
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
       const kind = input.kind ?? 'proof'
+
       if (isLeaderboardKind(kind)) {
         if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
+
         validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
       } else if (kind === 'ranked-player-pulse') {
         const { brawlhallaId } = input.payload as { brawlhallaId: number }
+
         if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
           throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
         }
       } else if (kind === 'player-name-verification') {
         const { brawlhallaId, playerName } = input.payload as { brawlhallaId: number; playerName: string }
+
         if (input.workClass !== 'maintenance')
           throw new Error('player name verification requires maintenance work class')
+
         if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
           throw new Error('player name verification brawlhallaId must be a positive 32-bit integer')
         }
+
         if (typeof playerName !== 'string' || playerName.length === 0) {
           throw new Error('player name verification playerName must be a non-empty string')
         }
       }
+
       if (isDiscoveryProjectionKind(kind)) {
         const { batchSize } = input.payload as { batchSize: number }
+
         if (input.workClass !== 'projection') throw new Error('discovery projection requires projection work class')
+
         if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 1_000) {
           throw new Error('discovery projection batchSize must be between 1 and 1000')
         }
       }
+
       if (kind === 'discovery-reconciliation') {
         const { owner } = input.payload as { owner: string }
+
         if (input.workClass !== 'projection') throw new Error('discovery reconciliation requires projection work class')
+
         if (owner !== 'player' && owner !== 'clan') throw new Error('discovery reconciliation owner is invalid')
       }
+
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
           const operationId = randomUUID()
+
           const inserted = await sql<{ id: string }[]>`
             INSERT INTO refresh_operations.operations
               (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
@@ -1188,8 +1381,10 @@ export function createPostgresRefreshOperations(
             DO NOTHING
             RETURNING id
           `
+
           if (inserted[0]) {
             await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
             return { outcome: 'accepted' as const, operationId }
           }
 
@@ -1197,8 +1392,10 @@ export function createPostgresRefreshOperations(
             SELECT id FROM refresh_operations.operations
             WHERE kind = ${kind} AND dedupe_key = ${input.dedupeKey} AND status IN ('pending', 'leased')
           `
+
           return active ? { outcome: 'already-active' as const, operationId: active.id } : null
         })
+
         if (result) return result
       }
     },
@@ -1207,6 +1404,7 @@ export function createPostgresRefreshOperations(
       if (!(snapshot.observedAt instanceof Date) || Number.isNaN(snapshot.observedAt.getTime())) {
         throw new Error('Primary monitoring snapshot requires a valid observedAt')
       }
+
       const definitions = snapshot.targets.map((target) => {
         const definition: PrimaryMonitoringScheduleDefinition = {
           kind: 'interactive-player-refresh' as const,
@@ -1224,22 +1422,28 @@ export function createPostgresRefreshOperations(
           provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
           maxAttempts: 3,
         }
+
         validatePrimaryMonitoringSchedule(definition)
+
         return definition
       })
+
       if (new Set(definitions.map(({ resourceKey }) => resourceKey)).size !== definitions.length) {
         throw new Error('Primary monitoring snapshot contains duplicate players')
       }
 
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         await sql`SELECT pg_advisory_xact_lock(${208_192})`
+
         const [previous] = await sql<{ observed_at: Date }[]>`
           SELECT observed_at
           FROM refresh_operations.primary_monitoring_reconciliation
           WHERE singleton
           FOR UPDATE
         `
+
         if (previous && previous.observed_at.getTime() >= snapshot.observedAt.getTime()) {
           return { created: 0, retired: 0 }
         }
@@ -1258,20 +1462,25 @@ export function createPostgresRefreshOperations(
           WHERE provenance ->> 'source' = 'primary-player-monitoring' AND enabled
           FOR UPDATE
         `
+
         const desiredByResource = new Map(definitions.map((definition) => [definition.resourceKey, definition]))
         let retired = 0
+
         for (const schedule of existing) {
           const desired = schedule.resource_key ? desiredByResource.get(schedule.resource_key) : undefined
+
           const matches =
             desired &&
             schedule.schedule_key === desired.scheduleKey &&
             schedule.first_due_at.getTime() === new Date(desired.firstDueAt).getTime() &&
             schedule.payload.assignmentId === desired.payload.assignmentId &&
             schedule.payload.brawlhallaId === desired.payload.brawlhallaId
+
           if (matches) {
             desiredByResource.delete(desired.resourceKey)
             continue
           }
+
           await sql`
             UPDATE refresh_operations.schedules
             SET enabled = false,
@@ -1279,10 +1488,12 @@ export function createPostgresRefreshOperations(
                 updated_at = clock_timestamp()
             WHERE id = ${schedule.id}
           `
+
           retired++
         }
 
         let created = 0
+
         for (const definition of desiredByResource.values()) {
           await sql`
             INSERT INTO refresh_operations.schedules
@@ -1294,13 +1505,16 @@ export function createPostgresRefreshOperations(
                ${definition.operationKeyPrefix}, ${sql.json(definition.payload)},
                ${sql.json(definition.provenance)}, ${definition.maxAttempts})
           `
+
           created++
         }
+
         await sql`
           INSERT INTO refresh_operations.primary_monitoring_reconciliation (singleton, observed_at)
           VALUES (true, ${snapshot.observedAt})
           ON CONFLICT (singleton) DO UPDATE SET observed_at = EXCLUDED.observed_at
         `
+
         return { created, retired }
       })
     },
@@ -1309,6 +1523,7 @@ export function createPostgresRefreshOperations(
       const firstDueAt = validateSchedule(input)
       const kind = input.kind ?? 'proof'
       const scheduleId = randomUUID()
+
       const [created] = await client<{ id: string }[]>`
         INSERT INTO refresh_operations.schedules
           (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
@@ -1321,6 +1536,7 @@ export function createPostgresRefreshOperations(
         ON CONFLICT (schedule_key) DO NOTHING
         RETURNING id
       `
+
       if (created) return { outcome: 'created', scheduleId: created.id }
 
       const [existing] = await client<{ id: string; matches: boolean }[]>`
@@ -1337,7 +1553,9 @@ export function createPostgresRefreshOperations(
         FROM refresh_operations.schedules
         WHERE schedule_key = ${input.scheduleKey}
       `
+
       if (!existing?.matches) throw new Error(`scheduleKey ${input.scheduleKey} already has a different definition`)
+
       return { outcome: 'already-exists', scheduleId: existing.id }
     },
 
@@ -1365,6 +1583,7 @@ export function createPostgresRefreshOperations(
               SELECT window_at, next_page, total_pages
               FROM refresh_operations.leaderboard_deep_crawl_mode_progress WHERE mode = ${mode} AND region = ${region}
             `
+
       return row ? { windowAt: row.window_at, nextPage: row.next_page, totalPages: row.total_pages } : null
     },
 
@@ -1383,8 +1602,10 @@ export function createPostgresRefreshOperations(
             window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
             total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
         `
+
         return
       }
+
       await client`
         INSERT INTO refresh_operations.leaderboard_deep_crawl_mode_progress
           (mode, region, window_at, next_page, total_pages)
@@ -1417,11 +1638,14 @@ export function createPostgresRefreshOperations(
       if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
         throw new Error('schedule materialization limit must be an integer between 1 and 1000')
       }
+
       const result = await client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [clock] = await sql<{ materialized_at: Date }[]>`
           SELECT clock_timestamp() AS materialized_at
         `
+
         const schedules = await sql<ScheduleRow[]>`
           SELECT id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_window_number,
                  next_due_at, operation_key_prefix, payload, provenance, max_attempts,
@@ -1435,7 +1659,9 @@ export function createPostgresRefreshOperations(
           FOR UPDATE SKIP LOCKED
           LIMIT ${limit}
         `
+
         const occurrences: MaterializeSchedulesResult['occurrences'] = []
+
         for (const schedule of schedules) {
           const dueWindowCount = Number(schedule.due_window_count)
           const missedWindowCount = dueWindowCount - 1
@@ -1470,6 +1696,7 @@ export function createPostgresRefreshOperations(
               message: 'A newer scheduled leaderboard window is available',
               retryable: false,
             }
+
             await sql`
               WITH targets AS MATERIALIZED (
                 SELECT operation.id, operation.attempt_count
@@ -1525,6 +1752,7 @@ export function createPostgresRefreshOperations(
                   LIMIT 1
                 `
               : []
+
           const [inserted] = completedFullRefresh
             ? []
             : await sql<{ id: string }[]>`
@@ -1544,8 +1772,11 @@ export function createPostgresRefreshOperations(
                 ON CONFLICT DO NOTHING
                 RETURNING id
               `
+
           if (!inserted && !completedFullRefresh) continue
+
           const deduplicatedOperationId = completedFullRefresh?.id ?? null
+
           await sql`
             INSERT INTO refresh_operations.schedule_occurrences
               (id, schedule_id, operation_id, deduplicated_to_operation_id, disposition,
@@ -1557,6 +1788,7 @@ export function createPostgresRefreshOperations(
                ${windowDueAt}, ${materializedAt}, ${latenessMs}, ${missedWindowCount},
                ${missedWindowCount > 0})
           `
+
           if (inserted) {
             await sql`
               UPDATE refresh_operations.operations
@@ -1564,6 +1796,7 @@ export function createPostgresRefreshOperations(
               WHERE id = ${operationId}
             `
           }
+
           await sql`
             UPDATE refresh_operations.schedules
             SET next_window_number = ${nextWindowNumber},
@@ -1571,7 +1804,9 @@ export function createPostgresRefreshOperations(
                 updated_at = ${materializedAt}
             WHERE id = ${schedule.id}
           `
+
           if (inserted) await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
+
           occurrences.push({
             scheduleId: schedule.id,
             occurrenceId,
@@ -1582,8 +1817,10 @@ export function createPostgresRefreshOperations(
             missedWindowCount,
           })
         }
+
         return { occurrencesCreated: occurrences.length, occurrences }
       })
+
       return result
     },
 
@@ -1595,20 +1832,25 @@ export function createPostgresRefreshOperations(
     ): Promise<OperationLease | null> {
       validateAdmissionConfig(admission)
       const policy = admissionConfigHash(admission)
+
       for (;;) {
         const result = await client.begin(async (transaction) => {
           const sql = transaction as unknown as typeof client
           const dueKindFilter = kind ? sql`AND kind = ${kind}` : sql``
           const candidateKindFilter = kind ? sql`AND operation.kind = ${kind}` : sql``
+
           await sql`SELECT pg_advisory_xact_lock(${admissionLockId})`
+
           await sql`
             INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
             VALUES (true, ${policy.hash}, ${sql.json(policy.document)})
             ON CONFLICT (singleton) DO NOTHING
           `
+
           const [storedPolicy] = await sql<{ config_hash: string }[]>`
             SELECT config_hash FROM refresh_operations.admission_policy WHERE singleton FOR UPDATE
           `
+
           if (storedPolicy.config_hash !== policy.hash) {
             throw new Error('admission configuration differs from the policy active in PostgreSQL')
           }
@@ -1619,8 +1861,10 @@ export function createPostgresRefreshOperations(
             WHERE status = 'leased' AND lease_expires_at > clock_timestamp()
             GROUP BY work_class
           `
+
           const active = new Map(activeRows.map((row) => [row.work_class, Number(row.count)]))
           const activeTotal = activeRows.reduce((total, row) => total + Number(row.count), 0)
+
           if (activeTotal >= admission.totalConcurrency) return { kind: 'empty' as const }
 
           const dueRows = await sql<{ work_class: WorkClass }[]>`
@@ -1630,7 +1874,9 @@ export function createPostgresRefreshOperations(
                OR (status = 'leased' AND lease_expires_at <= clock_timestamp()))
               ${dueKindFilter}
           `
+
           const due = new Set(dueRows.map((row) => row.work_class))
+
           const eligible = (workClass: WorkClass) =>
             due.has(workClass) && (active.get(workClass) ?? 0) < admission.classConcurrency[workClass]
 
@@ -1652,18 +1898,22 @@ export function createPostgresRefreshOperations(
                 ON CONFLICT (work_class) DO NOTHING
               `
             }
+
             const credits = await sql<AdmissionCreditRow[]>`
               SELECT work_class, credit
               FROM refresh_operations.admission_classes
               WHERE work_class IN ${sql(backgroundEligible)}
               FOR UPDATE
             `
+
             const selection = chooseBackgroundClass(backgroundEligible, credits, admission)
+
             selectedClass = selection.selected
             nextCredits = selection.nextCredits
           } else if (interactiveEligible) {
             selectedClass = 'interactive'
           }
+
           if (!selectedClass) return { kind: 'empty' as const }
 
           const [candidate] = await sql<OperationRow[]>`
@@ -1689,6 +1939,7 @@ export function createPostgresRefreshOperations(
             FOR UPDATE OF operation SKIP LOCKED
             LIMIT 1
           `
+
           if (!candidate) return { kind: 'retry' as const }
 
           if (isDiscoveryProjectionKind(candidate.kind) || candidate.kind === 'discovery-reconciliation') {
@@ -1707,12 +1958,14 @@ export function createPostgresRefreshOperations(
                     WHERE operation_id = ${candidate.effect_operation_id}
                   `
                 : []
+
             const [leaderboardEffect] = isLeaderboardKind(candidate.kind)
               ? await sql<{ operation_id: string }[]>`
                     SELECT operation_id FROM refresh_operations.leaderboard_effects
                     WHERE operation_id = ${candidate.effect_operation_id}
                   `
               : []
+
             const [statisticsEffect] = isStatisticsCollectionKind(candidate.kind)
               ? await sql<{ operation_id: string }[]>`
                   SELECT operation_id FROM refresh_operations.statistics_collection_effects
@@ -1730,6 +1983,7 @@ export function createPostgresRefreshOperations(
                         WHERE operation_id = ${candidate.effect_operation_id}
                       `
                   : []
+
             const [interactiveEffect] =
               candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
                 ? await sql<{ complete: boolean }[]>`
@@ -1754,16 +2008,19 @@ export function createPostgresRefreshOperations(
                       ) AS complete
                     `
                   : []
+
             const projectionEffect = isDiscoveryProjectionKind(candidate.kind)
               ? await (options.projectionEffectState?.(candidate.kind, candidate.effect_operation_id) ??
                   (candidate.kind === 'player-discovery-projection'
                     ? options.playerProjectionEffectState?.(candidate.effect_operation_id)
                     : 'none'))
               : 'none'
+
             const reconciliationEffectApplied =
               candidate.kind === 'discovery-reconciliation'
                 ? await options.reconciliationEffectApplied?.(candidate.effect_operation_id)
                 : false
+
             if (
               proofEffect ||
               leaderboardEffect ||
@@ -1778,14 +2035,17 @@ export function createPostgresRefreshOperations(
                 WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
                   AND finished_at IS NULL
               `
+
               await sql`
                 UPDATE refresh_operations.operations
                 SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
                     completed_at = clock_timestamp(), updated_at = clock_timestamp()
                 WHERE id = ${candidate.id}
               `
+
               return { kind: 'retry' as const }
             }
+
             await sql`
               UPDATE refresh_operations.attempts
               SET finished_at = clock_timestamp(), outcome = 'lease_expired',
@@ -1793,6 +2053,7 @@ export function createPostgresRefreshOperations(
               WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
                 AND finished_at IS NULL
             `
+
             if (
               candidate.attempt_count >= candidate.max_attempts &&
               projectionEffect !== 'applied' &&
@@ -1805,6 +2066,7 @@ export function createPostgresRefreshOperations(
                     last_error = ${sql.json({ code: 'lease_expired', message: 'Maximum attempts exhausted' })}
                 WHERE id = ${candidate.id}
               `
+
               return { kind: 'retry' as const }
             }
           }
@@ -1819,11 +2081,13 @@ export function createPostgresRefreshOperations(
             RETURNING id, effect_operation_id, operation_key, kind, work_class, payload, provenance,
                       lease_owner, lease_token, attempt_count, max_attempts, status
           `
+
           await sql`
             INSERT INTO refresh_operations.attempts
               (operation_id, attempt_number, lease_token, lease_owner)
             VALUES (${leased.id}, ${leased.attempt_count}, ${leased.lease_token}, ${workerId})
           `
+
           if (nextCredits) {
             for (const [workClass, credit] of nextCredits) {
               await sql`
@@ -1833,6 +2097,7 @@ export function createPostgresRefreshOperations(
               `
             }
           }
+
           return {
             kind: 'leased' as const,
             lease: toLease({
@@ -1842,7 +2107,9 @@ export function createPostgresRefreshOperations(
             }),
           }
         })
+
         if (result.kind === 'leased') return result.lease
+
         if (result.kind === 'empty') return null
       }
     },
@@ -1854,6 +2121,7 @@ export function createPostgresRefreshOperations(
         ORDER BY created_at, id
         LIMIT 100
       `
+
       return rows.map(({ id }) => id)
     },
 
@@ -1867,6 +2135,7 @@ export function createPostgresRefreshOperations(
           AND lease_expires_at > clock_timestamp()
         RETURNING id
       `
+
       return renewed[0] ? 'renewed' : 'lease-lost'
     },
 
@@ -1880,6 +2149,7 @@ export function createPostgresRefreshOperations(
           AND lease_expires_at > clock_timestamp()
         RETURNING lease_expires_at
       `
+
       return renewed
         ? ({ outcome: 'renewed', leaseExpiresAt: renewed.lease_expires_at } as const)
         : ({ outcome: 'lease-lost' } as const)
@@ -1899,7 +2169,9 @@ export function createPostgresRefreshOperations(
           AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
           AND lease_expires_at > clock_timestamp()
       `
+
       if (!owned) return 'lease-lost' as const
+
       return owned.completed ? ('already-applied' as const) : ('execute' as const)
     },
 
@@ -1909,6 +2181,7 @@ export function createPostgresRefreshOperations(
     ): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [owned] = await sql<{ id: string }[]>`
           SELECT id FROM refresh_operations.operations
           WHERE id = ${lease.operationId} AND status = 'leased'
@@ -1916,20 +2189,25 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE
         `
+
         if (!owned) return 'lease-lost' as const
+
         await sql`
           INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
           VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
           ON CONFLICT (operation_id, section) DO NOTHING
         `
+
         return 'transitioned' as const
       })
     },
 
     async commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult> {
       if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [owned] = await sql<
           {
             id: string
@@ -1944,7 +2222,9 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE
         `
+
         if (!owned) return 'lease-lost' as const
+
         const inserted = await sql<{ operation_key: string }[]>`
           INSERT INTO refresh_operations.proof_effects
             (operation_key, operation_id, lease_token, effect_value)
@@ -1952,12 +2232,15 @@ export function createPostgresRefreshOperations(
           ON CONFLICT (operation_key) DO NOTHING
           RETURNING operation_key
         `
+
         if (inserted[0]) return 'applied' as const
+
         const [existing] = await sql<{ operation_id: string; matches_payload: boolean }[]>`
           SELECT operation_id, effect_value = ${sql.json(owned.payload)}::jsonb AS matches_payload
           FROM refresh_operations.proof_effects
           WHERE operation_key = ${owned.operation_key}
         `
+
         return existing?.operation_id === owned.effect_operation_id && existing.matches_payload
           ? ('already-applied' as const)
           : ('effect-conflict' as const)
@@ -1973,6 +2256,7 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
         ) AS active
       `
+
       return result.active
     },
 
@@ -1982,6 +2266,7 @@ export function createPostgresRefreshOperations(
     ): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [updated] = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations
           SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
@@ -1996,7 +2281,9 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           RETURNING id
         `
+
         if (!updated) return 'lease-lost' as const
+
         await sql`
           UPDATE refresh_operations.attempts
           SET finished_at = clock_timestamp(), outcome = 'retry',
@@ -2006,6 +2293,7 @@ export function createPostgresRefreshOperations(
               })}
           WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
         `
+
         return 'transitioned' as const
       })
     },
@@ -2014,8 +2302,10 @@ export function createPostgresRefreshOperations(
       if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) {
         throw new Error('source admission retry delay must be a non-negative safe integer')
       }
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [owned] = await sql<{ attempt_count: number }[]>`
           SELECT attempt_count FROM refresh_operations.operations
           WHERE id = ${lease.operationId} AND status = 'leased'
@@ -2023,14 +2313,18 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE
         `
+
         if (!owned || owned.attempt_count !== lease.attemptNumber) return 'lease-lost' as const
+
         const [removed] = await sql<{ operation_id: string }[]>`
           DELETE FROM refresh_operations.attempts
           WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
             AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
           RETURNING operation_id
         `
+
         if (!removed) return 'lease-lost' as const
+
         await sql`
           UPDATE refresh_operations.operations
           SET status = 'pending', attempt_count = attempt_count - 1,
@@ -2040,6 +2334,7 @@ export function createPostgresRefreshOperations(
               updated_at = clock_timestamp()
           WHERE id = ${lease.operationId}
         `
+
         return 'transitioned' as const
       })
     },
@@ -2047,6 +2342,7 @@ export function createPostgresRefreshOperations(
     async complete(lease: OperationLease): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const updated = await sql<{ id: string }[]>`
           UPDATE refresh_operations.operations
           SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
@@ -2056,12 +2352,15 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           RETURNING id
         `
+
         if (!updated[0]) return 'lease-lost' as const
+
         await sql`
           UPDATE refresh_operations.attempts
           SET finished_at = clock_timestamp(), outcome = 'succeeded'
           WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
         `
+
         return 'transitioned' as const
       })
     },
@@ -2069,6 +2368,7 @@ export function createPostgresRefreshOperations(
     async fail(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [owned] = await sql<{ attempt_count: number; max_attempts: number }[]>`
           SELECT attempt_count, max_attempts FROM refresh_operations.operations
           WHERE id = ${lease.operationId} AND status = 'leased'
@@ -2076,14 +2376,18 @@ export function createPostgresRefreshOperations(
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE
         `
+
         if (!owned) return 'lease-lost' as const
+
         const retry = failure.retryable && owned.attempt_count < owned.max_attempts
+
         await sql`
           UPDATE refresh_operations.attempts
           SET finished_at = clock_timestamp(), outcome = ${retry ? 'retry' : 'dead_letter'},
               error = ${sql.json(failure)}
           WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
         `
+
         await sql`
           UPDATE refresh_operations.operations
           SET status = ${retry ? 'pending' : 'dead_letter'}, lease_owner = NULL, lease_expires_at = NULL,
@@ -2092,20 +2396,24 @@ export function createPostgresRefreshOperations(
               last_error = ${sql.json(failure)}, updated_at = clock_timestamp()
           WHERE id = ${lease.operationId}
         `
+
         return 'transitioned' as const
       })
     },
 
     async listDeadLetters(input: { limit?: number; cursor?: string } = {}): Promise<DeadLetterPage> {
       const limit = input.limit ?? 50
+
       if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
         throw new Error('limit must be an integer between 1 and 100')
       }
+
       const cursorFilter = input.cursor
         ? client`AND (operation.completed_at, operation.id) < (
             SELECT completed_at, id FROM refresh_operations.operations WHERE id = ${input.cursor}
           )`
         : client``
+
       const rows = await client<DeadLetterListRow[]>`
         SELECT operation.id, operation.kind, operation.operation_key, operation.work_class,
                operation.provenance, operation.attempt_count, operation.max_attempts,
@@ -2117,8 +2425,10 @@ export function createPostgresRefreshOperations(
         ORDER BY operation.completed_at DESC, operation.id DESC
         LIMIT ${limit + 1}
       `
+
       const pageRows = rows.slice(0, limit)
       const items = pageRows.map(toDeadLetterListItem)
+
       return {
         items,
         nextCursor: rows.length > limit ? (pageRows.at(-1)?.id ?? null) : null,
@@ -2128,6 +2438,7 @@ export function createPostgresRefreshOperations(
     async inspectDeadLetter(operationId: string): Promise<DeadLetterInspection | null> {
       return client.begin('ISOLATION LEVEL REPEATABLE READ READ ONLY', async (transaction) => {
         const sql = transaction as unknown as typeof client
+
         const [row] = await sql<
           (DeadLetterListRow & {
             effect_operation_id: string
@@ -2147,6 +2458,7 @@ export function createPostgresRefreshOperations(
           ON action.target_operation_id = operation.id
         WHERE operation.id = ${operationId} AND operation.status = 'dead_letter'
       `
+
         if (!row) return null
 
         const [
@@ -2261,7 +2573,9 @@ export function createPostgresRefreshOperations(
           ORDER BY occurred_at, id
         `,
         ])
+
         const schedule = scheduleRows[0]
+
         return {
           operation: {
             ...toDeadLetterListItem(row),
@@ -2343,6 +2657,7 @@ export function createPostgresRefreshOperations(
       const [databaseTime] = await client<{ observed_at: Date }[]>`
         SELECT clock_timestamp() AS observed_at
       `
+
       const oldestPending = await client<{ work_class: WorkClass; age_ms: string | number }[]>`
         SELECT work_class,
                -- Waiting time since the work last became runnable: a deep crawl that yields between slices is created once
@@ -2352,6 +2667,7 @@ export function createPostgresRefreshOperations(
         WHERE status = 'pending' AND available_at <= ${databaseTime.observed_at}
         GROUP BY work_class
       `
+
       const deadLetters = await client<
         {
           work_class: WorkClass
@@ -2373,6 +2689,7 @@ export function createPostgresRefreshOperations(
           )
         GROUP BY 1, 2, 3
       `
+
       const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
         SELECT kind,
                greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(next_due_at))) * 1000)::bigint
@@ -2381,10 +2698,13 @@ export function createPostgresRefreshOperations(
         WHERE enabled
         GROUP BY kind
       `
+
       const pendingByClass = new Map(oldestPending.map((row) => [row.work_class, Number(row.age_ms)]))
+
       const deadLettersByClassKindAndReason = new Map(
         deadLetters.map((row) => [`${row.work_class}:${row.kind}:${row.reason}`, Number(row.count)]),
       )
+
       const allOperationKinds: OperationLease['kind'][] = [
         'proof',
         'interactive-player-refresh',
@@ -2401,7 +2721,9 @@ export function createPostgresRefreshOperations(
         'statistics-publication',
         'statistics-legend-meta-publication',
       ]
+
       const latenessByKind = new Map(scheduleLateness.map((row) => [row.kind, Number(row.lateness_ms)]))
+
       return {
         observedAt: databaseTime.observed_at.toISOString(),
         oldestPending: workClasses.map((workClass) => ({
@@ -2413,6 +2735,7 @@ export function createPostgresRefreshOperations(
         deadLetters: workClasses.flatMap((workClass) =>
           allOperationKinds.flatMap((kind) => {
             const admissionRejected = deadLettersByClassKindAndReason.get(`${workClass}:${kind}:admission_rejected`)
+
             return [
               {
                 workClass,
@@ -2445,6 +2768,7 @@ export function createPostgresRefreshOperations(
       const [operation] = await client<{ status: string }[]>`
         SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
       `
+
       return operation?.status ?? null
     },
 
@@ -2452,15 +2776,19 @@ export function createPostgresRefreshOperations(
       const [operation] = await client`
         SELECT * FROM refresh_operations.operations WHERE id = ${operationId}
       `
+
       const attempts = await client`
         SELECT * FROM refresh_operations.attempts WHERE operation_id = ${operationId} ORDER BY attempt_number
       `
+
       const effects = await client`
         SELECT * FROM refresh_operations.proof_effects WHERE operation_id = ${operationId}
       `
+
       const leaderboardEffects = await client`
         SELECT * FROM refresh_operations.leaderboard_effects WHERE operation_id = ${operationId}
       `
+
       return { operation, attempts, effects, leaderboardEffects }
     },
 
@@ -2468,6 +2796,7 @@ export function createPostgresRefreshOperations(
       const [schedule] = await client`
         SELECT * FROM refresh_operations.schedules WHERE id = ${scheduleId}
       `
+
       const occurrences = await client`
         SELECT occurrence.*, coalesce(operation.status, deduplicated.status) AS operation_status,
                coalesce(operation.attempt_count, deduplicated.attempt_count) AS attempt_count,
@@ -2480,6 +2809,7 @@ export function createPostgresRefreshOperations(
         WHERE occurrence.schedule_id = ${scheduleId}
         ORDER BY occurrence.window_due_at
       `
+
       return { schedule, occurrences }
     },
 
@@ -2494,6 +2824,7 @@ export function createPostgresRefreshOperations(
         playerRefreshSettledChannel,
         (payload) => {
           const event = parsePlayerRefreshSettled(payload)
+
           if (event) onSettled(event)
         },
         onListen,
@@ -2506,6 +2837,7 @@ export type PostgresRefreshOperations = ReturnType<typeof createPostgresRefreshO
 
 export function createPostgresDeadLetterOperations(database: Database): DeadLetterOperations {
   const operations = createPostgresRefreshOperations({ database })
+
   return {
     listDeadLetters: operations.listDeadLetters,
     inspectDeadLetter: operations.inspectDeadLetter,

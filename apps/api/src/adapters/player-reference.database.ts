@@ -41,13 +41,16 @@ export function createDatabasePlayerReferenceQueries(
         ORDER BY observed_at DESC, display_alias
       `),
     ])
+
     const nameEvidence = selectCanonicalPlayerName({
       brawlhallaId,
       ranked: rankedReference,
       career: careerReference,
       leaderboard: leaderboardReference,
     })
+
     if (!nameEvidence) return null
+
     return {
       brawlhallaId,
       name: nameEvidence.name,

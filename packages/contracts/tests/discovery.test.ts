@@ -17,7 +17,9 @@ describe('Discovery contract', () => {
       ],
       clans: [{ clanId: 42, clanName: 'Preserved Clan', clanXp: '123', memberCount: 4 }],
     }
+
     expect(discoverySearchOutputSchema.parse(output)).toEqual(output)
+
     expect(() =>
       discoverySearchOutputSchema.parse({
         ...output,

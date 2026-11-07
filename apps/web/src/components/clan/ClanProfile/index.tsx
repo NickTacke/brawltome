@@ -13,6 +13,7 @@ import { MemberList } from './MemberList'
 import type { SortKey } from './utils'
 
 const PAGE_SIZE = 25
+
 interface ClanProfileProps {
   initialData: ClanProfileContract | null
   id: string
@@ -31,11 +32,13 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   const queryFn = useCallback(() => getClanAction(clanId), [clanId])
   const shouldStart = useCallback(() => true, [])
+
   const isDone = useCallback(
     (_previous: ClanProfileContract | null, next: ClanProfileContract | null) =>
       hasCompletedClanRefresh(initialData, next, pending),
     [initialData, pending],
   )
+
   const {
     data: clan,
     isRefreshing,
@@ -51,6 +54,7 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
   const requestRefresh = useCallback(
     async (token?: string) => {
       const response = await refreshClanAction(clanId, token)
+
       setRefresh(response.refresh)
       setNeedsVerification(response.refresh.outcome === 'verificationRequired')
       setPoll(response.refresh.outcome === 'accepted' || response.refresh.outcome === 'alreadyRefreshing')
@@ -60,18 +64,22 @@ export function ClanProfile({ initialData, id }: ClanProfileProps) {
 
   useEffect(() => {
     if (requested.current) return
+
     requested.current = true
+
     void requestRefresh().catch(() =>
       setRefresh({ outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 30 } }),
     )
   }, [requestRefresh])
 
   const hasClan = Boolean(clan)
+
   useEffect(() => {
     if (hasClan) track({ name: 'feature.used', feature: 'clan.view' })
   }, [hasClan])
 
   if (error && !(error instanceof RefreshTimeoutError)) throw error
+
   const delayed =
     error instanceof RefreshTimeoutError ||
     refresh?.outcome === 'temporarilyUnavailable' ||

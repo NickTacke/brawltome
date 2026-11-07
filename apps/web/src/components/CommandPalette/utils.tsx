@@ -35,6 +35,7 @@ export function buildCommands(deps: {
   if (!deps.isSearchMode) {
     return deps.navItems.map((item) => {
       const Icon = item.icon
+
       return {
         kind: 'nav' as const,
         id: `nav-${item.href}`,
@@ -44,6 +45,7 @@ export function buildCommands(deps: {
       }
     })
   }
+
   const players: Command[] = deps.playerResults.map((p) => ({
     kind: 'player' as const,
     id: `p-${p.brawlhallaId}`,
@@ -54,12 +56,14 @@ export function buildCommands(deps: {
     matchedAlias: p.matchedAlias ? fixEncoding(p.matchedAlias) : null,
     href: `/player/${p.brawlhallaId}`,
   }))
+
   const clans: Command[] = deps.clanResults.map((c) => ({
     kind: 'clan' as const,
     id: `c-${c.clanId}`,
     label: fixEncoding(c.clanName),
     href: `/clan/${c.clanId}`,
   }))
+
   return [...players, ...clans]
 }
 

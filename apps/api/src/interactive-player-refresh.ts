@@ -36,6 +36,7 @@ export async function requestInteractivePlayerRefresh(
       request.dedupeKey,
       request.brawlhallaId,
     )
+
     if (active) {
       if (active.awaitingAdmission) {
         if (await request.requestAdmission.hasActorReservation(active.operationId)) {
@@ -46,12 +47,14 @@ export async function requestInteractivePlayerRefresh(
           return poll(active.operationId)
         }
       }
+
       if (!active.reservationExpired || (await request.requestAdmission.hasActorReservation(active.operationId))) {
         return poll(active.operationId)
       }
     }
 
     const actor = await request.resolveActor()
+
     if ('outcome' in actor) return actor
 
     const reserved = await request.refreshOperations.reserveInteractivePlayerRefresh({
@@ -62,15 +65,18 @@ export async function requestInteractivePlayerRefresh(
       provenance: request.provenance,
       reservationTtlSeconds: 30,
     })
+
     if (reserved.outcome === 'already-active') return poll(reserved.operationId)
 
     const admission = await request.requestAdmission.admitActor(actor, reserved.operationId)
+
     if (admission.outcome === 'rate-limited') {
       await request.refreshOperations.rejectInteractiveRefresh(
         reserved.operationId,
         reserved.reservationToken,
         'actor_rate_limited',
       )
+
       return {
         outcome: 'rateLimited',
         retry: { kind: 'after', afterSeconds: admission.retryAfterSeconds },
@@ -81,7 +87,9 @@ export async function requestInteractivePlayerRefresh(
       reserved.operationId,
       reserved.reservationToken,
     )
+
     if (activated === 'lease-lost') return temporarilyUnavailable
+
     return {
       outcome: 'accepted',
       operationId: reserved.operationId,
@@ -89,6 +97,7 @@ export async function requestInteractivePlayerRefresh(
     }
   } catch (error) {
     request.onError?.(error)
+
     return temporarilyUnavailable
   }
 }

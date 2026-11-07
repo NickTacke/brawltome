@@ -204,6 +204,7 @@ describe('PinnedPlayersSection', () => {
         onMove={() => {}}
       />,
     )
+
     expect(pendingHtml.match(/disabled=""/g)).toHaveLength(6)
   })
 
@@ -236,6 +237,7 @@ describe('PinnedPlayersSection', () => {
         onMove={() => {}}
       />,
     )
+
     const primaryLast = renderToStaticMarkup(
       <PinnedPlayersSection
         pinnedPlayers={[pinnedPlayers[1], pinnedPlayers[0]]}
@@ -314,6 +316,7 @@ describe('PinnedPlayerButton', () => {
     const pin = renderToStaticMarkup(<PinnedPlayerButton pinned={false} pending={false} onToggle={() => {}} />)
     const unpin = renderToStaticMarkup(<PinnedPlayerButton pinned pending={false} onToggle={() => {}} />)
     const pending = renderToStaticMarkup(<PinnedPlayerButton pinned={false} pending onToggle={() => {}} />)
+
     const limited = renderToStaticMarkup(
       <PinnedPlayerButton pinned={false} pending={false} disabled onToggle={() => {}} />,
     )

@@ -8,6 +8,7 @@ describe('mapPlayerReference', () => {
       name: 'Ada',
       aliases: ['Former Ada'],
     })
+
     expect(mapPlayerReference(null)).toBeNull()
   })
 })

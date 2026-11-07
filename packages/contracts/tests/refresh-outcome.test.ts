@@ -34,14 +34,17 @@ describe('canonical refresh outcome', () => {
       'rate-limited',
       'temporarily-unavailable',
     ]
+
     const fixtures = await Promise.all(
       names.map((name) => Bun.file(`${import.meta.dir}/fixtures/refresh-${name}.json`).json()),
     )
+
     expect(fixtures.map((value) => parseRefreshOutcomeOutput(value))).toEqual([...outcomes])
   })
 
   test('validates all six semantic outcomes with exact retry guidance', () => {
     expect(outcomes.map((value) => parseRefreshOutcomeOutput(value))).toEqual([...outcomes])
+
     expect(outcomes.map(({ outcome }) => outcome)).toEqual([
       'accepted',
       'alreadyRefreshing',
@@ -69,13 +72,16 @@ describe('canonical refresh outcome', () => {
       id: 42,
       discordUserId: '123456789012345678',
     })
+
     expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '' })).toThrow()
     expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: 'invented-user' })).toThrow()
     expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '00000000000000000' })).toThrow()
     expect(() => discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '18446744073709551616' })).toThrow()
+
     expect(discordPlayerRefreshInputSchema.parse({ id: 42, discordUserId: '18446744073709551615' }).discordUserId).toBe(
       '18446744073709551615',
     )
+
     expect(() =>
       discordPlayerRefreshInputSchema.parse({
         id: 42,
@@ -88,12 +94,15 @@ describe('canonical refresh outcome', () => {
   test('returns unchanged cached PlayerReference for every outcome and rejects persistence fields', () => {
     for (const refresh of outcomes) {
       const response = { player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [] }, refresh }
+
       expect(parsePlayerRefreshResponseOutput(response)).toEqual(response)
     }
+
     expect(playerRefreshResponseSchema.parse({ player: null, refresh: outcomes[2] })).toEqual({
       player: null,
       refresh: outcomes[2],
     })
+
     expect(() =>
       playerRefreshResponseSchema.parse({
         player: { brawlhallaId: 42, name: 'Cached Ada', aliases: [], rating: 2000 },

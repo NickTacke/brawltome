@@ -5,6 +5,7 @@ import { Clock } from 'lucide-react'
 /** How old a profile section's data is, and where it came from when that is the leaderboard crawl. */
 export function FreshnessBadge({ freshness }: { freshness: SectionFreshness }) {
   const label = freshnessLabel(freshness)
+
   return (
     <Badge variant="outline" className="text-xs font-mono text-muted-foreground gap-1.5 shrink-0">
       <Clock className="w-3 h-3" aria-hidden="true" />

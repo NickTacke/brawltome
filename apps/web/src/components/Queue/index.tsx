@@ -50,8 +50,10 @@ function QueueHeader({ filters }: { filters: QueueFilters }) {
 function QueueFilterControls({ filters }: { filters: QueueFilters }) {
   const navigate = (next: Partial<QueueFilters>) => {
     const query = buildQueueFilterQueryString({ ...filters, ...next, page: 1, snapshotId: undefined })
+
     window.location.assign(`/queue?${query}`)
   }
+
   return (
     <div className="flex gap-2">
       <p id="queue-filter-hint" className="sr-only">
@@ -88,6 +90,7 @@ function QueueFilterControls({ filters }: { filters: QueueFilters }) {
 function Player({ player }: { player: Contestant }) {
   const href = playerHref(player.brawlhallaId)
   const name = fixEncoding(player.name)
+
   const content = (
     <span className="flex min-h-12 min-w-0 flex-1 items-center gap-4 font-bold">
       {player.bestLegendNameKey && (
@@ -109,6 +112,7 @@ function Player({ player }: { player: Contestant }) {
       <span className="truncate text-xl font-black">{name}</span>
     </span>
   )
+
   return href ? (
     <Link href={href} prefetch={false} className="block min-w-0 flex-1 hover:text-primary">
       {content}
@@ -120,11 +124,13 @@ function Player({ player }: { player: Contestant }) {
 
 function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   if (entry.identity.type !== 'fixed-two-vs-two-team') return <Player player={entry.identity.player} />
+
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
       <div className="flex shrink-0 gap-1">
         {entry.identity.players.map((player) => {
           const name = fixEncoding(player.name)
+
           return (
             <Avatar
               key={`${player.brawlhallaId}:${player.name}`}
@@ -154,6 +160,7 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
         {entry.identity.players.map((player) => {
           const name = fixEncoding(player.name)
           const href = playerHref(player.brawlhallaId)
+
           return (
             <li key={`${player.brawlhallaId}:${player.name}`} className="min-w-0">
               {href ? (
@@ -174,6 +181,7 @@ function Identity({ entry }: { entry: LeaderboardRecentActivityEntry }) {
 function ActivityMetrics({ entry }: { entry: LeaderboardRecentActivityEntry }) {
   const ratingDeltaColor = entry.ratingDelta > 0 ? 'text-success' : entry.ratingDelta < 0 ? 'text-danger' : ''
   const winRate = (entry.winsDelta / entry.gamesDelta) * 100
+
   return (
     <div className="mt-3 space-y-2 border-t border-border/50 pt-2">
       <div className="flex items-end justify-between gap-3">
@@ -230,9 +238,11 @@ function entryKey(entry: LeaderboardRecentActivityEntry): string {
 function Pagination({ view, filters }: { view: AvailableActivity; filters: QueueFilters }) {
   const previous =
     view.page > 1 ? `/queue?${buildQueuePageQueryString(filters, view.page - 1, view.currentSnapshotId)}` : undefined
+
   const next = view.hasMore
     ? `/queue?${buildQueuePageQueryString(filters, view.page + 1, view.currentSnapshotId)}`
     : undefined
+
   return (
     <nav aria-label="Queue pages" className="flex items-center justify-between">
       {previous ? (
@@ -262,6 +272,7 @@ export function QueueView({ view, filters }: { view: LeaderboardRecentActivityOu
   useEffect(() => {
     track({ name: 'feature.used', feature: 'queue.view' })
   }, [])
+
   return (
     <div className="space-y-8 pb-10">
       <QueueHeader filters={filters} />
@@ -299,6 +310,7 @@ export function QueueLoadError({ filters }: { filters: QueueFilters }) {
   const query = filters.snapshotId
     ? buildQueuePageQueryString(filters, filters.page, filters.snapshotId)
     : buildQueueFilterQueryString(filters)
+
   return (
     <div className="space-y-8 pb-10">
       <QueueHeader filters={filters} />

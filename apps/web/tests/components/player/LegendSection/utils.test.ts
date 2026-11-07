@@ -48,6 +48,7 @@ describe('computeLegendStats', () => {
       elo: 0,
       peakElo: 0,
     })
+
     expect(stats.winrate).toBeCloseTo(0.6, 5)
     expect(stats.playtimeHours).toBeCloseTo(2, 5)
   })
@@ -63,6 +64,7 @@ describe('computeLegendStats', () => {
       elo: 0,
       peakElo: 0,
     })
+
     expect(stats.winrate).toBe(0)
   })
 })
@@ -82,11 +84,13 @@ describe('sortLegends', () => {
 
   it('sorts by xp desc', () => {
     const result = sortLegends([L(1, { xp: 100 }), L(2, { xp: 300 }), L(3, { xp: 200 })], 'xp')
+
     expect(result.map((l) => l.legendId)).toEqual([2, 3, 1])
   })
 
   it('sorts by games desc', () => {
     const result = sortLegends([L(1, { games: 10 }), L(2, { games: 30 }), L(3, { games: 20 })], 'games')
+
     expect(result.map((l) => l.legendId)).toEqual([2, 3, 1])
   })
 
@@ -95,6 +99,7 @@ describe('sortLegends', () => {
     const b = L(2, { games: 100, wins: 80 })
     const c = L(3, { games: 0, wins: 0 })
     const result = sortLegends([a, b, c], 'winrate')
+
     expect(result.map((l) => l.legendId)).toEqual([2, 1, 3])
   })
 })

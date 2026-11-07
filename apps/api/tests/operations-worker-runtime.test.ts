@@ -16,10 +16,12 @@ describe('operations worker telemetry observer', () => {
     let calls = 0
     const never = new Promise<never>(() => {})
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const observer = createOperationsTelemetryObserver({
       operations: {
         inspectTelemetry: () => {
           calls++
+
           return never
         },
       } as never,
@@ -27,6 +29,7 @@ describe('operations worker telemetry observer', () => {
       intervalMs: 1,
       timeoutMs: 5,
     })
+
     const started = performance.now()
 
     observer.trigger()
@@ -42,11 +45,13 @@ describe('operations worker telemetry observer', () => {
     let now = 0
     let calls = 0
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
     const observer = createOperationsTelemetryObserver({
       operations: {
         inspectTelemetry: async () => {
           calls++
           if (calls === 1) return snapshot
+
           throw new Error('offline')
         },
       } as never,
@@ -63,11 +68,14 @@ describe('operations worker telemetry observer', () => {
     await Bun.sleep(0)
 
     const metrics = telemetry.metrics.snapshot()
+
     expect(metrics.find(({ name }) => name === 'operation_oldest_pending_age_ms')?.series[0]?.value).toBe(42)
+
     expect(metrics.find(({ name }) => name === 'operation_dead_letters')?.series[0]).toMatchObject({
       labels: { work_class: 'leaderboard', kind: 'leaderboard-1v1', reason: 'execution' },
       value: 2,
     })
+
     expect(metrics.find(({ name }) => name === 'schedule_lateness_ms')?.series[0]?.value).toBe(17)
   })
 })

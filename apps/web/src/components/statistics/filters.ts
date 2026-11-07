@@ -9,5 +9,6 @@ export function parseCareerWeaponUsageFilters(
     region: searchParams.region,
     bracket: searchParams.bracket,
   })
+
   return parsed.success ? parsed.data : { region: 'all', bracket: 'all' }
 }

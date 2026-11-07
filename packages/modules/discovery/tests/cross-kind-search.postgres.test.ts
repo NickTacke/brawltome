@@ -12,6 +12,7 @@ let connectionString = ''
 beforeAll(async () => {
   const configured = new URL(configuredServer ?? '')
   const dedicated = new URL(dedicatedServer)
+
   if (
     configured.protocol !== dedicated.protocol ||
     configured.hostname !== dedicated.hostname ||
@@ -21,6 +22,7 @@ beforeAll(async () => {
   ) {
     throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
   }
+
   database = await createTestDatabase({ label: 'discovery_cross_kind_search', modules: [discoveryModule] })
   connectionString = database.connectionString
 }, 20_000)
@@ -49,7 +51,9 @@ const clan = (clanId: number, clanName: string, clanXp: string, memberCount = 0)
 describe('Discovery cross-kind search', () => {
   test('returns type-distinct overlapping identities and ranks clans by exactness, numeric XP, then stable identity', async () => {
     const discovery = createPostgresDiscovery(database)
+
     await discovery.rebuildPlayers({ sourceVersion: 1, facts: [player(42, 'Shared Prefix')] })
+
     await discovery.rebuildClans({
       sourceVersion: 1,
       pendingEventCount: 0,
@@ -66,7 +70,9 @@ describe('Discovery cross-kind search', () => {
     })
 
     const result = await discovery.search('  SHARED  ')
+
     expect(result.players).toEqual([expect.objectContaining({ brawlhallaId: 42, name: 'Shared Prefix' })])
+
     expect(result.clans).toEqual([
       { clanId: 5, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 5 },
       { clanId: 9, clanName: 'Shared', clanXp: '900719925474099312345', memberCount: 3 },
@@ -74,6 +80,7 @@ describe('Discovery cross-kind search', () => {
       { clanId: 7, clanName: 'Shared Prefix', clanXp: '999999999999999999999', memberCount: 4 },
       { clanId: 11, clanName: 'Shared Two', clanXp: '999999999999999999999', memberCount: 6 },
     ])
+
     expect(result.clans).toHaveLength(5)
   })
 
@@ -82,6 +89,7 @@ describe('Discovery cross-kind search', () => {
     const currentFact = clan(42, 'Concurrent Current', '12345678901234567890', 9)
     const eventId = randomUUID()
     const acknowledged: string[] = []
+
     const source: ClanProjectionSource = {
       pendingEvents: async () => [{ eventId, clanId: 42, sourceVersion: 5, fact: currentFact }],
       acknowledgeEvents: async (eventIds) => {
@@ -95,8 +103,10 @@ describe('Discovery cross-kind search', () => {
       }),
       lag: async () => 1,
     }
+
     await Promise.all([discovery.deliverPendingClans(source, 100), discovery.rebuildClansFrom(source)])
     expect(acknowledged).toEqual([eventId])
+
     expect((await discovery.search('concurrent')).clans).toEqual([
       { clanId: 42, clanName: 'Concurrent Current', clanXp: '12345678901234567890', memberCount: 9 },
     ])
@@ -104,10 +114,12 @@ describe('Discovery cross-kind search', () => {
 
   test('uses the cross-kind prefix index for the production Clan query under normal planner settings', async () => {
     const client = postgres(connectionString, { max: 1 })
+
     try {
       const [generation] = await client<{ generation_id: string }[]>`
         SELECT generation_id FROM discovery.generations WHERE entity_kind = 'clan' AND active
       `
+
       await client`
         INSERT INTO discovery.terms
           (entity_kind, generation_id, entity_id, term_kind, display_term, normalized_term,
@@ -117,7 +129,9 @@ describe('Discovery cross-kind search', () => {
                'Noise Clan ' || value, value, 0
         FROM generate_series(1, 15000) AS value
       `
+
       await client`ANALYZE discovery.terms`
+
       const plan = await client`
         EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
         SELECT term.entity_id, term.canonical_name, term.clan_xp::text, term.member_count
@@ -132,7 +146,9 @@ describe('Discovery cross-kind search', () => {
                  term.clan_xp DESC, term.entity_id
         LIMIT 5
       `
+
       const serializedPlan = JSON.stringify(plan)
+
       expect(serializedPlan).toContain('discovery_terms_prefix')
       expect(serializedPlan).not.toContain('Seq Scan on terms')
     } finally {

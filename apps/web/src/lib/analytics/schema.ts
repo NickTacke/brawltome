@@ -22,6 +22,7 @@ const common = {
   viewport: z.enum(['<640', '640-1024', '1024-1440', '>1440']),
   t: z.number().int().min(0).max(86_400_000),
 }
+
 const ms = z.number().int().min(0).max(600_000)
 const source = z.enum(['bar', 'palette'])
 const dataAge = z.enum(['lt_1h', '1h_12h', '12h_7d', 'gt_7d', 'never'])

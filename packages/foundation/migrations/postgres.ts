@@ -24,6 +24,7 @@ export async function migratePostgres(connectionString: string, migrations: read
     await client.unsafe('SET statement_timeout = 0')
 
     await client`CREATE SCHEMA IF NOT EXISTS brawltome_migrations`
+
     await client`
       CREATE TABLE IF NOT EXISTS brawltome_migrations.history (
         ordinal integer PRIMARY KEY,
@@ -42,11 +43,13 @@ export async function migratePostgres(connectionString: string, migrations: read
           FROM brawltome_migrations.history
           ORDER BY ordinal
         `
+
         return rows.map((row): AppliedMigration => ({ identity: row.identity, checksum: row.checksum.trim() }))
       },
       execute: async (migration, ordinal) => {
         await client.begin(async (transaction) => {
           await transaction.unsafe(migration.sql)
+
           await transaction.unsafe(
             `INSERT INTO brawltome_migrations.history (ordinal, identity, predecessor, checksum)
              VALUES ($1, $2, $3, $4)`,
@@ -65,6 +68,7 @@ export async function migratePostgres(connectionString: string, migrations: read
         cleanupFailure = error
       }
     }
+
     try {
       await client.end()
     } catch (error) {
@@ -73,6 +77,8 @@ export async function migratePostgres(connectionString: string, migrations: read
   }
 
   if (primaryFailure) throw primaryFailure
+
   if (cleanupFailure) throw cleanupFailure
+
   return appliedCount
 }

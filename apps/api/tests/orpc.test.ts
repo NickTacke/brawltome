@@ -26,6 +26,7 @@ function createApp() {
   const app = new Hono()
 
   app.route('/', createOrpcRoutes({ telemetry }))
+
   app.use(
     '/trpc/*',
     trpcServer({
@@ -71,6 +72,7 @@ describe('oRPC next to tRPC', () => {
 
     expect(response.status).toBe(200)
     const body = (await response.json()) as { result: { data: { json: unknown } } }
+
     expect(body.result.data.json).toEqual({ status: 'ready' })
   })
 
@@ -78,6 +80,7 @@ describe('oRPC next to tRPC', () => {
     const app = createApp()
 
     const response = await app.fetch(new Request('http://api.test/openapi.json'))
+
     const document = (await response.json()) as {
       openapi: string
       info: { title: string; version: string }
@@ -105,6 +108,7 @@ describe('oRPC next to tRPC', () => {
 
   test('every path in the document resolves under the documented server', async () => {
     const app = createApp()
+
     const document = (await (await app.fetch(new Request('http://api.test/openapi.json'))).json()) as {
       servers: Array<{ url: string }>
       paths: Record<string, Record<string, unknown>>

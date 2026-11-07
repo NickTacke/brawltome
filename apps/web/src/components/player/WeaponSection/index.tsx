@@ -27,6 +27,7 @@ export function WeaponSection({ weaponStats }: WeaponSectionProps) {
     if (showAllWeapons) {
       weaponsRef.current?.scrollIntoView({ behavior: 'auto' })
     }
+
     setShowAllWeapons(!showAllWeapons)
   }
 

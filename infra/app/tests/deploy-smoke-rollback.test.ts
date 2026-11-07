@@ -31,29 +31,37 @@ function writeCheckout(directory: string, sha: string) {
 
 function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?: Record<string, string> } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-deploy-'))
+
   temporaryDirectories.push(directory)
   const bin = join(directory, 'bin')
+
   mkdirSync(bin)
   const checkout = join(directory, 'checkout')
+
   writeCheckout(checkout, releaseSha)
   writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec '${process.execPath}' '${dockerStub}' "$@"\n`)
   chmodSync(join(bin, 'docker'), 0o755)
 
   const running = firstDeploy ? ['postgres'] : ['postgres', ...appServices]
+
   const containers: Container[] = running.map((service) => ({
     id: `${service}-old`,
     service,
     image: `sha256:old-${service}`,
   }))
+
   const tags = Object.fromEntries(running.map((service) => [`${project}-${service}:latest`, `sha256:old-${service}`]))
+
   // A tag left by some earlier deploy; it must never be restored when nothing runs that image.
   if (firstDeploy) tags[`${project}-api:previous`] = 'sha256:stale-api'
+
   writeFileSync(
     join(directory, 'state.json'),
     JSON.stringify({ project, services, containers, tags, counter: 0, execCalls: 0 }),
   )
 
   const { BRAWLTOME_IMAGE_TAG: _inherited, ...inheritedEnv } = process.env
+
   const result = spawnSync('sh', [deployScript, project, 'infra/app/compose.yml', 'api', 'web'], {
     cwd: checkout,
     encoding: 'utf8',
@@ -67,19 +75,24 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
       ...env,
     },
   })
+
   const state = JSON.parse(readFileSync(join(directory, 'state.json'), 'utf8')) as {
     containers: Container[]
     tags: Record<string, string>
     outages?: string[]
   }
+
   // Whatever fails, api and web must keep a healthy container serving from the moment they first have one.
   expect(state.outages ?? []).toEqual([])
+
   // a run rejected before any docker call leaves no logs
   const readLines = (name: string) =>
     existsSync(join(directory, name)) ? readFileSync(join(directory, name), 'utf8').trim().split('\n') : []
+
   const calls = readLines('calls.log')
   const releaseTags = readLines('release-tags.log')
   const imageOf = (service: string) => state.containers.filter((item) => item.service === service).map((c) => c.image)
+
   return { result, state, calls, imageOf, releaseTags }
 }
 
@@ -100,15 +113,19 @@ describe('deploy smoke checks and rollback', () => {
       expect(imageOf(service)).toEqual([`sha256:new-${service}`])
       expect(state.tags[`${project}-${service}:previous`]).toBe(`sha256:old-${service}`)
     }
+
     expect(calls.some((call) => call.startsWith('tag ') && !call.endsWith(':previous'))).toBe(false)
+
     // The previous images are recorded before the release images are pulled.
     expect(calls.findIndex((call) => call.startsWith(`tag sha256:old-api ${project}-api:previous`))).toBeLessThan(
       calls.findIndex((call) => call.includes(' pull ')),
     )
+
     // Probes run inside the containers with the runtime each image ships.
     expect(calls).toContainEqual(
       expect.stringMatching(/^exec api-\d+ bun -e .*http:\/\/127\.0\.0\.1:3000\/health\/ready/),
     )
+
     expect(calls).toContainEqual(expect.stringMatching(/^exec web-\d+ node -e .*http:\/\/127\.0\.0\.1:3000\/'/))
     expect(calls).toContainEqual(expect.stringMatching(/^exec api-\d+ bun -e .*\/trpc\/leaderboard\.get\?input=/))
   })
@@ -118,6 +135,7 @@ describe('deploy smoke checks and rollback', () => {
 
     expect(result.status).toBe(0)
     const pulls = calls.filter((call) => call.includes(' pull '))
+
     expect(pulls).toHaveLength(1)
     expect(pulls[0]).toEndWith(' pull --quiet api web operations-worker migration')
     expect(calls.some((call) => call.includes(' build'))).toBe(false)
@@ -130,6 +148,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(result.stdout).toContain(`pull failed for release ${releaseSha}: its images may not be pushed yet`)
     expect(result.stderr).toContain(releaseImage('api'))
     const afterPull = calls.slice(calls.findIndex((call) => call.includes(' pull ')) + 1)
+
     expect(afterPull.filter((call) => /^(stop|rm|up) /.test(call) || call.includes(' up '))).toEqual([])
     for (const service of appServices) expect(imageOf(service)).toEqual([`sha256:old-${service}`])
   })
@@ -177,9 +196,11 @@ describe('deploy smoke checks and rollback', () => {
       expect(calls).toContain(`tag ${project}-${service}:previous ${releaseImage(service)}`)
       expect(imageOf(service)).toEqual([`sha256:old-${service}`])
     }
+
     // The public services roll back beside the failed release, never by stopping it first.
     const rollbackStart = calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`)
     const rollbackCalls = calls.slice(rollbackStart)
+
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale api=2 api'))
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale web=2 web'))
     expect(imageOf('postgres')).toEqual(['sha256:old-postgres'])
@@ -227,6 +248,7 @@ describe('deploy smoke checks and rollback', () => {
     // Rollback convergence never names a public service, which compose would recreate in place.
     const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
     const converges = rollbackCalls.filter((call) => call.includes(' up -d --remove-orphans '))
+
     expect(converges).toHaveLength(1)
     expect(converges[0]).toEndWith(' operations-worker')
   })
@@ -259,6 +281,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('api')).toEqual(['sha256:new-api'])
     expect(state.tags[releaseImage('api')]).toBe('sha256:new-api')
     const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
+
     expect(rollbackCalls.some((call) => call.includes('--scale api='))).toBe(false)
     // The rest still roll back.
     expect(imageOf('web')).toEqual(['sha256:old-web'])
@@ -276,6 +299,7 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('web')).toEqual(['sha256:old-web'])
     expect(imageOf('operations-worker')).toEqual(['sha256:new-operations-worker'])
     const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
+
     expect(rollbackCalls.some((call) => call.includes(' up -d --remove-orphans '))).toBe(false)
   })
 

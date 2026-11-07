@@ -51,12 +51,15 @@ export function validateAdmissionConfig(config: AdmissionConfig): AdmissionConfi
   for (const workClass of workClasses) {
     integer(config.classConcurrency[workClass], `classConcurrency.${workClass}`, 1, config.totalConcurrency)
   }
+
   if (config.classConcurrency.interactive < config.interactiveReservation) {
     throw new Error('classConcurrency.interactive must cover interactiveReservation')
   }
+
   for (const workClass of backgroundWorkClasses) {
     integer(config.backgroundWeights[workClass], `backgroundWeights.${workClass}`, 1, 10_000)
   }
+
   return config
 }
 
@@ -93,6 +96,7 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
   ) {
     throw new Error(`leaderboard pageDepth must be an integer between 1 and ${maxLeaderboardPageDepth}`)
   }
+
   if (
     !Number.isSafeInteger(payload.intervalMs) ||
     payload.intervalMs < minLeaderboardIntervalMs ||
@@ -102,6 +106,7 @@ export function validateLeaderboardOperationPayload(payload: LeaderboardOperatio
       `leaderboard intervalMs must be an integer between ${minLeaderboardIntervalMs} and ${maxLeaderboardIntervalMs}`,
     )
   }
+
   return payload
 }
 
@@ -125,6 +130,7 @@ export function validateLeaderboardDeepCrawlPayload(payload: LeaderboardDeepCraw
   if (!(leaderboardDeepCrawlRegions as readonly string[]).includes(payload.region)) {
     throw new Error('leaderboard deep crawl region is not a regional leaderboard scope')
   }
+
   if (
     !Number.isSafeInteger(payload.intervalMs) ||
     payload.intervalMs < minLeaderboardDeepCrawlIntervalMs ||
@@ -134,12 +140,15 @@ export function validateLeaderboardDeepCrawlPayload(payload: LeaderboardDeepCraw
       `leaderboard deep crawl intervalMs must be an integer between ${minLeaderboardDeepCrawlIntervalMs} and ${maxLeaderboardDeepCrawlIntervalMs}`,
     )
   }
+
   if (payload.mode !== undefined && !(leaderboardDeepCrawlModes as readonly string[]).includes(payload.mode)) {
     throw new Error('leaderboard deep crawl mode must be 1v1, solo2v2, or 2v2')
   }
+
   if (Object.keys(payload).length !== (payload.mode === undefined ? 2 : 3)) {
     throw new Error('leaderboard deep crawl payload has unexpected fields')
   }
+
   return payload
 }
 
@@ -163,6 +172,7 @@ export function validateRankingRetentionPayload(payload: RankingRetentionPayload
       `ranking retention retentionHours must be an integer between ${minRankingRetentionHours} and ${maxRankingRetentionHours}`,
     )
   }
+
   if (
     !Number.isSafeInteger(payload.maxGenerations) ||
     payload.maxGenerations < 1 ||
@@ -170,7 +180,9 @@ export function validateRankingRetentionPayload(payload: RankingRetentionPayload
   ) {
     throw new Error(`ranking retention maxGenerations must be an integer between 1 and ${maxRankingRetentionBatch}`)
   }
+
   if (Object.keys(payload).length !== 2) throw new Error('ranking retention payload has unexpected fields')
+
   return payload
 }
 
@@ -412,16 +424,23 @@ export type PlayerRefreshSettled = {
 
 export function parsePlayerRefreshSettled(payload: string): PlayerRefreshSettled | null {
   let value: unknown
+
   try {
     value = JSON.parse(payload)
   } catch {
     return null
   }
+
   if (!value || typeof value !== 'object') return null
+
   const { operationId, brawlhallaId, status } = value as Record<string, unknown>
+
   if (typeof operationId !== 'string' || operationId.length === 0 || operationId.length > 64) return null
+
   if (typeof brawlhallaId !== 'number' || !Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1) return null
+
   if (status !== 'succeeded' && status !== 'dead_letter') return null
+
   return { operationId, brawlhallaId, status }
 }
 

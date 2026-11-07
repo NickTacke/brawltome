@@ -6,6 +6,7 @@ import postgres from 'postgres'
 
 let database: TestDatabase
 let connectionString = ''
+
 const admission = {
   totalConcurrency: 8,
   interactiveReservation: 2,
@@ -44,6 +45,7 @@ async function insertVisitorRefresh(
   errorCode?: string,
 ): Promise<void> {
   const id = randomUUID()
+
   await sql`
     INSERT INTO refresh_operations.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts, created_at)
@@ -52,6 +54,7 @@ async function insertVisitorRefresh(
        ${sql.json({ brawlhallaId, staleSections: ['ranked'] })}, ${sql.json({ source })}, 4,
        clock_timestamp() - make_interval(days => ${ageDays}))
   `
+
   if (errorCode) {
     await sql`
       UPDATE refresh_operations.operations
@@ -71,6 +74,7 @@ describe('Recently viewed freshness operations', () => {
   test('counts request days per player and the planner attempts within the window', async () => {
     const control = postgres(connectionString, { max: 1 })
     const operations = createPostgresRefreshOperations({ database })
+
     try {
       for (let index = 0; index < 3; index++) await insertVisitorRefresh(control, 10, 1, true)
       await insertVisitorRefresh(control, 10, 3, true)
@@ -81,6 +85,7 @@ describe('Recently viewed freshness operations', () => {
       await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'actor_rate_limited')
       await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'admission_reservation_expired')
       await operations.enqueueRecentlyViewedRefreshes([11])
+
       await control`
         UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE provenance->>'source' = 'freshness-planner'
@@ -88,10 +93,12 @@ describe('Recently viewed freshness operations', () => {
 
       // Distinct days, not request counts: three requests on one day count once.
       const demand = await operations.refreshRequestDemand({ windowDays: 30 })
+
       expect(demand.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([
         { brawlhallaId: 10, viewDays: 2 },
         { brawlhallaId: 11, viewDays: 1 },
       ])
+
       expect(await operations.recentFreshnessAttempts({ windowDays: 30 })).toEqual([
         { brawlhallaId: 11, lastPlannedAt: expect.any(Date), lastFailedAt: expect.any(Date) },
       ])
@@ -103,6 +110,7 @@ describe('Recently viewed freshness operations', () => {
   test('enqueues background refreshes once per player and skips players with an active refresh', async () => {
     const control = postgres(connectionString, { max: 1 })
     const operations = createPostgresRefreshOperations({ database })
+
     try {
       await insertVisitorRefresh(control, 30, 0, false)
 
@@ -114,6 +122,7 @@ describe('Recently viewed freshness operations', () => {
         SELECT work_class, payload, resource_key FROM refresh_operations.operations
         WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '20'
       `
+
       expect(row).toEqual({
         work_class: 'primary-monitoring',
         payload: { cohort: 'recently-viewed', brawlhallaId: 20, staleSections: ['ranked', 'stats'] },
@@ -125,7 +134,9 @@ describe('Recently viewed freshness operations', () => {
         UPDATE refresh_operations.operations SET status = 'succeeded', completed_at = clock_timestamp()
         WHERE work_class = 'interactive'
       `
+
       const lease = await operations.claim('worker', 1_000, admission)
+
       expect(lease).toMatchObject({
         kind: 'interactive-player-refresh',
         workClass: 'primary-monitoring',
@@ -138,8 +149,10 @@ describe('Recently viewed freshness operations', () => {
 
   test('rejects primary-monitoring refreshes that have neither an assignment nor the cohort', async () => {
     const control = postgres(connectionString, { max: 1 })
+
     try {
       const id = randomUUID()
+
       const insertOrphan = async () => {
         await control`
           INSERT INTO refresh_operations.operations
@@ -150,6 +163,7 @@ describe('Recently viewed freshness operations', () => {
              ${control.json({ source: 'test' })}, 4)
         `
       }
+
       await expect(insertOrphan()).rejects.toThrow('operations_payload_by_kind')
     } finally {
       await control.end()
@@ -159,9 +173,12 @@ describe('Recently viewed freshness operations', () => {
   test('promotes a queued background refresh when a visitor asks for the same player', async () => {
     const control = postgres(connectionString, { max: 1 })
     const operations = createPostgresRefreshOperations({ database })
+
     try {
       const activeBefore = await operations.activeRecentlyViewedRefreshes()
+
       expect(await operations.enqueueRecentlyViewedRefreshes([50])).toEqual([50])
+
       const reservation = await operations.reserveInteractivePlayerRefresh({
         brawlhallaId: 50,
         dedupeKey: 'player:50:visit',
@@ -170,10 +187,12 @@ describe('Recently viewed freshness operations', () => {
         provenance: { source: 'interactive-api' },
         reservationTtlSeconds: 30,
       })
+
       const [background] = await control<{ id: string; work_class: string }[]>`
         SELECT id, work_class FROM refresh_operations.operations
         WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '50'
       `
+
       expect(reservation).toEqual({ outcome: 'already-active', operationId: background.id })
       expect(background.work_class).toBe('interactive')
       // The promoted refresh no longer occupies a background slot.

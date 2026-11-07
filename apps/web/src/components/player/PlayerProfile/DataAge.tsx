@@ -11,6 +11,7 @@ export function DataAge({ updatedAt }: { updatedAt: Date }) {
 
   useEffect(() => {
     const intervalId = setInterval(() => setTick((tick) => tick + 1), TICK_MS)
+
     return () => clearInterval(intervalId)
   }, [])
 
