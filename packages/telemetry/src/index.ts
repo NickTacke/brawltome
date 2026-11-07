@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
 import {
   type Context,
   type Span,
@@ -163,8 +164,9 @@ const workClass = [
   'maintenance',
 ] as const
 
-const deepCrawlMode = ['1v1', 'solo2v2', '2v2'] as const
-const deepCrawlRegion = ['US-E', 'US-W', 'EU', 'SEA', 'AUS', 'BRZ', 'JPN', 'ME', 'SA'] as const
+// the deep crawl skips 3v3, like leaderboardDeepCrawlModes in refresh-operations
+const deepCrawlMode = ['1v1', 'solo2v2', '2v2'] as const satisfies readonly RankedMode[]
+const deepCrawlRegion = rankedRegions
 
 const operationKind = [
   'proof',
