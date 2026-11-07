@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
-import type { Database } from '@brawltome/foundation'
-import { openTestClient } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import { playerMigrationInventory } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -13,39 +12,14 @@ import {
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
-const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
-const databaseName = `bt_discovery_reconcile_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 16)}`
-let admin: ReturnType<typeof postgres>
 let connectionString = ''
-let database: Database
+let database: TestDatabase
 
-// builds its database by hand: player migration 0005 adds its triggers only when the legacy
+// starts empty and migrates by hand: player migration 0005 adds its triggers only when the legacy
 // public.player tables exist before it runs, so they are created first
 beforeAll(async () => {
-  const configured = new URL(configuredServer ?? '')
-  const dedicated = new URL(dedicatedServer)
-
-  if (
-    configured.protocol !== dedicated.protocol ||
-    configured.hostname !== dedicated.hostname ||
-    configured.port !== dedicated.port ||
-    configured.username !== dedicated.username ||
-    configured.password !== dedicated.password
-  ) {
-    throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
-  }
-
-  const adminUrl = new URL(dedicatedServer)
-
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(dedicatedServer)
-
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  database = openTestClient(connectionString)
+  database = await createTestDatabase({ label: 'discovery_reconcile', modules: [] })
+  connectionString = database.connectionString
   const setup = postgres(connectionString, { max: 1 })
 
   try {
@@ -80,11 +54,7 @@ beforeAll(async () => {
 }, 30_000)
 
 afterAll(async () => {
-  await database?.close()
-  if (!admin) return
-
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 }, 20_000)
 
 const admission: AdmissionConfig = {

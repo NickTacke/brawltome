@@ -1,52 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { Database } from '@brawltome/foundation'
-import { openTestClient } from '@brawltome/foundation/testing'
+import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { initializeDiscovery } from '../migrations/0001-initialize-discovery'
 import { generalizeDiscovery } from '../migrations/0002-generalize-discovery'
 import { createPostgresDiscovery } from '../postgres'
 
-const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
-const databaseName = `brawltome_discovery_upgrade_${process.pid}_${randomUUID().replaceAll('-', '').slice(0, 12)}`
-let admin: ReturnType<typeof postgres>
 let connectionString = ''
-let database: Database
+let database: TestDatabase
 
-// an empty database by hand: the test applies discovery 0001, seeds it, then upgrades to 0002
+// starts empty: the test applies discovery 0001, seeds it, then upgrades to 0002
 beforeAll(async () => {
-  const configured = new URL(configuredServer ?? '')
-  const dedicated = new URL(dedicatedServer)
-
-  if (
-    configured.protocol !== dedicated.protocol ||
-    configured.hostname !== dedicated.hostname ||
-    configured.port !== dedicated.port ||
-    configured.username !== dedicated.username ||
-    configured.password !== dedicated.password
-  ) {
-    throw new Error(`Discovery PostgreSQL tests require the dedicated server ${dedicatedServer}`)
-  }
-
-  const adminUrl = new URL(dedicatedServer)
-
-  adminUrl.pathname = '/postgres'
-  admin = postgres(adminUrl.toString(), { max: 1 })
-  await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
-  const databaseUrl = new URL(dedicatedServer)
-
-  databaseUrl.pathname = `/${databaseName}`
-  connectionString = databaseUrl.toString()
-  database = openTestClient(connectionString)
+  database = await createTestDatabase({ label: 'discovery_upgrade', modules: [] })
+  connectionString = database.connectionString
 }, 20_000)
 
 afterAll(async () => {
-  await database?.close()
-  if (!admin) return
-
-  await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
-  await admin.end()
+  await database?.drop()
 }, 20_000)
 
 describe('Discovery generalized migration', () => {

@@ -40,12 +40,6 @@ const admission: AdmissionConfig = {
 }
 
 beforeEach(async () => {
-  const configuredUrl = new URL(process.env.DATABASE_URL ?? 'postgres://unset')
-
-  if (configuredUrl.hostname !== '127.0.0.1' || configuredUrl.port !== '55436') {
-    throw new Error('Statistics tests require dedicated PostgreSQL 127.0.0.1:55436')
-  }
-
   database = await createTestDatabase({
     label: 'statistics_cohort',
     modules: [refreshOperationsModule, statisticsModule],

@@ -14,8 +14,6 @@ import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawlto
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 
-const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
 let database: TestDatabase
 let connectionString = ''
 
@@ -40,10 +38,6 @@ const admission = {
 } as const
 
 beforeAll(async () => {
-  if (!configuredServer?.startsWith(dedicatedServer)) {
-    throw new Error('Primary monitoring PostgreSQL tests require dedicated 127.0.0.1:55436')
-  }
-
   database = await createTestDatabase({
     label: 'primary_monitoring',
     modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
