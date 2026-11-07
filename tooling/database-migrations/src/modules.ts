@@ -8,6 +8,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
+import { legacyV2Module } from './legacy-v2'
 
 // every module whose schema the database holds, whichever process loads it
 export const migrationModules: readonly BrawltomeModule[] = [
@@ -20,4 +21,5 @@ export const migrationModules: readonly BrawltomeModule[] = [
   rankingModule,
   statisticsModule,
   replayAnalysisModule,
+  legacyV2Module,
 ]
