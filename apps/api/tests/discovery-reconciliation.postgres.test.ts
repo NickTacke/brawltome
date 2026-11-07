@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanMigrationInventory, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryMigrationInventory } from '@brawltome/discovery'
+import type { Database } from '@brawltome/foundation'
 import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import { playerMigrationInventory } from '@brawltome/player'
 import {
