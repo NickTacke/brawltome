@@ -59,8 +59,8 @@ COPY tooling/database-migrations/package.json tooling/database-migrations/
 RUN bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
 
 FROM base AS build
-COPY --from=install /app/node_modules node_modules
-COPY --from=install /app/packages/contracts/node_modules packages/contracts/node_modules
+# the whole install stage, so any workspace's nested node_modules come along
+COPY --from=install /app .
 COPY . .
 
 FROM base AS migration

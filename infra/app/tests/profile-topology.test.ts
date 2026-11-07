@@ -176,7 +176,7 @@ describe('application profile topology', () => {
     expect(dockerfile).toContain('postgres:16.8-alpine@sha256:')
     expect(dockerfile).toContain('AS postgres')
     expect(dockerfile).toContain('AS web')
-    expect(dockerfile).toContain('/app/packages/contracts/node_modules packages/contracts/node_modules')
+    expect(dockerfile).toContain('COPY --from=install /app .')
     expect(dockerfile).toContain('apps/web/.next/standalone')
 
     expect(
