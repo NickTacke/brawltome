@@ -91,7 +91,7 @@ describe('Leaderboard deep crawl operations', () => {
     const control = postgres(connectionString, { max: 1 })
 
     try {
-      const insert = async (payload: Record<string, unknown>) => {
+      const insert = async (payload: Record<string, postgres.JSONValue>) => {
         const id = randomUUID()
 
         await control`

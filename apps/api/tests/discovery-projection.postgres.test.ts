@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
-import { migratePostgres, orderMigrations } from '@brawltome/foundation'
+import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
 import {
@@ -43,7 +43,7 @@ beforeAll(async () => {
     await setup.end()
   }
 
-  const modules = [playerModule, refreshOperationsModule, discoveryModule]
+  const modules: readonly BrawltomeModule[] = [playerModule, refreshOperationsModule, discoveryModule]
 
   await migratePostgres(connectionString, orderMigrations(modules.flatMap((module) => module.migrations)))
 }, 20_000)

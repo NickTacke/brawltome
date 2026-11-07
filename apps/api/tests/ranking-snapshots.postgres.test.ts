@@ -78,6 +78,8 @@ function authorization(
   lease: Extract<OperationLease, { workClass: 'leaderboard' }>,
   scheduleWindowAt = lease.scheduleWindowAt,
 ): RankingPublicationAuthorization {
+  if (lease.kind === 'leaderboard-deep-crawl') throw new Error('a deep crawl lease publishes no ranking')
+
   return {
     operationId: lease.operationId,
     effectOperationId: lease.effectOperationId,

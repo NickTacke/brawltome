@@ -1334,7 +1334,7 @@ describe('Ranking snapshot retention', () => {
         SELECT outcome FROM refresh_operations.attempts WHERE operation_id = ${operation?.id as string}
       `
 
-      expect(attempts).toEqual([{ outcome: 'succeeded' }])
+      expect([...attempts]).toEqual([{ outcome: 'succeeded' }])
       // Nothing is left to reclaim, so the batch is not re-run back to back.
       expect(await operations.claim('retention-worker', leaseMs, admission, 'ranking-retention')).toBeNull()
       const remaining = await storedGenerationIds(sql)

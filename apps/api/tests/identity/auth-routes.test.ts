@@ -96,13 +96,21 @@ function makeFakes() {
     },
   }
 
+  const admissionResult = () =>
+    admissionOutcome === 'admitted'
+      ? ({ outcome: 'admitted' } as const)
+      : ({ outcome: 'rate-limited', retryAfterSeconds: 60 } as const)
+
   const requestAdmission = {
     async admitActor(actor: unknown, reservationKey?: string) {
       actorAdmissions.push({ actor, reservationKey })
 
-      return admissionOutcome === 'admitted'
-        ? ({ outcome: 'admitted' } as const)
-        : ({ outcome: 'rate-limited', retryAfterSeconds: 60 } as const)
+      return admissionResult()
+    },
+    async admitActorOnce(actor: unknown) {
+      actorAdmissions.push({ actor, reservationKey: undefined })
+
+      return admissionResult()
     },
     async hasActorReservation() {
       return false
