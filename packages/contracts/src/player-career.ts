@@ -87,7 +87,7 @@ const combatSchema = z
   .strict()
   .refine(({ wins, games }) => wins <= games, { message: 'wins cannot exceed games', path: ['wins'] })
 
-export const playerCareerSnapshotSchema = z
+const playerCareerSnapshotSchema = z
   .object({
     guild: guildSchema.nullable(),
     account: accountSchema,

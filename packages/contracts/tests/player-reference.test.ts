@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { parsePlayerReferenceOutput, playerReferenceSchema } from '../src/player-reference'
+import { nullablePlayerReferenceSchema, playerReferenceSchema } from '../src/player-reference'
 
 describe('Player Reference contract', () => {
   test('accepts bounded identifiers, preserves zero-free identity, and supports absence', () => {
     expect(
-      parsePlayerReferenceOutput({ brawlhallaId: 1, name: 'Ada', aliases: ['Former Ada'], legacyRating: 1800 }),
+      nullablePlayerReferenceSchema.parse({
+        brawlhallaId: 1,
+        name: 'Ada',
+        aliases: ['Former Ada'],
+        legacyRating: 1800,
+      }),
     ).toEqual({
       brawlhallaId: 1,
       name: 'Ada',
@@ -12,19 +17,21 @@ describe('Player Reference contract', () => {
       legacyRating: 1800,
     })
 
-    expect(parsePlayerReferenceOutput({ brawlhallaId: 2_147_483_647, name: 'A'.repeat(256), aliases: [] })).toEqual({
+    expect(
+      nullablePlayerReferenceSchema.parse({ brawlhallaId: 2_147_483_647, name: 'A'.repeat(256), aliases: [] }),
+    ).toEqual({
       brawlhallaId: 2_147_483_647,
       name: 'A'.repeat(256),
       aliases: [],
     })
 
-    expect(parsePlayerReferenceOutput({ brawlhallaId: 1, name: '🦊'.repeat(256), aliases: [] })).toEqual({
+    expect(nullablePlayerReferenceSchema.parse({ brawlhallaId: 1, name: '🦊'.repeat(256), aliases: [] })).toEqual({
       brawlhallaId: 1,
       name: '🦊'.repeat(256),
       aliases: [],
     })
 
-    expect(parsePlayerReferenceOutput(null)).toBeNull()
+    expect(nullablePlayerReferenceSchema.parse(null)).toBeNull()
   })
 
   test.each([

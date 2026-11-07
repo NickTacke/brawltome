@@ -11,8 +11,9 @@ import { z } from './zod'
 export const legendMetaRegions = ['all', ...leaderboardRegions] as const
 export const legendMetaBrackets = ['all', 'Platinum', 'Diamond+'] as const
 
-export const legendMetaRegionSchema = z.enum(legendMetaRegions)
-export const legendMetaBracketSchema = z.enum(legendMetaBrackets)
+const legendMetaRegionSchema = z.enum(legendMetaRegions)
+const legendMetaBracketSchema = z.enum(legendMetaBrackets)
+
 export const legendMetaInputSchema = z
   .object({
     region: legendMetaRegionSchema,

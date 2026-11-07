@@ -31,10 +31,9 @@ const contestantSchema = z
   })
   .strict()
 
-export const oneVsOneIdentitySchema = z
-  .object({ type: z.literal('one-vs-one-player'), player: contestantSchema })
-  .strict()
-export const fixedTwoVsTwoIdentitySchema = z
+const oneVsOneIdentitySchema = z.object({ type: z.literal('one-vs-one-player'), player: contestantSchema }).strict()
+
+const fixedTwoVsTwoIdentitySchema = z
   .object({
     type: z.literal('fixed-two-vs-two-team'),
     players: z.tuple([contestantSchema, contestantSchema]),
@@ -46,14 +45,16 @@ export const fixedTwoVsTwoIdentitySchema = z
       (players[0].brawlhallaId === players[1].brawlhallaId && players[0].name !== players[1].name),
     { message: 'fixed team participant slots must be distinct and account IDs ascending' },
   )
-export const soloTwoVsTwoIdentitySchema = z
+
+const soloTwoVsTwoIdentitySchema = z
   .object({ type: z.literal('solo-two-vs-two-player'), player: contestantSchema })
   .strict()
-export const threeVsThreeIdentitySchema = z
+
+const threeVsThreeIdentitySchema = z
   .object({ type: z.literal('three-vs-three-player'), player: contestantSchema })
   .strict()
 
-export const leaderboardIdentitySchema = z.discriminatedUnion('type', [
+const leaderboardIdentitySchema = z.discriminatedUnion('type', [
   oneVsOneIdentitySchema,
   fixedTwoVsTwoIdentitySchema,
   soloTwoVsTwoIdentitySchema,
@@ -91,11 +92,12 @@ function entrySchema<T extends z.ZodType>(identity: T) {
     .refine(({ games, wins, losses }) => games === wins + losses, 'games must equal wins plus losses')
 }
 
-export const leaderboard1v1EntrySchema = entrySchema(oneVsOneIdentitySchema)
-export const leaderboardFixed2v2EntrySchema = entrySchema(fixedTwoVsTwoIdentitySchema)
-export const leaderboardSolo2v2EntrySchema = entrySchema(soloTwoVsTwoIdentitySchema)
-export const leaderboard3v3EntrySchema = entrySchema(threeVsThreeIdentitySchema)
-export const leaderboardEntrySchema = z.union([
+const leaderboard1v1EntrySchema = entrySchema(oneVsOneIdentitySchema)
+const leaderboardFixed2v2EntrySchema = entrySchema(fixedTwoVsTwoIdentitySchema)
+const leaderboardSolo2v2EntrySchema = entrySchema(soloTwoVsTwoIdentitySchema)
+const leaderboard3v3EntrySchema = entrySchema(threeVsThreeIdentitySchema)
+
+const leaderboardEntrySchema = z.union([
   leaderboard1v1EntrySchema,
   leaderboardFixed2v2EntrySchema,
   leaderboardSolo2v2EntrySchema,
@@ -195,7 +197,7 @@ const activityFixed2v2EntrySchema = activityEntrySchema(fixedTwoVsTwoIdentitySch
 const activitySolo2v2EntrySchema = activityEntrySchema(soloTwoVsTwoIdentitySchema)
 const activity3v3EntrySchema = activityEntrySchema(threeVsThreeIdentitySchema)
 
-export const leaderboardRecentActivityEntrySchema = z.union([
+const leaderboardRecentActivityEntrySchema = z.union([
   activity1v1EntrySchema,
   activityFixed2v2EntrySchema,
   activitySolo2v2EntrySchema,
@@ -250,14 +252,9 @@ const activityUnavailableSchema = z
 
 export const leaderboardRecentActivityOutputSchema = z.union([activityAvailableOutputSchema, activityUnavailableSchema])
 
-export type LeaderboardRegion = z.infer<typeof leaderboardRegionSchema>
-export type LeaderboardScope = z.infer<typeof leaderboardScopeSchema>
-export type LeaderboardMode = z.infer<typeof leaderboardModeSchema>
-export type LeaderboardInput = z.infer<typeof leaderboardInputSchema>
 export type LeaderboardIdentity = z.infer<typeof leaderboardIdentitySchema>
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>
-export type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
-export type LeaderboardRecentActivityInput = z.infer<typeof leaderboardRecentActivityInputSchema>
+type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
 export type LeaderboardRecentActivityEntry = z.infer<typeof leaderboardRecentActivityEntrySchema>
 export type LeaderboardRecentActivityOutput = z.infer<typeof leaderboardRecentActivityOutputSchema>
 
