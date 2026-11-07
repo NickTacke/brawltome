@@ -130,7 +130,6 @@ const migrations = [
   addLeaderboardTeamObservationsSecondPlayerIndex,
 ] as const
 
-// the ranked and career stores fence their writes with refresh_operations lease functions
 export const playerModule = {
   name: 'player',
   dependsOn: ['refresh-operations'],

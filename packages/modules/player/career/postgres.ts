@@ -1,4 +1,5 @@
 import type { Database, Sql } from '@brawltome/foundation'
+import { acquireActiveLease, commitInteractiveSection } from '@brawltome/refresh-operations'
 import {
   CAREER_FRESHNESS_SECONDS,
   type CareerPlayerProfile,
@@ -77,31 +78,6 @@ type WeaponRow = {
   held_time: number
   damage: string
   kos: number
-}
-
-async function acquireLease(sql: Sql, effect: CanonicalCareerEffect): Promise<boolean> {
-  const [lease] = await sql<{ active: boolean }[]>`
-    SELECT refresh_operations.acquire_active_lease(
-      ${effect.operationId}::uuid,
-      ${effect.leaseOwner},
-      ${effect.leaseToken}
-    ) AS active
-  `
-
-  return lease?.active === true
-}
-
-async function commitInteractiveSection(sql: Sql, effect: CanonicalCareerEffect): Promise<boolean> {
-  const [lease] = await sql<{ committed: boolean }[]>`
-    SELECT refresh_operations.commit_interactive_section_if_owned(
-      ${effect.operationId}::uuid,
-      ${effect.leaseOwner},
-      ${effect.leaseToken},
-      ${effect.section}
-    ) AS committed
-  `
-
-  return lease?.committed === true
 }
 
 export function createPostgresCareerPlayers(
@@ -297,7 +273,7 @@ export function createPostgresCareerPlayers(
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
 
-        if (!(await acquireLease(sql, effect))) return 'lease-lost' as const
+        if (!(await acquireActiveLease(sql, effect))) return 'lease-lost' as const
 
         await sql`
           INSERT INTO players.career_profiles (brawlhalla_id, checked_at)

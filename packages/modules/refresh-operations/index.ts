@@ -28,6 +28,17 @@ import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refr
 
 export * from './model'
 export {
+  acquireActiveLease,
+  commitInteractiveSection,
+  completeRankingRetentionLease,
+  lockActiveLeaderboardLease,
+  lockActiveRankingRetentionLease,
+  recordLeaderboardEffect,
+  type HeldLease,
+  type HeldLeaderboardLease,
+  type LeaderboardEffectResult,
+} from './lease-fences'
+export {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   type PostgresRefreshOperations,

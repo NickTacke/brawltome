@@ -71,7 +71,6 @@ const migrations = [
   statementLevelRowImmutability,
 ] as const
 
-// leaderboard publication and retention fence their writes with refresh_operations lease functions
 export const rankingModule = {
   name: 'ranking',
   dependsOn: ['refresh-operations'],

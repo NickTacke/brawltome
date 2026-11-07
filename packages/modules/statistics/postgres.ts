@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Database, JsonValue } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
+import { acquireActiveLease } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
@@ -723,13 +724,9 @@ export function createPostgresStatistics(
 
     if ((capacity?.attempts ?? 0) >= LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST) return 'capacity-exceeded'
 
-    const [active] = await sql<{ active: boolean }[]>`
-      SELECT refresh_operations.acquire_active_lease(
-        ${authorization.operationId}, ${authorization.leaseOwner}, ${authorization.leaseToken}
-      ) AS active
-    `
+    const isActive = await acquireActiveLease(sql, authorization)
 
-    return active?.active ? 'allowed' : 'lease-lost'
+    return isActive ? 'allowed' : 'lease-lost'
   }
 
   const tracer: StatisticsTracer = {

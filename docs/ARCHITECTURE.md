@@ -118,9 +118,11 @@ Migrations still have to be backward compatible with the release that serves dur
 - `@brawltome/foundation/testing` is test-only.
 - A module may import only the modules the policy lists for it (`capabilityDependencies` in
   `tooling/architecture/src/current-policy.ts`).
-- A module's non-test source can't hold SQL that names another module's schema. Three exceptions exist today, all
-  reaching into `refresh_operations`, and are tracked in issue #388. Deployed migrations are skipped; a new migration
-  may name another module's schema only when its `requires` lists a migration of that module.
+- A module's non-test source can't hold SQL that names another module's schema. One exception exists today:
+  statistics reads `refresh_operations` tables, tracked in issue #388. Modules that fence a write with a queue lease
+  call the fence functions `@brawltome/refresh-operations` exports, which take the caller's transaction. Deployed
+  migrations are skipped; a new migration may name another module's schema only when its `requires` lists a
+  migration of that module.
 - A module's `index.ts` exports no drizzle tables, views or schemas. drizzle queries hold no `schema.table` text, so the
   SQL check above couldn't see another module querying them.
 - Every module a module may import is in its `dependsOn`, so an import never points at a module that isn't loaded.
