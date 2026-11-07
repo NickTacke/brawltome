@@ -104,16 +104,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       return operationsClient
     }
 
-    let operations = createPostgresRefreshOperations(
-      { database: operationsClient },
-      {
-        projectionEffectState: (kind, effectOperationId) =>
-          kind === 'player-discovery-projection'
-            ? discovery.playerProjectionEffectState(effectOperationId)
-            : discovery.clanProjectionEffectState(effectOperationId),
-        reconciliationEffectApplied: discovery.reconciliationEffectApplied,
-      },
-    )
+    let operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
 
     const projectionOptions = {
       leaseMs: 10_000,
@@ -164,13 +155,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       operations = createPostgresRefreshOperations(
         { database: await restartOperationsClient() },
-        {
-          projectionEffectState: (kind, effectOperationId) =>
-            kind === 'player-discovery-projection'
-              ? discovery.playerProjectionEffectState(effectOperationId)
-              : discovery.clanProjectionEffectState(effectOperationId),
-          reconciliationEffectApplied: discovery.reconciliationEffectApplied,
-        },
+        { discoveryEffects: discovery },
       )
 
       await runOneRefreshOperation(operations, 'restarted-worker', projectionOptions)
@@ -274,13 +259,16 @@ describe('Clan Discovery delivery and reconciliation', () => {
       operations = createPostgresRefreshOperations(
         { database: await restartOperationsClient() },
         {
-          reconciliationEffectApplied: async (effectOperationId) => {
-            const applied = await discovery.reconciliationEffectApplied(effectOperationId)
+          discoveryEffects: {
+            projectionEffectState: discovery.projectionEffectState,
+            reconciliationEffectApplied: async (effectOperationId) => {
+              const applied = await discovery.reconciliationEffectApplied(effectOperationId)
 
-            effectStateRead()
-            await recoveryMayContinue
+              effectStateRead()
+              await recoveryMayContinue
 
-            return applied
+              return applied
+            },
           },
         },
       )

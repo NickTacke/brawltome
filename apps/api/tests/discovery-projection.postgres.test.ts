@@ -95,12 +95,7 @@ describe('Players to Discovery projection delivery', () => {
     // the operations worker restarts below, so it gets a client of its own to close and reopen
     let operationsClient = openTestClient(connectionString)
 
-    let operations = createPostgresRefreshOperations(
-      { database: operationsClient },
-      {
-        playerProjectionEffectState: discovery.playerProjectionEffectState,
-      },
-    )
+    let operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
 
     try {
       const archiveChecksum = 'a'.repeat(64)
@@ -342,12 +337,7 @@ describe('Players to Discovery projection delivery', () => {
       await operationsClient.close()
       operationsClient = openTestClient(connectionString)
 
-      operations = createPostgresRefreshOperations(
-        { database: operationsClient },
-        {
-          playerProjectionEffectState: discovery.playerProjectionEffectState,
-        },
-      )
+      operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
 
       expect(
         await runOneRefreshOperation(operations, 'restarted-projection-worker', {

@@ -102,7 +102,7 @@ const discoveryChecks = createPostgresDiscovery(databases.main)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { playerProjectionEffectState: discoveryChecks.playerProjectionEffectState },
+  { discoveryEffects: discoveryChecks },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {
