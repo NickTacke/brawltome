@@ -1,6 +1,5 @@
 import { brawlhallaV0RequestLimit, brawlhallaV0WindowMs } from './budget'
 
-
 export type Caller = 'on-demand' | 'background'
 
 export interface RequestQueueOptions {
