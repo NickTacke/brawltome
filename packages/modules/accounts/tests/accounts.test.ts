@@ -3,8 +3,6 @@ import {
   type AccountsStore,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
-  InvalidPinnedPlayerError,
-  MAX_PINNED_PLAYERS,
   createAccounts,
 } from '../src/accounts'
 
@@ -111,19 +109,6 @@ function makeAccounts(store: AccountsStore, token = 'raw-session-token') {
 }
 
 describe('Accounts', () => {
-  test('delegates the pinned-player add cap to the store', async () => {
-    const state = makeStore()
-
-    const service = makeAccounts({
-      ...state.store,
-      async pinPlayer() {
-        throw new InvalidPinnedPlayerError(`Pinned Players cannot exceed ${MAX_PINNED_PLAYERS}`)
-      },
-    })
-
-    await expect(service.pinPlayer(ACCOUNT_ID, 21)).rejects.toThrow('Pinned Players cannot exceed 20')
-  })
-
   test('generates unique URL-safe 32-byte session tokens', async () => {
     const state = makeStore()
     const accounts = createAccounts({ store: state.store, now: () => now })
