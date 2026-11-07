@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BhApiHttpError } from '@brawltome/bhapi'
 import { RateLimitError } from '@brawltome/bhapi'
+import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
@@ -1688,7 +1689,7 @@ describe('refresh operations worker source retry', () => {
       const waits: number[] = []
       const fetched: number[] = []
       const nameWrites: number[] = []
-      const standingWrites: Array<Array<{ brawlhallaId: number; games: number }>> = []
+      const standingWrites: LeaderboardRankedObservation[][] = []
       const transitions: string[] = []
       let progress: Progress | null = input.saved ?? null
 
@@ -1983,12 +1984,9 @@ describe('refresh operations worker source retry', () => {
   })
 
   test('propagates published 1v1 standings without failing the publication', async () => {
-    const standings: Array<{ observedAt: Date; players: Array<{ brawlhallaId: number; rating: number }> }> = []
+    const standings: Array<{ observedAt: Date; players: LeaderboardRankedObservation[] }> = []
 
-    const recordStandings = async (input: {
-      observedAt: Date
-      players: Array<{ brawlhallaId: number; rating: number }>
-    }) => {
+    const recordStandings = async (input: { observedAt: Date; players: LeaderboardRankedObservation[] }) => {
       standings.push(input)
 
       return { changed: input.players.length }

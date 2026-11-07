@@ -36,7 +36,7 @@ async function removeEffectDelay(client: ReturnType<typeof postgres>): Promise<v
   await client.unsafe('DROP FUNCTION IF EXISTS refresh_operations.test_delay_proof_effect() CASCADE')
 }
 
-function apiEnvironment(port: number): Record<string, string> {
+function apiEnvironment(port: number) {
   return {
     DATABASE_URL: connectionString,
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',

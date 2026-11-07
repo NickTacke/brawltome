@@ -45,7 +45,7 @@ function createApp() {
 function createRpcClient(app: Hono): RouterClient<typeof orpcRouter> {
   const link = new RPCLink({
     url: 'http://api.test/rpc',
-    fetch: (request) => app.fetch(request),
+    fetch: async (request) => app.fetch(request),
   })
 
   return createORPCClient(link)
