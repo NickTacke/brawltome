@@ -3,25 +3,10 @@ import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } fr
 import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
-const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
 let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
-  const configured = new URL(configuredServer ?? '')
-  const dedicated = new URL(dedicatedServer)
-
-  if (
-    configured.protocol !== dedicated.protocol ||
-    configured.hostname !== dedicated.hostname ||
-    configured.port !== dedicated.port ||
-    configured.username !== dedicated.username ||
-    configured.password !== dedicated.password
-  ) {
-    throw new Error(`Clan discovery tests require the dedicated server ${dedicatedServer}`)
-  }
-
   database = await createTestDatabase({ label: 'clan_discovery_source', modules: [clanModule] })
   connectionString = database.connectionString
 }, 20_000)

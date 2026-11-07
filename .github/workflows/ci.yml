@@ -90,7 +90,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://brawltome_test:brawltome_test@127.0.0.1:55436/brawltome_test
-      ALLOW_DESTRUCTIVE_DATABASE_TESTS: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

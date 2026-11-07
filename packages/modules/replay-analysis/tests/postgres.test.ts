@@ -6,8 +6,6 @@ import postgres from 'postgres'
 import { ActiveReplayJobError, type ReplayAnalysisJobs, replayAnalysisModule } from '../index'
 import { createPostgresReplayAnalysisJobs } from '../postgres'
 
-const dedicatedServer = 'postgres://brawltome_test:brawltome_test@127.0.0.1:55436'
-const configuredServer = process.env.DATABASE_URL
 const accountId = randomUUID()
 const replayDigest = `sha256:${'a'.repeat(64)}`
 let database: TestDatabase | undefined
@@ -15,21 +13,6 @@ let control: ReturnType<typeof postgres>
 let jobs: ReplayAnalysisJobs
 
 beforeAll(async () => {
-  if (!configuredServer) return
-
-  const configured = new URL(configuredServer)
-  const dedicated = new URL(dedicatedServer)
-
-  if (
-    configured.protocol !== dedicated.protocol ||
-    configured.hostname !== dedicated.hostname ||
-    configured.port !== dedicated.port ||
-    configured.username !== dedicated.username ||
-    configured.password !== dedicated.password
-  ) {
-    throw new Error(`Replay analysis tests require the dedicated server ${dedicatedServer}`)
-  }
-
   database = await createTestDatabase({ label: 'replay_analysis', modules: [accountsModule, replayAnalysisModule] })
   control = postgres(database.connectionString, { max: 1 })
   await control`INSERT INTO accounts.users (id) VALUES (${accountId})`
@@ -37,13 +20,11 @@ beforeAll(async () => {
 }, 20_000)
 
 afterAll(async () => {
-  if (!configuredServer) return
-
-  await control.end()
+  await control?.end()
   await database?.drop()
 }, 20_000)
 
-describe.skipIf(!configuredServer)('PostgreSQL replay analysis jobs', () => {
+describe('PostgreSQL replay analysis jobs', () => {
   test('fences stale claimants, keeps one active upload, and clears terminal replay bytes', async () => {
     const first = await jobs.create({
       accountId,
