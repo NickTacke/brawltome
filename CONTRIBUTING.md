@@ -29,7 +29,7 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md). How the modules
 ## Commands
 
 ```bash
-bun run lint            # biome
+bun run lint            # biome, plus eslint for blank lines between statements
 bun run typecheck
 bun test                # Postgres-backed tests need Docker
 bun run architecture:check
