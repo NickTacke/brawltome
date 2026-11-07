@@ -206,6 +206,7 @@ export function createPostgresDiscovery(database: Database): DiscoveryQueries & 
   ): Promise<ReconciliationResult>
   reconciliationDue(owner: ProjectionOwner, intervalMs: number): Promise<boolean>
   reconciliationEffectApplied(operationId: string): Promise<boolean>
+  projectionEffectState(owner: ProjectionOwner, operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   playerProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   clanProjectionEffectState(operationId: string): Promise<'none' | 'applied' | 'acknowledged'>
 } {
@@ -935,6 +936,7 @@ export function createPostgresDiscovery(database: Database): DiscoveryQueries & 
     reconcileClans: (source, operationId, authorizeEffect) => reconcile('clan', source, operationId, authorizeEffect),
     reconciliationDue,
     reconciliationEffectApplied,
+    projectionEffectState,
     playerProjectionEffectState: (operationId) => projectionEffectState('player', operationId),
     clanProjectionEffectState: (operationId) => projectionEffectState('clan', operationId),
   }
