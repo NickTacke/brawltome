@@ -41,7 +41,7 @@ import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
 import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
-import { readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
+import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
 
@@ -65,11 +65,7 @@ if (!replayBridgeSecret || Buffer.byteLength(replayBridgeSecret) < 32) {
   throw new Error('REPLAY_BRIDGE_SECRET must be set and at least 32 bytes')
 }
 
-const authenticatedRefreshIpLimit = Number(process.env.AUTHENTICATED_REFRESH_IP_LIMIT ?? 120)
-
-if (!Number.isInteger(authenticatedRefreshIpLimit) || authenticatedRefreshIpLimit < 1) {
-  throw new Error('AUTHENTICATED_REFRESH_IP_LIMIT must be a positive integer')
-}
+const authenticatedRefreshIpLimit = readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT)
 
 checkModuleList(apiModules)
 
@@ -304,7 +300,7 @@ app.get('/metrics', async (c) => {
   })
 })
 
-const port = Number.parseInt(process.env.PORT ?? '3000', 10)
+const port = readPort('PORT', process.env.PORT, 3000)
 
 const instrumentedFetch = instrumentHttpHandler(
   telemetry,
