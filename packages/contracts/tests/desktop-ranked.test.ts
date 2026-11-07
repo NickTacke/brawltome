@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { generateContractOpenApi, parseDesktopRankedLookupOutput } from '../src'
+import { parseDesktopRankedLookupOutput } from '../src'
+import { generateContractOpenApi } from '../src/openapi'
 
 describe('desktop ranked lookup contract', () => {
   test('preserves measured zero and nullable ranked values from the shared fixture', async () => {

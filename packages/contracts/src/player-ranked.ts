@@ -108,7 +108,7 @@ const sparsePulseSchema = z
     }
   })
 
-export const playerRankedSnapshotSchema = z
+const playerRankedSnapshotSchema = z
   .object({
     oneVsOne: oneVsOneSchema,
     rankedLegends: z.array(rankedLegendSchema),
@@ -172,7 +172,7 @@ export function parsePlayerRankedProfileOutput(value: unknown): PlayerRankedProf
 
 // The latest 1v1 standing seen on the V1 leaderboard: shown for players whose profile has no V0 ranked snapshot yet.
 // Kept apart from PlayerRankedProfile, which the desktop overlay deserializes strictly.
-export const leaderboardStandingSchema = z
+const leaderboardStandingSchema = z
   .object({
     brawlhallaId: brawlhallaIdSchema,
     region: visibleText,
@@ -186,4 +186,3 @@ export const leaderboardStandingSchema = z
   .strict()
 
 export const nullableLeaderboardStandingSchema = leaderboardStandingSchema.nullable()
-export type LeaderboardStandingContract = z.infer<typeof leaderboardStandingSchema>

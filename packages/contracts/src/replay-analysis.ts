@@ -255,7 +255,8 @@ export const analysisResultV1Schema = z
     }
   })
 
-export const replayJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed'])
+const replayJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed'])
+
 export const replayJobFailureSchema = z.object({ code: z.string().min(1), message: z.string().min(1) }).strict()
 export const replayJobSummarySchema = z
   .object({
@@ -271,6 +272,5 @@ export const replayJobDetailSchema = replayJobSummarySchema
   .extend({ result: analysisResultV1Schema.nullable() })
   .strict()
 
-export type AnalysisResultV1 = z.infer<typeof analysisResultV1Schema>
 export type ReplayJobSummaryContract = z.infer<typeof replayJobSummarySchema>
 export type ReplayJobDetailContract = z.infer<typeof replayJobDetailSchema>

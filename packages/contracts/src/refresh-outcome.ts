@@ -67,11 +67,3 @@ export type RefreshOutcomeContract = z.infer<typeof refreshOutcomeSchema>
 export type PlayerRefreshInputContract = z.infer<typeof playerRefreshInputSchema>
 export type DiscordPlayerRefreshInputContract = z.infer<typeof discordPlayerRefreshInputSchema>
 export type PlayerRefreshResponseContract = z.infer<typeof playerRefreshResponseSchema>
-
-export function parseRefreshOutcomeOutput(value: unknown): RefreshOutcomeContract {
-  return refreshOutcomeSchema.parse(value)
-}
-
-export function parsePlayerRefreshResponseOutput(value: unknown): PlayerRefreshResponseContract {
-  return playerRefreshResponseSchema.parse(value)
-}
