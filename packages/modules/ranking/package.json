@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

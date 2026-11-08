@@ -1,7 +1,9 @@
+import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import {
   type AdmissionConfig,
   createEffectStates,
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   defineJob,
   type JobDefinition,
@@ -12,6 +14,7 @@ import {
   type SourceAdmitter,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
+import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
 import {
   createWorkerJobs,
@@ -84,6 +87,11 @@ export function createTestQueue(databases: RefreshOperationsDatabases, discovery
   return createPostgresRefreshOperations(databases, {
     effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
   })
+}
+
+// the dead letter operations the CLI builds, with every owner's guards and effect listings
+export function createTestDeadLetters(database: Database) {
+  return createPostgresDeadLetterOperations(database, createDeadLetterHooks())
 }
 
 const jobListAdmission: AdmissionConfig = {

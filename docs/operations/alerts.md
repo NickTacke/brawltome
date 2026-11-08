@@ -261,7 +261,7 @@ retries. Admission rejections are expected outcomes and are not counted.
 outage that outlasted the retry budget.
 
 **First steps:** list and inspect dead letters with the operator CLI (`bun run operations:dead-letters`, which runs
-`packages/modules/refresh-operations/cli.ts`). It needs `DEAD_LETTER_DATABASE_URL`, `DEAD_LETTER_OPERATOR_TOKENS` and
+`apps/api/src/dead-letter-cli.ts`). It needs `DEAD_LETTER_DATABASE_URL`, `DEAD_LETTER_OPERATOR_TOKENS` and
 your `DEAD_LETTER_OPERATOR_TOKEN`; in production it runs as the operator-profile `dead-letter-cli` service of
 `infra/app/compose.yml`, which supplies the first two from secrets.
 

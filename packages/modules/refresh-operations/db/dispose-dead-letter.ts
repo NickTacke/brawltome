@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { and, eq } from 'drizzle-orm'
 import { toDispositionResult, validateDispositionInput } from '../domain/dead-letter-disposition'
-import { isStatisticsCollectionKind } from '../domain/operation-kinds'
 import type { DeadLetterDisposition, DeadLetterDispositionInput, DeadLetterDispositionResult } from '../model'
-import { deadLetterActions, operations, statisticsCollectionSeals } from './tables'
+import type { DeadLetterHooks } from './dead-letter-hooks'
+import { deadLetterActions, operations } from './tables'
 import type { Transaction } from './transaction'
 import { notifyWakeup } from './wakeup'
 
@@ -35,24 +35,6 @@ async function lockDeadLetter(transaction: Transaction, operationId: string) {
 }
 
 type LockedDeadLetter = NonNullable<Awaited<ReturnType<typeof lockDeadLetter>>>
-
-// a publication that read the collection has sealed it, and replaying it would change what that publication read
-async function requireCollectionUnsealed(transaction: Transaction, target: LockedDeadLetter): Promise<void> {
-  if (!isStatisticsCollectionKind(target.kind)) return
-
-  await transaction
-    .select({ id: operations.id })
-    .from(operations)
-    .where(eq(operations.id, target.effectOperationId))
-    .for('update')
-
-  const [seal] = await transaction
-    .select({ collectionOperationId: statisticsCollectionSeals.collectionOperationId })
-    .from(statisticsCollectionSeals)
-    .where(eq(statisticsCollectionSeals.collectionOperationId, target.effectOperationId))
-
-  if (seal) throw new Error('Statistics collection replay is sealed by publication validation')
-}
 
 async function insertReplay(transaction: Transaction, target: LockedDeadLetter, actionId: string): Promise<string> {
   const replayOperationId = randomUUID()
@@ -114,6 +96,7 @@ async function disposeLockedDeadLetter(
 export async function disposeDeadLetter(
   database: Database,
   input: DeadLetterDisposalInput,
+  hooks: Pick<DeadLetterHooks, 'replayGuards'>,
 ): Promise<DeadLetterDispositionResult> {
   // checked before the transaction starts, so a bad input never takes a lock
   const { actorId, reason } = validateDispositionInput(input)
@@ -123,7 +106,9 @@ export async function disposeDeadLetter(
 
     if (!target) return { outcome: 'not-found', disposition: null, actionId: null, replayOperationId: null }
 
-    await requireCollectionUnsealed(transaction, target)
+    const replayGuard = hooks.replayGuards.get(target.kind)
+
+    if (replayGuard) await replayGuard(transaction, target)
 
     return disposeLockedDeadLetter(transaction, target, { disposition: input.disposition, actorId, reason })
   })

@@ -19,7 +19,7 @@ import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { createProofJob, createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -197,7 +197,7 @@ describe('durable Refresh Operations', () => {
       expect(snapshot.deadLetters.length).toBeLessThanOrEqual(128)
 
       expect(
-        await operations.discardDeadLetter({
+        await createTestDeadLetters(database).discardDeadLetter({
           operationId: dead.operationId,
           actorId: 'operator:telemetry-test',
           reason: 'verify resolved dead letters leave the active gauge',
@@ -1061,7 +1061,7 @@ describe('durable Refresh Operations', () => {
 
       expect(second.occurrences.filter(({ scheduleId }) => scheduleId === schedule.scheduleId)).toHaveLength(1)
 
-      expect(await operations.inspectDeadLetter(firstOperationId)).toMatchObject({
+      expect(await createTestDeadLetters(database).inspectDeadLetter(firstOperationId)).toMatchObject({
         operation: {
           operationId: firstOperationId,
           lastError: { code: 'superseded_scheduled_operation', retryable: false },

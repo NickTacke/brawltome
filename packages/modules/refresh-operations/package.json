@@ -7,7 +7,6 @@
     "./testing": "./testing.ts"
   },
   "scripts": {
-    "dead-letters": "bun cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

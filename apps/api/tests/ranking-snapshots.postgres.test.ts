@@ -22,7 +22,7 @@ import {
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
 let admin: ReturnType<typeof postgres>
@@ -1121,7 +1121,7 @@ describe('immutable Ranking snapshots for every mode', () => {
 
     await operations.fail(original, { code: 'source_repaired', message: 'repairable', retryable: false }, 0)
 
-    const replayed = await operations.replayDeadLetter({
+    const replayed = await createTestDeadLetters(database).replayDeadLetter({
       operationId: original.operationId,
       actorId: 'operator:ranking',
       reason: 'mode source repaired',

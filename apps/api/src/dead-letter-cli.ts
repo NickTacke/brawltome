@@ -1,6 +1,10 @@
 import { createDatabase } from '@brawltome/foundation'
-import { authenticateDeadLetterOperator, OperatorAuthenticationError } from './operator-auth'
-import { createPostgresDeadLetterOperations } from './postgres'
+import {
+  authenticateDeadLetterOperator,
+  createPostgresDeadLetterOperations,
+  OperatorAuthenticationError,
+} from '@brawltome/refresh-operations'
+import { createDeadLetterHooks } from './dead-letter-hooks'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -106,7 +110,7 @@ async function main() {
 
   // one command at a time, so one connection is enough
   const database = createDatabase(connectionString, { maxConnections: 1, applicationName: 'brawltome-dead-letter-cli' })
-  const operations = createPostgresDeadLetterOperations(database)
+  const operations = createPostgresDeadLetterOperations(database, createDeadLetterHooks())
 
   try {
     if (parsed.command === 'list') {

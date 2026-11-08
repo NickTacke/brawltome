@@ -1,22 +1,27 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { createHash, randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   activateReserved,
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
+  type DeadLetterHooks,
+  type DeadLetterOperations,
+  type EffectDescriber,
   interactiveRefreshMaxAttempts,
   type OperationLease,
+  type ReplayGuard,
+  readProofEffects,
   reconcileResourceSchedules,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
-import postgres from 'postgres'
 
 let database: TestDatabase
 let connectionString = ''
+let deadLetters: DeadLetterOperations
+
+const noHooks: DeadLetterHooks = { replayGuards: new Map(), describeEffects: new Map() }
 
 const admission = {
   totalConcurrency: 4,
@@ -47,6 +52,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'refresh_operations_dead_letters', modules: [refreshOperationsModule] })
   connectionString = database.connectionString
+  deadLetters = createPostgresDeadLetterOperations(database, noHooks)
 })
 
 afterAll(async () => {
@@ -89,52 +95,22 @@ async function createDeadLetter(value = 'sensitive-payload') {
   return { operations, operationId: accepted.operationId, lease }
 }
 
-function operatorEnv(rawToken: string) {
-  return {
-    DEAD_LETTER_DATABASE_URL: connectionString,
-    DEAD_LETTER_OPERATOR_TOKEN: rawToken,
-    DEAD_LETTER_OPERATOR_TOKENS: JSON.stringify([
-      {
-        actorId: 'operator:integration',
-        tokenSha256: createHash('sha256').update(rawToken).digest('hex'),
-      },
-    ]),
-  }
-}
-
-async function runCli(args: string[], env: Record<string, string>) {
-  const process = Bun.spawn(['bun', 'packages/modules/refresh-operations/cli.ts', ...args], {
-    cwd: new URL('../../../..', import.meta.url).pathname,
-    env: { ...globalThis.process.env, ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  const [exitCode, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-  ])
-
-  return { exitCode, stdout, stderr }
-}
-
 describe('dead-letter operations', () => {
   test('lists redacted records and inspects full immutable evidence', async () => {
-    const { operations, operationId } = await createDeadLetter()
+    const { operationId } = await createDeadLetter()
 
     await createDeadLetter('second-sensitive-payload')
 
-    const firstPage = await operations.listDeadLetters({ limit: 1 })
+    const firstPage = await deadLetters.listDeadLetters({ limit: 1 })
 
     expect(firstPage.items).toHaveLength(1)
     expect(firstPage.nextCursor).not.toBeNull()
-    const secondPage = await operations.listDeadLetters({ limit: 1, cursor: firstPage.nextCursor as string })
+    const secondPage = await deadLetters.listDeadLetters({ limit: 1, cursor: firstPage.nextCursor as string })
 
     expect(secondPage.items).toHaveLength(1)
     expect(secondPage.items[0].operationId).not.toBe(firstPage.items[0].operationId)
 
-    const page = await operations.listDeadLetters({ limit: 10 })
+    const page = await deadLetters.listDeadLetters({ limit: 10 })
     const listed = page.items.find((item) => item.operationId === operationId)
 
     expect(listed).toMatchObject({
@@ -147,7 +123,7 @@ describe('dead-letter operations', () => {
 
     expect(listed).not.toHaveProperty('payload')
 
-    const inspected = await operations.inspectDeadLetter(operationId)
+    const inspected = await deadLetters.inspectDeadLetter(operationId)
 
     expect(inspected).toMatchObject({
       operation: {
@@ -162,7 +138,7 @@ describe('dead-letter operations', () => {
 
   test('creates one linked immediate replay with fresh attempts under concurrent replay and discard', async () => {
     const { operations, operationId, lease: originalLease } = await createDeadLetter('replay-me')
-    const actors = Array.from({ length: 20 }, () => createPostgresRefreshOperations({ database }))
+    const actors = Array.from({ length: 20 }, () => createPostgresDeadLetterOperations(database, noHooks))
 
     const results = await Promise.all(
       actors.map((actor, index) =>
@@ -177,7 +153,7 @@ describe('dead-letter operations', () => {
     expect(terminal).toHaveLength(1)
     expect(results.every((result) => result.disposition === terminal[0].disposition)).toBe(true)
 
-    const inspected = await operations.inspectDeadLetter(operationId)
+    const inspected = await deadLetters.inspectDeadLetter(operationId)
 
     expect(inspected?.auditActions).toHaveLength(1)
     const action = inspected?.auditActions[0]
@@ -236,14 +212,14 @@ describe('dead-letter operations', () => {
       0,
     )
 
-    const replayed = await operations.replayDeadLetter({
+    const replayed = await deadLetters.replayDeadLetter({
       operationId: scheduledLease.operationId,
       actorId: 'operator:scheduler',
       reason: 'repair scheduled collection',
     })
 
     expect(replayed.outcome).toBe('replayed')
-    const replayInspection = await operations.inspectDeadLetter(scheduledLease.operationId)
+    const replayInspection = await deadLetters.inspectDeadLetter(scheduledLease.operationId)
 
     expect(replayInspection?.schedule).toMatchObject({
       scheduleId: schedule.scheduleId,
@@ -302,7 +278,7 @@ describe('dead-letter operations', () => {
     await operations.commitInteractiveSection(original, 'ranked')
     await operations.fail(original, { code: 'stats_failed', message: 'stats failed', retryable: false }, 0)
 
-    const interactiveReplay = await operations.replayDeadLetter({
+    const interactiveReplay = await deadLetters.replayDeadLetter({
       operationId: original.operationId,
       actorId: 'operator:interactive',
       reason: 'upstream recovered',
@@ -347,7 +323,7 @@ describe('dead-letter operations', () => {
       0,
     )
 
-    const leaderboardReplay = await operations.replayDeadLetter({
+    const leaderboardReplay = await deadLetters.replayDeadLetter({
       operationId: leaderboardLease.operationId,
       actorId: 'operator:leaderboard',
       reason: 'leaderboard source repaired',
@@ -395,7 +371,7 @@ describe('dead-letter operations', () => {
 
     await operations.fail(clanLease, { code: 'clan_repairable', message: 'clan repairable', retryable: false }, 0)
 
-    const clanReplay = await operations.replayDeadLetter({
+    const clanReplay = await deadLetters.replayDeadLetter({
       operationId: clanLease.operationId,
       actorId: 'operator:clan',
       reason: 'clan source repaired',
@@ -440,7 +416,7 @@ describe('dead-letter operations', () => {
       0,
     )
 
-    const projectionReplay = await operations.replayDeadLetter({
+    const projectionReplay = await deadLetters.replayDeadLetter({
       operationId: projectionLease.operationId,
       actorId: 'operator:player-discovery',
       reason: 'projection source repaired',
@@ -479,7 +455,7 @@ describe('dead-letter operations', () => {
 
     await operations.fail(pulseLease, { code: 'pulse_repairable', message: 'pulse repairable', retryable: false }, 0)
 
-    const pulseReplay = await operations.replayDeadLetter({
+    const pulseReplay = await deadLetters.replayDeadLetter({
       operationId: pulseLease.operationId,
       actorId: 'operator:pulse',
       reason: 'pulse source repaired',
@@ -545,7 +521,7 @@ describe('dead-letter operations', () => {
       0,
     )
 
-    const monitoringReplay = await operations.replayDeadLetter({
+    const monitoringReplay = await deadLetters.replayDeadLetter({
       operationId: monitoringLease.operationId,
       actorId: 'operator:monitoring',
       reason: 'monitoring source repaired',
@@ -580,9 +556,9 @@ describe('dead-letter operations', () => {
   })
 
   test('makes audit actions append-only in PostgreSQL', async () => {
-    const { operations, operationId } = await createDeadLetter()
+    const { operationId } = await createDeadLetter()
 
-    await operations.discardDeadLetter({
+    await deadLetters.discardDeadLetter({
       operationId,
       actorId: 'operator:audit',
       reason: 'invalid operation confirmed',
@@ -609,183 +585,85 @@ describe('dead-letter operations', () => {
     }
   })
 
-  test('runs every CLI command with only dedicated dead-letter privileges', async () => {
-    const role = 'brawltome_dead_letter'
-    const rolePassword = `operator-${randomUUID()}`
-    const rawToken = `raw-secret-${randomUUID()}`
-    const databaseUrl = new URL(connectionString)
-    const secretRoot = mkdtempSync(join(tmpdir(), 'brawltome-dead-letter-role-'))
+  test('a kind with no describer keeps every field of the inspection, empty', async () => {
+    const { operationId } = await createDeadLetter('no-describer')
 
-    writeFileSync(join(secretRoot, 'postgres_owner_password'), decodeURIComponent(databaseUrl.password), {
-      mode: 0o400,
-    })
+    const inspected = await deadLetters.inspectDeadLetter(operationId)
 
-    writeFileSync(join(secretRoot, 'postgres_dead_letter_password'), rolePassword, { mode: 0o400 })
-
-    const configured = Bun.spawn(
-      ['sh', resolve(import.meta.dir, '../../../../infra/app/postgres/configure-dead-letter-role.sh')],
-      {
-        env: {
-          ...process.env,
-          BRAWLTOME_SECRETS_ROOT: secretRoot,
-          PGDATABASE: databaseUrl.pathname.slice(1),
-          PGHOST: databaseUrl.hostname,
-          PGPASSWORD: decodeURIComponent(databaseUrl.password),
-          PGPORT: databaseUrl.port,
-          PGUSER: decodeURIComponent(databaseUrl.username),
-        },
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
-    )
-
-    const [configuredExitCode, configuredStderr] = await Promise.all([
-      configured.exited,
-      new Response(configured.stderr).text(),
+    expect(Object.keys(inspected ?? {})).toEqual([
+      'operation',
+      'attempts',
+      'proofEffects',
+      'interactiveEffects',
+      'leaderboardEffects',
+      'statisticsEffects',
+      'statisticsPublicationEffects',
+      'schedule',
+      'auditActions',
     ])
 
-    expect(configuredExitCode, configuredStderr).toBe(0)
+    expect(inspected).toMatchObject({
+      proofEffects: [],
+      interactiveEffects: [],
+      leaderboardEffects: [],
+      statisticsEffects: [],
+      statisticsPublicationEffects: [],
+    })
+  })
 
-    const operatorUrl = new URL(connectionString)
+  test('a describer fills in its own field and leaves the rest of the inspection in place', async () => {
+    const { operations, operationId, lease } = await createDeadLetter('described')
 
-    operatorUrl.username = role
-    operatorUrl.password = rolePassword
-    const env = { ...operatorEnv(rawToken), DEAD_LETTER_DATABASE_URL: operatorUrl.toString() }
-    const replayTarget = await createDeadLetter('restricted-replay')
-    const discardTarget = await createDeadLetter('restricted-discard')
+    await database.sql`
+      INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+      VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken}, ${database.sql.json({ value: 'x' })})
+    `
 
-    try {
-      expect((await runCli(['list'], env)).exitCode).toBe(0)
-      expect((await runCli(['inspect', replayTarget.operationId], env)).exitCode).toBe(0)
-      expect((await runCli(['replay', replayTarget.operationId, '--reason', 'source repaired'], env)).exitCode).toBe(0)
-
-      expect((await runCli(['discard', discardTarget.operationId, '--reason', 'invalid request'], env)).exitCode).toBe(
-        0,
-      )
-
-      const restricted = postgres(operatorUrl.toString(), { max: 1 })
-
-      try {
-        await expect((async () => restricted`DELETE FROM refresh_operations.operations`)()).rejects.toMatchObject({
-          code: '42501',
-        })
-
-        await expect(
-          (async () => restricted`UPDATE refresh_operations.dead_letter_actions SET reason = 'tampered'`)(),
-        ).rejects.toMatchObject({ code: '42501' })
-      } finally {
-        await restricted.end()
-      }
-    } finally {
-      const owner = postgres(connectionString, { max: 1 })
-
-      await owner.unsafe(`DROP OWNED BY ${role}`)
-      await owner.unsafe(`DROP ROLE IF EXISTS ${role}`)
-      await owner.end()
-      rmSync(secretRoot, { force: true, recursive: true })
-    }
-  }, 15_000)
-
-  test('authenticates the JSON CLI before PostgreSQL and never exposes token material', async () => {
-    const rawToken = `raw-secret-${randomUUID()}`
-
-    const missingAuth = await runCli(['list'], {
-      DEAD_LETTER_DATABASE_URL: 'postgres://invalid:invalid@127.0.0.1:1/invalid',
-      DEAD_LETTER_OPERATOR_TOKENS: operatorEnv(rawToken).DEAD_LETTER_OPERATOR_TOKENS,
+    const describing = createPostgresDeadLetterOperations(database, {
+      replayGuards: new Map(),
+      describeEffects: new Map<string, EffectDescriber>([
+        [
+          lease.kind,
+          async (transaction, effectOperationId) => ({
+            proofEffects: await readProofEffects(transaction, effectOperationId),
+          }),
+        ],
+      ]),
     })
 
-    expect(missingAuth.exitCode).toBe(1)
-    expect(JSON.parse(missingAuth.stderr)).toMatchObject({ ok: false, error: { code: 'unauthorized' } })
-    expect(`${missingAuth.stdout}${missingAuth.stderr}`).not.toContain(rawToken)
-    expect(`${missingAuth.stdout}${missingAuth.stderr}`).not.toContain('ECONNREFUSED')
+    const inspected = await describing.inspectDeadLetter(operationId)
 
-    const { operationId } = await createDeadLetter('cli-sensitive-payload')
-    const listed = await runCli(['list', '--limit', '10'], operatorEnv(rawToken))
+    expect(inspected?.proofEffects).toEqual([
+      { operationKey: lease.operationKey, effectValue: { value: 'x' }, createdAt: expect.any(String) },
+    ])
 
-    expect(listed.exitCode).toBe(0)
-    expect(listed.stderr).toBe('')
-    expect(listed.stdout).not.toContain('cli-sensitive-payload')
-    expect(listed.stdout).not.toContain(rawToken)
-    expect(JSON.parse(listed.stdout)).toMatchObject({ ok: true, data: { items: expect.any(Array) } })
+    expect(inspected?.interactiveEffects).toEqual([])
+    expect(Object.keys(inspected ?? {})[2]).toBe('proofEffects')
+    expect(await operations.inspect(operationId)).toMatchObject({ operation: { status: 'dead_letter' } })
+  })
 
-    const inspected = await runCli(['inspect', operationId], operatorEnv(rawToken))
+  test('a replay guard that rejects stops the replay and the discard, inside their transaction', async () => {
+    const { operationId } = await createDeadLetter('guarded')
 
-    if (inspected.exitCode !== 0) throw new Error(`CLI inspect failed: ${inspected.stderr}`)
-
-    expect(inspected.exitCode).toBe(0)
-
-    expect(JSON.parse(inspected.stdout)).toMatchObject({
-      ok: true,
-      data: { operation: { operationId, payload: { value: 'cli-sensitive-payload' } } },
+    const guarded = createPostgresDeadLetterOperations(database, {
+      replayGuards: new Map<string, ReplayGuard>([
+        [
+          'proof',
+          async () => {
+            throw new Error('held by a test guard')
+          },
+        ],
+      ]),
+      describeEffects: new Map(),
     })
 
-    const replayed = await runCli(
-      ['replay', operationId, '--reason', 'upstream dependency repaired'],
-      operatorEnv(rawToken),
-    )
+    const input = { operationId, actorId: 'operator:guard', reason: 'guarded' }
 
-    expect(replayed.exitCode).toBe(0)
+    await expect(guarded.replayDeadLetter(input)).rejects.toThrow('held by a test guard')
+    await expect(guarded.discardDeadLetter(input)).rejects.toThrow('held by a test guard')
 
-    expect(JSON.parse(replayed.stdout)).toMatchObject({
-      ok: true,
-      data: { outcome: 'replayed', disposition: 'replayed', replayOperationId: expect.any(String) },
-    })
+    const inspected = await deadLetters.inspectDeadLetter(operationId)
 
-    const replayAudit = await runCli(['inspect', operationId], operatorEnv(rawToken))
-
-    expect(JSON.parse(replayAudit.stdout)).toMatchObject({
-      ok: true,
-      data: { auditActions: [{ actorId: 'operator:integration', reason: 'upstream dependency repaired' }] },
-    })
-
-    const discardedTarget = await createDeadLetter('discard-through-cli')
-
-    const discarded = await runCli(
-      ['discard', discardedTarget.operationId, '--reason', 'invalid source request confirmed'],
-      operatorEnv(rawToken),
-    )
-
-    expect(discarded.exitCode).toBe(0)
-
-    expect(JSON.parse(discarded.stdout)).toMatchObject({
-      ok: true,
-      data: { outcome: 'discarded', disposition: 'discarded', replayOperationId: null },
-    })
-
-    const blankReason = await runCli(['replay', operationId, '--reason', '   '], operatorEnv(rawToken))
-
-    expect(blankReason.exitCode).toBe(1)
-    expect(JSON.parse(blankReason.stderr)).toMatchObject({ ok: false, error: { code: 'invalid_reason' } })
-    const longReason = await runCli(['discard', operationId, '--reason', 'x'.repeat(501)], operatorEnv(rawToken))
-
-    expect(longReason.exitCode).toBe(1)
-    expect(JSON.parse(longReason.stderr)).toMatchObject({ ok: false, error: { code: 'invalid_reason' } })
-
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex')
-
-    for (const output of [missingAuth, listed, inspected, replayed, replayAudit, discarded, blankReason, longReason]) {
-      expect(`${output.stdout}${output.stderr}`).not.toContain(rawToken)
-      expect(`${output.stdout}${output.stderr}`).not.toContain(tokenHash)
-    }
-
-    const control = postgres(connectionString, { max: 1 })
-
-    try {
-      for (const secret of [rawToken, tokenHash]) {
-        const [stored] = await control<{ found: boolean }[]>`
-          SELECT EXISTS (
-            SELECT 1 FROM refresh_operations.operations
-            WHERE payload::text LIKE ${`%${secret}%`} OR provenance::text LIKE ${`%${secret}%`}
-            UNION ALL
-            SELECT 1 FROM refresh_operations.dead_letter_actions
-            WHERE actor_id LIKE ${`%${secret}%`} OR reason LIKE ${`%${secret}%`}
-          ) AS found
-        `
-
-        expect(stored.found).toBe(false)
-      }
-    } finally {
-      await control.end()
-    }
-  }, 15_000)
+    expect(inspected?.auditActions).toEqual([])
+  })
 })

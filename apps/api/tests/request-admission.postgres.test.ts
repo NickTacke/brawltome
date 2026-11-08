@@ -8,7 +8,12 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createProofJob, createScriptedPlayerRefreshJob, createTestQueue } from './fixtures/queue'
+import {
+  createProofJob,
+  createScriptedPlayerRefreshJob,
+  createTestDeadLetters,
+  createTestQueue,
+} from './fixtures/queue'
 
 const testAdmission = {
   totalConcurrency: 2,
@@ -790,7 +795,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     await operations.fail(original, { code: 'operator_repairable', message: 'repairable', retryable: false }, 0)
 
-    const replay = await operations.replayDeadLetter({
+    const replay = await createTestDeadLetters(database).replayDeadLetter({
       operationId: original.operationId,
       actorId: 'operator:integration',
       reason: 'upstream repaired',

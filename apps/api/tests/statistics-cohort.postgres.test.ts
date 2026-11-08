@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type AdmissionConfig,
-  createPostgresDeadLetterOperations,
-  type OperationLease,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, type OperationLease, refreshOperationsModule } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   type CohortCollectionIntent,
@@ -15,7 +10,7 @@ import {
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -405,7 +400,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
       ).toBe('transitioned')
     }
 
-    const deadLetters = createPostgresDeadLetterOperations(database)
+    const deadLetters = createTestDeadLetters(database)
 
     const replay = await deadLetters.replayDeadLetter({
       operationId,

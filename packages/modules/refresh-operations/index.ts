@@ -41,6 +41,14 @@ export {
   rejectExpired,
   rejectReserved,
 } from './db/activate-operation'
+export { hasStatisticsCollectionSeal, lockEffectOperation } from './db/collection-seal'
+export type {
+  DeadLetterEffects,
+  DeadLetterHooks,
+  EffectDescriber,
+  ReplayGuard,
+  ReplayGuardTarget,
+} from './db/dead-letter-hooks'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
 export { createEffectStates, type EffectStateEntry, type EffectStates, proofEffectState } from './db/effect-states'
 export {
@@ -58,6 +66,13 @@ export {
   type ReadAttemptHistoryInput,
   readAttemptHistory,
 } from './db/read-attempt-history'
+export {
+  readInteractiveEffects,
+  readLeaderboardEffects,
+  readProofEffects,
+  readStatisticsEffects,
+  readStatisticsPublicationEffects,
+} from './db/read-effect-rows'
 export {
   type FixedSchedule,
   type ReconcileFixedScheduleInput,
@@ -77,6 +92,7 @@ export {
   reserveForBinding,
 } from './db/reserve-operation'
 export { allSectionsCommitted, sectionCommitted } from './db/section-checkpoints'
+export type { Transaction } from './db/transaction'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,
@@ -125,6 +141,7 @@ export {
   recordLeaderboardEffect,
 } from './lease-fences'
 export * from './model'
+export { authenticateDeadLetterOperator, OperatorAuthenticationError } from './operator-auth'
 export {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,

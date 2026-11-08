@@ -4,6 +4,7 @@ import { activateAdmitted } from './db/activate-operation'
 import { admissionLockId } from './db/admission-lock'
 import { claimOperation } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
+import type { DeadLetterHooks } from './db/dead-letter-hooks'
 import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStates } from './db/effect-states'
@@ -29,10 +30,8 @@ import {
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateLeaderboardSchedule,
   type CreateSchedule,
-  type DeadLetterDispositionInput,
   type DeadLetterOperations,
   type FencedResult,
-  type ListDeadLettersInput,
   type OperationFailure,
   type OperationLease,
   type PlayerRefreshSettled,
@@ -325,16 +324,6 @@ export function createPostgresRefreshOperations(
     fail: (lease: OperationLease, failure: OperationFailure, retryDelayMs: number) =>
       failOperation(database, lease, failure, retryDelayMs),
 
-    listDeadLetters: (input?: ListDeadLettersInput) => listDeadLetters(database, input),
-
-    inspectDeadLetter: (operationId: string) => inspectDeadLetter(database, operationId),
-
-    replayDeadLetter: (input: DeadLetterDispositionInput) =>
-      disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
-
-    discardDeadLetter: (input: DeadLetterDispositionInput) =>
-      disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
-
     inspectTelemetry: () => inspectTelemetry(database),
 
     operationStatus: (operationId: string) => readOperationStatus(database, operationId),
@@ -365,14 +354,14 @@ export function createPostgresRefreshOperations(
 
 export type PostgresRefreshOperations = ReturnType<typeof createPostgresRefreshOperations>
 
-export function createPostgresDeadLetterOperations(database: Database): DeadLetterOperations {
+export function createPostgresDeadLetterOperations(database: Database, hooks: DeadLetterHooks): DeadLetterOperations {
   return {
     listDeadLetters: (input) => listDeadLetters(database, input),
 
-    inspectDeadLetter: (operationId) => inspectDeadLetter(database, operationId),
+    inspectDeadLetter: (operationId) => inspectDeadLetter(database, operationId, hooks),
 
-    replayDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
+    replayDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'replayed' }, hooks),
 
-    discardDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
+    discardDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'discarded' }, hooks),
   }
 }

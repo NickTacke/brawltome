@@ -1,11 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type AdmissionConfig,
-  createPostgresDeadLetterOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   createPostgresStatistics,
@@ -16,7 +12,7 @@ import {
 } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -453,7 +449,7 @@ describe('Statistics full launch cohort publication', () => {
     expect(await statistics.collectionIntents()).toEqual([])
 
     const replayControl = postgres(connectionString, { max: 1 })
-    const replayOperations = createPostgresDeadLetterOperations(database)
+    const replayOperations = createTestDeadLetters(database)
 
     try {
       const bindings = await replayControl<
@@ -595,7 +591,7 @@ describe('Statistics full launch cohort publication', () => {
     `
 
     await sealedControl.end()
-    const sealedDeadLetters = createPostgresDeadLetterOperations(database)
+    const sealedDeadLetters = createTestDeadLetters(database)
 
     await expect(
       sealedDeadLetters.replayDeadLetter({
@@ -1098,7 +1094,7 @@ describe('Statistics full launch cohort publication', () => {
     `
 
     await control.end()
-    const deadLetters = createPostgresDeadLetterOperations(database)
+    const deadLetters = createTestDeadLetters(database)
 
     const replay = await deadLetters.replayDeadLetter({
       operationId: rejectedOperationId,

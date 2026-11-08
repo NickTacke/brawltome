@@ -3,13 +3,17 @@ import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
+  type DeadLetterOperations,
   type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import { statisticsDeadLetterHooks } from '../../jobs/dead-letter-hooks'
 import { createStatisticsReservations } from '../../jobs/statistics-reservations'
 
 let database: TestDatabase
+let deadLetters: DeadLetterOperations
 
 const admission: AdmissionConfig = {
   totalConcurrency: 4,
@@ -39,6 +43,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'statistics_dead_letters', modules: [refreshOperationsModule] })
+  deadLetters = createPostgresDeadLetterOperations(database, statisticsDeadLetterHooks)
 })
 
 afterAll(async () => {
@@ -81,15 +86,34 @@ async function createCollectionDeadLetter() {
   return { operations, original, operationKey }
 }
 
+async function sealCollection(collectionOperationId: string): Promise<void> {
+  const reservations = createStatisticsReservations(database)
+  const operationKey = `statistics:${randomUUID()}:publication`
+
+  const publication = await reservations.reserveStatisticsPublication({
+    kind: 'statistics-publication',
+    dedupeKey: operationKey,
+    operationKey,
+    workClass: 'global-statistics',
+    payload: { generationId: randomUUID(), product: 'ranked' },
+    provenance: { source: 'statistics-publication-validation', requestedBy: 'issue-210' },
+  })
+
+  await database.sql`
+    INSERT INTO refresh_operations.statistics_collection_seals (collection_operation_id, publication_operation_id)
+    VALUES (${collectionOperationId}, ${publication.operationId})
+  `
+}
+
 describe('statistics dead letters', () => {
   test('replays a reserved Statistics collection with stable effect identity', async () => {
     const { operations, original, operationKey } = await createCollectionDeadLetter()
 
-    expect((await operations.inspectDeadLetter(original.operationId))?.statisticsEffects).toEqual([
+    expect((await deadLetters.inspectDeadLetter(original.operationId))?.statisticsEffects).toEqual([
       expect.objectContaining({ operationKey, kind: 'statistics-ranked-collection' }),
     ])
 
-    const replayed = await operations.replayDeadLetter({
+    const replayed = await deadLetters.replayDeadLetter({
       operationId: original.operationId,
       actorId: 'operator:statistics',
       reason: 'Statistics source repaired',
@@ -109,5 +133,75 @@ describe('statistics dead letters', () => {
       payload: original.payload,
       attemptNumber: 1,
     })
+
+    await operations.complete(successor)
+  })
+
+  test("a sealed statistics collection can't be replayed", async () => {
+    const { original } = await createCollectionDeadLetter()
+
+    await sealCollection(original.effectOperationId)
+
+    await expect(
+      deadLetters.replayDeadLetter({
+        operationId: original.operationId,
+        actorId: 'operator:statistics',
+        reason: 'must not race publication validation',
+      }),
+    ).rejects.toThrow('Statistics collection replay is sealed by publication validation')
+
+    expect((await deadLetters.inspectDeadLetter(original.operationId))?.auditActions).toEqual([])
+  })
+
+  test('a sealed statistics collection cannot be discarded either', async () => {
+    const { original } = await createCollectionDeadLetter()
+
+    await sealCollection(original.effectOperationId)
+
+    await expect(
+      deadLetters.discardDeadLetter({
+        operationId: original.operationId,
+        actorId: 'operator:statistics',
+        reason: 'must stay evidence for publication',
+      }),
+    ).rejects.toThrow('sealed by publication validation')
+  })
+
+  test('lists both publication tables for the publication kinds', async () => {
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const reservations = createStatisticsReservations(database)
+    const operationKey = `statistics:${randomUUID()}:legend-meta`
+
+    const reserved = await reservations.reserveStatisticsLegendMetaPublication({
+      kind: 'statistics-legend-meta-publication',
+      dedupeKey: operationKey,
+      operationKey,
+      workClass: 'global-statistics',
+      payload: { generationId: randomUUID() },
+      provenance: { source: 'statistics-legend-meta-publication', requestedBy: 'issue-211' },
+      maxAttempts: 1,
+    })
+
+    await reservations.activateStatisticsLegendMetaPublication(reserved.operationId)
+
+    const lease = requireLease(
+      await operations.claim('statistics-legend-meta', 10_000, admission, 'statistics-legend-meta-publication'),
+    )
+
+    await database.sql`
+      INSERT INTO refresh_operations.statistics_legend_meta_publication_effects
+        (operation_key, operation_id, lease_token)
+      VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
+    `
+
+    await operations.fail(lease, { code: 'source_failed', message: 'repairable', retryable: false }, 0)
+
+    const inspected = await deadLetters.inspectDeadLetter(lease.operationId)
+
+    expect(inspected?.statisticsPublicationEffects).toEqual([
+      { operationKey, leaseToken: lease.leaseToken, createdAt: expect.any(String) },
+    ])
+
+    expect(inspected?.statisticsEffects).toEqual([])
   })
 })

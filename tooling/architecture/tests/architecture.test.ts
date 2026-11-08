@@ -206,18 +206,20 @@ describe('dependency architecture', () => {
     expect(players).not.toMatch(/playerClan|getPlayerGuildV1|getGuildStatsV1/)
   })
 
-  it('keeps dead-letter operator tooling capability-owned behind one public surface', () => {
+  it('keeps the dead-letter operator entry in the API app, outside the queue', () => {
     const repositoryRoot = resolve(import.meta.dir, '../../..')
     const repository = readArchitectureRepository(repositoryRoot)
     const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
+    const api = repository.workspaces.find(({ name }) => name === '@brawltome/api')
 
-    const packageDocument = JSON.parse(
-      readFileSync(resolve(repositoryRoot, 'packages/modules/refresh-operations/package.json'), 'utf8'),
-    ) as { scripts?: Record<string, string> }
+    const readScripts = (path: string) =>
+      (JSON.parse(readFileSync(resolve(repositoryRoot, path), 'utf8')) as { scripts?: Record<string, string> }).scripts
 
-    expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(true)
+    expect(api?.sourceFiles.some(({ path }) => path.endsWith('/src/dead-letter-cli.ts'))).toBe(true)
+    expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(false)
     expect(refreshOperations?.exports).toEqual(['.', './testing'])
-    expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
+    expect(readScripts('packages/modules/refresh-operations/package.json')?.['dead-letters']).toBeUndefined()
+    expect(readScripts('apps/api/package.json')?.['dead-letters']).toBe('bun src/dead-letter-cli.ts')
   })
 
   it('passes the current repository with only cross-module-sql exceptions', () => {
