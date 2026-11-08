@@ -1,16 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
+import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStateEntry, EffectStates } from './db/effect-states'
+import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
+import { listDeadLetters } from './db/list-dead-letters'
 import { readOperationStatus } from './db/read-operation-status'
+import { wakeupChannel } from './db/wakeup'
 import {
   type AdmissionCreditRow,
   admissionConfigHash,
   chooseBackgroundClass,
   validateAdmissionConfig,
 } from './domain/admission'
+import { isDiscoveryProjectionKind, isLeaderboardKind, isStatisticsCollectionKind } from './domain/operation-kinds'
 import type { EffectState } from './jobs/job-definition'
 import {
   type AcceptOperation,
@@ -23,15 +28,8 @@ import {
   type CreateRankingRetentionSchedule,
   type CreateSchedule,
   type CreateScheduleResult,
-  type DeadLetterDisposition,
   type DeadLetterDispositionInput,
-  type DeadLetterDispositionResult,
-  type DeadLetterInspection,
-  type DeadLetterListItem,
   type DeadLetterOperations,
-  type DeadLetterPage,
-  type DiscoveryProjectionKind,
-  discoveryProjectionKinds,
   type FencedResult,
   type FreshnessAttempt,
   freshnessPlannerSource,
@@ -40,7 +38,7 @@ import {
   interactiveRefreshMaxAttempts,
   type LeaderboardDeepCrawlPayload,
   type LeaderboardOperationKind,
-  leaderboardOperationKinds,
+  type ListDeadLettersInput,
   type MaterializeSchedulesResult,
   type OperationFailure,
   type OperationLease,
@@ -56,8 +54,6 @@ import {
   type ReserveStatisticsLegendMetaPublication,
   type ReserveStatisticsPublication,
   recentlyViewedCohort,
-  type StatisticsCollectionKind,
-  statisticsCollectionKinds,
   type TransitionResult,
   validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
@@ -65,7 +61,6 @@ import {
   type WorkClass,
 } from './model'
 
-const wakeupChannel = 'refresh_operations_wakeup'
 const admissionLockId = 1_920_192
 const utcDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
 
@@ -129,34 +124,6 @@ type PrimaryMonitoringScheduleDefinition = {
   }
   provenance: { source: string; requestedBy: string }
   maxAttempts: number
-}
-
-type DeadLetterListRow = {
-  id: string
-  kind: OperationLease['kind']
-  operation_key: string
-  work_class: WorkClass
-  provenance: OperationLease['provenance']
-  attempt_count: number
-  max_attempts: number
-  last_error: OperationFailure | null
-  completed_at: Date
-  disposition: DeadLetterDisposition | null
-}
-
-function toDeadLetterListItem(row: DeadLetterListRow): DeadLetterListItem {
-  return {
-    operationId: row.id,
-    kind: row.kind,
-    operationKey: row.operation_key,
-    workClass: row.work_class,
-    provenance: row.provenance,
-    attemptCount: row.attempt_count,
-    maxAttempts: row.max_attempts,
-    lastError: row.last_error,
-    deadLetteredAt: row.completed_at.toISOString(),
-    disposition: row.disposition,
-  }
 }
 
 function toLease(row: OperationRow): OperationLease {
@@ -290,43 +257,6 @@ function toLease(row: OperationRow): OperationLease {
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
-function validateDispositionInput(input: DeadLetterDispositionInput) {
-  const actorId = input.actorId.trim()
-  const reason = input.reason.trim()
-
-  if ([...actorId].length < 1 || [...actorId].length > 200) {
-    throw new Error('actorId must contain between 1 and 200 characters')
-  }
-
-  if ([...reason].length < 1 || [...reason].length > 500) {
-    throw new Error('reason must contain between 1 and 500 characters')
-  }
-
-  return { actorId, reason }
-}
-
-function toDispositionResult(row: {
-  id: string
-  disposition: DeadLetterDisposition
-  replay_operation_id: string | null
-}): DeadLetterDispositionResult {
-  if (row.disposition === 'replayed' && row.replay_operation_id) {
-    return {
-      outcome: 'already-disposed',
-      disposition: 'replayed',
-      actionId: row.id,
-      replayOperationId: row.replay_operation_id,
-    }
-  }
-
-  return {
-    outcome: 'already-disposed',
-    disposition: 'discarded',
-    actionId: row.id,
-    replayOperationId: null,
-  }
-}
-
 function parseFirstDueAt(value: string): Date {
   if (!utcDateTime.test(value)) throw new Error('firstDueAt must be an ISO-8601 UTC timestamp ending in Z')
 
@@ -342,18 +272,6 @@ function parseFirstDueAt(value: string): Date {
   }
 
   return parsed
-}
-
-function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
-  return (leaderboardOperationKinds as readonly string[]).includes(kind)
-}
-
-function isDiscoveryProjectionKind(kind: string): kind is DiscoveryProjectionKind {
-  return (discoveryProjectionKinds as readonly string[]).includes(kind)
-}
-
-function isStatisticsCollectionKind(kind: string): kind is StatisticsCollectionKind {
-  return (statisticsCollectionKinds as readonly string[]).includes(kind)
 }
 
 function readEffectState(
@@ -544,109 +462,6 @@ export function createPostgresRefreshOperations(
       `
 
       return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
-    })
-  }
-
-  async function disposeDeadLetter(
-    disposition: DeadLetterDisposition,
-    input: DeadLetterDispositionInput,
-  ): Promise<DeadLetterDispositionResult> {
-    const { actorId, reason } = validateDispositionInput(input)
-
-    return client.begin(async (transaction) => {
-      const sql = transaction as unknown as typeof client
-
-      const [target] = await sql<
-        {
-          id: string
-          effect_operation_id: string
-          kind: OperationLease['kind']
-          dedupe_key: string
-          operation_key: string
-          resource_key: string | null
-          work_class: WorkClass
-          payload_version: number
-          payload: OperationLease['payload']
-          provenance: OperationLease['provenance']
-          max_attempts: number
-          lease_token: string | number
-          origin_schedule_occurrence_id: string | null
-        }[]
-      >`
-        SELECT id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload_version,
-               payload, provenance, max_attempts, lease_token, origin_schedule_occurrence_id
-        FROM refresh_operations.operations
-        WHERE id = ${input.operationId} AND status = 'dead_letter'
-        FOR UPDATE
-      `
-
-      if (!target) {
-        return { outcome: 'not-found', disposition: null, actionId: null, replayOperationId: null }
-      }
-
-      if (isStatisticsCollectionKind(target.kind)) {
-        await sql`
-          SELECT id FROM refresh_operations.operations
-          WHERE id = ${target.effect_operation_id}
-          FOR UPDATE
-        `
-
-        const [sealed] = await sql<{ sealed: boolean }[]>`
-          SELECT EXISTS (
-            SELECT 1 FROM refresh_operations.statistics_collection_seals seal
-            WHERE seal.collection_operation_id = ${target.effect_operation_id}
-          ) AS sealed
-        `
-
-        if (sealed?.sealed) throw new Error('Statistics collection replay is sealed by publication validation')
-      }
-
-      const [existing] = await sql<
-        {
-          id: string
-          disposition: DeadLetterDisposition
-          replay_operation_id: string | null
-        }[]
-      >`
-        SELECT id, disposition, replay_operation_id
-        FROM refresh_operations.dead_letter_actions
-        WHERE target_operation_id = ${target.id}
-      `
-
-      if (existing) return toDispositionResult(existing)
-
-      const actionId = randomUUID()
-      let replayOperationId: string | null = null
-
-      if (disposition === 'replayed') {
-        replayOperationId = randomUUID()
-
-        await sql`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload_version,
-             payload, provenance, max_attempts, lease_token, replayed_from_operation_id,
-             origin_schedule_occurrence_id)
-          VALUES
-            (${replayOperationId}, ${target.effect_operation_id}, ${target.kind},
-             ${`${target.dedupe_key}:replay:${actionId}`}, ${target.operation_key}, ${target.resource_key},
-             ${target.work_class}, ${target.payload_version}, ${sql.json(target.payload)}, ${sql.json(target.provenance)},
-             ${target.max_attempts}, ${target.lease_token}, ${target.id}, ${target.origin_schedule_occurrence_id})
-        `
-      }
-
-      await sql`
-        INSERT INTO refresh_operations.dead_letter_actions
-          (id, target_operation_id, disposition, actor_id, reason, replay_operation_id)
-        VALUES (${actionId}, ${target.id}, ${disposition}, ${actorId}, ${reason}, ${replayOperationId})
-      `
-
-      if (replayOperationId) {
-        await sql`SELECT pg_notify(${wakeupChannel}, ${replayOperationId})`
-
-        return { outcome: 'replayed', disposition: 'replayed', actionId, replayOperationId }
-      }
-
-      return { outcome: 'discarded', disposition: 'discarded', actionId, replayOperationId: null }
     })
   }
 
@@ -2284,257 +2099,15 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async listDeadLetters(input: { limit?: number; cursor?: string } = {}): Promise<DeadLetterPage> {
-      const limit = input.limit ?? 50
+    listDeadLetters: (input?: ListDeadLettersInput) => listDeadLetters(database, input),
 
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-        throw new Error('limit must be an integer between 1 and 100')
-      }
+    inspectDeadLetter: (operationId: string) => inspectDeadLetter(database, operationId),
 
-      const cursorFilter = input.cursor
-        ? client`AND (operation.completed_at, operation.id) < (
-            SELECT completed_at, id FROM refresh_operations.operations WHERE id = ${input.cursor}
-          )`
-        : client``
+    replayDeadLetter: (input: DeadLetterDispositionInput) =>
+      disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
 
-      const rows = await client<DeadLetterListRow[]>`
-        SELECT operation.id, operation.kind, operation.operation_key, operation.work_class,
-               operation.provenance, operation.attempt_count, operation.max_attempts,
-               operation.last_error, operation.completed_at, action.disposition
-        FROM refresh_operations.operations operation
-        LEFT JOIN refresh_operations.dead_letter_actions action
-          ON action.target_operation_id = operation.id
-        WHERE operation.status = 'dead_letter' ${cursorFilter}
-        ORDER BY operation.completed_at DESC, operation.id DESC
-        LIMIT ${limit + 1}
-      `
-
-      const pageRows = rows.slice(0, limit)
-      const items = pageRows.map(toDeadLetterListItem)
-
-      return {
-        items,
-        nextCursor: rows.length > limit ? (pageRows.at(-1)?.id ?? null) : null,
-      }
-    },
-
-    async inspectDeadLetter(operationId: string): Promise<DeadLetterInspection | null> {
-      return client.begin('ISOLATION LEVEL REPEATABLE READ READ ONLY', async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [row] = await sql<
-          (DeadLetterListRow & {
-            effect_operation_id: string
-            dedupe_key: string
-            payload_version: number
-            payload: OperationLease['payload']
-            replayed_from_operation_id: string | null
-          })[]
-        >`
-        SELECT operation.id, operation.effect_operation_id, operation.kind, operation.dedupe_key,
-               operation.operation_key, operation.work_class, operation.payload_version,
-               operation.payload, operation.provenance, operation.attempt_count,
-               operation.max_attempts, operation.last_error, operation.completed_at,
-               operation.replayed_from_operation_id, action.disposition
-        FROM refresh_operations.operations operation
-        LEFT JOIN refresh_operations.dead_letter_actions action
-          ON action.target_operation_id = operation.id
-        WHERE operation.id = ${operationId} AND operation.status = 'dead_letter'
-      `
-
-        if (!row) return null
-
-        const [
-          attempts,
-          proofEffects,
-          interactiveEffects,
-          leaderboardEffects,
-          statisticsEffects,
-          statisticsPublicationEffects,
-          scheduleRows,
-          actionRows,
-        ] = await Promise.all([
-          sql<
-            {
-              attempt_number: number
-              lease_token: string | number
-              lease_owner: string
-              started_at: Date
-              finished_at: Date | null
-              outcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_expired' | null
-              error: OperationFailure | null
-            }[]
-          >`
-          SELECT attempt_number, lease_token, lease_owner, started_at, finished_at, outcome, error
-          FROM refresh_operations.attempts
-          WHERE operation_id = ${operationId}
-          ORDER BY attempt_number
-        `,
-          sql<{ operation_key: string; effect_value: { value: string }; created_at: Date }[]>`
-          SELECT operation_key, effect_value, created_at
-          FROM refresh_operations.proof_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          ORDER BY created_at
-        `,
-          sql<
-            {
-              section: 'ranked' | 'stats' | 'profile' | 'roster'
-              lease_token: string | number
-              completed_at: Date
-            }[]
-          >`
-          SELECT section, lease_token, completed_at
-          FROM refresh_operations.interactive_refresh_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          ORDER BY section
-        `,
-          sql<{ operation_key: string; lease_token: string | number; created_at: Date }[]>`
-          SELECT operation_key, lease_token, created_at
-          FROM refresh_operations.leaderboard_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          ORDER BY created_at
-        `,
-          sql<
-            {
-              operation_key: string
-              kind: StatisticsCollectionKind
-              lease_token: string | number
-              created_at: Date
-            }[]
-          >`
-          SELECT operation_key, kind, lease_token, created_at
-          FROM refresh_operations.statistics_collection_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          ORDER BY created_at
-        `,
-          sql<{ operation_key: string; lease_token: string | number; created_at: Date }[]>`
-          SELECT operation_key, lease_token, created_at
-          FROM refresh_operations.statistics_publication_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          UNION ALL
-          SELECT operation_key, lease_token, created_at
-          FROM refresh_operations.statistics_legend_meta_publication_effects
-          WHERE operation_id = ${row.effect_operation_id}
-          ORDER BY created_at
-        `,
-          sql<
-            {
-              schedule_id: string
-              schedule_key: string
-              first_window_number: string | number
-              last_window_number: string | number
-              window_due_at: Date
-              materialized_at: Date
-              lateness_ms: string | number
-              missed_window_count: string | number
-              catch_up: boolean
-            }[]
-          >`
-          SELECT occurrence.schedule_id, schedule.schedule_key, occurrence.first_window_number,
-                 occurrence.last_window_number, occurrence.window_due_at, occurrence.materialized_at,
-                 occurrence.lateness_ms, occurrence.missed_window_count, occurrence.catch_up
-          FROM refresh_operations.operations operation
-          JOIN refresh_operations.schedule_occurrences occurrence
-            ON occurrence.id = operation.origin_schedule_occurrence_id
-          JOIN refresh_operations.schedules schedule ON schedule.id = occurrence.schedule_id
-          WHERE operation.id = ${operationId}
-        `,
-          sql<
-            {
-              id: string
-              target_operation_id: string
-              disposition: DeadLetterDisposition
-              actor_id: string
-              reason: string
-              occurred_at: Date
-              replay_operation_id: string | null
-            }[]
-          >`
-          SELECT id, target_operation_id, disposition, actor_id, reason, occurred_at, replay_operation_id
-          FROM refresh_operations.dead_letter_actions
-          WHERE target_operation_id = ${operationId}
-          ORDER BY occurred_at, id
-        `,
-        ])
-
-        const schedule = scheduleRows[0]
-
-        return {
-          operation: {
-            ...toDeadLetterListItem(row),
-            dedupeKey: row.dedupe_key,
-            payload: row.payload,
-            payloadVersion: row.payload_version,
-            replayedFromOperationId: row.replayed_from_operation_id,
-          },
-          attempts: attempts.map((attempt) => ({
-            attemptNumber: attempt.attempt_number,
-            leaseToken: Number(attempt.lease_token),
-            leaseOwner: attempt.lease_owner,
-            startedAt: attempt.started_at.toISOString(),
-            finishedAt: attempt.finished_at?.toISOString() ?? null,
-            outcome: attempt.outcome,
-            error: attempt.error,
-          })),
-          proofEffects: proofEffects.map((effect) => ({
-            operationKey: effect.operation_key,
-            effectValue: effect.effect_value,
-            createdAt: effect.created_at.toISOString(),
-          })),
-          interactiveEffects: interactiveEffects.map((effect) => ({
-            section: effect.section,
-            leaseToken: Number(effect.lease_token),
-            completedAt: effect.completed_at.toISOString(),
-          })),
-          leaderboardEffects: leaderboardEffects.map((effect) => ({
-            operationKey: effect.operation_key,
-            leaseToken: Number(effect.lease_token),
-            createdAt: effect.created_at.toISOString(),
-          })),
-          statisticsEffects: statisticsEffects.map((effect) => ({
-            operationKey: effect.operation_key,
-            kind: effect.kind,
-            leaseToken: Number(effect.lease_token),
-            createdAt: effect.created_at.toISOString(),
-          })),
-          statisticsPublicationEffects: statisticsPublicationEffects.map((effect) => ({
-            operationKey: effect.operation_key,
-            leaseToken: Number(effect.lease_token),
-            createdAt: effect.created_at.toISOString(),
-          })),
-          schedule: schedule
-            ? {
-                scheduleId: schedule.schedule_id,
-                scheduleKey: schedule.schedule_key,
-                firstWindowNumber: Number(schedule.first_window_number),
-                lastWindowNumber: Number(schedule.last_window_number),
-                windowDueAt: schedule.window_due_at.toISOString(),
-                materializedAt: schedule.materialized_at.toISOString(),
-                latenessMs: Number(schedule.lateness_ms),
-                missedWindowCount: Number(schedule.missed_window_count),
-                catchUp: schedule.catch_up,
-              }
-            : null,
-          auditActions: actionRows.map((action) => ({
-            actionId: action.id,
-            targetOperationId: action.target_operation_id,
-            disposition: action.disposition,
-            actorId: action.actor_id,
-            reason: action.reason,
-            occurredAt: action.occurred_at.toISOString(),
-            replayOperationId: action.replay_operation_id,
-          })),
-        }
-      })
-    },
-
-    replayDeadLetter(input: DeadLetterDispositionInput) {
-      return disposeDeadLetter('replayed', input)
-    },
-
-    discardDeadLetter(input: DeadLetterDispositionInput) {
-      return disposeDeadLetter('discarded', input)
-    },
+    discardDeadLetter: (input: DeadLetterDispositionInput) =>
+      disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
 
     inspectTelemetry: () => inspectTelemetry(database),
 
@@ -2567,12 +2140,13 @@ export function createPostgresRefreshOperations(
 export type PostgresRefreshOperations = ReturnType<typeof createPostgresRefreshOperations>
 
 export function createPostgresDeadLetterOperations(database: Database): DeadLetterOperations {
-  const operations = createPostgresRefreshOperations({ database })
-
   return {
-    listDeadLetters: operations.listDeadLetters,
-    inspectDeadLetter: operations.inspectDeadLetter,
-    replayDeadLetter: operations.replayDeadLetter,
-    discardDeadLetter: operations.discardDeadLetter,
+    listDeadLetters: (input) => listDeadLetters(database, input),
+
+    inspectDeadLetter: (operationId) => inspectDeadLetter(database, operationId),
+
+    replayDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
+
+    discardDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
   }
 }
