@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Database, JsonValue } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
-import { acquireActiveLease } from '@brawltome/refresh-operations'
+import {
+  acquireActiveLease,
+  type EffectLineage,
+  operationMatches,
+  readEffectLineage,
+} from '@brawltome/refresh-operations'
 import {
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
@@ -183,6 +188,27 @@ type LegendMetaSelectionRow = {
   latest_decision: 'accepted' | 'rejected' | null
   active_id: string | null
   active_artifact: LegendMetaArtifact | null
+}
+
+type UnpublishedGenerationRow = {
+  generation_id: string
+  product: CollectionProduct
+  is_insufficient_evidence: boolean
+  is_missing_collection: boolean
+  collection_operation_ids: string[]
+}
+
+// an insufficient generation has nothing more to wait for; otherwise every member's collection must have finished
+function isReadyToPublish(row: UnpublishedGenerationRow, lineage: ReadonlyMap<string, EffectLineage>): boolean {
+  if (row.is_insufficient_evidence) return true
+
+  if (row.is_missing_collection) return false
+
+  return row.collection_operation_ids.every((operationId) => {
+    const effect = lineage.get(operationId)
+
+    return effect?.hasFinished === true && !effect.hasUnfinished
+  })
 }
 
 function productFromKind(kind: CollectionAuthorization['kind']): CollectionProduct {
@@ -449,6 +475,36 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     }
   }
 
+  // a replay shares its effect with the original, so the last completion is taken across every operation of that effect
+  async function lastCompletedByCohort(
+    sql: typeof client,
+    generationId: string,
+    product: CollectionProduct,
+  ): Promise<Map<string, Date>> {
+    const bindings = await sql<{ cohort_id: string; operation_id: string }[]>`
+      SELECT collection.cohort_id, collection.operation_id
+      FROM statistics.collection_operations collection
+      JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
+      WHERE cohort.generation_id = ${generationId} AND collection.product = ${product}
+    `
+
+    const lineage = await readEffectLineage(
+      sql,
+      bindings.map(({ operation_id }) => operation_id),
+    )
+
+    const lastCompleted = new Map<string, Date>()
+
+    for (const { cohort_id, operation_id } of bindings) {
+      const completedAt = lineage.get(operation_id)?.lastFinishedAt
+      const known = lastCompleted.get(cohort_id)
+
+      if (completedAt && (!known || completedAt > known)) lastCompleted.set(cohort_id, completedAt)
+    }
+
+    return lastCompleted
+  }
+
   async function collectionProgress(
     sql: typeof client,
     generationId: string,
@@ -456,6 +512,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
   ): Promise<CellCollectionProgress[]> {
     const rows = await sql<
       {
+        cohort_id: string
         region: LaunchCohortRegion
         bracket: 'Platinum' | 'Diamond+'
         selected_players: number
@@ -464,16 +521,14 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         maximum_player_attempts: string | number
         successes: string | number
         first_attempt_at: Date | null
-        last_completed_at: Date | null
       }[]
     >`
-      SELECT cohort.region, cohort.bracket, cohort.selected_players,
+      SELECT cohort.id AS cohort_id, cohort.region, cohort.bracket, cohort.selected_players,
              count(DISTINCT collection.operation_id)::bigint AS operations,
              coalesce(sum(attempt.attempt_count), 0)::bigint AS source_attempts,
              coalesce(max(attempt.attempt_count), 0)::bigint AS maximum_player_attempts,
              count(DISTINCT observation.effect_operation_id)::bigint AS successes,
-             min(attempt.first_attempt_at) AS first_attempt_at,
-             max(lineage.completed_at) AS last_completed_at
+             min(attempt.first_attempt_at) AS first_attempt_at
       FROM statistics.cohorts cohort
       LEFT JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
       LEFT JOIN statistics.collection_operations collection
@@ -489,17 +544,13 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
       LEFT JOIN statistics.observations observation
         ON observation.cohort_id = member.cohort_id
        AND observation.brawlhalla_id = member.brawlhalla_id AND observation.product = ${product}
-      LEFT JOIN LATERAL (
-        SELECT max(operation.completed_at) AS completed_at
-        FROM refresh_operations.operations operation
-        WHERE operation.effect_operation_id = collection.operation_id
-          AND operation.status IN ('succeeded', 'dead_letter')
-      ) lineage ON true
       WHERE cohort.generation_id = ${generationId}
       GROUP BY cohort.id, cohort.region, cohort.bracket, cohort.selected_players
       ORDER BY array_position(${launchCohortRegions}::text[], cohort.region),
                array_position(${launchCohortBrackets}::text[], cohort.bracket)
     `
+
+    const lastCompleted = await lastCompletedByCohort(sql, generationId, product)
 
     return rows.map((row) => ({
       region: row.region,
@@ -510,7 +561,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
       maximumPlayerAttempts: Number(row.maximum_player_attempts),
       successes: Number(row.successes),
       firstAttemptAt: row.first_attempt_at?.toISOString() ?? null,
-      lastCompletedAt: row.last_completed_at?.toISOString() ?? null,
+      lastCompletedAt: lastCompleted.get(row.cohort_id)?.toISOString() ?? null,
     }))
   }
 
@@ -685,14 +736,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
 
     if (bound?.operation_id !== authorization.effectOperationId) return 'effect-conflict'
 
-    const [operation] = await sql<{ matches: boolean }[]>`
-      SELECT effect_operation_id = ${authorization.effectOperationId}
-         AND operation_key = ${authorization.operationKey}
-         AND kind = ${authorization.kind} AS matches
-      FROM refresh_operations.operations WHERE id = ${authorization.operationId}
-    `
-
-    if (!operation?.matches) return 'effect-conflict'
+    if (!(await operationMatches(sql, authorization))) return 'effect-conflict'
 
     const [existing] = await sql<{ matches: boolean }[]>`
       SELECT effect_operation_id = ${authorization.effectOperationId}
@@ -1122,39 +1166,47 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     },
 
     async publicationIntents(): Promise<PublicationIntent[]> {
-      const rows = await client<{ generation_id: string; product: CollectionProduct }[]>`
-        SELECT generation.id AS generation_id, product.product
+      const rows = await client<UnpublishedGenerationRow[]>`
+        SELECT generation.id AS generation_id, product.product,
+               generation.evidence_state = 'insufficient-evidence' AS is_insufficient_evidence,
+               EXISTS (
+                 SELECT 1 FROM statistics.cohorts cohort
+                 JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
+                 LEFT JOIN statistics.collection_operations collection
+                   ON collection.cohort_id = member.cohort_id
+                  AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
+                 WHERE cohort.generation_id = generation.id AND collection.operation_id IS NULL
+               ) AS is_missing_collection,
+               ARRAY(
+                 SELECT collection.operation_id
+                 FROM statistics.cohorts cohort
+                 JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
+                 JOIN statistics.collection_operations collection
+                   ON collection.cohort_id = member.cohort_id
+                  AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
+                 WHERE cohort.generation_id = generation.id
+               ) AS collection_operation_ids
         FROM statistics.cohort_generations generation
         CROSS JOIN (VALUES ('ranked'::text), ('lifetime'::text)) product(product)
         LEFT JOIN statistics.publication_operations publication
           ON publication.generation_id = generation.id AND publication.product = product.product
         WHERE publication.operation_id IS NULL
-          AND (generation.evidence_state = 'insufficient-evidence' OR NOT EXISTS (
-            SELECT 1 FROM statistics.cohorts cohort
-            JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
-            LEFT JOIN statistics.collection_operations collection
-              ON collection.cohort_id = member.cohort_id
-             AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
-            WHERE cohort.generation_id = generation.id
-              AND (collection.operation_id IS NULL OR EXISTS (
-                SELECT 1 FROM refresh_operations.operations operation
-                WHERE operation.effect_operation_id = collection.operation_id
-                  AND operation.status NOT IN ('succeeded', 'dead_letter')
-              ) OR NOT EXISTS (
-                SELECT 1 FROM refresh_operations.operations operation
-                WHERE operation.effect_operation_id = collection.operation_id
-                  AND operation.status IN ('succeeded', 'dead_letter')
-              ))
-          ))
         ORDER BY generation.created_at, product.product DESC
       `
 
-      return rows.map(({ generation_id, product }) => ({
-        generationId: generation_id,
-        product,
-        kind: 'statistics-publication',
-        operationKey: publicationOperationKey(generation_id, product),
-      }))
+      const lineage = await readEffectLineage(
+        client,
+        rows.flatMap((row) => row.collection_operation_ids),
+      )
+
+      return rows
+        .filter((row) => isReadyToPublish(row, lineage))
+        .map(({ generation_id, product }) => ({
+          generationId: generation_id,
+          product,
+          kind: 'statistics-publication',
+          operationKey: publicationOperationKey(generation_id, product),
+        }))
     },
 
     async boundPublicationOperationIds(operationIds): Promise<string[]> {

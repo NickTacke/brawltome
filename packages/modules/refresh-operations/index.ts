@@ -51,6 +51,12 @@ export type {
 } from './db/dead-letter-hooks'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
 export {
+  type EffectLineage,
+  type OperationIdentity,
+  operationMatches,
+  readEffectLineage,
+} from './db/effect-lineage'
+export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
