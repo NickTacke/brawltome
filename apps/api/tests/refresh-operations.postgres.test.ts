@@ -1020,6 +1020,59 @@ describe('durable Refresh Operations', () => {
     }
   })
 
+  test('keeps a leaderboard window whose effect landed when the next window arrives', async () => {
+    const operations = createTestQueue({ database })
+    const control = postgres(connectionString, { max: 1 })
+    const intervalMs = 60_000
+
+    const schedule = await reconcileLeaderboardSchedule(database, {
+      scheduleKey: `landed-leaderboard:${randomUUID()}`,
+      operationKeyPrefix: `landed-leaderboard:${randomUUID()}`,
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      intervalMs,
+      firstDueAt: new Date(Date.now() - 1_000).toISOString(),
+      payload: { pageDepth: 1, intervalMs },
+      provenance: { source: 'integration-test', requestedBy: 'incident-220' },
+    })
+
+    try {
+      const first = await operations.materializeDueSchedules()
+
+      const firstOperationId = first.occurrences.find(
+        ({ scheduleId }) => scheduleId === schedule.scheduleId,
+      )?.operationId
+
+      if (!firstOperationId) throw new Error('Expected the first leaderboard occurrence')
+
+      await control`
+        INSERT INTO rankings.leaderboard_effects (operation_key, operation_id, operation_kind, lease_token)
+        VALUES (${`landed:${firstOperationId}`}, ${firstOperationId}, 'leaderboard-1v1', 1)
+      `
+
+      await control`
+        UPDATE refresh_operations.schedules
+        SET next_due_at = clock_timestamp() - interval '1 second'
+        WHERE id = ${schedule.scheduleId}
+      `
+
+      await operations.materializeDueSchedules()
+
+      expect((await operations.inspect(firstOperationId)).operation.status).toBe('pending')
+
+      // the two windows leave two pending operations; later tests in this file claim from the same queue
+      for (let cleaned = 0; cleaned < 2; cleaned++) {
+        const current = requireLease(
+          await operations.claim('landed-leaderboard-cleanup', 10_000, testAdmission, 'leaderboard-1v1'),
+        )
+
+        expect(await operations.complete(current)).toBe('transitioned')
+      }
+    } finally {
+      await control.end()
+    }
+  })
+
   test('supersedes obsolete pending leaderboard windows without leaving retry or alert backlog', async () => {
     const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
