@@ -115,8 +115,8 @@ describe('Primary Player monitoring', () => {
 
     // two replicas, then a restart: each process gets a client of its own
     const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
-    const operationsA = createPostgresRefreshOperations({ database: replicaClients[0] })
-    const operationsB = createPostgresRefreshOperations({ database: replicaClients[1] })
+    const operationsA = createPostgresRefreshOperations({ database: replicaClients[0] }, { effectStates: {} })
+    const operationsB = createPostgresRefreshOperations({ database: replicaClients[1] }, { effectStates: {} })
     const snapshot = await accounts.primaryMonitoring.readSnapshot()
 
     const reconciled = await Promise.all(

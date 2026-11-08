@@ -91,7 +91,7 @@ async function acceptProofOperation(): Promise<{
   operations: ReturnType<typeof createPostgresRefreshOperations>
   operationId: string
 }> {
-  const operations = createPostgresRefreshOperations({ database })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
   const key = randomUUID()
 
   const accepted = await operations.accept({

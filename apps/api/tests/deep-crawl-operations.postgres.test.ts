@@ -39,7 +39,7 @@ afterAll(async () => {
 
 describe('Leaderboard deep crawl operations', () => {
   test('reconciles, materializes, and claims one crawl per region schedule', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
 
     const definitions = leaderboardDeepCrawlScheduleDefinitions({
       enabled: true,

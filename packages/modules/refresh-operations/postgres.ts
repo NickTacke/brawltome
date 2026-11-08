@@ -8,10 +8,12 @@ import {
   rejectExpired,
   rejectReserved,
 } from './db/activate-operation'
+import { admissionLockId } from './db/admission-lock'
+import { claimOperation } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
 import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
-import type { EffectStateEntry, EffectStates } from './db/effect-states'
+import type { EffectStates } from './db/effect-states'
 import { findActiveOperation, listAwaiting } from './db/find-operations'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
@@ -22,27 +24,22 @@ import { materializeDueSchedules } from './db/materialize-due-schedules'
 import { promotePendingWorkClass } from './db/promote-work-class'
 import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
+import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { reserveForAdmission, reserveForBinding } from './db/reserve-operation'
+import { beginSection, commitSection } from './db/section-checkpoints'
+import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
 import type { Transaction } from './db/transaction'
 import { wakeupChannel } from './db/wakeup'
-import {
-  type AdmissionCreditRow,
-  admissionConfigHash,
-  chooseBackgroundClass,
-  validateAdmissionConfig,
-} from './domain/admission'
-import { isDiscoveryProjectionKind, isLeaderboardKind, isStatisticsCollectionKind } from './domain/operation-kinds'
+import { admissionConfigHash, validateAdmissionConfig } from './domain/admission'
+import { isDiscoveryProjectionKind, isLeaderboardKind } from './domain/operation-kinds'
 import {
   type PrimaryMonitoringScheduleDefinition,
   validatePrimaryMonitoringSchedule,
 } from './domain/schedule-definition'
-import type { EffectState } from './jobs/job-definition'
 import {
   type AcceptOperation,
   type AcceptOperationResult,
   type AdmissionConfig,
-  type BackgroundWorkClass,
-  backgroundWorkClasses,
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateLeaderboardSchedule,
   type CreateSchedule,
@@ -72,177 +69,12 @@ import {
   statisticsCollectionKinds,
   type TransitionResult,
   validateLeaderboardOperationPayload,
-  type WorkClass,
 } from './model'
-
-const admissionLockId = 1_920_192
 
 const interactiveRefreshKinds = ['interactive-player-refresh', 'clan-refresh'] as const
 
 function playerResourceKey(brawlhallaId: number): string {
   return `player:${brawlhallaId}`
-}
-
-type OperationRow = {
-  id: string
-  effect_operation_id: string
-  effect_created_at: string
-  kind: OperationLease['kind']
-  operation_key: string
-  work_class: WorkClass
-  payload: OperationLease['payload']
-  provenance: { source: string; requestedBy?: string }
-  lease_owner: string
-  lease_token: string | number
-  attempt_count: number
-  max_attempts: number
-  status: string
-  scheduled_window_at: Date | null
-}
-
-function toLease(row: OperationRow): OperationLease {
-  const common = {
-    operationId: row.id,
-    effectOperationId: row.effect_operation_id,
-    effectCreatedAt: row.effect_created_at,
-    operationKey: row.operation_key,
-    provenance: row.provenance,
-    leaseOwner: row.lease_owner,
-    leaseToken: Number(row.lease_token),
-    attemptNumber: row.attempt_count,
-    maxAttempts: row.max_attempts,
-    scheduleWindowAt: row.scheduled_window_at?.toISOString() ?? null,
-  }
-
-  if (isLeaderboardKind(row.kind)) {
-    if (row.work_class !== 'leaderboard' || !('pageDepth' in row.payload)) {
-      throw new Error('invalid durable leaderboard operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (isDiscoveryProjectionKind(row.kind)) {
-    if (row.work_class !== 'projection' || !('batchSize' in row.payload)) {
-      throw new Error('invalid durable discovery projection operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'discovery-reconciliation') {
-    if (row.work_class !== 'projection' || !('owner' in row.payload)) {
-      throw new Error('invalid durable discovery reconciliation operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'interactive-player-refresh') {
-    if (
-      (row.work_class !== 'interactive' && row.work_class !== 'primary-monitoring') ||
-      !('brawlhallaId' in row.payload) ||
-      !('staleSections' in row.payload)
-    ) {
-      throw new Error('invalid durable player refresh operation')
-    }
-
-    if (row.work_class === 'primary-monitoring') {
-      if ('assignmentId' in row.payload) {
-        return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-      }
-
-      if ('cohort' in row.payload && row.payload.cohort === recentlyViewedCohort) {
-        return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-      }
-
-      throw new Error('invalid durable Primary monitoring operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'clan-refresh') {
-    if (row.work_class !== 'interactive' || !('clanId' in row.payload)) {
-      throw new Error('invalid durable clan refresh operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'ranked-player-pulse') {
-    if (row.work_class !== 'primary-monitoring' || !('brawlhallaId' in row.payload) || 'staleSections' in row.payload) {
-      throw new Error('invalid durable ranked player pulse operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'player-name-verification') {
-    if (row.work_class !== 'maintenance' || !('playerName' in row.payload) || !('brawlhallaId' in row.payload)) {
-      throw new Error('invalid durable player name verification operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'ranking-retention') {
-    if (row.work_class !== 'maintenance' || !('retentionHours' in row.payload) || !('maxGenerations' in row.payload)) {
-      throw new Error('invalid durable ranking retention operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'leaderboard-deep-crawl') {
-    if (row.work_class !== 'leaderboard' || !('region' in row.payload) || !('intervalMs' in row.payload)) {
-      throw new Error('invalid durable leaderboard deep crawl operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (isStatisticsCollectionKind(row.kind)) {
-    if (row.work_class !== 'global-statistics' || !('cohortId' in row.payload) || !('brawlhallaId' in row.payload)) {
-      throw new Error('invalid durable statistics collection operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'statistics-publication') {
-    if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || !('product' in row.payload)) {
-      throw new Error('invalid durable statistics publication operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind === 'statistics-legend-meta-publication') {
-    if (row.work_class !== 'global-statistics' || !('generationId' in row.payload) || 'product' in row.payload) {
-      throw new Error('invalid durable Statistics Legend Meta publication operation')
-    }
-
-    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-  }
-
-  if (row.kind !== 'proof' || !('value' in row.payload)) throw new Error('invalid durable proof operation')
-
-  return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
-}
-
-function readEffectState(
-  effects: EffectStateEntry | undefined,
-  sql: Database['sql'],
-  candidate: OperationRow,
-): Promise<EffectState> {
-  if (!effects?.effectState) return Promise.resolve('none')
-
-  return effects.effectState(sql, {
-    operationId: candidate.id,
-    effectOperationId: candidate.effect_operation_id,
-    payload: candidate.payload,
-  })
 }
 
 export type RefreshOperationsDatabases = {
@@ -256,7 +88,6 @@ export function createPostgresRefreshOperations(
   options: { effectStates?: EffectStates } = {},
 ) {
   const client = database.sql
-  const renewalClient = renewals.sql
 
   return {
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
@@ -799,212 +630,12 @@ export function createPostgresRefreshOperations(
       admission: AdmissionConfig,
       kind?: OperationLease['kind'],
     ): Promise<OperationLease | null> {
-      validateAdmissionConfig(admission)
-      const policy = admissionConfigHash(admission)
-
-      for (;;) {
-        const result = await client.begin(async (transaction) => {
-          const sql = transaction as unknown as typeof client
-          const dueKindFilter = kind ? sql`AND kind = ${kind}` : sql``
-          const candidateKindFilter = kind ? sql`AND operation.kind = ${kind}` : sql``
-
-          await sql`SELECT pg_advisory_xact_lock(${admissionLockId})`
-
-          await sql`
-            INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
-            VALUES (true, ${policy.hash}, ${sql.json(policy.document)})
-            ON CONFLICT (singleton) DO NOTHING
-          `
-
-          const [storedPolicy] = await sql<{ config_hash: string }[]>`
-            SELECT config_hash FROM refresh_operations.admission_policy WHERE singleton FOR UPDATE
-          `
-
-          if (storedPolicy.config_hash !== policy.hash) {
-            throw new Error('admission configuration differs from the policy active in PostgreSQL')
-          }
-
-          const activeRows = await sql<{ work_class: WorkClass; count: string | number }[]>`
-            SELECT work_class, count(*)::bigint AS count
-            FROM refresh_operations.operations
-            WHERE status = 'leased' AND lease_expires_at > clock_timestamp()
-            GROUP BY work_class
-          `
-
-          const active = new Map(activeRows.map((row) => [row.work_class, Number(row.count)]))
-          const activeTotal = activeRows.reduce((total, row) => total + Number(row.count), 0)
-
-          if (activeTotal >= admission.totalConcurrency) return { kind: 'empty' as const }
-
-          const dueRows = await sql<{ work_class: WorkClass }[]>`
-            SELECT DISTINCT work_class
-            FROM refresh_operations.operations
-            WHERE ((status = 'pending' AND available_at <= clock_timestamp())
-               OR (status = 'leased' AND lease_expires_at <= clock_timestamp()))
-              ${dueKindFilter}
-          `
-
-          const due = new Set(dueRows.map((row) => row.work_class))
-
-          const eligible = (workClass: WorkClass) =>
-            due.has(workClass) && (active.get(workClass) ?? 0) < admission.classConcurrency[workClass]
-
-          const interactiveEligible = eligible('interactive')
-          const interactiveActive = active.get('interactive') ?? 0
-          const backgroundActive = activeTotal - interactiveActive
-          const backgroundCapacity = admission.totalConcurrency - admission.interactiveReservation
-          const backgroundEligible = backgroundWorkClasses.filter(eligible)
-          let selectedClass: WorkClass | undefined
-          let nextCredits: Map<BackgroundWorkClass, number> | undefined
-
-          if (interactiveEligible && interactiveActive < admission.interactiveReservation) {
-            selectedClass = 'interactive'
-          } else if (backgroundEligible.length > 0 && backgroundActive < backgroundCapacity) {
-            for (const workClass of backgroundEligible) {
-              await sql`
-                INSERT INTO refresh_operations.admission_classes (work_class)
-                VALUES (${workClass})
-                ON CONFLICT (work_class) DO NOTHING
-              `
-            }
-
-            const credits = await sql<AdmissionCreditRow[]>`
-              SELECT work_class, credit
-              FROM refresh_operations.admission_classes
-              WHERE work_class IN ${sql(backgroundEligible)}
-              FOR UPDATE
-            `
-
-            const selection = chooseBackgroundClass(backgroundEligible, credits, admission)
-
-            selectedClass = selection.selected
-            nextCredits = selection.nextCredits
-          } else if (interactiveEligible) {
-            selectedClass = 'interactive'
-          }
-
-          if (!selectedClass) return { kind: 'empty' as const }
-
-          const [candidate] = await sql<OperationRow[]>`
-            SELECT operation.id, operation.effect_operation_id,
-                   to_char(effect.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS effect_created_at,
-                   operation.kind, operation.operation_key, operation.work_class, operation.payload,
-                   operation.provenance, operation.lease_owner, operation.lease_token, operation.attempt_count,
-                   operation.max_attempts, operation.status,
-                   (
-                     SELECT occurrence.window_due_at
-                       + (occurrence.missed_window_count * schedule.interval_ms) * interval '1 millisecond'
-                     FROM refresh_operations.schedule_occurrences occurrence
-                     JOIN refresh_operations.schedules schedule ON schedule.id = occurrence.schedule_id
-                     WHERE occurrence.id = operation.origin_schedule_occurrence_id
-                   ) AS scheduled_window_at
-            FROM refresh_operations.operations operation
-            JOIN refresh_operations.operations effect ON effect.id = operation.effect_operation_id
-            WHERE operation.work_class = ${selectedClass}
-              AND ((operation.status = 'pending' AND operation.available_at <= clock_timestamp())
-                OR (operation.status = 'leased' AND operation.lease_expires_at <= clock_timestamp()))
-              ${candidateKindFilter}
-            ORDER BY operation.available_at, operation.created_at, operation.id
-            FOR UPDATE OF operation SKIP LOCKED
-            LIMIT 1
-          `
-
-          if (!candidate) return { kind: 'retry' as const }
-
-          const effects = options.effectStates?.[candidate.kind]
-          const claimLockKey = effects?.claimLockKey?.(candidate.effect_operation_id)
-
-          if (claimLockKey) {
-            await sql`
-              SELECT pg_advisory_xact_lock(
-                hashtextextended(${claimLockKey}, 200)
-              )
-            `
-          }
-
-          if (candidate.status === 'leased') {
-            const effectState = await readEffectState(effects, sql, candidate)
-
-            if (effectState === 'acknowledged') {
-              await sql`
-                UPDATE refresh_operations.attempts
-                SET finished_at = clock_timestamp(), outcome = 'succeeded'
-                WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
-                  AND finished_at IS NULL
-              `
-
-              await sql`
-                UPDATE refresh_operations.operations
-                SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
-                    completed_at = clock_timestamp(), updated_at = clock_timestamp()
-                WHERE id = ${candidate.id}
-              `
-
-              return { kind: 'retry' as const }
-            }
-
-            await sql`
-              UPDATE refresh_operations.attempts
-              SET finished_at = clock_timestamp(), outcome = 'lease_expired',
-                  error = ${sql.json({ code: 'lease_expired', message: 'Worker lease expired' })}
-              WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
-                AND finished_at IS NULL
-            `
-
-            if (candidate.attempt_count >= candidate.max_attempts && effectState !== 'applied') {
-              await sql`
-                UPDATE refresh_operations.operations
-                SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
-                    completed_at = clock_timestamp(), updated_at = clock_timestamp(),
-                    last_error = ${sql.json({ code: 'lease_expired', message: 'Maximum attempts exhausted' })}
-                WHERE id = ${candidate.id}
-              `
-
-              return { kind: 'retry' as const }
-            }
-          }
-
-          const [leased] = await sql<OperationRow[]>`
-            UPDATE refresh_operations.operations
-            SET status = 'leased', lease_owner = ${workerId},
-                lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
-                lease_token = lease_token + 1, attempt_count = attempt_count + 1,
-                updated_at = clock_timestamp()
-            WHERE id = ${candidate.id}
-            RETURNING id, effect_operation_id, operation_key, kind, work_class, payload, provenance,
-                      lease_owner, lease_token, attempt_count, max_attempts, status
-          `
-
-          await sql`
-            INSERT INTO refresh_operations.attempts
-              (operation_id, attempt_number, lease_token, lease_owner)
-            VALUES (${leased.id}, ${leased.attempt_count}, ${leased.lease_token}, ${workerId})
-          `
-
-          if (nextCredits) {
-            for (const [workClass, credit] of nextCredits) {
-              await sql`
-                UPDATE refresh_operations.admission_classes
-                SET credit = ${credit}, updated_at = clock_timestamp()
-                WHERE work_class = ${workClass}
-              `
-            }
-          }
-
-          return {
-            kind: 'leased' as const,
-            lease: toLease({
-              ...leased,
-              effect_created_at: candidate.effect_created_at,
-              scheduled_window_at: candidate.scheduled_window_at,
-            }),
-          }
-        })
-
-        if (result.kind === 'leased') return result.lease
-
-        if (result.kind === 'empty') return null
+      // without them claim would never finish an acknowledged operation or take its claim lock
+      if (!options.effectStates) {
+        throw new Error(`claim operation for worker ${workerId}: queue was built without effectStates`)
       }
+
+      return claimOperation(database, { workerId, leaseMs, admission, kind, effectStates: options.effectStates })
     },
 
     async listAwaitingInteractiveRefreshes(): Promise<string[]> {
@@ -1018,82 +649,19 @@ export function createPostgresRefreshOperations(
       return rows.map(({ id }) => id)
     },
 
-    async renew(lease: OperationLease, leaseMs: number): Promise<'renewed' | 'lease-lost'> {
-      const renewed = await renewalClient<{ id: string }[]>`
-        UPDATE refresh_operations.operations
-        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
-            updated_at = clock_timestamp()
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-        RETURNING id
-      `
+    renew: (lease: OperationLease, leaseMs: number) => renewLease(renewals, lease, leaseMs),
 
-      return renewed[0] ? 'renewed' : 'lease-lost'
-    },
+    renewWithAuthority: (lease: OperationLease, leaseMs: number) => renewLeaseWithAuthority(renewals, lease, leaseMs),
 
-    async renewWithAuthority(lease: OperationLease, leaseMs: number) {
-      const [renewed] = await renewalClient<{ lease_expires_at: Date }[]>`
-        UPDATE refresh_operations.operations
-        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
-            updated_at = clock_timestamp()
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-        RETURNING lease_expires_at
-      `
-
-      return renewed
-        ? ({ outcome: 'renewed', leaseExpiresAt: renewed.lease_expires_at } as const)
-        : ({ outcome: 'lease-lost' } as const)
-    },
-
-    async beginInteractiveSection(
+    beginInteractiveSection: (
       lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
       section: 'ranked' | 'stats' | 'profile' | 'roster',
-    ) {
-      const [owned] = await client<{ completed: boolean }[]>`
-        SELECT EXISTS (
-          SELECT 1 FROM refresh_operations.interactive_refresh_effects
-          WHERE operation_id = ${lease.effectOperationId} AND section = ${section}
-        ) AS completed
-        FROM refresh_operations.operations
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-      `
+    ) => beginSection(database, lease, section),
 
-      if (!owned) return 'lease-lost' as const
-
-      return owned.completed ? ('already-applied' as const) : ('execute' as const)
-    },
-
-    async commitInteractiveSection(
+    commitInteractiveSection: (
       lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
       section: 'ranked' | 'stats' | 'profile' | 'roster',
-    ): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [owned] = await sql<{ id: string }[]>`
-          SELECT id FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          FOR UPDATE
-        `
-
-        if (!owned) return 'lease-lost' as const
-
-        await sql`
-          INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
-          VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
-          ON CONFLICT (operation_id, section) DO NOTHING
-        `
-
-        return 'transitioned' as const
-      })
-    },
+    ) => commitSection(database, lease, section),
 
     async commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult> {
       if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
@@ -1153,146 +721,18 @@ export function createPostgresRefreshOperations(
       return result.active
     },
 
-    async retryAppliedDiscoveryProjection(
+    retryAppliedDiscoveryProjection: (
       lease: Extract<OperationLease, { payload: { batchSize: number } }>,
       retryDelayMs: number,
-    ): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
+    ) => retryAppliedEffect(database, lease, retryDelayMs),
 
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations
-          SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
-              available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
-              last_error = ${sql.json({
-                code: 'discovery_projection_acknowledgment_pending',
-                message: 'Discovery projection applied; owner acknowledgment remains pending',
-              })},
-              updated_at = clock_timestamp()
-          WHERE id = ${lease.operationId} AND kind = ${lease.kind} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          RETURNING id
-        `
+    defer: (lease: OperationLease, failure: OperationFailure, retryDelayMs: number) =>
+      deferOperation(database, lease, failure, retryDelayMs),
 
-        if (!updated) return 'lease-lost' as const
+    complete: (lease: OperationLease) => completeOperation(database, lease),
 
-        await sql`
-          UPDATE refresh_operations.attempts
-          SET finished_at = clock_timestamp(), outcome = 'retry',
-              error = ${sql.json({
-                code: 'discovery_projection_acknowledgment_pending',
-                message: 'Discovery projection applied; owner acknowledgment remains pending',
-              })}
-          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
-        `
-
-        return 'transitioned' as const
-      })
-    },
-
-    async defer(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult> {
-      if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) {
-        throw new Error('source admission retry delay must be a non-negative safe integer')
-      }
-
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [owned] = await sql<{ attempt_count: number }[]>`
-          SELECT attempt_count FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          FOR UPDATE
-        `
-
-        if (!owned || owned.attempt_count !== lease.attemptNumber) return 'lease-lost' as const
-
-        const [removed] = await sql<{ operation_id: string }[]>`
-          DELETE FROM refresh_operations.attempts
-          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          RETURNING operation_id
-        `
-
-        if (!removed) return 'lease-lost' as const
-
-        await sql`
-          UPDATE refresh_operations.operations
-          SET status = 'pending', attempt_count = attempt_count - 1,
-              lease_owner = NULL, lease_expires_at = NULL,
-              available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
-              last_error = ${sql.json(failure)},
-              updated_at = clock_timestamp()
-          WHERE id = ${lease.operationId}
-        `
-
-        return 'transitioned' as const
-      })
-    },
-
-    async complete(lease: OperationLease): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const updated = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations
-          SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
-              completed_at = clock_timestamp(), updated_at = clock_timestamp()
-          WHERE id = ${lease.operationId} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          RETURNING id
-        `
-
-        if (!updated[0]) return 'lease-lost' as const
-
-        await sql`
-          UPDATE refresh_operations.attempts
-          SET finished_at = clock_timestamp(), outcome = 'succeeded'
-          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
-        `
-
-        return 'transitioned' as const
-      })
-    },
-
-    async fail(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [owned] = await sql<{ attempt_count: number; max_attempts: number }[]>`
-          SELECT attempt_count, max_attempts FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          FOR UPDATE
-        `
-
-        if (!owned) return 'lease-lost' as const
-
-        const retry = failure.retryable && owned.attempt_count < owned.max_attempts
-
-        await sql`
-          UPDATE refresh_operations.attempts
-          SET finished_at = clock_timestamp(), outcome = ${retry ? 'retry' : 'dead_letter'},
-              error = ${sql.json(failure)}
-          WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
-        `
-
-        await sql`
-          UPDATE refresh_operations.operations
-          SET status = ${retry ? 'pending' : 'dead_letter'}, lease_owner = NULL, lease_expires_at = NULL,
-              available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
-              completed_at = ${retry ? null : sql`clock_timestamp()`},
-              last_error = ${sql.json(failure)}, updated_at = clock_timestamp()
-          WHERE id = ${lease.operationId}
-        `
-
-        return 'transitioned' as const
-      })
-    },
+    fail: (lease: OperationLease, failure: OperationFailure, retryDelayMs: number) =>
+      failOperation(database, lease, failure, retryDelayMs),
 
     listDeadLetters: (input?: ListDeadLettersInput) => listDeadLetters(database, input),
 
