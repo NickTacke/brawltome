@@ -14,8 +14,8 @@
     "@brawltome/game-data": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "@marsidev/react-turnstile": "^1.5.0",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-node": "^2.0.0",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/sdk-trace-node": "^2.12.0",
     "@radix-ui/react-avatar": "^1.1.0",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-progress": "^1.1.8",
@@ -24,8 +24,8 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@solar-icons/react": "^1.1.0",
     "@tanstack/react-query": "^5.62.0",
-    "@trpc/client": "^11.0.0",
-    "@trpc/server": "^11.0.0",
+    "@trpc/client": "^11.25.0",
+    "@trpc/server": "^11.25.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "lucide-react": "^0.577.0",
@@ -39,7 +39,7 @@
     "tailwindcss": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
     "use-debounce": "^10.1.0",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

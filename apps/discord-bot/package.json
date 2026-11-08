@@ -13,8 +13,8 @@
   "dependencies": {
     "@brawltome/contracts": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
-    "@trpc/client": "^11.0.0",
-    "discord.js": "^14.22.0",
+    "@trpc/client": "^11.25.0",
+    "discord.js": "^14.28.1",
     "superjson": "^2.2.2"
   },
   "devDependencies": {

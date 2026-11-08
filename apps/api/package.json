@@ -27,18 +27,18 @@
     "@brawltome/statistics": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "@hono/trpc-server": "^0.3.0",
-    "@orpc/openapi": "1.16.1",
-    "@orpc/server": "1.16.1",
-    "@orpc/zod": "1.16.1",
-    "@trpc/server": "^11.0.0",
+    "@orpc/openapi": "1.16.2",
+    "@orpc/server": "1.16.2",
+    "@orpc/zod": "1.16.2",
+    "@trpc/server": "^11.25.0",
     "drizzle-orm": "0.45.4",
-    "hono": "^4.7.0",
+    "hono": "^4.13.17",
     "postgres": "^3.4.0",
     "superjson": "^2.2.6",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@orpc/client": "1.16.1",
+    "@orpc/client": "1.16.2",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   }
