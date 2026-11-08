@@ -1,3 +1,4 @@
+import type { PostgresClans } from '../db/postgres-clans'
 import { parseGuildMembers } from '../domain/guild-members'
 import { parseGuildStats } from '../domain/guild-stats'
 import { failedCheckProvenance, successProvenance } from '../domain/provenance'
@@ -5,7 +6,6 @@ import type { ClanPublicationResult } from '../domain/publication'
 import type { ClanRefreshEffect } from '../domain/refresh-effect'
 import type { ClanRefreshSection } from '../domain/refresh-section'
 import { classifySourceFailure } from '../domain/source-failure'
-import type { PostgresClans } from '../postgres'
 
 type SourceCallOptions = { caller: 'on-demand' | 'background' }
 

@@ -4,6 +4,9 @@ import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
 import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
 import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
 
+export { getClanProfile } from './db/get-clan-profile'
+export { getPlayerMembership } from './db/get-player-membership'
+export { type ClanQueries, createPostgresClans, getClan, type PostgresClans } from './db/postgres-clans'
 export type {
   ClanDiscoveryEvent,
   ClanDiscoveryFact,
@@ -11,20 +14,15 @@ export type {
   ClanDiscoverySource,
 } from './discovery-facts'
 export { createPostgresClanDiscoverySource, type PostgresClanDiscoverySource } from './discovery-postgres'
+export type { ClanMember, ClanProfile, ClanSectionState, PlayerClanMembership } from './domain/clan-profile'
+export type { ClanProvenance } from './domain/provenance'
+export type { ClanRefreshEffect } from './domain/refresh-effect'
 export {
   type ClanRefreshResult,
   type ClanSource,
   processRefreshClan,
   processRefreshClanSection,
 } from './jobs/refresh-clan'
-export {
-  type ClanProvenance,
-  type ClanQueries,
-  type ClanRefreshEffect,
-  createPostgresClans,
-  type PostgresClans,
-} from './postgres'
-export { getClan } from './queries/get-clan'
 
 const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 
