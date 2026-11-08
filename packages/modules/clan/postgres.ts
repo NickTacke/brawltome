@@ -1,39 +1,11 @@
 import type { Database } from '@brawltome/foundation'
+import type { ClanMemberWrite } from './domain/guild-members'
+import type { ClanProfileWrite } from './domain/guild-stats'
 import type { ClanProvenance } from './domain/provenance'
+import type { ClanPublicationResult } from './domain/publication'
+import type { ClanEffectPreparation, ClanRefreshEffect } from './domain/refresh-effect'
 
-export type { ClanProvenance }
-
-export type ClanRefreshEffect = {
-  operationId: string
-  section: 'profile' | 'roster'
-  leaseToken: number
-  leaseExpiresAt: Date
-}
-
-export type ClanProfileWrite = {
-  clanId: number
-  clanName: string
-  clanCreateDate: Date
-  clanXp: string
-  clanLifetimeXp: string
-  notice: string
-  tags: string[]
-  discordInviteCode: string
-  guildPoints: string
-  isRecruiting: boolean
-}
-
-export type ClanMemberWrite = {
-  brawlhallaId: number
-  name: string | null
-  rank: string | null
-  joinDate: Date | null
-  xp: string
-  guildPoints: string | null
-}
-
-export type ClanPublicationResult = 'applied' | 'already-applied' | 'fenced' | 'superseded'
-export type ClanEffectPreparation = 'execute' | 'already-applied' | 'fenced'
+export type { ClanProvenance, ClanRefreshEffect }
 
 type ProfileRow = {
   clan_id: number
