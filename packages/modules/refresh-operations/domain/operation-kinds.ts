@@ -3,9 +3,12 @@ import {
   discoveryProjectionKinds,
   type LeaderboardOperationKind,
   leaderboardOperationKinds,
+  type OperationLease,
   type StatisticsCollectionKind,
   statisticsCollectionKinds,
 } from '../model'
+
+export type OperationKind = OperationLease['kind']
 
 export function isLeaderboardKind(kind: string): kind is LeaderboardOperationKind {
   return (leaderboardOperationKinds as readonly string[]).includes(kind)

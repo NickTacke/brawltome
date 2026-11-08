@@ -1,17 +1,29 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
+import { acceptOperation } from './db/accept-operation'
+import {
+  activateAdmitted,
+  activateBound,
+  activateReserved,
+  rejectExpired,
+  rejectReserved,
+} from './db/activate-operation'
 import { createSchedule } from './db/create-schedule'
 import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStateEntry, EffectStates } from './db/effect-states'
+import { findActiveOperation, listAwaiting } from './db/find-operations'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
 import { materializeDueSchedules } from './db/materialize-due-schedules'
+import { promotePendingWorkClass } from './db/promote-work-class'
 import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
+import { reserveForAdmission, reserveForBinding } from './db/reserve-operation'
+import type { Transaction } from './db/transaction'
 import { wakeupChannel } from './db/wakeup'
 import {
   type AdmissionCreditRow,
@@ -58,12 +70,19 @@ import {
   type ReserveStatisticsLegendMetaPublication,
   type ReserveStatisticsPublication,
   recentlyViewedCohort,
+  statisticsCollectionKinds,
   type TransitionResult,
   validateLeaderboardOperationPayload,
   type WorkClass,
 } from './model'
 
 const admissionLockId = 1_920_192
+
+const interactiveRefreshKinds = ['interactive-player-refresh', 'clan-refresh'] as const
+
+function playerResourceKey(brawlhallaId: number): string {
+  return `player:${brawlhallaId}`
+}
 
 type OperationRow = {
   id: string
@@ -277,226 +296,82 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number) {
-      const [active] = await client<{ id: string; awaiting_admission: boolean; reservation_expired: boolean }[]>`
-        SELECT id,
-          status = 'awaiting_admission' AS awaiting_admission,
-          status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp() AS reservation_expired
-        FROM refresh_operations.operations
-        WHERE kind = 'interactive-player-refresh'
-          AND (dedupe_key = ${dedupeKey}
-            OR (${brawlhallaId ?? null}::bigint IS NOT NULL AND resource_key = ${brawlhallaId ? `player:${brawlhallaId}` : null}))
-          AND status IN ('awaiting_admission', 'pending', 'leased')
-      `
-
-      return active
-        ? {
-            operationId: active.id,
-            awaitingAdmission: active.awaiting_admission,
-            reservationExpired: active.reservation_expired,
-          }
-        : null
+    findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number) {
+      return findActiveOperation(database, {
+        kind: 'interactive-player-refresh',
+        dedupeKey,
+        resourceKey: brawlhallaId ? playerResourceKey(brawlhallaId) : undefined,
+      })
     },
 
-    async findActiveInteractiveClanRefresh(dedupeKey: string) {
-      const [active] = await client<{ id: string; awaiting_admission: boolean; reservation_expired: boolean }[]>`
-        SELECT id,
-          status = 'awaiting_admission' AS awaiting_admission,
-          status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp() AS reservation_expired
-        FROM refresh_operations.operations
-        WHERE kind = 'clan-refresh' AND dedupe_key = ${dedupeKey}
-          AND status IN ('awaiting_admission', 'pending', 'leased')
-      `
-
-      return active
-        ? {
-            operationId: active.id,
-            awaitingAdmission: active.awaiting_admission,
-            reservationExpired: active.reservation_expired,
-          }
-        : null
+    findActiveInteractiveClanRefresh(dedupeKey: string) {
+      return findActiveOperation(database, { kind: 'clan-refresh', dedupeKey })
     },
 
-    async reserveInteractivePlayerRefresh(
+    reserveInteractivePlayerRefresh(
       input: InteractivePlayerRefreshReservation,
     ): Promise<ReserveInteractiveRefreshResult> {
-      for (;;) {
-        const result = await client.begin(async (transaction) => {
-          const sql = transaction as unknown as typeof client
+      const resourceKey = playerResourceKey(input.brawlhallaId)
 
-          await sql`
-            UPDATE refresh_operations.operations
-            SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
-                completed_at = clock_timestamp(), updated_at = clock_timestamp(),
-                last_error = ${sql.json({ code: 'admission_reservation_expired', message: 'Admission reservation expired' })}
-            WHERE kind = 'interactive-player-refresh' AND dedupe_key = ${input.dedupeKey}
-              AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
-          `
+      const reservation = {
+        kind: 'interactive-player-refresh' as const,
+        dedupeKey: input.dedupeKey,
+        operationKey: input.operationKey,
+        resourceKey,
+        workClass: 'interactive' as const,
+        payload: { brawlhallaId: input.brawlhallaId, staleSections: input.staleSections },
+        provenance: input.provenance,
+        maxAttempts: interactiveRefreshMaxAttempts,
+        reservationTtlSeconds: input.reservationTtlSeconds,
+      }
 
-          // A visitor outranks the background: a queued recently viewed refresh for this player becomes interactive
-          // work, so the visitor waits on interactive priority instead of behind the monitoring queue.
-          await sql`
-            UPDATE refresh_operations.operations
-            SET work_class = 'interactive', updated_at = clock_timestamp()
-            WHERE kind = 'interactive-player-refresh' AND resource_key = ${`player:${input.brawlhallaId}`}
-              AND status = 'pending' AND work_class = 'primary-monitoring'
-              AND payload->>'cohort' = ${recentlyViewedCohort}
-          `
-
-          const operationId = randomUUID()
-          const reservationToken = randomUUID()
-
-          const [inserted] = await sql<{ id: string }[]>`
-            INSERT INTO refresh_operations.operations
-              (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
-               provenance, status, max_attempts, reservation_token, reservation_expires_at)
-            VALUES
-              (${operationId}, ${operationId}, 'interactive-player-refresh', ${input.dedupeKey},
-               ${input.operationKey}, ${`player:${input.brawlhallaId}`}, 'interactive',
-               ${sql.json({ brawlhallaId: input.brawlhallaId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
-               clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
-            ON CONFLICT DO NOTHING
-            RETURNING id
-          `
-
-          if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
-
-          const [active] = await sql<{ id: string }[]>`
-            SELECT id FROM refresh_operations.operations
-            WHERE kind = 'interactive-player-refresh'
-              AND (dedupe_key = ${input.dedupeKey} OR resource_key = ${`player:${input.brawlhallaId}`})
-              AND status IN ('awaiting_admission', 'pending', 'leased')
-          `
-
-          return active ? { outcome: 'already-active' as const, operationId: active.id } : null
+      // A visitor outranks the background: a queued recently viewed refresh for this player becomes interactive
+      // work, so the visitor waits on interactive priority instead of behind the monitoring queue.
+      const promoteRecentlyViewed = (transaction: Transaction) =>
+        promotePendingWorkClass(transaction, {
+          kind: 'interactive-player-refresh',
+          resourceKey,
+          from: 'primary-monitoring',
+          to: 'interactive',
+          payloadEquals: { cohort: recentlyViewedCohort },
         })
 
-        if (result) return result
-      }
+      return reserveForAdmission(database, reservation, { beforeInsert: promoteRecentlyViewed })
     },
 
-    async reserveInteractiveClanRefresh(
-      input: InteractiveClanRefreshReservation,
-    ): Promise<ReserveInteractiveRefreshResult> {
-      for (;;) {
-        const result = await client.begin(async (transaction) => {
-          const sql = transaction as unknown as typeof client
-
-          await sql`
-            UPDATE refresh_operations.operations
-            SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
-                completed_at = clock_timestamp(), updated_at = clock_timestamp(),
-                last_error = ${sql.json({ code: 'admission_reservation_expired', message: 'Admission reservation expired' })}
-            WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
-              AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
-          `
-
-          const operationId = randomUUID()
-          const reservationToken = randomUUID()
-
-          const [inserted] = await sql<{ id: string }[]>`
-            INSERT INTO refresh_operations.operations
-              (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-               status, max_attempts, reservation_token, reservation_expires_at)
-            VALUES
-              (${operationId}, ${operationId}, 'clan-refresh', ${input.dedupeKey}, ${input.operationKey}, 'interactive',
-               ${sql.json({ clanId: input.clanId, staleSections: input.staleSections })},
-               ${sql.json(input.provenance)}, 'awaiting_admission', ${interactiveRefreshMaxAttempts}, ${reservationToken},
-               clock_timestamp() + (${input.reservationTtlSeconds} * interval '1 second'))
-            ON CONFLICT (kind, dedupe_key)
-              WHERE status IN ('awaiting_admission', 'pending', 'leased')
-            DO NOTHING RETURNING id
-          `
-
-          if (inserted) return { outcome: 'reserved' as const, operationId, reservationToken }
-
-          const [active] = await sql<{ id: string }[]>`
-            SELECT id FROM refresh_operations.operations
-            WHERE kind = 'clan-refresh' AND dedupe_key = ${input.dedupeKey}
-              AND status IN ('awaiting_admission', 'pending', 'leased')
-          `
-
-          return active ? { outcome: 'already-active' as const, operationId: active.id } : null
-        })
-
-        if (result) return result
-      }
-    },
-
-    async activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations
-          SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
-              updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
-            AND status = 'awaiting_admission' AND reservation_token = ${reservationToken}
-            AND reservation_expires_at > clock_timestamp()
-          RETURNING id
-        `
-
-        if (!updated) return 'lease-lost' as const
-
-        await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-        return 'transitioned' as const
+    reserveInteractiveClanRefresh(input: InteractiveClanRefreshReservation): Promise<ReserveInteractiveRefreshResult> {
+      return reserveForAdmission(database, {
+        kind: 'clan-refresh',
+        dedupeKey: input.dedupeKey,
+        operationKey: input.operationKey,
+        workClass: 'interactive',
+        payload: { clanId: input.clanId, staleSections: input.staleSections },
+        provenance: input.provenance,
+        maxAttempts: interactiveRefreshMaxAttempts,
+        reservationTtlSeconds: input.reservationTtlSeconds,
       })
     },
 
-    async activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
+    activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {
+      return activateReserved(database, { operationId, reservationToken, kinds: interactiveRefreshKinds })
+    },
 
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations
-          SET status = 'pending', reservation_token = NULL, reservation_expires_at = NULL,
-              updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
-            AND status = 'awaiting_admission'
-          RETURNING id
-        `
+    activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult> {
+      return activateAdmitted(database, { operationId, kinds: interactiveRefreshKinds })
+    },
 
-        if (!updated) return 'lease-lost' as const
-
-        await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-        return 'transitioned' as const
+    rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult> {
+      return rejectReserved(database, {
+        operationId,
+        reservationToken,
+        reason,
+        message: 'Interactive refresh admission rejected',
+        kinds: interactiveRefreshKinds,
       })
     },
 
-    async rejectInteractiveRefresh(
-      operationId: string,
-      reservationToken: string,
-      reason: string,
-    ): Promise<TransitionResult> {
-      const [updated] = await client<{ id: string }[]>`
-        UPDATE refresh_operations.operations
-        SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
-            completed_at = clock_timestamp(), updated_at = clock_timestamp(),
-            last_error = ${client.json({ code: reason, message: 'Interactive refresh admission rejected' })}
-        WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
-          AND status = 'awaiting_admission' AND reservation_token = ${reservationToken}
-        RETURNING id
-      `
-
-      return updated ? 'transitioned' : 'lease-lost'
-    },
-
-    async rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult> {
-      const [updated] = await client<{ id: string }[]>`
-        UPDATE refresh_operations.operations
-        SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
-            completed_at = clock_timestamp(), updated_at = clock_timestamp(),
-            last_error = ${client.json({ code: 'admission_reservation_expired', message: 'Admission reservation expired' })}
-        WHERE id = ${operationId} AND kind IN ('interactive-player-refresh', 'clan-refresh')
-          AND status = 'awaiting_admission' AND reservation_expires_at <= clock_timestamp()
-        RETURNING id
-      `
-
-      return updated ? 'transitioned' : 'lease-lost'
+    rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult> {
+      return rejectExpired(database, { operationId, kinds: interactiveRefreshKinds })
     },
 
     async reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult> {
@@ -516,89 +391,20 @@ export function createPostgresRefreshOperations(
         throw new Error('statistics collection brawlhallaId must be a positive safe integer')
       }
 
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 209))`
-
-        const [existing] = await sql<{ id: string; matches: boolean }[]>`
-          SELECT id,
-            kind = ${input.kind}
-            AND dedupe_key = ${input.dedupeKey}
-            AND work_class = 'global-statistics'
-            AND payload = ${sql.json(input.payload)}::jsonb
-            AND provenance = ${sql.json(input.provenance)}::jsonb
-            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-          FROM refresh_operations.operations
-          WHERE operation_key = ${input.operationKey}
-            AND kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
-            AND replayed_from_operation_id IS NULL
-          FOR UPDATE
-        `
-
-        if (existing) {
-          if (!existing.matches) throw new Error('statistics collection operation key has a different definition')
-
-          return { outcome: 'already-active' as const, operationId: existing.id }
-        }
-
-        const operationId = randomUUID()
-
-        await sql`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-             max_attempts, status)
-          VALUES
-            (${operationId}, ${operationId}, ${input.kind}, ${input.dedupeKey}, ${input.operationKey},
-             'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
-             ${input.maxAttempts ?? 3}, 'awaiting_binding')
-        `
-
-        return { outcome: 'accepted' as const, operationId }
+      return reserveForBinding(database, {
+        ...input,
+        operationKeyKinds: statisticsCollectionKinds,
+        lockNamespace: 209,
+        mismatchMessage: 'statistics collection operation key has a different definition',
       })
     },
 
-    async listAwaitingStatisticsCollections(): Promise<string[]> {
-      const rows = await client<{ id: string }[]>`
-        SELECT id FROM refresh_operations.operations
-        WHERE kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
-          AND status = 'awaiting_binding'
-        ORDER BY created_at, id
-        LIMIT 500
-      `
-
-      return rows.map((row) => row.id)
+    listAwaitingStatisticsCollections(): Promise<string[]> {
+      return listAwaiting(database, { kinds: statisticsCollectionKinds, status: 'awaiting_binding', limit: 500 })
     },
 
-    async activateStatisticsCollection(operationId: string): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations
-          SET status = 'pending', updated_at = clock_timestamp()
-          WHERE id = ${operationId}
-            AND kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
-            AND status = 'awaiting_binding'
-          RETURNING id
-        `
-
-        if (updated) {
-          await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-          return 'transitioned' as const
-        }
-
-        const [existing] = await sql<{ status: string }[]>`
-          SELECT status FROM refresh_operations.operations
-          WHERE id = ${operationId}
-            AND kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
-        `
-
-        return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
-          ? ('transitioned' as const)
-          : ('lease-lost' as const)
-      })
+    activateStatisticsCollection(operationId: string): Promise<TransitionResult> {
+      return activateBound(database, operationId, { kinds: statisticsCollectionKinds })
     },
 
     async reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult> {
@@ -620,80 +426,19 @@ export function createPostgresRefreshOperations(
         throw new Error('statistics publication product is unsupported')
       }
 
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 210))`
-
-        const [existing] = await sql<{ id: string; matches: boolean }[]>`
-          SELECT id, kind = 'statistics-publication'
-            AND dedupe_key = ${input.dedupeKey}
-            AND work_class = 'global-statistics'
-            AND payload = ${sql.json(input.payload)}::jsonb
-            AND provenance = ${sql.json(input.provenance)}::jsonb
-            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-          FROM refresh_operations.operations
-          WHERE operation_key = ${input.operationKey} AND kind = 'statistics-publication'
-            AND replayed_from_operation_id IS NULL
-          FOR UPDATE
-        `
-
-        if (existing) {
-          if (!existing.matches) throw new Error('statistics publication operation key has a different definition')
-
-          return { outcome: 'already-active' as const, operationId: existing.id }
-        }
-
-        const operationId = randomUUID()
-
-        await sql`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-             max_attempts, status)
-          VALUES (${operationId}, ${operationId}, 'statistics-publication', ${input.dedupeKey},
-             ${input.operationKey}, 'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
-             ${input.maxAttempts ?? 3}, 'awaiting_binding')
-        `
-
-        return { outcome: 'accepted' as const, operationId }
+      return reserveForBinding(database, {
+        ...input,
+        lockNamespace: 210,
+        mismatchMessage: 'statistics publication operation key has a different definition',
       })
     },
 
-    async listAwaitingStatisticsPublications(): Promise<string[]> {
-      const rows = await client<{ id: string }[]>`
-        SELECT id FROM refresh_operations.operations
-        WHERE kind = 'statistics-publication' AND status = 'awaiting_binding'
-        ORDER BY created_at, id LIMIT 100
-      `
-
-      return rows.map(({ id }) => id)
+    listAwaitingStatisticsPublications(): Promise<string[]> {
+      return listAwaiting(database, { kinds: ['statistics-publication'], status: 'awaiting_binding', limit: 100 })
     },
 
-    async activateStatisticsPublication(operationId: string): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations SET status = 'pending', updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind = 'statistics-publication' AND status = 'awaiting_binding'
-          RETURNING id
-        `
-
-        if (updated) {
-          await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-          return 'transitioned' as const
-        }
-
-        const [existing] = await sql<{ status: string }[]>`
-          SELECT status FROM refresh_operations.operations
-          WHERE id = ${operationId} AND kind = 'statistics-publication'
-        `
-
-        return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
-          ? ('transitioned' as const)
-          : ('lease-lost' as const)
-      })
+    activateStatisticsPublication(operationId: string): Promise<TransitionResult> {
+      return activateBound(database, operationId, { kinds: ['statistics-publication'] })
     },
 
     async reserveStatisticsLegendMetaPublication(
@@ -713,80 +458,23 @@ export function createPostgresRefreshOperations(
         throw new Error('Statistics Legend Meta publication generationId must be a UUID')
       }
 
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.operationKey}, 211))`
-
-        const [existing] = await sql<{ id: string; matches: boolean }[]>`
-          SELECT id, kind = 'statistics-legend-meta-publication'
-            AND dedupe_key = ${input.dedupeKey}
-            AND work_class = 'global-statistics'
-            AND payload = ${sql.json(input.payload)}::jsonb
-            AND provenance = ${sql.json(input.provenance)}::jsonb
-            AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-          FROM refresh_operations.operations
-          WHERE operation_key = ${input.operationKey} AND kind = 'statistics-legend-meta-publication'
-            AND replayed_from_operation_id IS NULL
-          FOR UPDATE
-        `
-
-        if (existing) {
-          if (!existing.matches) throw new Error('Statistics Legend Meta operation key has a different definition')
-
-          return { outcome: 'already-active' as const, operationId: existing.id }
-        }
-
-        const operationId = randomUUID()
-
-        await sql`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-             max_attempts, status)
-          VALUES (${operationId}, ${operationId}, 'statistics-legend-meta-publication', ${input.dedupeKey},
-             ${input.operationKey}, 'global-statistics', ${sql.json(input.payload)}, ${sql.json(input.provenance)},
-             ${input.maxAttempts ?? 3}, 'awaiting_binding')
-        `
-
-        return { outcome: 'accepted' as const, operationId }
+      return reserveForBinding(database, {
+        ...input,
+        lockNamespace: 211,
+        mismatchMessage: 'Statistics Legend Meta operation key has a different definition',
       })
     },
 
-    async listAwaitingStatisticsLegendMetaPublications(): Promise<string[]> {
-      const rows = await client<{ id: string }[]>`
-        SELECT id FROM refresh_operations.operations
-        WHERE kind = 'statistics-legend-meta-publication' AND status = 'awaiting_binding'
-        ORDER BY created_at, id LIMIT 100
-      `
-
-      return rows.map(({ id }) => id)
+    listAwaitingStatisticsLegendMetaPublications(): Promise<string[]> {
+      return listAwaiting(database, {
+        kinds: ['statistics-legend-meta-publication'],
+        status: 'awaiting_binding',
+        limit: 100,
+      })
     },
 
-    async activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [updated] = await sql<{ id: string }[]>`
-          UPDATE refresh_operations.operations SET status = 'pending', updated_at = clock_timestamp()
-          WHERE id = ${operationId} AND kind = 'statistics-legend-meta-publication' AND status = 'awaiting_binding'
-          RETURNING id
-        `
-
-        if (updated) {
-          await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-          return 'transitioned' as const
-        }
-
-        const [existing] = await sql<{ status: string }[]>`
-          SELECT status FROM refresh_operations.operations
-          WHERE id = ${operationId} AND kind = 'statistics-legend-meta-publication'
-        `
-
-        return existing && ['pending', 'leased', 'succeeded'].includes(existing.status)
-          ? ('transitioned' as const)
-          : ('lease-lost' as const)
-      })
+    activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult> {
+      return activateBound(database, operationId, { kinds: ['statistics-legend-meta-publication'] })
     },
 
     // Distinct days on which site or Discord visitors requested a player's refresh. Overlay lookups and requests that
@@ -915,38 +603,15 @@ export function createPostgresRefreshOperations(
         if (owner !== 'player' && owner !== 'clan') throw new Error('discovery reconciliation owner is invalid')
       }
 
-      for (;;) {
-        const result = await client.begin(async (transaction) => {
-          const sql = transaction as unknown as typeof client
-          const operationId = randomUUID()
-
-          const inserted = await sql<{ id: string }[]>`
-            INSERT INTO refresh_operations.operations
-              (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
-            VALUES
-              (${operationId}, ${operationId}, ${kind}, ${input.dedupeKey}, ${input.operationKey}, ${input.workClass},
-               ${sql.json(input.payload)}, ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
-            ON CONFLICT (kind, dedupe_key) WHERE status IN ('pending', 'leased')
-            DO NOTHING
-            RETURNING id
-          `
-
-          if (inserted[0]) {
-            await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-            return { outcome: 'accepted' as const, operationId }
-          }
-
-          const [active] = await sql<{ id: string }[]>`
-            SELECT id FROM refresh_operations.operations
-            WHERE kind = ${kind} AND dedupe_key = ${input.dedupeKey} AND status IN ('pending', 'leased')
-          `
-
-          return active ? { outcome: 'already-active' as const, operationId: active.id } : null
-        })
-
-        if (result) return result
-      }
+      return acceptOperation(database, {
+        kind,
+        dedupeKey: input.dedupeKey,
+        operationKey: input.operationKey,
+        workClass: input.workClass,
+        payload: input.payload,
+        provenance: input.provenance,
+        maxAttempts: input.maxAttempts,
+      })
     },
 
     async reconcilePrimaryMonitoring(snapshot: PrimaryMonitoringSnapshot): Promise<ReconcilePrimaryMonitoringResult> {
