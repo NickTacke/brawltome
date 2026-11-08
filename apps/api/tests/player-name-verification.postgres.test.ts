@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  createPlayerNameVerificationJob,
   createPostgresPlayerDiscoverySource,
   createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
@@ -179,7 +180,7 @@ describe('Player name verification through durable operations', () => {
         retryDelayMs: 1,
         admission,
         sourceAdmission,
-        executePlayerNameVerification: execute,
+        movedJobs: [createPlayerNameVerificationJob({ verifyName: execute })],
       })
 
     expect(await run()).toBe(true)

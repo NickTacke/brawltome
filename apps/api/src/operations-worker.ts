@@ -12,6 +12,7 @@ import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
 import {
+  type CareerLegendReference,
   createPostgresCareerPlayers,
   createPostgresLeaderboardPlayerNames,
   createPostgresLeaderboardRanked,
@@ -23,9 +24,6 @@ import {
   createRecentlyViewedRefreshes,
   createSteamPlayerEvidenceResolver,
   reconcilePrimaryMonitoring,
-  refreshCanonicalCareerPlayer,
-  refreshCanonicalRankedPlayer,
-  refreshRankedPlayerPulse,
 } from '@brawltome/player'
 import {
   createPostgresRanking,
@@ -95,6 +93,22 @@ const legendReferences = createLegendReferenceIndex(
     })),
 )
 
+function resolveLegendReference(legendId: number, legendNameKey: string): CareerLegendReference | null {
+  const byId = legendReferences.getById(legendId)
+  const byKey = legendReferences.getByKey(legendNameKey)
+
+  if (!byId || !byKey || byId.legendId !== byKey.legendId || byId.legendNameKey !== byKey.legendNameKey) {
+    return null
+  }
+
+  return {
+    legendId: byId.legendId,
+    legendNameKey: byId.legendNameKey,
+    weaponOne: normalizeWeaponName(byId.weaponOne),
+    weaponTwo: normalizeWeaponName(byId.weaponTwo),
+  }
+}
+
 checkModuleList(workerModules)
 
 const telemetry = createRuntimeTelemetry('operations-worker')
@@ -120,6 +134,28 @@ const clans = createPostgresClans(databases.main)
 const playerDiscoverySource = createPostgresPlayerDiscoverySource(databases.discovery)
 const clanDiscoverySource = createPostgresClanDiscoverySource(databases.discovery)
 
+const careerPlayers = createPostgresCareerPlayers(databases.main)
+const playerNameVerifications = createPostgresPlayerNameVerifications(databases.main)
+
+const rankedPlayers = createPostgresRankedPlayers(databases.main, {
+  resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
+})
+
+const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
+
+const executePlayerNameVerification = createPlayerNameVerificationExecutor({
+  config: nameVerificationConfig,
+  readSourceUsage: readV0SourceUsage,
+  verifications: playerNameVerifications,
+  rankedPlayers,
+  rankedSource: (admitSourceCall) => {
+    const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
+
+    return { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) }
+  },
+  telemetry,
+})
+
 // the queue needs these jobs' effect checks to be built, so the jobs can only reach the queue once they run
 const discoveryLeaseActive = (lease: Lease<unknown>): Promise<boolean> => operations.discoveryLeaseActive(lease)
 
@@ -135,7 +171,18 @@ const workerJobs = createWorkerJobs({
     leaseActive: discoveryLeaseActive,
   },
   clan: { clans, createBrawlhallaClient: createWorkerBhApiClient },
-  accounts: { accounts: accounts.accounts, createEvidenceResolver: createPrimaryPlayerEvidenceResolver },
+  accounts: {
+    accounts: accounts.accounts,
+    createEvidenceResolver: createPrimaryPlayerEvidenceResolver,
+    primaryMonitoring: accounts.primaryMonitoring,
+  },
+  player: {
+    rankedPlayers,
+    careerPlayers,
+    createBrawlhallaClient: createWorkerBhApiClient,
+    resolveLegendReference,
+    verifyName: executePlayerNameVerification,
+  },
 })
 
 const operations = createPostgresRefreshOperations(
@@ -184,16 +231,10 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
 }
 
 const statistics = createPostgresStatistics(databases.main)
-const careerPlayers = createPostgresCareerPlayers(databases.main)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
 const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
 const playerFreshness = createPostgresPlayerFreshness(databases.main)
 const profileViews = createPostgresProfileViews(databases.main)
-const playerNameVerifications = createPostgresPlayerNameVerifications(databases.main)
-
-const rankedPlayers = createPostgresRankedPlayers(databases.main, {
-  resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
-})
 
 const playerDiscoveryChecks = createPostgresPlayerDiscoverySource(databases.main)
 const clanDiscoveryChecks = createPostgresClanDiscoverySource(databases.main)
@@ -289,7 +330,6 @@ const discoveryReconciliationBackoff = createDiscoveryReconciliationBackoff({
 const leaderboardSchedules = leaderboardScheduleDefinitions(workerConfig.leaderboard)
 const rankingRetentionSchedule = rankingRetentionScheduleDefinition(workerConfig.rankingRetention)
 const deepCrawlSchedules = leaderboardDeepCrawlScheduleDefinitions(workerConfig.deepCrawl)
-const nameVerificationConfig = readPlayerNameVerificationConfig(process.env)
 
 // The same rolling-window usage request admission enforces and source_quota_used reports.
 async function readV0SourceUsage() {
@@ -316,19 +356,6 @@ const freshnessPlanner = createFreshnessPlanner({
   operations: createRecentlyViewedRefreshes(databases.main),
   profileViews,
   freshness: playerFreshness,
-  telemetry,
-})
-
-const executePlayerNameVerification = createPlayerNameVerificationExecutor({
-  config: nameVerificationConfig,
-  readSourceUsage: readV0SourceUsage,
-  verifications: playerNameVerifications,
-  rankedPlayers,
-  rankedSource: (admitSourceCall) => {
-    const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
-
-    return { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) }
-  },
   telemetry,
 })
 
@@ -491,99 +518,6 @@ try {
         },
         statistics,
         executeStatisticsCollection: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
-        isPrimaryMonitoringTarget: async (lease) => {
-          const snapshot = await accounts.primaryMonitoring.readSnapshot()
-
-          return snapshot.targets.some(
-            (target) =>
-              target.assignmentId === lease.payload.assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
-          )
-        },
-        executeSection: async (lease, section, admitSourceCall, caller) => {
-          const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
-            if (lease.workClass === 'primary-monitoring' && 'assignmentId' in lease.payload) {
-              const { assignmentId } = lease.payload
-              const snapshot = await accounts.primaryMonitoring.readSnapshot()
-
-              const current = snapshot.targets.some(
-                (target) => target.assignmentId === assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
-              )
-
-              if (!current) throw new Error('Primary Player assignment is no longer current')
-            }
-
-            await admitSourceCall(domain)
-          })
-
-          if (section === 'ranked') {
-            await refreshCanonicalRankedPlayer(
-              rankedPlayers,
-              { getRanked: (brawlhallaId, options) => admittedBhapi.getPlayerRanked(brawlhallaId, options) },
-              lease.payload.brawlhallaId,
-              { caller },
-              {
-                operationId: lease.operationId,
-                effectOperationId: lease.effectOperationId,
-                leaseOwner: lease.leaseOwner,
-                leaseToken: lease.leaseToken,
-                effectCreatedAt: lease.effectCreatedAt,
-                section: 'ranked',
-              },
-            )
-          } else {
-            await refreshCanonicalCareerPlayer(
-              careerPlayers,
-              { getStats: (brawlhallaId, options) => admittedBhapi.getPlayerStats(brawlhallaId, options) },
-              lease.payload.brawlhallaId,
-              { caller },
-              {
-                operationId: lease.operationId,
-                effectOperationId: lease.effectOperationId,
-                leaseOwner: lease.leaseOwner,
-                leaseToken: lease.leaseToken,
-                section: 'stats',
-              },
-              (legendId, legendNameKey) => {
-                const byId = legendReferences.getById(legendId)
-                const byKey = legendReferences.getByKey(legendNameKey)
-
-                if (!byId || !byKey || byId.legendId !== byKey.legendId || byId.legendNameKey !== byKey.legendNameKey) {
-                  return null
-                }
-
-                return {
-                  legendId: byId.legendId,
-                  legendNameKey: byId.legendNameKey,
-                  weaponOne: normalizeWeaponName(byId.weaponOne),
-                  weaponTwo: normalizeWeaponName(byId.weaponTwo),
-                }
-              },
-            )
-          }
-        },
-        executePlayerNameVerification,
-        executeRankedPulse: async (lease, admitSourceCall) => {
-          const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
-
-          await refreshRankedPlayerPulse(
-            rankedPlayers,
-            {
-              getOneVsOne: (brawlhallaId, options) =>
-                admittedBhapi.getPlayerStatsV1Payload(brawlhallaId, 'ranked_1v1', options),
-              getFixedTeams: (brawlhallaId, options) => admittedBhapi.getPlayerTeamsV1Payload(brawlhallaId, options),
-            },
-            lease.payload.brawlhallaId,
-            { caller: 'background' },
-            {
-              operationId: lease.operationId,
-              effectOperationId: lease.effectOperationId,
-              leaseOwner: lease.leaseOwner,
-              leaseToken: lease.leaseToken,
-              effectCreatedAt: lease.effectCreatedAt,
-              section: 'ranked',
-            },
-          )
-        },
       }),
   })
 } catch (error) {

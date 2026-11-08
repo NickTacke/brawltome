@@ -27,20 +27,16 @@ import {
   type RetryBackoff,
   type RetryTimings,
   runOneJob,
-  runSections,
   SourceAdmissionLimitedError,
   sourceWaitMs,
   statisticsCollectionKinds,
   type WorkClass,
   waitForRenewal,
 } from '@brawltome/refresh-operations'
-import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
+import type { ActorAdmission, SourceAdmission } from '@brawltome/request-admission'
 import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
 import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 
-type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
-type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
-type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
 type LeaderboardLease = Exclude<Extract<OperationLease, { workClass: 'leaderboard' }>, LeaderboardDeepCrawlLease>
 type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
@@ -50,7 +46,6 @@ type StatisticsCollectionLease = Extract<
 >
 type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-publication' }>
 type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
-type InteractiveSection = PlayerLease['payload']['staleSections'][number]
 
 type RunOneRefreshOperationOptions = {
   leaseMs: number
@@ -62,18 +57,6 @@ type RunOneRefreshOperationOptions = {
   sourceAdmission?: SourceAdmission
   waitForSourceAdmission?: (retryAfterMs: number, signal: AbortSignal) => Promise<void>
   waitForSourceRetry?: (delayMs: number, signal: AbortSignal) => Promise<void>
-  executeSection?(
-    lease: PlayerLease,
-    section: 'ranked' | 'stats',
-    admitSourceCall: (domain: SourceDomain) => Promise<void>,
-    caller: 'on-demand' | 'background',
-  ): Promise<void>
-  executeRankedPulse?(lease: RankedPulseLease, admitSourceCall: (domain: SourceDomain) => Promise<void>): Promise<void>
-  executePlayerNameVerification?(
-    lease: NameVerificationLease,
-    admitSourceCall: (domain: SourceDomain) => Promise<void>,
-  ): Promise<unknown>
-  isPrimaryMonitoringTarget?(lease: AccountPrimaryLease): Promise<boolean>
   ranking?: RankingPublicationStore
   leaderboardPlayerNames?: {
     applyLeaderboardNames(input: {
@@ -183,111 +166,6 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
   }
 
   return null
-}
-
-type AccountPrimaryLease = Extract<PlayerLease, { workClass: 'primary-monitoring'; payload: { assignmentId: string } }>
-
-function isAccountPrimaryLease(lease: PlayerLease): lease is AccountPrimaryLease {
-  return (
-    lease.kind === 'interactive-player-refresh' &&
-    lease.workClass === 'primary-monitoring' &&
-    'assignmentId' in lease.payload
-  )
-}
-
-// Account Primary refreshes stop once their assignment ends; recently viewed refreshes belong to no account.
-async function completeEndedAssignment(
-  operations: LeaseOperations,
-  lease: PlayerLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome | null> {
-  if (!isAccountPrimaryLease(lease)) return null
-
-  if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
-
-  if (await options.isPrimaryMonitoringTarget(lease)) return null
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-async function executePlayerRefresh(
-  lease: PlayerLease,
-  tools: JobTools,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.sourceAdmission) throw new Error('Interactive refresh dependencies are unavailable')
-
-  return runSections(
-    lease,
-    lease.payload.staleSections as InteractiveSection[],
-    tools,
-    async (section, { admitSource }) => {
-      if (!options.executeSection || (section !== 'ranked' && section !== 'stats')) {
-        throw new Error('Player refresh handler unavailable')
-      }
-
-      await options.executeSection(
-        lease,
-        section,
-        admitSource,
-        lease.workClass === 'primary-monitoring' ? 'background' : 'on-demand',
-      )
-    },
-    { beforeSection: () => completeEndedAssignment(tools.queue, lease, options) },
-  )
-}
-
-async function executeRankedPulse(
-  operations: LeaseOperations,
-  lease: RankedPulseLease,
-  options: RunOneRefreshOperationOptions,
-  tools: JobTools,
-): Promise<AttemptOutcome> {
-  if (!options.executeRankedPulse || !options.sourceAdmission) {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'ranked_pulse_executor_unavailable',
-        message: 'Ranked pulse executor is not configured',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  await options.executeRankedPulse(lease, tools.createSourceAdmitter('ranked-pulse'))
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-// The executor spends at most one V0 call and records its own outcome, so only a lost lease fails the attempt.
-async function executeNameVerification(
-  operations: LeaseOperations,
-  lease: NameVerificationLease,
-  options: RunOneRefreshOperationOptions,
-  tools: JobTools,
-): Promise<AttemptOutcome> {
-  if (!options.executePlayerNameVerification || !options.sourceAdmission) {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'name_verification_executor_unavailable',
-        message: 'Player name verification executor is not configured',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  await options.executePlayerNameVerification(lease, tools.createSourceAdmitter('name-verification'))
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 async function executeStatisticsCollection(
@@ -1040,34 +918,6 @@ function wrapJob<WrappedLease extends OperationLease>(job: WrappedJob<WrappedLea
   })
 }
 
-function interactiveJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [
-    wrapJob<PlayerLease>({
-      kind: 'interactive-player-refresh',
-      workClasses: ['interactive', 'primary-monitoring'],
-      failureCode: 'interactive_player_refresh_failed',
-      run: (lease, tools) => executePlayerRefresh(lease, tools, options),
-    }),
-  ]
-}
-
-function playerBackgroundJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [
-    wrapJob<RankedPulseLease>({
-      kind: 'ranked-player-pulse',
-      workClasses: ['primary-monitoring'],
-      failureCode: 'ranked_player_pulse_failed',
-      run: (lease, tools) => executeRankedPulse(tools.queue, lease, options, tools),
-    }),
-    wrapJob<NameVerificationLease>({
-      kind: 'player-name-verification',
-      workClasses: ['maintenance'],
-      failureCode: 'player_name_verification_failed',
-      run: (lease, tools) => executeNameVerification(tools.queue, lease, options, tools),
-    }),
-  ]
-}
-
 function statisticsJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
   const collectionJobs = statisticsCollectionKinds.map((kind) =>
     wrapJob<StatisticsCollectionLease>({
@@ -1121,13 +971,7 @@ function leaderboardJobs(options: RunOneRefreshOperationOptions): JobDefinition<
 }
 
 export function createJobsFromOptions(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [
-    ...interactiveJobs(options),
-    ...playerBackgroundJobs(options),
-    ...statisticsJobs(options),
-    ...leaderboardJobs(options),
-    ...(options.movedJobs ?? []),
-  ]
+  return [...statisticsJobs(options), ...leaderboardJobs(options), ...(options.movedJobs ?? [])]
 }
 
 export function runOneRefreshOperation(

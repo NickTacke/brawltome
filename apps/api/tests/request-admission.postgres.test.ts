@@ -8,7 +8,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createProofJob, createTestQueue } from './fixtures/queue'
+import { createProofJob, createScriptedPlayerRefreshJob, createTestQueue } from './fixtures/queue'
 
 const testAdmission = {
   totalConcurrency: 2,
@@ -536,10 +536,12 @@ describe('PostgreSQL interactive refresh admission', () => {
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        executeSection: async (_lease, _section, admitSourceCall) => {
-          await admitSourceCall('brawlhalla-v1')
-          await admitSourceCall('brawlhalla-v1')
-        },
+        movedJobs: [
+          createScriptedPlayerRefreshJob(async (_lease, _section, admitSourceCall) => {
+            await admitSourceCall('brawlhalla-v1')
+            await admitSourceCall('brawlhalla-v1')
+          }),
+        ],
       }),
     ).toBe(true)
 
@@ -586,12 +588,11 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const options = {
-      movedJobs: [createProofJob()],
+      movedJobs: [createProofJob(), createScriptedPlayerRefreshJob()],
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      executeSection: async () => undefined,
       leaderboardSource: {
         async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
           if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
@@ -669,10 +670,12 @@ describe('PostgreSQL interactive refresh admission', () => {
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      executeSection: async () => {
-        sectionStarted?.()
-        await Bun.sleep(1_750)
-      },
+      movedJobs: [
+        createScriptedPlayerRefreshJob(async () => {
+          sectionStarted?.()
+          await Bun.sleep(1_750)
+        }),
+      ],
     })
 
     await started
@@ -803,11 +806,13 @@ describe('PostgreSQL interactive refresh admission', () => {
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        executeSection: async (lease, _section, admitSourceCall) => {
-          expect(lease.effectOperationId).toBe(original.effectOperationId)
-          expect(lease.operationId).toBe(replay.replayOperationId)
-          await admitSourceCall('brawlhalla-v1')
-        },
+        movedJobs: [
+          createScriptedPlayerRefreshJob(async (lease, _section, admitSourceCall) => {
+            expect(lease.effectOperationId).toBe(original.effectOperationId)
+            expect(lease.operationId).toBe(replay.replayOperationId)
+            await admitSourceCall('brawlhalla-v1')
+          }),
+        ],
       }),
     ).toBe(true)
 

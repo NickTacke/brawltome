@@ -3,6 +3,7 @@ import { brawlhallaV0WindowMs } from '@brawltome/bhapi'
 import { parseBoundedInteger } from '@brawltome/foundation'
 import {
   type NameVerificationOutcome,
+  type PlayerNameVerificationPayload,
   type PostgresPlayerNameVerifications,
   type PostgresRankedPlayers,
   refreshCanonicalRankedPlayer,
@@ -11,7 +12,7 @@ import {
 import {
   type AcceptOperationResult,
   type AcceptPlayerNameVerificationOperation,
-  type OperationLease,
+  type Lease,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
 import type { SourceDomain } from '@brawltome/request-admission'
@@ -33,7 +34,6 @@ export type PlayerNameVerificationConfig = {
 
 export type SourceUsage = { used: number; limit: number }
 type MetricOutcome = 'renamed' | 'unchanged' | 'failed' | 'skipped_budget' | 'resolved_free'
-type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 
 const dayMs = 24 * 60 * 60 * 1000
 
@@ -261,7 +261,10 @@ export function createPlayerNameVerificationExecutor(deps: {
   rankedSource(admitSourceCall: (domain: SourceDomain) => Promise<void>): V0RankedSource
   telemetry?: Telemetry
 }) {
-  return async (lease: NameVerificationLease, admitSourceCall: (domain: SourceDomain) => Promise<void>) => {
+  return async (
+    lease: Lease<PlayerNameVerificationPayload>,
+    admitSourceCall: (domain: SourceDomain) => Promise<void>,
+  ) => {
     const source = deps.rankedSource(admitSourceCall)
 
     return executePlayerNameVerification({

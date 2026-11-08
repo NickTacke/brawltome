@@ -3,12 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  createInteractivePlayerRefreshJob,
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
   playerModule,
   reconcilePrimaryMonitoring,
-  refreshCanonicalCareerPlayer,
-  refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -153,65 +152,44 @@ describe('Primary Player monitoring', () => {
     let rankedCalls = 0
     let careerCalls = 0
 
+    const refreshJob = createInteractivePlayerRefreshJob({
+      rankedPlayers,
+      careerPlayers,
+      resolveLegendReference: () => null,
+      isPrimaryMonitoringTarget: async (assignmentId, targetBrawlhallaId) => {
+        const current = await accounts.primaryMonitoring.readSnapshot()
+
+        return current.targets.some(
+          (target) => target.assignmentId === assignmentId && target.brawlhallaId === targetBrawlhallaId,
+        )
+      },
+      createAdmittedSource: (admitSource) => ({
+        getRanked: async (_id, options) => {
+          expect(options.caller).toBe('background')
+          await admitSource('brawlhalla-v0')
+          options.onAttempt()
+          rankedCalls++
+
+          return rankedSnapshot(brawlhallaId)
+        },
+        getStats: async (_id, options) => {
+          expect(options.caller).toBe('background')
+          await admitSource('brawlhalla-v0')
+          options.onAttempt()
+          careerCalls++
+
+          return careerSnapshot(brawlhallaId)
+        },
+      }),
+    })
+
     const run = (operations: typeof operationsA, workerId: string) =>
       runOneRefreshOperation(operations, workerId, {
         leaseMs: 10_000,
         retryDelayMs: 1,
         admission,
         sourceAdmission,
-        isPrimaryMonitoringTarget: async (lease) => {
-          const current = await accounts.primaryMonitoring.readSnapshot()
-
-          return current.targets.some(
-            (target) =>
-              target.assignmentId === lease.payload.assignmentId && target.brawlhallaId === lease.payload.brawlhallaId,
-          )
-        },
-        executeSection: async (lease, section, admitSourceCall, caller) => {
-          expect(caller).toBe('background')
-          await admitSourceCall('brawlhalla-v0')
-
-          const effect = {
-            operationId: lease.operationId,
-            effectOperationId: lease.effectOperationId,
-            effectCreatedAt: lease.effectCreatedAt,
-            leaseOwner: lease.leaseOwner,
-            leaseToken: lease.leaseToken,
-          }
-
-          if (section === 'ranked') {
-            await refreshCanonicalRankedPlayer(
-              rankedPlayers,
-              {
-                getRanked: async (_id, options) => {
-                  options.onAttempt()
-                  rankedCalls++
-
-                  return rankedSnapshot(brawlhallaId)
-                },
-              },
-              brawlhallaId,
-              { caller },
-              { ...effect, section: 'ranked' },
-            )
-          } else {
-            await refreshCanonicalCareerPlayer(
-              careerPlayers,
-              {
-                getStats: async (_id, options) => {
-                  options.onAttempt()
-                  careerCalls++
-
-                  return careerSnapshot(brawlhallaId)
-                },
-              },
-              brawlhallaId,
-              { caller },
-              { ...effect, section: 'stats' },
-              () => null,
-            )
-          }
-        },
+        movedJobs: [refreshJob],
       })
 
     const executions = await Promise.all([run(operationsA, 'replica-a'), run(operationsB, 'replica-b')])

@@ -5,6 +5,7 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import {
   createPlayerRefreshReservations,
   createPostgresRankedPlayers,
+  createRankedPlayerPulseJob,
   playerModule,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
@@ -472,15 +473,12 @@ describe('Players-owned canonical ranked state', () => {
           admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
           pauseSource: async () => {},
         },
-        executeRankedPulse: async (lease) => {
-          await refreshRankedPlayerPulse(
-            players,
-            pulseSource({ brawlhalla_id: brawlhallaId, rating: 1750, games: 14 }),
-            brawlhallaId,
-            { caller: 'background' },
-            effectFor(lease),
-          )
-        },
+        movedJobs: [
+          createRankedPlayerPulseJob({
+            rankedPlayers: players,
+            createAdmittedPulseSource: () => pulseSource({ brawlhalla_id: brawlhallaId, rating: 1750, games: 14 }),
+          }),
+        ],
       }),
     ).toBe(true)
 
