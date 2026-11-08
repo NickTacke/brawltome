@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { createPostgresAccounts } from '@brawltome/accounts'
+import { createPostgresAccounts, proofEffectStore } from '@brawltome/accounts'
 import {
   BhApiClient,
   type BhApiClientOptions,
@@ -230,7 +230,7 @@ const jobRegistry = createJobRegistry(workerJobs)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { effectStates: createEffectStates(workerJobs) },
+  { effectStates: createEffectStates(workerJobs), proofEffects: proofEffectStore },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {

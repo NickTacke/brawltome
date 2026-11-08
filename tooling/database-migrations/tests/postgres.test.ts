@@ -746,9 +746,11 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         // the history above is faked, so what a pending migration moves or alters has to exist by hand
         await client`CREATE SCHEMA refresh_operations`
         await client`CREATE SCHEMA players`
+        await client`CREATE SCHEMA accounts`
 
         await client`
           CREATE TABLE refresh_operations.operations (
+            id uuid PRIMARY KEY,
             kind text NOT NULL CONSTRAINT operations_kind_check CHECK (true),
             work_class text NOT NULL,
             payload jsonb NOT NULL CONSTRAINT operations_payload_by_kind CHECK (true)
@@ -759,6 +761,16 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           CREATE TABLE refresh_operations.primary_monitoring_reconciliation (
             singleton boolean PRIMARY KEY,
             observed_at timestamptz NOT NULL
+          )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.proof_effects (
+            operation_key text PRIMARY KEY,
+            operation_id uuid NOT NULL,
+            lease_token bigint NOT NULL,
+            effect_value jsonb NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT clock_timestamp()
           )
         `
       } finally {

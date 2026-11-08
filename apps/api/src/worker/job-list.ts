@@ -1,4 +1,8 @@
-import { createPrimaryPlayerVerificationJob, type PrimaryPlayerVerificationJobDependencies } from '@brawltome/accounts'
+import {
+  createPrimaryPlayerVerificationJob,
+  type PrimaryPlayerVerificationJobDependencies,
+  proofEffectState,
+} from '@brawltome/accounts'
 import type { BhApiClient, BhApiClientOptions } from '@brawltome/bhapi'
 import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
 import {
@@ -34,7 +38,6 @@ import {
   type Lease,
   leaderboardOperationKinds,
   type ProofEffectPayload,
-  proofEffectState,
   workClasses,
 } from '@brawltome/refresh-operations'
 import {

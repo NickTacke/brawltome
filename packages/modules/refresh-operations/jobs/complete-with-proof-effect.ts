@@ -1,6 +1,25 @@
+import type { Database, Sql } from '@brawltome/foundation'
+import type postgres from 'postgres'
 import type { AttemptOutcome, JobTools, Lease } from './job-definition'
 
 export type ProofEffectPayload = { value: string }
+
+export type ProofEffectWrite = {
+  operationKey: string
+  effectOperationId: string
+  leaseToken: number
+  payload: ProofEffectPayload
+}
+
+export type ProofEffectWriteResult = 'applied' | 'already-applied' | 'effect-conflict'
+
+// the owner of the proof effect table, given to the queue so it never names another module's table
+export type ProofEffectStore = {
+  // runs inside the transaction that fenced the lease
+  write(sql: Sql, effect: ProofEffectWrite): Promise<ProofEffectWriteResult>
+  // every stored row for the operation, for tests and operators
+  readRows(database: Database, operationId: string): Promise<postgres.Row[]>
+}
 
 /** Records the effect of a proof-style operation and settles the lease on what the write found. */
 export async function completeWithProofEffect(

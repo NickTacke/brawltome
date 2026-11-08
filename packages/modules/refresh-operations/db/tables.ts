@@ -126,14 +126,6 @@ export const admissionClasses = refreshOperationsSchema.table('admission_classes
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(clockTimestamp),
 })
 
-export const proofEffects = refreshOperationsSchema.table('proof_effects', {
-  operationKey: text('operation_key').primaryKey(),
-  operationId: uuid('operation_id').notNull().unique(),
-  leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
-  effectValue: jsonb<{ value: string }>('effect_value').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
 export const interactiveRefreshEffects = refreshOperationsSchema.table(
   'interactive_refresh_effects',
   {

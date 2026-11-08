@@ -49,12 +49,16 @@ ALTER ROLE brawltome_dead_letter PASSWORD :'dead_letter_password'
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA refresh_operations FROM brawltome_dead_letter;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA refresh_operations FROM brawltome_dead_letter;
 REVOKE ALL PRIVILEGES ON SCHEMA refresh_operations FROM brawltome_dead_letter;
+REVOKE ALL PRIVILEGES ON accounts.proof_effects FROM brawltome_dead_letter;
+REVOKE ALL PRIVILEGES ON SCHEMA accounts FROM brawltome_dead_letter;
 
 SELECT format('GRANT CONNECT ON DATABASE %I TO brawltome_dead_letter', current_database())
 \gexec
 GRANT USAGE ON SCHEMA refresh_operations TO brawltome_dead_letter;
+GRANT USAGE ON SCHEMA accounts TO brawltome_dead_letter;
 GRANT SELECT, INSERT, UPDATE ON refresh_operations.operations TO brawltome_dead_letter;
 GRANT SELECT, INSERT ON refresh_operations.dead_letter_actions TO brawltome_dead_letter;
+GRANT SELECT ON accounts.proof_effects TO brawltome_dead_letter;
 GRANT SELECT ON
   refresh_operations.attempts,
   refresh_operations.proof_effects,

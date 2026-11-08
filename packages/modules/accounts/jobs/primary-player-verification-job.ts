@@ -4,8 +4,8 @@ import {
   type JobDefinition,
   type Lease,
   type ProofEffectPayload,
-  proofEffectState,
 } from '@brawltome/refresh-operations'
+import { proofEffectState } from '../db/proof-effects'
 import type { Accounts } from '../src/accounts'
 
 type PrimaryPlayerEvidenceResolver = Parameters<Accounts['resolvePrimaryPlayerVerification']>[1]

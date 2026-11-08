@@ -1,3 +1,4 @@
+import { proofEffectStore } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import { createLeaderboardCollectionJob, defaultDeepCrawlSlicePages } from '@brawltome/ranking'
@@ -11,6 +12,7 @@ import {
   type JobTools,
   type LeaderboardOperationKind,
   type Lease,
+  type ProofEffectStore,
   type QueueWorker,
   type RefreshOperationsDatabases,
   type RunOneJobOptions,
@@ -141,10 +143,23 @@ function withEffect(tools: JobTools, commitProofEffect: QueueWorker['commitProof
   return { ...tools, queue: { ...tools.queue, commitProofEffect } }
 }
 
+// proof effects live in the accounts schema; a database without that module has none to read
+const testProofEffectStore: ProofEffectStore = {
+  ...proofEffectStore,
+  async readRows(database, operationId) {
+    const [{ table }] = await database.sql<
+      { table: string | null }[]
+    >`SELECT to_regclass('accounts.proof_effects') AS table`
+
+    return table ? proofEffectStore.readRows(database, operationId) : []
+  },
+}
+
 // built the way the worker builds it, so expired leases read the same effect tables
 export function createTestQueue(databases: RefreshOperationsDatabases, discovery = noDiscoveryEffects) {
   return createPostgresRefreshOperations(databases, {
     effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
+    proofEffects: testProofEffectStore,
   })
 }
 

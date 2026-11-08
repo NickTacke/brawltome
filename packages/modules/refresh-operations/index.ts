@@ -62,7 +62,6 @@ export {
   type EffectStates,
   leaderboardEffectState,
   legendMetaPublicationEffectState,
-  proofEffectState,
   statisticsCollectionEffectState,
   statisticsPublicationEffectState,
 } from './db/effect-states'
@@ -84,7 +83,6 @@ export {
 export {
   readInteractiveEffects,
   readLeaderboardEffects,
-  readProofEffects,
   readStatisticsEffects,
   readStatisticsPublicationEffects,
 } from './db/read-effect-rows'
@@ -127,7 +125,13 @@ export {
   type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
-export { completeWithProofEffect, type ProofEffectPayload } from './jobs/complete-with-proof-effect'
+export {
+  completeWithProofEffect,
+  type ProofEffectPayload,
+  type ProofEffectStore,
+  type ProofEffectWrite,
+  type ProofEffectWriteResult,
+} from './jobs/complete-with-proof-effect'
 export {
   type AttemptOutcome,
   defineJob,

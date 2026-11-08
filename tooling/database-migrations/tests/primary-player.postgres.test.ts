@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
+import type { Migration } from '@brawltome/foundation'
 import { migratePostgres } from '@brawltome/foundation'
 import { openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
+
+// the accounts migration that moves the proof effects needs the queue's migrations; these tests load only accounts
+const accountsMigrations = accountsModule.migrations.filter((migration: Migration) => !migration.requires?.length)
 
 const connectionString = process.env.DATABASE_URL
 
@@ -63,7 +67,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
             ('e72d7508-25e8-41b5-aee4-a67033fc9d8a', 99, 'steam-duplicate-b', 'steam', 'linked', '2026-08-10');
         `)
 
-        await migratePostgres(databaseUrl, accountsModule.migrations)
+        await migratePostgres(databaseUrl, accountsMigrations)
 
         const ownership = await sql`SELECT account_id::text, brawlhalla_id::int FROM accounts.primary_players`
 
@@ -94,7 +98,7 @@ describe.skipIf(!connectionString)('Primary Player PostgreSQL', () => {
 
   test('atomically allows only one account to own a player and keeps both attempts', async () => {
     await withDatabase(async (databaseUrl) => {
-      await migratePostgres(databaseUrl, accountsModule.migrations)
+      await migratePostgres(databaseUrl, accountsMigrations)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const sql = postgres(databaseUrl, { max: 2 })

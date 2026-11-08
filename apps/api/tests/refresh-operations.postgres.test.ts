@@ -1979,7 +1979,7 @@ async function recordNothing(): Promise<void> {}
 
 async function recordProofEffect(control: ControlClient, lease: OperationLease): Promise<void> {
   await control`
-    INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+    INSERT INTO accounts.proof_effects (operation_key, operation_id, lease_token, effect_value)
     VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
             ${control.json({ value: 'proof' })})
   `

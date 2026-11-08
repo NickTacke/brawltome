@@ -6,7 +6,7 @@ import * as refreshOperationsTables from '../db/tables'
 import { refreshOperationsModule } from '../index'
 
 // a queue-only test database keeps these here; only the owners' migrations move them
-const movedToOwnerModules = ['primary_monitoring_reconciliation']
+const movedToOwnerModules = ['primary_monitoring_reconciliation', 'proof_effects']
 
 const tables = Object.values(refreshOperationsTables).flatMap((value) => (is(value, PgTable) ? [value] : []))
 

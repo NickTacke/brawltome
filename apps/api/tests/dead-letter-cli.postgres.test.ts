@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { accountsModule, proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
@@ -45,7 +46,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'dead_letter_cli', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'dead_letter_cli', modules: [refreshOperationsModule, accountsModule] })
   connectionString = database.connectionString
 })
 
@@ -54,7 +55,7 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
 
   const accepted = await operations.accept({
     dedupeKey: `dead-letter:${randomUUID()}`,
@@ -90,7 +91,7 @@ async function createDeadLetter(value = 'sensitive-payload') {
 }
 
 async function createCollectionDeadLetter() {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
   const reservations = createStatisticsReservations(database)
   const cohortId = randomUUID()
   const operationKey = `statistics:${cohortId}:42:ranked`

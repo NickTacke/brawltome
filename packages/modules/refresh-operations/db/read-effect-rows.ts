@@ -3,29 +3,11 @@ import type { DeadLetterInspection } from '../model'
 import {
   interactiveRefreshEffects,
   leaderboardEffects,
-  proofEffects,
   statisticsCollectionEffects,
   statisticsLegendMetaPublicationEffects,
   statisticsPublicationEffects,
 } from './tables'
 import type { Transaction } from './transaction'
-
-export async function readProofEffects(
-  transaction: Transaction,
-  effectOperationId: string,
-): Promise<DeadLetterInspection['proofEffects']> {
-  const rows = await transaction
-    .select()
-    .from(proofEffects)
-    .where(eq(proofEffects.operationId, effectOperationId))
-    .orderBy(asc(proofEffects.createdAt))
-
-  return rows.map((effect) => ({
-    operationKey: effect.operationKey,
-    effectValue: effect.effectValue,
-    createdAt: effect.createdAt.toISOString(),
-  }))
-}
 
 export async function readInteractiveEffects(
   transaction: Transaction,

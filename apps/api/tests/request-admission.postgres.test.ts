@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { accountsModule } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPlayerRefreshReservations } from '@brawltome/player'
@@ -45,7 +46,7 @@ const playerRefreshes = (client: Database = database) => createPlayerRefreshRese
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'request_admission',
-    modules: [refreshOperationsModule, requestAdmissionModule],
+    modules: [refreshOperationsModule, requestAdmissionModule, accountsModule],
   })
 
   connectionString = database.connectionString
@@ -62,7 +63,7 @@ beforeEach(async () => {
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions DISABLE TRIGGER USER')
 
     await control.unsafe(
-      'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, refresh_operations.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
+      'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, accounts.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
     )
 
     await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions ENABLE TRIGGER USER')

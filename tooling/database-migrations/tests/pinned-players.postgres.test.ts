@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts, MAX_PINNED_PLAYERS } from '@brawltome/accounts'
+import type { Migration } from '@brawltome/foundation'
 import { migratePostgres } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
+
+// the accounts migration that moves the proof effects needs the queue's migrations; these tests load only accounts
+const accountsMigrations = accountsModule.migrations.filter((migration: Migration) => !migration.requires?.length)
 
 // the migrations up to 0007, before 0008 consolidates saved and pinned players
 const migrationsBeforeConsolidation = 7
@@ -37,7 +41,7 @@ describe('Pinned Players PostgreSQL', () => {
       const seed = postgres(databaseUrl, { max: 1 })
 
       try {
-        await migratePostgres(databaseUrl, accountsModule.migrations.slice(0, migrationsBeforeConsolidation))
+        await migratePostgres(databaseUrl, accountsMigrations.slice(0, migrationsBeforeConsolidation))
 
         await seed`
           INSERT INTO accounts.users (id) VALUES (${accountId}), (${legacyAccountId})
@@ -68,9 +72,9 @@ describe('Pinned Players PostgreSQL', () => {
         await seed.end()
       }
 
-      const pendingCount = accountsModule.migrations.length - migrationsBeforeConsolidation
+      const pendingCount = accountsMigrations.length - migrationsBeforeConsolidation
 
-      expect(await migratePostgres(databaseUrl, accountsModule.migrations)).toBe(pendingCount)
+      expect(await migratePostgres(databaseUrl, accountsMigrations)).toBe(pendingCount)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const inspect = postgres(databaseUrl, { max: 1 })
@@ -118,7 +122,7 @@ describe('Pinned Players PostgreSQL', () => {
 
   test('does not count a retained Primary Player toward the managed pin cap', async () => {
     await withDatabase(async (databaseUrl) => {
-      await migratePostgres(databaseUrl, accountsModule.migrations)
+      await migratePostgres(databaseUrl, accountsMigrations)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
       const inspect = postgres(databaseUrl, { max: 1 })
@@ -191,7 +195,7 @@ describe('Pinned Players PostgreSQL', () => {
 
   test('allows idempotent existing pins and legacy-over-cap reorder while capping new additions', async () => {
     await withDatabase(async (databaseUrl) => {
-      await migratePostgres(databaseUrl, accountsModule.migrations)
+      await migratePostgres(databaseUrl, accountsMigrations)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
 
@@ -222,7 +226,7 @@ describe('Pinned Players PostgreSQL', () => {
 
   test('compacts positions after idempotent unpinning and isolates accounts', async () => {
     await withDatabase(async (databaseUrl) => {
-      await migratePostgres(databaseUrl, accountsModule.migrations)
+      await migratePostgres(databaseUrl, accountsMigrations)
       const runtimeDatabase = openTestClient(databaseUrl)
       const runtime = createPostgresAccounts(runtimeDatabase)
 

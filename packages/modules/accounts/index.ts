@@ -9,8 +9,11 @@ import { addV2AccountsImportEvidence } from './migrations/0007-add-v2-accounts-i
 import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-players'
 import { addAccountTheme } from './migrations/0009-add-account-theme'
 import { dropV2AuthState } from './migrations/0010-drop-v2-auth-state'
+import { moveProofEffects } from './migrations/0011-move-proof-effects'
 import { createAccounts } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
+
+export { proofEffectState, proofEffectStore } from './db/proof-effects'
 
 export {
   createPrimaryPlayerVerificationJob,
@@ -62,6 +65,7 @@ const migrations = [
   consolidatePinnedPlayers,
   addAccountTheme,
   dropV2AuthState,
+  moveProofEffects,
 ] as const
 
 export const accountsModule = {
