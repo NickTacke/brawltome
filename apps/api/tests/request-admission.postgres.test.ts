@@ -6,7 +6,7 @@ import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestQueue } from './fixtures/queue'
 
 const testAdmission = {
   totalConcurrency: 2,
@@ -582,6 +582,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const options = {
+      movedJobs: [createProofJob()],
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,

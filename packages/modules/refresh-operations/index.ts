@@ -40,7 +40,7 @@ export {
   rejectReserved,
 } from './db/activate-operation'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
-export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
+export { createEffectStates, type EffectStateEntry, type EffectStates, proofEffectState } from './db/effect-states'
 export {
   type ActiveOperation,
   type FindActiveOperationInput,
@@ -80,6 +80,7 @@ export {
   type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
+export { completeWithProofEffect, type ProofEffectPayload } from './jobs/complete-with-proof-effect'
 export {
   type AttemptOutcome,
   defineJob,

@@ -16,7 +16,7 @@ import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -323,11 +323,13 @@ describe('durable Refresh Operations', () => {
       renewEveryMs: 100,
       retryDelayMs: 1,
       admission: testAdmission,
-      executeEffect: async (lease) => {
-        await Bun.sleep(1_200)
+      movedJobs: [
+        createProofJob(async (lease) => {
+          await Bun.sleep(1_200)
 
-        return operations.commitProofEffect(lease)
-      },
+          return operations.commitProofEffect(lease)
+        }),
+      ],
     })
 
     const state = await operations.inspect(accepted.operationId)
@@ -391,6 +393,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
   })
@@ -430,6 +433,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -900,6 +904,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -922,7 +927,7 @@ describe('durable Refresh Operations', () => {
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
-      executeEffect: failEffect,
+      movedJobs: [createProofJob(failEffect)],
     }
 
     expect(await runOneRefreshOperation(worker, 'worker-a', options)).toBe(true)
@@ -967,9 +972,11 @@ describe('durable Refresh Operations', () => {
           leaseMs: 1_000,
           retryDelayMs: 1,
           admission: testAdmission,
-          executeEffect: async () => {
-            throw new SourceAdmissionLimitedError(37)
-          },
+          movedJobs: [
+            createProofJob(async () => {
+              throw new SourceAdmissionLimitedError(37)
+            }),
+          ],
         }),
       ).toBe(true)
 

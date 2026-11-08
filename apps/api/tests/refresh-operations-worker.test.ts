@@ -10,6 +10,7 @@ import {
 } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { LeaderboardDeepCrawlYield, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createProofJob } from './fixtures/queue'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -71,6 +72,7 @@ describe('refresh operations worker source retry', () => {
         retryDelayMs: 10,
         admission,
         telemetry,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -100,6 +102,7 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
       admission,
       telemetry: failingTelemetry,
+      movedJobs: [createProofJob()],
     })
 
     await expect(failingTelemetry.shutdown(5)).resolves.toBeUndefined()
@@ -136,9 +139,11 @@ describe('refresh operations worker source retry', () => {
       retryDelayMs: 10,
       admission,
       telemetry,
-      executeEffect: async () => {
-        throw new Error('execution failed')
-      },
+      movedJobs: [
+        createProofJob(async () => {
+          throw new Error('execution failed')
+        }),
+      ],
     })
 
     const attempts = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_attempts_total')
@@ -182,9 +187,11 @@ describe('refresh operations worker source retry', () => {
         retryDelayMs: 10,
         admission,
         telemetry,
-        executeEffect: async () => {
-          throw new Error('execution failed')
-        },
+        movedJobs: [
+          createProofJob(async () => {
+            throw new Error('execution failed')
+          }),
+        ],
       }),
     ).rejects.toThrow('connection lost')
 
@@ -227,9 +234,11 @@ describe('refresh operations worker source retry', () => {
         retryDelayMs: 10,
         admission,
         telemetry,
-        executeEffect: async () => {
-          throw error
-        },
+        movedJobs: [
+          createProofJob(async () => {
+            throw error
+          }),
+        ],
       })
 
       await telemetry.flush(50)
@@ -1190,9 +1199,11 @@ describe('refresh operations worker source retry', () => {
           retryDelayMs: 2_000,
           retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2, random: () => 0.5 },
           admission,
-          executeEffect: async () => {
-            throw new Error('Brawlhalla v0 returned 502')
-          },
+          movedJobs: [
+            createProofJob(async () => {
+              throw new Error('Brawlhalla v0 returned 502')
+            }),
+          ],
         },
       )
     }
@@ -1858,7 +1869,7 @@ const idleRanking = {
 // the dependencies each kind needs to reach its executor, with the first call into the outside world throwing;
 // interactive work throws on its own when its dependencies are missing
 const failingOptions: Record<WrappedKind, Partial<WorkerOptions>> = {
-  proof: { executeEffect: explode },
+  proof: { movedJobs: [createProofJob(explode)] },
   'interactive-player-refresh': {},
   'ranked-player-pulse': { sourceAdmission: admittingSource, executeRankedPulse: explode },
   'player-name-verification': { sourceAdmission: admittingSource, executePlayerNameVerification: explode },
@@ -1993,7 +2004,7 @@ describe('refresh operations worker claim latency', () => {
       complete: async () => 'transitioned' as const,
     }
 
-    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry }
+    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry, movedJobs: [createProofJob()] }
 
     expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(true)
     expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(false)

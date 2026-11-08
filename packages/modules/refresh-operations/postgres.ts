@@ -646,7 +646,7 @@ export function createPostgresRefreshOperations(
       section: 'ranked' | 'stats' | 'profile' | 'roster',
     ) => commitSection(database, lease, section),
 
-    async commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult> {
+    async commitProofEffect(lease: Lease<{ value: string }>): Promise<FencedResult> {
       if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
 
       return client.begin(async (transaction) => {

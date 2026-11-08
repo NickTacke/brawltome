@@ -3,12 +3,15 @@ import {
   createEffectStates,
   createPostgresRefreshOperations,
   type JobDefinition,
+  type JobTools,
+  type QueueWorker,
   type RefreshOperationsDatabases,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
 import {
   createWorkerJobs,
+  type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
 } from '../../src/worker/job-list'
@@ -21,6 +24,11 @@ const noDiscoveryEffects: DiscoveryEffectChecks = {
 }
 
 const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
+const idleAccounts: WorkerAccountsDependencies = {
+  accounts: { resolvePrimaryPlayerVerification: async () => ({}) as never },
+  createEvidenceResolver: () => ({ resolve: async () => null }),
+}
 
 // the job list only runs these when a job executes, and these tests are about what the jobs tell claim
 function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefinition<unknown>[] {
@@ -39,7 +47,21 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
       clans: {} as WorkerClanDependencies['clans'],
       createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
     },
+    accounts: idleAccounts,
   })
+}
+
+// the worker's proof job, with its effect write swapped so a test can make it throw or run long
+export function createProofJob(commitEffect?: QueueWorker['commitProofEffect']): JobDefinition<unknown> {
+  const proof = createIdleWorkerJobs(noDiscoveryEffects).find((job) => job.kind === 'proof') as JobDefinition<unknown>
+
+  if (!commitEffect) return proof
+
+  return { ...proof, run: (lease, tools) => proof.run(lease, withEffect(tools, commitEffect)) }
+}
+
+function withEffect(tools: JobTools, commitProofEffect: QueueWorker['commitProofEffect']): JobTools {
+  return { ...tools, queue: { ...tools.queue, commitProofEffect } }
 }
 
 // built the way the worker builds it, so expired leases read the same effect tables
