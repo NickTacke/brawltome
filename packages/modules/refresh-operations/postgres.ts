@@ -24,6 +24,7 @@ import { materializeDueSchedules } from './db/materialize-due-schedules'
 import { promotePendingWorkClass } from './db/promote-work-class'
 import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
+import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { reserveForAdmission, reserveForBinding } from './db/reserve-operation'
 import type { Transaction } from './db/transaction'
 import { wakeupChannel } from './db/wakeup'
@@ -86,7 +87,6 @@ export function createPostgresRefreshOperations(
   options: { effectStates?: EffectStates } = {},
 ) {
   const client = database.sql
-  const renewalClient = renewals.sql
 
   return {
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
@@ -654,35 +654,9 @@ export function createPostgresRefreshOperations(
       return rows.map(({ id }) => id)
     },
 
-    async renew(lease: OperationLease, leaseMs: number): Promise<'renewed' | 'lease-lost'> {
-      const renewed = await renewalClient<{ id: string }[]>`
-        UPDATE refresh_operations.operations
-        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
-            updated_at = clock_timestamp()
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-        RETURNING id
-      `
+    renew: (lease: OperationLease, leaseMs: number) => renewLease(renewals, lease, leaseMs),
 
-      return renewed[0] ? 'renewed' : 'lease-lost'
-    },
-
-    async renewWithAuthority(lease: OperationLease, leaseMs: number) {
-      const [renewed] = await renewalClient<{ lease_expires_at: Date }[]>`
-        UPDATE refresh_operations.operations
-        SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
-            updated_at = clock_timestamp()
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-        RETURNING lease_expires_at
-      `
-
-      return renewed
-        ? ({ outcome: 'renewed', leaseExpiresAt: renewed.lease_expires_at } as const)
-        : ({ outcome: 'lease-lost' } as const)
-    },
+    renewWithAuthority: (lease: OperationLease, leaseMs: number) => renewLeaseWithAuthority(renewals, lease, leaseMs),
 
     async beginInteractiveSection(
       lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
