@@ -44,7 +44,7 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function validateScheduleIdentity(input: {
+export function validateScheduleIdentity(input: {
   scheduleKey: string
   operationKeyPrefix: string
   intervalMs: number

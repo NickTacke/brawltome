@@ -53,12 +53,22 @@ export {
   listAwaiting,
 } from './db/find-operations'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
-export { type AttemptHistory, type ReadAttemptHistoryInput, readAttemptHistory } from './db/read-attempt-history'
+export {
+  type AttemptHistory,
+  type ReadAttemptHistoryInput,
+  readAttemptHistory,
+} from './db/read-attempt-history'
 export {
   type FixedSchedule,
   type ReconcileFixedScheduleInput,
   reconcileFixedSchedule,
 } from './db/reconcile-fixed-schedule'
+export {
+  type ReconcileResourceSchedulesInput,
+  type ReconcileResourceSchedulesResult,
+  type ResourceSchedule,
+  reconcileResourceSchedules,
+} from './db/reconcile-resource-schedules'
 export {
   type ReserveForAdmissionInput,
   type ReserveForAdmissionOptions,
