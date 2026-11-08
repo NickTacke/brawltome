@@ -9,8 +9,8 @@ import {
   type SourceAdmissionPort,
   type StatisticsCollectionKind,
   type StatisticsCollectionPayload,
-  statisticsCollectionEffectState,
 } from '@brawltome/refresh-operations'
+import { statisticsCollectionEffectState } from '../db/effects'
 import type { CollectionAttemptAuthorization, LifetimeEvidence, RankedEvidence, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt } from './job-outcomes'
 

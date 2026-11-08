@@ -50,7 +50,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/telemetry': ['.', './analytics-labels', './node', './propagation'],
     '@brawltome/architecture': [],
     '@brawltome/analytics-review': [],
-    '@brawltome/accounts': ['.', './dead-letter-hooks'],
+    '@brawltome/accounts': ['.', './dead-letter-hooks', './testing'],
     '@brawltome/clan': ['.', './dead-letter-hooks'],
     '@brawltome/contracts': ['.'],
     '@brawltome/discovery': ['.'],
@@ -62,6 +62,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/statistics': ['.', './dead-letter-hooks'],
   },
   testOnlyExports: {
+    '@brawltome/accounts': ['./testing'],
     '@brawltome/foundation': ['./testing'],
     '@brawltome/refresh-operations': ['./testing'],
   },
@@ -85,17 +86,5 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/database-migrations': ['adapter', 'capability', 'foundation'],
   },
   deployedMigrations: deployedOrder,
-  exceptions: [
-    {
-      id: 'statistics-reads-refresh-operations',
-      rule: 'cross-module-sql',
-      importer: '@brawltome/statistics',
-      dependency: '@brawltome/refresh-operations',
-      files: ['packages/modules/statistics/postgres.ts'],
-      importPath: 'refresh_operations',
-      reason: 'Collection and publication read operations and its effect tables, and call its effect functions.',
-      issue: '#388',
-      expiresWhen: 'the module is rebuilt',
-    },
-  ],
+  exceptions: [],
 }

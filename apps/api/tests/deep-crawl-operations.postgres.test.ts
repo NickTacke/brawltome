@@ -4,6 +4,7 @@ import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/tes
 import {
   createLeaderboardDeepCrawlProgress,
   disableLeaderboardDeepCrawlSchedule,
+  rankingModule,
   reconcileLeaderboardDeepCrawlSchedule,
 } from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
@@ -34,7 +35,11 @@ const admission = {
 } as const
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'deep_crawl_operations', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({
+    label: 'deep_crawl_operations',
+    modules: [refreshOperationsModule, rankingModule],
+  })
+
   connectionString = database.connectionString
 }, 30_000)
 

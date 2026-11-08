@@ -1,9 +1,5 @@
-import {
-  type DeadLetterHooks,
-  type EffectDescriber,
-  leaderboardOperationKinds,
-  readLeaderboardEffects,
-} from '@brawltome/refresh-operations'
+import { type DeadLetterHooks, type EffectDescriber, leaderboardOperationKinds } from '@brawltome/refresh-operations'
+import { readLeaderboardEffects } from '../db/leaderboard-effects'
 
 const describeLeaderboardEffects: EffectDescriber = async (transaction, effectOperationId) => ({
   leaderboardEffects: await readLeaderboardEffects(transaction, effectOperationId),

@@ -18,11 +18,11 @@ export async function readDeepCrawlProgress(
     mode === '1v1'
       ? await client<ProgressColumns[]>`
           SELECT window_at, next_page, total_pages
-          FROM refresh_operations.leaderboard_deep_crawl_progress WHERE region = ${region}
+          FROM rankings.leaderboard_deep_crawl_progress WHERE region = ${region}
         `
       : await client<ProgressColumns[]>`
           SELECT window_at, next_page, total_pages
-          FROM refresh_operations.leaderboard_deep_crawl_mode_progress WHERE mode = ${mode} AND region = ${region}
+          FROM rankings.leaderboard_deep_crawl_mode_progress WHERE mode = ${mode} AND region = ${region}
         `
 
   return row ? { windowAt: row.window_at, nextPage: row.next_page, totalPages: row.total_pages } : null
@@ -33,7 +33,7 @@ export async function saveDeepCrawlProgress(database: Database, input: SaveDeepC
 
   if (input.mode === '1v1') {
     await client`
-      INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
+      INSERT INTO rankings.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
       VALUES (${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
       ON CONFLICT (region) DO UPDATE SET
         window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
@@ -44,7 +44,7 @@ export async function saveDeepCrawlProgress(database: Database, input: SaveDeepC
   }
 
   await client`
-    INSERT INTO refresh_operations.leaderboard_deep_crawl_mode_progress
+    INSERT INTO rankings.leaderboard_deep_crawl_mode_progress
       (mode, region, window_at, next_page, total_pages)
     VALUES (${input.mode}, ${input.region}, ${input.windowAt}, ${input.nextPage}, ${input.totalPages})
     ON CONFLICT (mode, region) DO UPDATE SET

@@ -58,23 +58,6 @@ export async function lockActiveLeaderboardLease(transaction: Sql, lease: HeldLe
   return result?.active === true
 }
 
-export async function recordLeaderboardEffect(
-  transaction: Sql,
-  lease: HeldLeaderboardLease,
-): Promise<LeaderboardEffectResult> {
-  const [result] = await transaction<{ result: LeaderboardEffectResult }[]>`
-    SELECT refresh_operations.record_leaderboard_effect(
-      ${lease.operationId},
-      ${lease.operationKey},
-      ${lease.operationKind},
-      ${lease.leaseOwner},
-      ${lease.leaseToken}
-    ) AS result
-  `
-
-  return result?.result ?? 'lease-lost'
-}
-
 export async function lockActiveRankingRetentionLease(transaction: Sql, lease: HeldLease): Promise<boolean> {
   const [result] = await transaction<{ active: boolean }[]>`
     SELECT refresh_operations.lock_active_ranking_retention_lease(

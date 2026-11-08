@@ -41,7 +41,7 @@ export {
   rejectExpired,
   rejectReserved,
 } from './db/activate-operation'
-export { hasStatisticsCollectionSeal, lockEffectOperation } from './db/collection-seal'
+export { lockEffectOperation } from './db/collection-seal'
 export type {
   DeadLetterEffects,
   DeadLetterHooks,
@@ -49,22 +49,17 @@ export type {
   ReplayGuard,
   ReplayGuardTarget,
 } from './db/dead-letter-hooks'
-export {
-  type DeepCrawlProgressRow,
-  readDeepCrawlProgress,
-  type SaveDeepCrawlProgressInput,
-  saveDeepCrawlProgress,
-} from './db/deep-crawl-progress'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
+export {
+  type EffectLineage,
+  type OperationIdentity,
+  operationMatches,
+  readEffectLineage,
+} from './db/effect-lineage'
 export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
-  leaderboardEffectState,
-  legendMetaPublicationEffectState,
-  proofEffectState,
-  statisticsCollectionEffectState,
-  statisticsPublicationEffectState,
 } from './db/effect-states'
 export {
   type ActiveOperation,
@@ -75,25 +70,21 @@ export {
   type ListAwaitingInput,
   listAwaiting,
 } from './db/find-operations'
+export type { AppliedLeaderboardEffects } from './db/materialize-due-schedules'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
 export {
   type AttemptHistory,
   type ReadAttemptHistoryInput,
   readAttemptHistory,
 } from './db/read-attempt-history'
-export {
-  readInteractiveEffects,
-  readLeaderboardEffects,
-  readProofEffects,
-  readStatisticsEffects,
-  readStatisticsPublicationEffects,
-} from './db/read-effect-rows'
+export { readInteractiveEffects } from './db/read-effect-rows'
 export {
   type FixedSchedule,
   type ReconcileFixedScheduleInput,
   reconcileFixedSchedule,
 } from './db/reconcile-fixed-schedule'
 export {
+  type ReconcileObservationWatermark,
   type ReconcileResourceSchedulesInput,
   type ReconcileResourceSchedulesResult,
   type ResourceSchedule,
@@ -126,7 +117,13 @@ export {
   type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
-export { completeWithProofEffect, type ProofEffectPayload } from './jobs/complete-with-proof-effect'
+export {
+  completeWithProofEffect,
+  type ProofEffectPayload,
+  type ProofEffectStore,
+  type ProofEffectWrite,
+  type ProofEffectWriteResult,
+} from './jobs/complete-with-proof-effect'
 export {
   type AttemptOutcome,
   defineJob,
@@ -153,7 +150,6 @@ export {
   type LeaderboardEffectResult,
   lockActiveLeaderboardLease,
   lockActiveRankingRetentionLease,
-  recordLeaderboardEffect,
 } from './lease-fences'
 export * from './model'
 export { authenticateDeadLetterOperator, OperatorAuthenticationError } from './operator-auth'

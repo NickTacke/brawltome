@@ -4,8 +4,15 @@ import type { OperationKind } from '../domain/operation-kinds'
 import { validateScheduleIdentity } from '../domain/schedule-definition'
 import type { OperationProvenance, WorkClass } from '../model'
 
-// one set has been reconciled through this function so far, so it shares primary monitoring's lock and watermark
+// one set has been reconciled through this function so far, so it shares primary monitoring's lock
 const scheduleSetLockId = 208_192
+
+// the owner of the schedule set keeps when it was last reconciled; both run inside the reconcile transaction
+export type ReconcileObservationWatermark = {
+  // locks the stored time, so two reconciles of the same snapshot can't both apply
+  isSuperseded(sql: Sql, observedAt: Date): Promise<boolean>
+  record(sql: Sql, observedAt: Date): Promise<void>
+}
 
 export type ResourceSchedule = {
   kind: OperationKind
@@ -26,6 +33,7 @@ export type ReconcileResourceSchedulesInput = {
   // a snapshot no newer than the last one applied changes nothing, so a slow replica can't undo a newer one
   observedAt: Date
   schedules: readonly ResourceSchedule[]
+  watermark: ReconcileObservationWatermark
   // payload fields that identify a schedule; a change to one of them replaces it
   identityPayloadFields: readonly string[]
 }
@@ -41,17 +49,6 @@ type ExistingSchedule = {
   resource_key: string | null
   first_due_at: Date
   payload: Record<string, unknown>
-}
-
-async function isSupersededSnapshot(sql: Sql, observedAt: Date): Promise<boolean> {
-  const [previous] = await sql<{ observed_at: Date }[]>`
-    SELECT observed_at
-    FROM refresh_operations.primary_monitoring_reconciliation
-    WHERE singleton
-    FOR UPDATE
-  `
-
-  return previous !== undefined && previous.observed_at.getTime() >= observedAt.getTime()
 }
 
 function readExistingSchedules(sql: Sql, provenanceSource: string): Promise<ExistingSchedule[]> {
@@ -98,14 +95,6 @@ async function insertSchedule(sql: Sql, schedule: ResourceSchedule): Promise<voi
   `
 }
 
-async function recordObservation(sql: Sql, observedAt: Date): Promise<void> {
-  await sql`
-    INSERT INTO refresh_operations.primary_monitoring_reconciliation (singleton, observed_at)
-    VALUES (true, ${observedAt})
-    ON CONFLICT (singleton) DO UPDATE SET observed_at = EXCLUDED.observed_at
-  `
-}
-
 async function applyDesiredSchedules(
   sql: Sql,
   input: ReconcileResourceSchedulesInput,
@@ -146,11 +135,11 @@ export async function reconcileResourceSchedules(
 
     await sql`SELECT pg_advisory_xact_lock(${scheduleSetLockId})`
 
-    if (await isSupersededSnapshot(sql, input.observedAt)) return { created: 0, retired: 0 }
+    if (await input.watermark.isSuperseded(sql, input.observedAt)) return { created: 0, retired: 0 }
 
     const result = await applyDesiredSchedules(sql, input)
 
-    await recordObservation(sql, input.observedAt)
+    await input.watermark.record(sql, input.observedAt)
 
     return result
   })

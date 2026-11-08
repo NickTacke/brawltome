@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { accountsModule } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { acceptOperation, type JobDefinition, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { runJobOnce } from '@brawltome/refresh-operations/testing'
@@ -21,7 +22,11 @@ let database: TestDatabase
 let queue: ReturnType<typeof createTestQueue>
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'primary_player_verification', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({
+    label: 'primary_player_verification',
+    modules: [refreshOperationsModule, accountsModule],
+  })
+
   queue = createTestQueue({ database })
 }, 30_000)
 

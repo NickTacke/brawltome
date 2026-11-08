@@ -1,4 +1,5 @@
-import { type DeadLetterHooks, type EffectDescriber, readProofEffects } from '@brawltome/refresh-operations'
+import type { DeadLetterHooks, EffectDescriber } from '@brawltome/refresh-operations'
+import { readProofEffects } from '../db/proof-effects'
 
 const describeProofEffects: EffectDescriber = async (transaction, effectOperationId) => ({
   proofEffects: await readProofEffects(transaction, effectOperationId),

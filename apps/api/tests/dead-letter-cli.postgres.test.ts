@@ -3,14 +3,16 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { accountsModule, proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { rankingModule } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
   type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
-import { createStatisticsReservations } from '@brawltome/statistics'
+import { createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 
 const repositoryRoot = resolve(import.meta.dir, '../../..')
@@ -45,7 +47,11 @@ function requireLease(lease: OperationLease | null): OperationLease {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'dead_letter_cli', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({
+    label: 'dead_letter_cli',
+    modules: [refreshOperationsModule, accountsModule, rankingModule, statisticsModule],
+  })
+
   connectionString = database.connectionString
 })
 
@@ -54,7 +60,7 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
 
   const accepted = await operations.accept({
     dedupeKey: `dead-letter:${randomUUID()}`,
@@ -90,7 +96,7 @@ async function createDeadLetter(value = 'sensitive-payload') {
 }
 
 async function createCollectionDeadLetter() {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
   const reservations = createStatisticsReservations(database)
   const cohortId = randomUUID()
   const operationKey = `statistics:${cohortId}:42:ranked`
@@ -130,7 +136,7 @@ async function sealCollection(collectionOperationId: string) {
   })
 
   await database.sql`
-    INSERT INTO refresh_operations.statistics_collection_seals (collection_operation_id, publication_operation_id)
+    INSERT INTO statistics.statistics_collection_seals (collection_operation_id, publication_operation_id)
     VALUES (${collectionOperationId}, ${publication.operationId})
   `
 }

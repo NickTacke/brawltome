@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { playerModule } from '../../index'
 import { reconcilePrimaryMonitoring } from '../../jobs/primary-monitoring-schedules'
 
 let database: TestDatabase
@@ -9,7 +10,10 @@ let database: TestDatabase
 const dayMs = 24 * 60 * 60 * 1000
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'primary_monitoring_schedules', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({
+    label: 'primary_monitoring_schedules',
+    modules: [refreshOperationsModule, playerModule],
+  })
 })
 
 afterAll(async () => {

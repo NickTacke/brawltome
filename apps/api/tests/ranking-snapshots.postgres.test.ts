@@ -1250,7 +1250,7 @@ describe('immutable Ranking snapshots for every mode', () => {
     const [counts] = await control<{ generations: number; effects: number }[]>`
       SELECT
         (SELECT count(*)::int FROM rankings.generations WHERE operation_id = ${rollback.operationId}) AS generations,
-        (SELECT count(*)::int FROM refresh_operations.leaderboard_effects WHERE operation_id = ${rollback.operationId}) AS effects
+        (SELECT count(*)::int FROM rankings.leaderboard_effects WHERE operation_id = ${rollback.operationId}) AS effects
     `
 
     expect(counts).toEqual({ generations: 0, effects: 0 })
@@ -1774,7 +1774,7 @@ describe('durable multi-mode collection operations', () => {
     const [counts] = await control<{ generations: number; effects: number }[]>`
       SELECT
         (SELECT count(*)::int FROM rankings.generations WHERE operation_id = ${accepted.operationId}) AS generations,
-        (SELECT count(*)::int FROM refresh_operations.leaderboard_effects
+        (SELECT count(*)::int FROM rankings.leaderboard_effects
           WHERE operation_id = ${accepted.operationId}) AS effects
     `
 

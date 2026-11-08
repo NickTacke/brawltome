@@ -5,6 +5,19 @@ import { getTableConfig, PgTable } from 'drizzle-orm/pg-core'
 import * as refreshOperationsTables from '../db/tables'
 import { refreshOperationsModule } from '../index'
 
+// a queue-only test database keeps these here; only the owners' migrations move them
+const movedToOwnerModules = [
+  'leaderboard_deep_crawl_mode_progress',
+  'leaderboard_deep_crawl_progress',
+  'leaderboard_effects',
+  'primary_monitoring_reconciliation',
+  'proof_effects',
+  'statistics_collection_effects',
+  'statistics_collection_seals',
+  'statistics_legend_meta_publication_effects',
+  'statistics_publication_effects',
+]
+
 const tables = Object.values(refreshOperationsTables).flatMap((value) => (is(value, PgTable) ? [value] : []))
 
 let database: TestDatabase
@@ -29,7 +42,7 @@ describe('refresh operations drizzle tables', () => {
       ORDER BY table_name
     `
 
-    const databaseTables = rows.map(({ name }) => name)
+    const databaseTables = rows.map(({ name }) => name).filter((name) => !movedToOwnerModules.includes(name))
     const modelledTables = tables.map((table) => getTableConfig(table).name).sort()
 
     expect(modelledTables).toEqual(databaseTables)

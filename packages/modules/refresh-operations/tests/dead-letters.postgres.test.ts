@@ -11,11 +11,12 @@ import {
   interactiveRefreshMaxAttempts,
   type OperationLease,
   type ReplayGuard,
-  readProofEffects,
   reconcileResourceSchedules,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
+import { readTestProofEffects, testProofEffects } from './test-proof-effects'
+import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
 let connectionString = ''
@@ -60,7 +61,7 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: testProofEffects })
 
   const accepted = await operations.accept({
     dedupeKey: `dead-letter:${randomUUID()}`,
@@ -189,7 +190,11 @@ describe('dead-letter operations', () => {
   })
 
   test('replay preserves scheduled provenance and stable interactive section effects', async () => {
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations(
+      { database },
+      { effectStates: {}, proofEffects: testProofEffects },
+    )
+
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
 
     const schedule = await operations.createSchedule({
@@ -299,7 +304,10 @@ describe('dead-letter operations', () => {
   })
 
   test('preserves clan, leaderboard, and projection kinds, payloads, and effect identity on replay', async () => {
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations(
+      { database },
+      { effectStates: {}, proofEffects: testProofEffects },
+    )
 
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
@@ -488,6 +496,7 @@ describe('dead-letter operations', () => {
     await reconcileResourceSchedules(database, {
       provenanceSource: 'primary-player-monitoring',
       observedAt: new Date(),
+      watermark: testWatermark,
       identityPayloadFields: ['assignmentId', 'brawlhallaId'],
       schedules: [
         {
@@ -625,7 +634,7 @@ describe('dead-letter operations', () => {
         [
           lease.kind,
           async (transaction, effectOperationId) => ({
-            proofEffects: await readProofEffects(transaction, effectOperationId),
+            proofEffects: await readTestProofEffects(transaction, effectOperationId),
           }),
         ],
       ]),

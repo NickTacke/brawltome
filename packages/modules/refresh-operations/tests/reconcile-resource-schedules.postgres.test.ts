@@ -6,6 +6,7 @@ import {
   reconcileResourceSchedules,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
 
@@ -48,6 +49,7 @@ function reconcile(schedules: ResourceSchedule[], observedAt: Date) {
     provenanceSource,
     observedAt,
     schedules,
+    watermark: testWatermark,
     identityPayloadFields: ['assignmentId', 'brawlhallaId'],
   })
 }

@@ -1,5 +1,5 @@
 import type { Database } from '@brawltome/foundation'
-import { readDeepCrawlProgress, saveDeepCrawlProgress } from '@brawltome/refresh-operations'
+import { readDeepCrawlProgress, saveDeepCrawlProgress } from '../db/deep-crawl-progress'
 
 export function createLeaderboardDeepCrawlProgress(database: Database) {
   return {

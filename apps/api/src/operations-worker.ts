@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { createPostgresAccounts } from '@brawltome/accounts'
+import { createPostgresAccounts, proofEffectStore } from '@brawltome/accounts'
 import {
   BhApiClient,
   type BhApiClientOptions,
@@ -31,6 +31,7 @@ import {
   disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
   fetchLeaderboardPage,
+  readAppliedLeaderboardEffects,
   reconcileLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardSchedule,
   reconcileRankingRetentionSchedule,
@@ -230,7 +231,11 @@ const jobRegistry = createJobRegistry(workerJobs)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { effectStates: createEffectStates(workerJobs) },
+  {
+    effectStates: createEffectStates(workerJobs),
+    proofEffects: proofEffectStore,
+    readAppliedLeaderboardEffects,
+  },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {

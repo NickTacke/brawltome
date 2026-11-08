@@ -12,7 +12,7 @@ import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
-import { materializeDueSchedules } from './db/materialize-due-schedules'
+import { type AppliedLeaderboardEffects, materializeDueSchedules } from './db/materialize-due-schedules'
 import { readOperationStatus } from './db/read-operation-status'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { beginSection, commitSection } from './db/section-checkpoints'
@@ -20,6 +20,7 @@ import { completeOperation, deferOperation, failOperation, retryAppliedEffect } 
 import { wakeupChannel } from './db/wakeup'
 import { admissionConfigHash, validateAdmissionConfig } from './domain/admission'
 import { isDiscoveryProjectionKind, isLeaderboardKind } from './domain/operation-kinds'
+import type { ProofEffectStore } from './jobs/complete-with-proof-effect'
 import type { Lease } from './jobs/job-definition'
 import {
   type AcceptOperation,
@@ -47,7 +48,11 @@ export type RefreshOperationsDatabases = {
 
 export function createPostgresRefreshOperations(
   { database, renewals = database }: RefreshOperationsDatabases,
-  options: { effectStates?: EffectStates } = {},
+  options: {
+    effectStates?: EffectStates
+    proofEffects?: ProofEffectStore
+    readAppliedLeaderboardEffects?: AppliedLeaderboardEffects
+  } = {},
 ) {
   const client = database.sql
 
@@ -151,7 +156,11 @@ export function createPostgresRefreshOperations(
 
     createSchedule: (input: CreateSchedule) => createSchedule(database, input),
 
-    materializeDueSchedules: (limit = 100) => materializeDueSchedules(database, { limit }),
+    materializeDueSchedules: (limit = 100) =>
+      materializeDueSchedules(database, {
+        limit,
+        readAppliedLeaderboardEffects: options.readAppliedLeaderboardEffects,
+      }),
 
     async claim(
       workerId: string,
@@ -197,6 +206,12 @@ export function createPostgresRefreshOperations(
         throw new Error('commitProofEffect requires a proof operation')
       }
 
+      const proofEffects = options.proofEffects
+
+      if (!proofEffects) {
+        throw new Error(`commit proof effect for operation ${lease.operationId}: no proof effect writer was configured`)
+      }
+
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
 
@@ -217,25 +232,12 @@ export function createPostgresRefreshOperations(
 
         if (!owned) return 'lease-lost' as const
 
-        const inserted = await sql<{ operation_key: string }[]>`
-          INSERT INTO refresh_operations.proof_effects
-            (operation_key, operation_id, lease_token, effect_value)
-          VALUES (${owned.operation_key}, ${owned.effect_operation_id}, ${lease.leaseToken}, ${sql.json(owned.payload)})
-          ON CONFLICT (operation_key) DO NOTHING
-          RETURNING operation_key
-        `
-
-        if (inserted[0]) return 'applied' as const
-
-        const [existing] = await sql<{ operation_id: string; matches_payload: boolean }[]>`
-          SELECT operation_id, effect_value = ${sql.json(owned.payload)}::jsonb AS matches_payload
-          FROM refresh_operations.proof_effects
-          WHERE operation_key = ${owned.operation_key}
-        `
-
-        return existing?.operation_id === owned.effect_operation_id && existing.matches_payload
-          ? ('already-applied' as const)
-          : ('effect-conflict' as const)
+        return proofEffects.write(sql, {
+          operationKey: owned.operation_key,
+          effectOperationId: owned.effect_operation_id,
+          leaseToken: lease.leaseToken,
+          payload: owned.payload,
+        })
       })
     },
 
@@ -267,7 +269,7 @@ export function createPostgresRefreshOperations(
 
     operationStatus: (operationId: string) => readOperationStatus(database, operationId),
 
-    inspect: (operationId: string) => inspectOperation(database, operationId),
+    inspect: (operationId: string) => inspectOperation(database, operationId, options.proofEffects),
 
     inspectSchedule: (scheduleId: string) => inspectSchedule(database, scheduleId),
 

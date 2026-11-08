@@ -76,7 +76,7 @@ async function settleWithin<T>(label: string, promise: Promise<T>, timeoutMs = 1
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations', modules: apiModules })
   connectionString = database.connectionString
 })
 
@@ -1016,6 +1016,59 @@ describe('durable Refresh Operations', () => {
         WHERE id = ${deferred.operationId}
       `
 
+      await control.end()
+    }
+  })
+
+  test('keeps a leaderboard window whose effect landed when the next window arrives', async () => {
+    const operations = createTestQueue({ database })
+    const control = postgres(connectionString, { max: 1 })
+    const intervalMs = 60_000
+
+    const schedule = await reconcileLeaderboardSchedule(database, {
+      scheduleKey: `landed-leaderboard:${randomUUID()}`,
+      operationKeyPrefix: `landed-leaderboard:${randomUUID()}`,
+      kind: 'leaderboard-1v1',
+      workClass: 'leaderboard',
+      intervalMs,
+      firstDueAt: new Date(Date.now() - 1_000).toISOString(),
+      payload: { pageDepth: 1, intervalMs },
+      provenance: { source: 'integration-test', requestedBy: 'incident-220' },
+    })
+
+    try {
+      const first = await operations.materializeDueSchedules()
+
+      const firstOperationId = first.occurrences.find(
+        ({ scheduleId }) => scheduleId === schedule.scheduleId,
+      )?.operationId
+
+      if (!firstOperationId) throw new Error('Expected the first leaderboard occurrence')
+
+      await control`
+        INSERT INTO rankings.leaderboard_effects (operation_key, operation_id, operation_kind, lease_token)
+        VALUES (${`landed:${firstOperationId}`}, ${firstOperationId}, 'leaderboard-1v1', 1)
+      `
+
+      await control`
+        UPDATE refresh_operations.schedules
+        SET next_due_at = clock_timestamp() - interval '1 second'
+        WHERE id = ${schedule.scheduleId}
+      `
+
+      await operations.materializeDueSchedules()
+
+      expect((await operations.inspect(firstOperationId)).operation.status).toBe('pending')
+
+      // the two windows leave two pending operations; later tests in this file claim from the same queue
+      for (let cleaned = 0; cleaned < 2; cleaned++) {
+        const current = requireLease(
+          await operations.claim('landed-leaderboard-cleanup', 10_000, testAdmission, 'leaderboard-1v1'),
+        )
+
+        expect(await operations.complete(current)).toBe('transitioned')
+      }
+    } finally {
       await control.end()
     }
   })
@@ -1979,7 +2032,7 @@ async function recordNothing(): Promise<void> {}
 
 async function recordProofEffect(control: ControlClient, lease: OperationLease): Promise<void> {
   await control`
-    INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+    INSERT INTO accounts.proof_effects (operation_key, operation_id, lease_token, effect_value)
     VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
             ${control.json({ value: 'proof' })})
   `
@@ -2011,7 +2064,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: acceptLeaderboard,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.leaderboard_effects (operation_key, operation_id, lease_token, operation_kind)
+        INSERT INTO rankings.leaderboard_effects (operation_key, operation_id, lease_token, operation_kind)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken}, ${lease.kind})
       `
     },
@@ -2020,7 +2073,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: () => reserveStatisticsOperation('statistics-ranked-collection'),
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
+        INSERT INTO statistics.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.kind}, ${lease.leaseToken})
       `
     },
@@ -2029,7 +2082,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: reserveStatisticsPublication,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_publication_effects (operation_key, operation_id, lease_token)
+        INSERT INTO statistics.statistics_publication_effects (operation_key, operation_id, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
       `
     },
@@ -2038,7 +2091,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: reserveLegendMetaPublication,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_legend_meta_publication_effects
+        INSERT INTO statistics.statistics_legend_meta_publication_effects
           (operation_key, operation_id, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
       `

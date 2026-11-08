@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts"
+    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts",
+    "./testing": "./testing.ts"
   },
   "scripts": {
     "test": "bun test",
@@ -13,7 +14,9 @@
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/refresh-operations": "workspace:*"
+    "@brawltome/refresh-operations": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/bun": "latest",

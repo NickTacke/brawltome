@@ -1,7 +1,13 @@
+import { proofEffectStore } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
-import { createLeaderboardCollectionJob, defaultDeepCrawlSlicePages } from '@brawltome/ranking'
 import {
+  createLeaderboardCollectionJob,
+  defaultDeepCrawlSlicePages,
+  readAppliedLeaderboardEffects,
+} from '@brawltome/ranking'
+import {
+  type AppliedLeaderboardEffects,
   createEffectStates,
   createJobRegistry,
   createPostgresDeadLetterOperations,
@@ -11,6 +17,7 @@ import {
   type JobTools,
   type LeaderboardOperationKind,
   type Lease,
+  type ProofEffectStore,
   type QueueWorker,
   type RefreshOperationsDatabases,
   type RunOneJobOptions,
@@ -19,6 +26,7 @@ import {
   waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
+import { sql } from 'drizzle-orm'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
 import {
   createStatisticsJobs,
@@ -141,10 +149,32 @@ function withEffect(tools: JobTools, commitProofEffect: QueueWorker['commitProof
   return { ...tools, queue: { ...tools.queue, commitProofEffect } }
 }
 
+// leaderboard effects live in the rankings schema; a database without that module has none applied
+const testReadAppliedLeaderboardEffects: AppliedLeaderboardEffects = async (transaction, effectOperationIds) => {
+  const [table] = await transaction.execute<{ table: string | null }>(
+    sql`SELECT to_regclass('rankings.leaderboard_effects') AS table`,
+  )
+
+  return table.table ? readAppliedLeaderboardEffects(transaction, effectOperationIds) : new Set()
+}
+
+const testProofEffectStore: ProofEffectStore = {
+  ...proofEffectStore,
+  async readRows(database, operationId) {
+    const [{ table }] = await database.sql<
+      { table: string | null }[]
+    >`SELECT to_regclass('accounts.proof_effects') AS table`
+
+    return table ? proofEffectStore.readRows(database, operationId) : []
+  },
+}
+
 // built the way the worker builds it, so expired leases read the same effect tables
 export function createTestQueue(databases: RefreshOperationsDatabases, discovery = noDiscoveryEffects) {
   return createPostgresRefreshOperations(databases, {
     effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
+    proofEffects: testProofEffectStore,
+    readAppliedLeaderboardEffects: testReadAppliedLeaderboardEffects,
   })
 }
 

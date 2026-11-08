@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -27,7 +28,7 @@ async function installEffectDelay(client: ReturnType<typeof postgres>, seconds: 
     END;
     $$ LANGUAGE plpgsql;
     CREATE TRIGGER test_delay_proof_effect
-      BEFORE INSERT ON refresh_operations.proof_effects
+      BEFORE INSERT ON accounts.proof_effects
       FOR EACH ROW EXECUTE FUNCTION refresh_operations.test_delay_proof_effect();
   `)
 }
@@ -172,7 +173,7 @@ describe('real production runtime lifecycle', () => {
   }, 20_000)
 
   test('overlapping API and worker replicas preserve background separation and one durable effect', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { proofEffects: proofEffectStore })
     const control = postgres(connectionString, { max: 1 })
 
     const [apiPortOne, apiPortTwo, workerPortOne, workerPortTwo] = await Promise.all([
@@ -262,7 +263,7 @@ describe('real production runtime lifecycle', () => {
 
   test('operations worker SIGINT drains active durable work and commits one effect', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { proofEffects: proofEffectStore })
 
     await installEffectDelay(control, 1.2)
 
@@ -335,7 +336,7 @@ describe('real production runtime lifecycle', () => {
 
   test('operations worker SIGTERM bounds shutdown and interrupted work recovers without duplicate effects', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { proofEffects: proofEffectStore })
 
     await installEffectDelay(control, 3)
 
