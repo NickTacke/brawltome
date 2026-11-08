@@ -60,6 +60,7 @@ export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
+  leaderboardEffectState,
   legendMetaPublicationEffectState,
   proofEffectState,
   statisticsCollectionEffectState,

@@ -9,6 +9,7 @@ import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawlto
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
 import {
+  createLeaderboardTestJob,
   createProofJob,
   createScriptedPlayerRefreshJob,
   createTestDeadLetters,
@@ -591,43 +592,49 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const options = {
-      movedJobs: [createProofJob(), createScriptedPlayerRefreshJob()],
+      movedJobs: [
+        createProofJob(),
+        createScriptedPlayerRefreshJob(),
+        createLeaderboardTestJob('leaderboard-1v1', {
+          sourceAdmission: admission,
+          source: {
+            async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
+              if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
+
+              return {
+                rankings: [
+                  {
+                    identity: {
+                      type: 'one-vs-one-player' as const,
+                      player: { id: 1, username: `${region} Player` },
+                    },
+                    rating: 2_000,
+                    best_rating: 2_100,
+                    rank: 1,
+                    wins: 20,
+                    losses: 10,
+                    region,
+                    tier: 'Diamond',
+                  },
+                ],
+                totalPages: 1,
+              }
+            },
+          },
+          publication: {
+            async publishGeneration() {
+              return 'published' as const
+            },
+            async recordCollectionFailure() {
+              return 'recorded' as const
+            },
+          },
+        }),
+      ],
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      leaderboardSource: {
-        async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
-          if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
-
-          return {
-            rankings: [
-              {
-                identity: {
-                  type: 'one-vs-one-player' as const,
-                  player: { id: 1, username: `${region} Player` },
-                },
-                rating: 2_000,
-                best_rating: 2_100,
-                rank: 1,
-                wins: 20,
-                losses: 10,
-                region,
-                tier: 'Diamond',
-              },
-            ],
-            totalPages: 1,
-          }
-        },
-      },
-      ranking: {
-        async publishGeneration() {
-          return 'published' as const
-        },
-        async recordCollectionFailure() {
-          return 'recorded' as const
-        },
-      },
     }
 
     expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)

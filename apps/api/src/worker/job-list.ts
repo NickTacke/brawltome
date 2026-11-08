@@ -19,12 +19,20 @@ import {
   type PostgresRankedPlayers,
   type PrimaryMonitoringSnapshot,
 } from '@brawltome/player'
-import { createRankingRetentionJob, type RankingRetentionStore } from '@brawltome/ranking'
+import {
+  createLeaderboardCollectionJob,
+  createLeaderboardDeepCrawlJob,
+  createRankingRetentionJob,
+  type LeaderboardCollectionJobDependencies,
+  type LeaderboardDeepCrawlJobDependencies,
+  type RankingRetentionStore,
+} from '@brawltome/ranking'
 import {
   completeWithProofEffect,
   defineJob,
   type JobDefinition,
   type Lease,
+  leaderboardOperationKinds,
   type ProofEffectPayload,
   proofEffectState,
   workClasses,
@@ -80,8 +88,11 @@ export type WorkerStatisticsDependencies = Omit<StatisticsCollectionJobDependenc
     StatisticsLegendMetaPublicationJobDependencies['statistics']
 }
 
+export type WorkerLeaderboardDependencies = LeaderboardCollectionJobDependencies & LeaderboardDeepCrawlJobDependencies
+
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
+  leaderboards: WorkerLeaderboardDependencies
   isRankingRetentionEnabled: boolean
   telemetry: Telemetry
   discovery: WorkerDiscoveryDependencies
@@ -173,6 +184,12 @@ function createPlayerJobs(
   return [interactiveRefresh, rankedPulse, nameVerification]
 }
 
+function createLeaderboardJobs(leaderboards: WorkerLeaderboardDependencies): JobDefinition<unknown>[] {
+  const collections = leaderboardOperationKinds.map((kind) => createLeaderboardCollectionJob(kind, leaderboards))
+
+  return [...collections, createLeaderboardDeepCrawlJob(leaderboards)]
+}
+
 export function createStatisticsJobs(statistics: WorkerStatisticsDependencies): JobDefinition<unknown>[] {
   return [
     createStatisticsRankedCollectionJob(statistics),
@@ -201,7 +218,6 @@ function createProofJob(
   })
 }
 
-// the jobs that live in their owning module; the rest are still wrapped in refresh-operations-worker.ts
 export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefinition<unknown>[] {
   const rankingRetention = createRankingRetentionJob({
     store: dependencies.ranking,
@@ -213,6 +229,7 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
 
   return [
     rankingRetention,
+    ...createLeaderboardJobs(dependencies.leaderboards),
     ...createDiscoveryJobs(dependencies.discovery),
     ...createClanJobs(dependencies.clan),
     ...createPlayerJobs(dependencies.player, dependencies.accounts.primaryMonitoring),

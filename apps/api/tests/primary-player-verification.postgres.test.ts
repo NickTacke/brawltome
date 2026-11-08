@@ -12,6 +12,7 @@ import {
 import {
   createTestDeadLetters,
   createTestQueue,
+  idleLeaderboardDependencies,
   idlePlayerDependencies,
   idleStatisticsDependencies,
 } from './fixtures/queue'
@@ -46,6 +47,7 @@ function createVerificationJobs(verify: Verify) {
 
   const jobs = createWorkerJobs({
     ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
+    leaderboards: idleLeaderboardDependencies,
     isRankingRetentionEnabled: true,
     telemetry: createTelemetry({ service: 'worker', drainIntervalMs: 0 }),
     discovery: {

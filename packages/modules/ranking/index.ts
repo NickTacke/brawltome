@@ -14,6 +14,15 @@ import { statementLevelRowImmutability } from './migrations/0012-statement-level
 
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
+  createLeaderboardCollectionJob,
+  type LeaderboardCollectionJobDependencies,
+} from './jobs/leaderboard-collection-job'
+export {
+  createLeaderboardDeepCrawlJob,
+  defaultDeepCrawlSlicePages,
+  type LeaderboardDeepCrawlJobDependencies,
+} from './jobs/leaderboard-deep-crawl-job'
+export {
   disableLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardSchedule,

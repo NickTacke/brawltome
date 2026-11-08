@@ -28,6 +28,7 @@ import {
 import {
   createLeaderboardDeepCrawlProgress,
   createPostgresRanking,
+  defaultDeepCrawlSlicePages,
   disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
   fetchLeaderboardPage,
@@ -40,6 +41,7 @@ import {
   createPostgresRefreshOperations,
   type Lease,
   SourceAdmissionLimitedError,
+  waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations } from '@brawltome/statistics'
@@ -166,8 +168,34 @@ const executePlayerNameVerification = createPlayerNameVerificationExecutor({
 // the queue needs these jobs' effect checks to be built, so the jobs can only reach the queue once they run
 const discoveryLeaseActive = (lease: Lease<unknown>): Promise<boolean> => operations.discoveryLeaseActive(lease)
 
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
+const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
+
 const workerJobs = createWorkerJobs({
   ranking,
+  leaderboards: {
+    publication: ranking,
+    source: {
+      fetchPage: (input) =>
+        fetchLeaderboardPage(input, {
+          onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
+        }),
+    },
+    sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
+    waitForSourceAdmission: waitForRenewal,
+    waitForSourceRetry: waitForRenewal,
+    playerNames: leaderboardPlayerNames,
+    rankedStandings: leaderboardRanked,
+    teamModes: leaderboardRanked,
+    progress: createLeaderboardDeepCrawlProgress(databases.main),
+    slicePages: defaultDeepCrawlSlicePages,
+    pageDelayMs: workerConfig.deepCrawl.pageDelayMs,
+    retryTimings: {
+      retryDelayMs: workerConfig.retryDelayMs,
+      sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
+    },
+    telemetry,
+  },
   isRankingRetentionEnabled: workerConfig.rankingRetention.enabled,
   telemetry,
   discovery: {
@@ -242,8 +270,6 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
   })
 }
 
-const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
-const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
 const playerFreshness = createPostgresPlayerFreshness(databases.main)
 const profileViews = createPostgresProfileViews(databases.main)
 
@@ -512,18 +538,6 @@ try {
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
         movedJobs: workerJobs,
-        ranking,
-        leaderboardPlayerNames,
-        leaderboardRanked,
-        deepCrawlPageDelayMs: workerConfig.deepCrawl.pageDelayMs,
-        leaderboardTeamModes: leaderboardRanked,
-        leaderboardDeepCrawlProgress: createLeaderboardDeepCrawlProgress(databases.main),
-        leaderboardSource: {
-          fetchPage: (input) =>
-            fetchLeaderboardPage(input, {
-              onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
-            }),
-        },
       }),
   })
 } catch (error) {
