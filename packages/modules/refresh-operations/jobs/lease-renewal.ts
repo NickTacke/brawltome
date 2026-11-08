@@ -29,7 +29,7 @@ export function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise
   })
 }
 
-// plain renewals stay on the cheaper statement; only a watcher needs to know the new expiry
+// only a watcher needs the new expiry, so everything else keeps the plain renew statement
 async function renewOnce({ queue, lease, leaseMs, watchers }: RenewalTarget): Promise<boolean> {
   if (watchers.size === 0) return (await queue.renew(lease, leaseMs)) !== 'lease-lost'
 
@@ -63,17 +63,13 @@ async function renewUntilStopped(
 
     if (stopped.aborted) return
 
-    try {
-      if (await renewOnce(target)) continue
-    } catch {
+    const isRenewed = await renewOnce(target).catch(() => false)
+
+    if (!isRenewed) {
       await reportLeaseLost()
 
       return
     }
-
-    await reportLeaseLost()
-
-    return
   }
 }
 

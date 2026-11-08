@@ -183,6 +183,12 @@ function createSourceAdmitter(
   }
 }
 
+function withParsedPayload(claimed: Lease<unknown>, job: JobDefinition<unknown>): Lease<unknown> {
+  const payload = job.parsePayload(claimed.payload)
+
+  return payload === claimed.payload ? claimed : { ...claimed, payload }
+}
+
 function attemptLabels(lease: Lease<unknown>) {
   return {
     operationId: lease.operationId,
@@ -283,7 +289,7 @@ async function executeAttempt(
   let parsedLease: Lease<unknown> | null = null
 
   try {
-    parsedLease = { ...claimed, payload: job.parsePayload(claimed.payload) }
+    parsedLease = withParsedPayload(claimed, job)
     attempt.outcome = await job.run(parsedLease, tools)
 
     if (attempt.outcome === 'lease_lost') attempt.category = 'lease_lost'

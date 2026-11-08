@@ -14,19 +14,29 @@ import {
 } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
-  decideExecutionFailure,
+  type AttemptOutcome,
+  createJobRegistry,
   decideSourceFailure,
+  defineJob,
   type FailureDecision,
   type FencedResult,
   failureDetails,
-  type OperationFailure,
+  type JobDefinition,
+  type JobTools,
+  type LeaseOperations,
+  leaderboardOperationKinds,
   type OperationLease,
   type RefreshOperationWorker,
+  type RetryBackoff,
   type RetryTimings,
+  runOneJob,
+  runSections,
   SourceAdmissionLimitedError,
-  sourceRetryAfterMs,
   sourceWaitMs,
-  type TransitionResult,
+  statisticsCollectionKinds,
+  type WorkClass,
+  waitForRenewal,
+  workClasses,
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
 import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
@@ -51,13 +61,6 @@ type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-p
 type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
 type InteractiveLease = PlayerLease | ClanLease
 type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
-
-export type RetryBackoff = {
-  multiplier: number
-  maxDelayMs: number
-  jitterRatio: number
-  random?: () => number
-}
 
 type RunOneRefreshOperationOptions = {
   leaseMs: number
@@ -171,98 +174,6 @@ type RunOneRefreshOperationOptions = {
   telemetry?: Telemetry
 }
 
-type ActiveClanAuthority = { lease: ClanLease; section: 'profile' | 'roster' } | null
-
-export function retryDelayForAttempt(
-  attemptNumber: number,
-  policy: { baseDelayMs: number; multiplier: number; maxDelayMs: number; jitterRatio: number; random: () => number },
-): number {
-  const exponent = Math.max(0, attemptNumber - 1)
-  const nominal = policy.baseDelayMs * policy.multiplier ** exponent
-  const jitter = 1 + policy.jitterRatio * (2 * policy.random() - 1)
-
-  return Math.max(0, Math.min(policy.maxDelayMs, Math.floor(nominal * jitter)))
-}
-
-function executionRetryDelayMs(lease: OperationLease, options: RunOneRefreshOperationOptions): number {
-  if (!options.retryBackoff) return options.retryDelayMs
-
-  return retryDelayForAttempt(lease.attemptNumber, {
-    baseDelayMs: options.retryDelayMs,
-    multiplier: options.retryBackoff.multiplier,
-    maxDelayMs: options.retryBackoff.maxDelayMs,
-    jitterRatio: options.retryBackoff.jitterRatio,
-    random: options.retryBackoff.random ?? Math.random,
-  })
-}
-
-function waitForRenewal(intervalMs: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve()
-
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer)
-      signal.removeEventListener('abort', done)
-      resolve()
-    }
-
-    const timer = setTimeout(done, intervalMs)
-
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
-async function renewLease(
-  operations: RefreshOperationWorker,
-  lease: OperationLease,
-  leaseMs: number,
-  intervalMs: number,
-  signal: AbortSignal,
-  clanAuthority: { active: ActiveClanAuthority },
-  authorityLost: AbortController,
-  options: RunOneRefreshOperationOptions,
-): Promise<void> {
-  const revokeActiveAuthority = async () => {
-    authorityLost.abort()
-    const active = clanAuthority.active
-
-    if (active && options.revokeClanLeaseAuthority) {
-      await options.revokeClanLeaseAuthority(active.lease, active.section).catch(() => undefined)
-    }
-  }
-
-  while (!signal.aborted) {
-    await waitForRenewal(intervalMs, signal)
-    if (signal.aborted) return
-
-    try {
-      if (lease.kind === 'clan-refresh') {
-        const authority = await operations.renewWithAuthority(lease, leaseMs)
-
-        if (authority.outcome === 'lease-lost') {
-          await revokeActiveAuthority()
-
-          return
-        }
-
-        const active = clanAuthority.active
-
-        if (active && options.syncClanLeaseAuthority) {
-          await options.syncClanLeaseAuthority(active.lease, active.section, authority.leaseExpiresAt)
-        }
-      } else if ((await operations.renew(lease, leaseMs)) === 'lease-lost') {
-        authorityLost.abort()
-
-        return
-      }
-    } catch {
-      await revokeActiveAuthority()
-
-      return
-    }
-  }
-}
-
 export async function reconcileInteractiveAdmissions(
   operations: RefreshOperationWorker,
   actorAdmission: ActorAdmission,
@@ -276,58 +187,6 @@ export async function reconcileInteractiveAdmissions(
   }
 
   return activated
-}
-
-const safeFailureCode = /^[a-z0-9_.-]{1,64}$/i
-
-type AttemptExecutionOutcome = 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost'
-
-type FailureCategory =
-  | 'admission_deferred'
-  | 'source_rate_limited'
-  | 'source_unavailable'
-  | 'execution'
-  | 'lease_lost'
-  | 'unknown'
-
-type FailureSettlement = { outcome: AttemptExecutionOutcome; category: FailureCategory }
-
-// a new lease kind fails typecheck here until it names its failure code
-const failureCodeByKind: Record<OperationLease['kind'], string> = {
-  proof: 'proof_execution_failed',
-  'interactive-player-refresh': 'interactive_player_refresh_failed',
-  'clan-refresh': 'clan_refresh_failed',
-  'player-discovery-projection': 'player_discovery_projection_failed',
-  'clan-discovery-projection': 'clan_discovery_projection_failed',
-  'discovery-reconciliation': 'discovery_reconciliation_failed',
-  'ranked-player-pulse': 'ranked_player_pulse_failed',
-  'player-name-verification': 'player_name_verification_failed',
-  'ranking-retention': 'ranking_retention_failed',
-  'leaderboard-deep-crawl': 'leaderboard_deep_crawl_failed',
-  'statistics-ranked-collection': 'statistics_collection_failed',
-  'statistics-lifetime-collection': 'statistics_collection_failed',
-  'statistics-publication': 'statistics_publication_failed',
-  'statistics-legend-meta-publication': 'statistics_legend_meta_publication_failed',
-  'leaderboard-1v1': 'leaderboard_collection_failed',
-  'leaderboard-2v2': 'leaderboard_collection_failed',
-  'leaderboard-solo-2v2': 'leaderboard_collection_failed',
-  'leaderboard-3v3': 'leaderboard_collection_failed',
-}
-
-const leaseLostSettlement: FailureSettlement = { outcome: 'lease_lost', category: 'lease_lost' }
-
-function recordTelemetry(telemetry: Telemetry | undefined, recording: (active: Telemetry) => void): void {
-  if (!telemetry) return
-
-  try {
-    recording(telemetry)
-  } catch {
-    return
-  }
-}
-
-function isProjectionLease(lease: OperationLease): lease is ProjectionLease {
-  return lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection'
 }
 
 function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecision | null {
@@ -355,11 +214,9 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
 }
 
 async function decideProjectionEffectFailure(
-  lease: OperationLease,
+  lease: ProjectionLease,
   options: RunOneRefreshOperationOptions,
 ): Promise<FailureDecision | null> {
-  if (!isProjectionLease(lease)) return null
-
   let effectState: 'none' | 'applied' | 'acknowledged' = 'none'
 
   try {
@@ -379,101 +236,11 @@ async function decideProjectionEffectFailure(
   return null
 }
 
-// order matters: a source outage on a projection whose effect landed must still wait for the source
-async function decideJobFailure(
-  lease: OperationLease,
-  error: unknown,
-  options: RunOneRefreshOperationOptions,
-): Promise<FailureDecision> {
-  const retry = {
-    retryDelayMs: options.retryDelayMs,
-    sourceUnavailableRetryMs: options.sourceUnavailableRetryMs ?? 60_000,
-  }
-
-  const rankingDecision = decideRankingFailure(error, retry)
-
-  if (rankingDecision) return rankingDecision
-
-  const sourceDecision = decideSourceFailure(error, retry)
-
-  if (sourceDecision) return sourceDecision
-
-  const effectDecision = await decideProjectionEffectFailure(lease, options)
-
-  if (effectDecision) return effectDecision
-
-  return decideExecutionFailure(error, failureCodeByKind[lease.kind], executionRetryDelayMs(lease, options))
-}
-
-function settledUnlessLeaseLost(transition: TransitionResult, settled: FailureSettlement): FailureSettlement {
-  return transition === 'lease-lost' ? leaseLostSettlement : settled
-}
-
-// Pausing the source holds every other caller too, instead of each discovering the outage on its own.
-async function pauseSource(
-  options: RunOneRefreshOperationOptions,
-  pause: { domain: SourceDomain; seconds: number },
-): Promise<void> {
-  try {
-    await options.sourceAdmission?.pauseSource(pause.domain, pause.seconds)
-  } catch (pauseError) {
-    recordTelemetry(options.telemetry, (active) =>
-      active.logger.error('source.backoff.persist_failed', pauseError, { domain: pause.domain }),
-    )
-  }
-}
-
-function failedAttemptOutcome(lease: OperationLease, failure: OperationFailure): AttemptExecutionOutcome {
-  const hasAttemptsLeft = failure.retryable && lease.attemptNumber < lease.maxAttempts
-
-  return hasAttemptsLeft ? 'retry' : 'dead_letter'
-}
-
-async function settleFailure(
-  operations: RefreshOperationWorker,
-  lease: OperationLease,
-  options: RunOneRefreshOperationOptions,
-  decision: FailureDecision,
-): Promise<FailureSettlement> {
-  if (decision.action === 'lease-lost') return leaseLostSettlement
-
-  if (decision.action === 'complete') {
-    const transition = await operations.complete(lease)
-
-    return settledUnlessLeaseLost(transition, { outcome: 'succeeded', category: 'unknown' })
-  }
-
-  if (decision.action === 'retry-applied-effect') {
-    if (!isProjectionLease(lease)) {
-      throw new Error(`settle failure for operation ${lease.operationId}: ${lease.kind} has no applied effect to retry`)
-    }
-
-    const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
-
-    return settledUnlessLeaseLost(transition, { outcome: 'retry', category: 'execution' })
-  }
-
-  if (decision.action === 'defer') {
-    if (decision.pauseSource) await pauseSource(options, decision.pauseSource)
-
-    const transition = await operations.defer(lease, decision.failure, decision.delayMs)
-
-    return settledUnlessLeaseLost(transition, { outcome: 'retry', category: decision.category })
-  }
-
-  const transition = await operations.fail(lease, decision.failure, decision.delayMs)
-
-  return settledUnlessLeaseLost(transition, {
-    outcome: failedAttemptOutcome(lease, decision.failure),
-    category: decision.category,
-  })
-}
-
 async function executeProof(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: ProofLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   const effect = options.executeEffect ? await options.executeEffect(lease) : await operations.commitProofEffect(lease)
 
   if (effect === 'lease-lost') return 'lease_lost'
@@ -491,29 +258,6 @@ async function executeProof(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
-function createSourceAdmission(
-  options: RunOneRefreshOperationOptions,
-  lease: InteractiveLease | RankedPulseLease | NameVerificationLease,
-  section: InteractiveSection | 'ranked-pulse' | 'name-verification',
-): (domain: SourceDomain) => Promise<void> {
-  let sourceCall = 0
-
-  return async (domain) => {
-    const sourceAdmission = await options.sourceAdmission?.admitSource({
-      domain,
-      reservationKey: `${lease.operationId}:${section}:${lease.attemptNumber}:${sourceCall++}`,
-      units: 1,
-      caller: lease.workClass === 'interactive' ? 'on-demand' : 'background',
-    })
-
-    if (!sourceAdmission) throw new Error('Source admission is unavailable')
-
-    if (sourceAdmission.outcome === 'rate-limited') {
-      throw new SourceAdmissionLimitedError(sourceAdmission.retryAfterSeconds)
-    }
-  }
-}
-
 type AccountPrimaryLease = Extract<PlayerLease, { workClass: 'primary-monitoring'; payload: { assignmentId: string } }>
 
 function isAccountPrimaryLease(lease: InteractiveLease): lease is AccountPrimaryLease {
@@ -524,68 +268,76 @@ function isAccountPrimaryLease(lease: InteractiveLease): lease is AccountPrimary
   )
 }
 
-async function executeInteractive(
-  operations: RefreshOperationWorker,
-  lease: InteractiveLease,
+// Account Primary refreshes stop once their assignment ends; recently viewed refreshes belong to no account.
+async function completeEndedAssignment(
+  operations: LeaseOperations,
+  lease: PlayerLease,
   options: RunOneRefreshOperationOptions,
-  clanAuthority: { active: ActiveClanAuthority },
-  authorityLost: AbortController,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome | null> {
+  if (!isAccountPrimaryLease(lease)) return null
+
+  if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
+
+  if (await options.isPrimaryMonitoringTarget(lease)) return null
+
+  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
+}
+
+async function executePlayerRefresh(
+  lease: PlayerLease,
+  tools: JobTools,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptOutcome> {
   if (!options.sourceAdmission) throw new Error('Interactive refresh dependencies are unavailable')
 
-  const failures: unknown[] = []
-
-  for (const section of lease.payload.staleSections as InteractiveSection[]) {
-    if (authorityLost.signal.aborted) return 'lease_lost'
-
-    // Account Primary refreshes stop once their assignment ends; recently viewed refreshes belong to no account.
-    if (isAccountPrimaryLease(lease)) {
-      if (!options.isPrimaryMonitoringTarget) throw new Error('Primary monitoring eligibility is unavailable')
-
-      if (!(await options.isPrimaryMonitoringTarget(lease))) {
-        return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-      }
-    }
-
-    let leaseExpiresAt: Date | undefined
-
-    if (lease.kind === 'clan-refresh') {
-      const authority = await operations.renewWithAuthority(lease, options.leaseMs)
-
-      if (authority.outcome === 'lease-lost') {
-        authorityLost.abort()
-
-        return 'lease_lost'
+  return runSections(
+    lease,
+    lease.payload.staleSections as InteractiveSection[],
+    tools,
+    async (section, { admitSource }) => {
+      if (!options.executeSection || (section !== 'ranked' && section !== 'stats')) {
+        throw new Error('Player refresh handler unavailable')
       }
 
-      leaseExpiresAt = authority.leaseExpiresAt
-    } else if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') {
-      authorityLost.abort()
+      await options.executeSection(
+        lease,
+        section,
+        admitSource,
+        lease.workClass === 'primary-monitoring' ? 'background' : 'on-demand',
+      )
+    },
+    { beforeSection: () => completeEndedAssignment(tools.queue, lease, options) },
+  )
+}
 
-      return 'lease_lost'
-    }
+async function executeClanRefresh(
+  lease: ClanLease,
+  tools: JobTools,
+  options: RunOneRefreshOperationOptions,
+): Promise<AttemptOutcome> {
+  if (!options.sourceAdmission) throw new Error('Interactive refresh dependencies are unavailable')
 
-    const checkpoint = await operations.beginInteractiveSection(lease, section)
+  let activeSection: 'profile' | 'roster' | null = null
 
-    if (checkpoint === 'lease-lost' || authorityLost.signal.aborted) return 'lease_lost'
+  const stopWatching = tools.watchLease({
+    async renewed(leaseExpiresAt) {
+      if (activeSection && options.syncClanLeaseAuthority) {
+        await options.syncClanLeaseAuthority(lease, activeSection, leaseExpiresAt)
+      }
+    },
+    async lost() {
+      if (activeSection && options.revokeClanLeaseAuthority) {
+        await options.revokeClanLeaseAuthority(lease, activeSection)
+      }
+    },
+  })
 
-    if (checkpoint === 'already-applied') continue
-
-    const admitSourceCall = createSourceAdmission(options, lease, section)
-
-    try {
-      if (lease.kind === 'interactive-player-refresh') {
-        if (!options.executeSection || (section !== 'ranked' && section !== 'stats')) {
-          throw new Error('Player refresh handler unavailable')
-        }
-
-        await options.executeSection(
-          lease,
-          section,
-          admitSourceCall,
-          lease.workClass === 'primary-monitoring' ? 'background' : 'on-demand',
-        )
-      } else {
+  try {
+    return await runSections(
+      lease,
+      lease.payload.staleSections as InteractiveSection[],
+      tools,
+      async (section, { admitSource, leaseExpiresAt }) => {
         if (
           !options.executeClanSection ||
           !options.syncClanLeaseAuthority ||
@@ -595,44 +347,27 @@ async function executeInteractive(
           throw new Error('Clan refresh handler unavailable')
         }
 
-        clanAuthority.active = { lease, section }
+        activeSection = section
         await options.syncClanLeaseAuthority(lease, section, leaseExpiresAt)
-        await options.executeClanSection(lease, section, admitSourceCall, leaseExpiresAt)
-      }
-
-      if (authorityLost.signal.aborted) return 'lease_lost'
-
-      if ((await operations.commitInteractiveSection(lease, section)) === 'lease-lost') return 'lease_lost'
-    } catch (error) {
-      failures.push(error)
-    } finally {
-      clanAuthority.active = null
-    }
+        await options.executeClanSection(lease, section, admitSource, leaseExpiresAt)
+      },
+      {
+        renewWithAuthority: true,
+        afterSection: () => {
+          activeSection = null
+        },
+      },
+    )
+  } finally {
+    stopWatching()
   }
-
-  if (authorityLost.signal.aborted) return 'lease_lost'
-
-  if (failures.length > 0) {
-    const executionFailure = failures.find((error) => sourceRetryAfterMs(error) === null)
-
-    if (executionFailure) throw executionFailure
-
-    const retryAware = failures
-      .map((error) => ({ error, retryAfterMs: sourceRetryAfterMs(error) }))
-      .filter((failure): failure is { error: unknown; retryAfterMs: number } => failure.retryAfterMs !== null)
-      .sort((left, right) => right.retryAfterMs - left.retryAfterMs)[0]
-
-    throw retryAware?.error ?? failures[0]
-  }
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 async function executeDiscoveryProjection(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: ProjectionLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   const execute =
     lease.kind === 'player-discovery-projection' ? options.executePlayerProjection : options.executeClanProjection
 
@@ -644,10 +379,10 @@ async function executeDiscoveryProjection(
 }
 
 async function executeDiscoveryReconciliation(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: ReconciliationLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (!options.executeDiscoveryReconciliation) throw new Error('Discovery reconciliation executor is unavailable')
 
   await options.executeDiscoveryReconciliation(lease)
@@ -656,10 +391,11 @@ async function executeDiscoveryReconciliation(
 }
 
 async function executeRankedPulse(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: RankedPulseLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+  tools: JobTools,
+): Promise<AttemptOutcome> {
   if (!options.executeRankedPulse || !options.sourceAdmission) {
     const transition = await operations.fail(
       lease,
@@ -674,17 +410,18 @@ async function executeRankedPulse(
     return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
   }
 
-  await options.executeRankedPulse(lease, createSourceAdmission(options, lease, 'ranked-pulse'))
+  await options.executeRankedPulse(lease, tools.createSourceAdmitter('ranked-pulse'))
 
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 // The executor spends at most one V0 call and records its own outcome, so only a lost lease fails the attempt.
 async function executeNameVerification(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: NameVerificationLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+  tools: JobTools,
+): Promise<AttemptOutcome> {
   if (!options.executePlayerNameVerification || !options.sourceAdmission) {
     const transition = await operations.fail(
       lease,
@@ -701,7 +438,7 @@ async function executeNameVerification(
 
   if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
 
-  await options.executePlayerNameVerification(lease, createSourceAdmission(options, lease, 'name-verification'))
+  await options.executePlayerNameVerification(lease, tools.createSourceAdmitter('name-verification'))
 
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
@@ -709,10 +446,10 @@ async function executeNameVerification(
 // Expires one bounded batch of old leaderboard generations. The lease check, the delete and the operation's
 // completion commit in one transaction, so a batch that outlives its lease is still recorded as succeeded.
 async function executeRankingRetention(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: RankingRetentionLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (options.rankingRetentionEnabled === false) {
     const transition = await operations.complete(lease)
 
@@ -785,10 +522,10 @@ async function executeRankingRetention(
 }
 
 async function executeStatisticsCollection(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: StatisticsCollectionLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (!options.statistics || !options.executeStatisticsCollection || !options.sourceAdmission) {
     const transition = await operations.fail(
       lease,
@@ -925,10 +662,10 @@ async function executeStatisticsCollection(
 }
 
 async function executeStatisticsPublication(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: StatisticsPublicationLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (!options.statistics) {
     const transition = await operations.fail(
       lease,
@@ -1000,10 +737,10 @@ async function executeStatisticsPublication(
 }
 
 async function executeStatisticsLegendMetaPublication(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: StatisticsLegendMetaPublicationLease,
   options: RunOneRefreshOperationOptions,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (!options.statistics) {
     const transition = await operations.fail(
       lease,
@@ -1210,7 +947,7 @@ function withLeaderboardNamePropagation(
 // Fetches one V1 leaderboard page with background source admission, renewing the lease around each wait and retrying
 // transient page failures in place.
 function admittedLeaderboardPageFetch(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: LeaderboardLease | LeaderboardDeepCrawlLease,
   options: RunOneRefreshOperationOptions,
   sourceAdmission: SourceAdmission,
@@ -1274,11 +1011,11 @@ export class LeaderboardDeepCrawlYield extends Error {
 // Reads every V1 leaderboard page of one mode and region in slices, writing each chunk of pages straight to Players without
 // publishing a ranking generation. Progress is saved per chunk, so a yielded, failed, or interrupted crawl resumes.
 async function executeLeaderboardDeepCrawl(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: LeaderboardDeepCrawlLease,
   options: RunOneRefreshOperationOptions,
   authorityLost: AbortSignal,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   const { leaderboardSource, sourceAdmission, leaderboardPlayerNames, leaderboardRanked, leaderboardTeamModes } =
     options
 
@@ -1453,11 +1190,11 @@ async function executeLeaderboardDeepCrawl(
 }
 
 async function executeLeaderboard(
-  operations: RefreshOperationWorker,
+  operations: LeaseOperations,
   lease: LeaderboardLease,
   options: RunOneRefreshOperationOptions,
   authorityLost: AbortSignal,
-): Promise<AttemptExecutionOutcome> {
+): Promise<AttemptOutcome> {
   if (!options.ranking || !options.leaderboardSource || !options.sourceAdmission) {
     const transition = await operations.fail(
       lease,
@@ -1505,155 +1242,182 @@ async function executeLeaderboard(
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
-export async function runOneRefreshOperation(
+function retryTimings(options: RunOneRefreshOperationOptions): RetryTimings {
+  return {
+    retryDelayMs: options.retryDelayMs,
+    sourceUnavailableRetryMs: options.sourceUnavailableRetryMs ?? 60_000,
+  }
+}
+
+type WrappedJob<WrappedLease extends OperationLease> = {
+  kind: WrappedLease['kind']
+  workClasses: readonly WorkClass[]
+  failureCode: string
+  run(lease: WrappedLease, tools: JobTools): Promise<AttemptOutcome>
+  decideFailure?(error: unknown, lease: WrappedLease): Promise<FailureDecision | null>
+}
+
+// claim already shapes these payloads, so wrapped jobs pass them through until each job moves to its owner
+function wrapJob<WrappedLease extends OperationLease>(job: WrappedJob<WrappedLease>): JobDefinition<unknown> {
+  const { decideFailure } = job
+
+  return defineJob<unknown>({
+    kind: job.kind,
+    workClasses: job.workClasses,
+    failureCode: job.failureCode,
+    parsePayload: (value) => value,
+    run: (lease, tools) => job.run(lease as WrappedLease, tools),
+    decideFailure: decideFailure && ((error, lease) => decideFailure(error, lease as WrappedLease)),
+  })
+}
+
+function proofJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  return [
+    wrapJob<ProofLease>({
+      kind: 'proof',
+      workClasses,
+      failureCode: 'proof_execution_failed',
+      run: (lease, tools) => executeProof(tools.queue, lease, options),
+    }),
+  ]
+}
+
+function interactiveJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  return [
+    wrapJob<PlayerLease>({
+      kind: 'interactive-player-refresh',
+      workClasses: ['interactive', 'primary-monitoring'],
+      failureCode: 'interactive_player_refresh_failed',
+      run: (lease, tools) => executePlayerRefresh(lease, tools, options),
+    }),
+    wrapJob<ClanLease>({
+      kind: 'clan-refresh',
+      workClasses: ['interactive'],
+      failureCode: 'clan_refresh_failed',
+      run: (lease, tools) => executeClanRefresh(lease, tools, options),
+    }),
+  ]
+}
+
+function discoveryProjectionJob(
+  kind: ProjectionLease['kind'],
+  failureCode: string,
+  options: RunOneRefreshOperationOptions,
+): JobDefinition<unknown> {
+  return wrapJob<ProjectionLease>({
+    kind,
+    workClasses: ['projection'],
+    failureCode,
+    run: (lease, tools) => executeDiscoveryProjection(tools.queue, lease, options),
+    // order matters: a source outage on a projection whose effect landed must still wait for the source
+    decideFailure: async (error, lease) =>
+      decideSourceFailure(error, retryTimings(options)) ?? (await decideProjectionEffectFailure(lease, options)),
+  })
+}
+
+function discoveryJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  return [
+    discoveryProjectionJob('player-discovery-projection', 'player_discovery_projection_failed', options),
+    discoveryProjectionJob('clan-discovery-projection', 'clan_discovery_projection_failed', options),
+    wrapJob<ReconciliationLease>({
+      kind: 'discovery-reconciliation',
+      workClasses: ['projection'],
+      failureCode: 'discovery_reconciliation_failed',
+      run: (lease, tools) => executeDiscoveryReconciliation(tools.queue, lease, options),
+    }),
+  ]
+}
+
+function playerBackgroundJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  return [
+    wrapJob<RankedPulseLease>({
+      kind: 'ranked-player-pulse',
+      workClasses: ['primary-monitoring'],
+      failureCode: 'ranked_player_pulse_failed',
+      run: (lease, tools) => executeRankedPulse(tools.queue, lease, options, tools),
+    }),
+    wrapJob<NameVerificationLease>({
+      kind: 'player-name-verification',
+      workClasses: ['maintenance'],
+      failureCode: 'player_name_verification_failed',
+      run: (lease, tools) => executeNameVerification(tools.queue, lease, options, tools),
+    }),
+  ]
+}
+
+function statisticsJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  const collectionJobs = statisticsCollectionKinds.map((kind) =>
+    wrapJob<StatisticsCollectionLease>({
+      kind,
+      workClasses: ['global-statistics'],
+      failureCode: 'statistics_collection_failed',
+      run: (lease, tools) => executeStatisticsCollection(tools.queue, lease, options),
+    }),
+  )
+
+  return [
+    ...collectionJobs,
+    wrapJob<StatisticsPublicationLease>({
+      kind: 'statistics-publication',
+      workClasses: ['global-statistics'],
+      failureCode: 'statistics_publication_failed',
+      run: (lease, tools) => executeStatisticsPublication(tools.queue, lease, options),
+    }),
+    wrapJob<StatisticsLegendMetaPublicationLease>({
+      kind: 'statistics-legend-meta-publication',
+      workClasses: ['global-statistics'],
+      failureCode: 'statistics_legend_meta_publication_failed',
+      run: (lease, tools) => executeStatisticsLegendMetaPublication(tools.queue, lease, options),
+    }),
+  ]
+}
+
+function leaderboardJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  const decideFailure = async (error: unknown) => decideRankingFailure(error, retryTimings(options))
+
+  const collectionJobs = leaderboardOperationKinds.map((kind) =>
+    wrapJob<LeaderboardLease>({
+      kind,
+      workClasses: ['leaderboard'],
+      failureCode: 'leaderboard_collection_failed',
+      decideFailure,
+      run: (lease, tools) => executeLeaderboard(tools.queue, lease, options, tools.signal),
+    }),
+  )
+
+  return [
+    ...collectionJobs,
+    wrapJob<LeaderboardDeepCrawlLease>({
+      kind: 'leaderboard-deep-crawl',
+      workClasses: ['leaderboard'],
+      failureCode: 'leaderboard_deep_crawl_failed',
+      decideFailure,
+      run: (lease, tools) => executeLeaderboardDeepCrawl(tools.queue, lease, options, tools.signal),
+    }),
+  ]
+}
+
+export function createJobsFromOptions(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
+  return [
+    ...proofJobs(options),
+    ...interactiveJobs(options),
+    ...discoveryJobs(options),
+    ...playerBackgroundJobs(options),
+    ...statisticsJobs(options),
+    ...leaderboardJobs(options),
+    wrapJob<RankingRetentionLease>({
+      kind: 'ranking-retention',
+      workClasses: ['maintenance'],
+      failureCode: 'ranking_retention_failed',
+      run: (lease, tools) => executeRankingRetention(tools.queue, lease, options),
+    }),
+  ]
+}
+
+export function runOneRefreshOperation(
   operations: RefreshOperationWorker,
   workerId: string,
   options: RunOneRefreshOperationOptions,
 ): Promise<boolean> {
-  const telemetry = options.telemetry
-
-  function record(recording: (active: Telemetry) => void): void {
-    recordTelemetry(telemetry, recording)
-  }
-
-  const claimStarted = performance.now()
-  const claimed = await operations.claim(workerId, options.leaseMs, options.admission)
-  const claimDurationMs = performance.now() - claimStarted
-
-  record((active) =>
-    active.metrics.observe('operation_claim_duration_ms', claimDurationMs, { outcome: claimed ? 'claimed' : 'empty' }),
-  )
-
-  if (!claimed) return false
-
-  const lease: OperationLease = claimed
-
-  const started = performance.now()
-  let attemptOutcome: AttemptExecutionOutcome = 'succeeded'
-  let failureCategory: FailureCategory = 'unknown'
-
-  async function executeClaimed(): Promise<boolean> {
-    record((active) =>
-      active.logger.info('operation.attempt.started', {
-        operationId: lease.operationId,
-        effectOperationId: lease.effectOperationId,
-        attemptNumber: lease.attemptNumber,
-        kind: lease.kind,
-        workClass: lease.workClass,
-        scheduled: lease.scheduleWindowAt !== null,
-      }),
-    )
-
-    const renewal = new AbortController()
-    const authorityLost = new AbortController()
-    const clanAuthority: { active: ActiveClanAuthority } = { active: null }
-
-    const renewalLoop = renewLease(
-      operations,
-      lease,
-      options.leaseMs,
-      options.renewEveryMs ?? Math.max(1, Math.floor(options.leaseMs / 3)),
-      renewal.signal,
-      clanAuthority,
-      authorityLost,
-      options,
-    )
-
-    try {
-      if (lease.kind === 'proof') attemptOutcome = await executeProof(operations, lease, options)
-      else if (lease.kind === 'interactive-player-refresh' || lease.kind === 'clan-refresh') {
-        attemptOutcome = await executeInteractive(operations, lease, options, clanAuthority, authorityLost)
-      } else if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
-        attemptOutcome = await executeDiscoveryProjection(operations, lease, options)
-      } else if (lease.kind === 'discovery-reconciliation') {
-        attemptOutcome = await executeDiscoveryReconciliation(operations, lease, options)
-      } else if (lease.kind === 'ranked-player-pulse') {
-        attemptOutcome = await executeRankedPulse(operations, lease, options)
-      } else if (lease.kind === 'player-name-verification') {
-        attemptOutcome = await executeNameVerification(operations, lease, options)
-      } else if (lease.kind === 'ranking-retention') {
-        attemptOutcome = await executeRankingRetention(operations, lease, options)
-      } else if (lease.kind === 'statistics-publication') {
-        attemptOutcome = await executeStatisticsPublication(operations, lease, options)
-      } else if (lease.kind === 'statistics-legend-meta-publication') {
-        attemptOutcome = await executeStatisticsLegendMetaPublication(operations, lease, options)
-      } else if (lease.workClass === 'global-statistics') {
-        attemptOutcome = await executeStatisticsCollection(operations, lease, options)
-      } else if (lease.kind === 'leaderboard-deep-crawl') {
-        attemptOutcome = await executeLeaderboardDeepCrawl(operations, lease, options, authorityLost.signal)
-      } else {
-        attemptOutcome = await executeLeaderboard(operations, lease, options, authorityLost.signal)
-      }
-
-      if (attemptOutcome === 'lease_lost') failureCategory = 'lease_lost'
-    } catch (error) {
-      const decision = await decideJobFailure(lease, error, options)
-
-      // set before the write so a rejected write still counts as a failed attempt
-      if (decision.action === 'fail') {
-        attemptOutcome = failedAttemptOutcome(lease, decision.failure)
-        failureCategory = decision.category
-      }
-
-      const settlement = await settleFailure(operations, lease, options, decision)
-
-      attemptOutcome = settlement.outcome
-      failureCategory = settlement.category
-
-      if (decision.action === 'fail') {
-        const failure = decision.failure
-
-        record((active) =>
-          active.logger.error('operation.attempt.failed', error, {
-            operationId: lease.operationId,
-            effectOperationId: lease.effectOperationId,
-            attemptNumber: lease.attemptNumber,
-            kind: lease.kind,
-            workClass: lease.workClass,
-            outcome: attemptOutcome,
-            failureCategory,
-            ...(safeFailureCode.test(failure.code) ? { failureCode: failure.code } : {}),
-          }),
-        )
-      }
-
-      return true
-    } finally {
-      renewal.abort()
-      await renewalLoop
-      const labels = { kind: lease.kind, work_class: lease.workClass, outcome: attemptOutcome }
-
-      record((active) => {
-        active.metrics.add('operation_attempts_total', 1, labels)
-        active.metrics.observe('operation_duration_ms', performance.now() - started, labels)
-        if (attemptOutcome !== 'succeeded') {
-          active.metrics.add('refresh_failures_total', 1, { kind: lease.kind, failure_category: failureCategory })
-        }
-
-        active.logger.info('operation.attempt.completed', {
-          operationId: lease.operationId,
-          effectOperationId: lease.effectOperationId,
-          attemptNumber: lease.attemptNumber,
-          kind: lease.kind,
-          workClass: lease.workClass,
-          outcome: attemptOutcome,
-          durationMs: performance.now() - started,
-        })
-      })
-    }
-
-    return true
-  }
-
-  if (!telemetry) return executeClaimed()
-
-  const context = telemetry.childContext()
-
-  return telemetry.run(context, () =>
-    telemetry.trace(
-      'operation.attempt',
-      { kind: lease.kind, workClass: lease.workClass, attemptNumber: lease.attemptNumber },
-      executeClaimed,
-    ),
-  )
+  return runOneJob(operations, workerId, createJobRegistry(createJobsFromOptions(options)), options)
 }
