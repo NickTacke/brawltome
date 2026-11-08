@@ -16,15 +16,11 @@ export {
   createClanRefreshJob,
 } from './jobs/clan-refresh-job'
 export {
-  activateClanRefresh,
-  type ClanRefreshReservation,
   type ClanRefreshReservations,
   createClanRefreshReservations,
-  findActiveClanRefresh,
-  rejectClanRefresh,
   reserveClanRefresh,
 } from './jobs/clan-refresh-reservation'
-export { type ClanSource, processRefreshClanSection } from './jobs/refresh-clan'
+export type { ClanSource } from './jobs/refresh-clan'
 
 const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 

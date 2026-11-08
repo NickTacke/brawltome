@@ -42,9 +42,9 @@ Everything other packages may import is exported from `index.ts`, and only what 
 - `readClanProfile` and `readPlayerClanMembership`: the reads the tRPC adapters share with the oRPC procedures
 - `toClanProfileContract`: turns a stored clan into its public shape, for the tRPC refresh
 - `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
-- `createPostgresClanDiscoverySource` and `processRefreshClanSection`, for the operations worker
+- `createPostgresClanDiscoverySource`, for the operations worker
 - `createClanRefreshJob`, for the operations worker's job list
-- `createClanRefreshReservations` and the reservation functions behind it, for the tRPC clan refresh
+- `createClanRefreshReservations`, for the tRPC clan refresh, and `reserveClanRefresh`, for the API's queue tests
 - the `ClanProvenance` type, for the API's test fixtures
 
 ## oRPC procedures

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
-import { clanModule, createPostgresClans, processRefreshClanSection } from '../index'
-import { processRefreshClan } from '../jobs/refresh-clan'
+import { clanModule, createPostgresClans } from '../index'
+import { processRefreshClan, processRefreshClanSection } from '../jobs/refresh-clan'
 
 let database: TestDatabase
 let clans: ReturnType<typeof createPostgresClans>
