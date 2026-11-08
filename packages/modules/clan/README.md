@@ -35,14 +35,14 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 
 ## Public surface
 
-Everything other packages may import is exported from `index.ts`:
+Everything other packages may import is exported from `index.ts`, and only what something outside the module uses:
 
 - `clanModule`: the module object (name, migrations and the oRPC procedures)
-- reads: `readClanProfile`, `readPlayerClanMembership`, `getClanProfile`, `getPlayerMembership`, `getClan`
-- `createPostgresClans`, with the `ClanQueries` and `PostgresClans` types
-- `createPostgresClanDiscoverySource`, with its type
-- refresh: `processRefreshClan`, `processRefreshClanSection`, with the `ClanSource` and `ClanRefreshResult` types
-- the domain types, for example `ClanProfile`, `ClanMember` and `ClanRefreshEffect`
+- `readClanProfile` and `readPlayerClanMembership`: the reads the tRPC adapters share with the oRPC procedures
+- `toClanProfileContract`: turns a stored clan into its public shape, for the tRPC refresh
+- `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
+- `createPostgresClanDiscoverySource` and `processRefreshClanSection`, for the operations worker
+- the `ClanProvenance` type, for the API's test fixtures
 
 ## oRPC procedures
 

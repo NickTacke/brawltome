@@ -2,7 +2,7 @@ import type { Database } from '@brawltome/foundation'
 import { getPlayerMembership } from '../db/get-player-membership'
 import type { PlayerClanMembership } from '../domain/clan-profile'
 
-export type PublicClanMembership = Pick<PlayerClanMembership, 'clanId' | 'clanName'>
+type PublicClanMembership = Pick<PlayerClanMembership, 'clanId' | 'clanName'>
 
 // the xp figures stay internal
 function toPublicClanMembership(membership: PlayerClanMembership): PublicClanMembership {
