@@ -6,15 +6,18 @@ import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
 
 export { getClanProfile } from './db/get-clan-profile'
 export { getPlayerMembership } from './db/get-player-membership'
+export {
+  createPostgresClanDiscoverySource,
+  type PostgresClanDiscoverySource,
+} from './db/postgres-clan-discovery-source'
 export { type ClanQueries, createPostgresClans, getClan, type PostgresClans } from './db/postgres-clans'
+export type { ClanMember, ClanProfile, ClanSectionState, PlayerClanMembership } from './domain/clan-profile'
 export type {
   ClanDiscoveryEvent,
   ClanDiscoveryFact,
   ClanDiscoverySnapshot,
   ClanDiscoverySource,
-} from './discovery-facts'
-export { createPostgresClanDiscoverySource, type PostgresClanDiscoverySource } from './discovery-postgres'
-export type { ClanMember, ClanProfile, ClanSectionState, PlayerClanMembership } from './domain/clan-profile'
+} from './domain/discovery-facts'
 export type { ClanProvenance } from './domain/provenance'
 export type { ClanRefreshEffect } from './domain/refresh-effect'
 export {
