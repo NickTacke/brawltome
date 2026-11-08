@@ -79,6 +79,7 @@ describe('reconcileResourceSchedules', () => {
       created: 1,
       retired: 1,
     })
+
     expect(await enabledCount()).toBe(1)
 
     expect(await reconcile([], new Date(start + 3))).toEqual({ created: 0, retired: 1 })

@@ -390,6 +390,7 @@ describe('dead-letter operations', () => {
       reservationToken: clan.reservationToken,
       kinds: ['clan-refresh'],
     })
+
     const clanLease = requireLease(await operations.claim('clan-original', 10_000, admission, 'clan-refresh'))
 
     await operations.fail(clanLease, { code: 'clan_repairable', message: 'clan repairable', retryable: false }, 0)
@@ -531,6 +532,7 @@ describe('dead-letter operations', () => {
         },
       ],
     })
+
     await operations.materializeDueSchedules()
 
     const monitoringLease = requireLease(

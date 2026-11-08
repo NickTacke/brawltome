@@ -121,6 +121,7 @@ describe('readAttemptHistory', () => {
     await insertRefresh({ brawlhallaId: brawlhallaIds.old, ageDays: 40 })
     await insertRefresh({ brawlhallaId: brawlhallaIds.otherSource, ageDays: 1, source: 'desktop-api' })
     await insertRefresh({ brawlhallaId: brawlhallaIds.otherSource, ageDays: 1, workClass: 'primary-monitoring' })
+
     await insertRefresh({
       brawlhallaId: brawlhallaIds.rejected,
       ageDays: 1,
@@ -145,6 +146,7 @@ describe('readAttemptHistory', () => {
       ageDays: 5,
       status: 'dead_letter',
     })
+
     await insertRefresh({ brawlhallaId: 2_010, workClass: 'primary-monitoring', source, ageDays: 1 })
     await insertRefresh({ brawlhallaId: 2_011, workClass: 'primary-monitoring', source, ageDays: 1 })
 
