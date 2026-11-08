@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { reserveClanRefresh } from '@brawltome/clan'
-import type { Migration } from '@brawltome/foundation'
+import { createClanRefreshReservations, reserveClanRefresh } from '@brawltome/clan'
+import type { Database, Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
+import { createPlayerRefreshReservations } from '@brawltome/player'
 import {
   acceptOperation,
   type OperationLease,
@@ -21,6 +22,8 @@ import { createProofJob, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
+
+const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
 
 const testAdmission = {
   totalConcurrency: 8,
@@ -452,7 +455,7 @@ describe('durable Refresh Operations', () => {
   test('gives interactive player and clan refreshes four attempts to ride out brief source failures', async () => {
     const operations = createTestQueue({ database })
 
-    const player = await operations.reserveInteractivePlayerRefresh({
+    const player = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive:${randomUUID()}`,
       brawlhallaId: 4_404,
@@ -502,7 +505,7 @@ describe('durable Refresh Operations', () => {
   test('checkpoints completed interactive sections across lease expiry', async () => {
     const operations = createTestQueue({ database })
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive:${randomUUID()}`,
       brawlhallaId: 42,
@@ -513,9 +516,9 @@ describe('durable Refresh Operations', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
-      'transitioned',
-    )
+    expect(
+      await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken),
+    ).toBe('transitioned')
 
     const first = requireLease(
       await operations.claim('interactive-a', 1_000, testAdmission, 'interactive-player-refresh'),
@@ -550,7 +553,7 @@ describe('durable Refresh Operations', () => {
     const brawlhallaId = 7_000_000 + Math.floor(Math.random() * 1_000_000)
 
     const reserve = (id: number) =>
-      operations.reserveInteractivePlayerRefresh({
+      playerRefreshes().reserveInteractivePlayerRefresh({
         dedupeKey: `interactive:${randomUUID()}`,
         operationKey: `interactive:${randomUUID()}`,
         brawlhallaId: id,
@@ -584,7 +587,7 @@ describe('durable Refresh Operations', () => {
 
       if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-      await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+      await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
       const lease = requireLease(
         await operations.claim('settled-notify', 10_000, testAdmission, 'interactive-player-refresh'),
@@ -605,7 +608,11 @@ describe('durable Refresh Operations', () => {
 
       if (rejected.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-      await operations.rejectInteractiveRefresh(rejected.operationId, rejected.reservationToken, 'actor_rate_limited')
+      await playerRefreshes().rejectInteractivePlayerRefresh(
+        rejected.operationId,
+        rejected.reservationToken,
+        'actor_rate_limited',
+      )
 
       const clan = await reserveClanRefresh(database, {
         dedupeKey: `clan:${randomUUID()}`,
@@ -618,7 +625,11 @@ describe('durable Refresh Operations', () => {
 
       if (clan.outcome !== 'reserved') throw new Error('Expected clan reservation')
 
-      await operations.rejectInteractiveRefresh(clan.operationId, clan.reservationToken, 'actor_rate_limited')
+      await createClanRefreshReservations(database).rejectClanRefresh(
+        clan.operationId,
+        clan.reservationToken,
+        'actor_rate_limited',
+      )
 
       await settleWithin(
         'dead-letter notification',
@@ -660,7 +671,7 @@ describe('durable Refresh Operations', () => {
 
     if (reserved?.outcome !== 'reserved') throw new Error('Expected clan reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await createClanRefreshReservations(database).activateClanRefresh(reserved.operationId, reserved.reservationToken)
     const stale = requireLease(await operations.claim('clan-a', 1_000, testAdmission, 'clan-refresh'))
 
     if (stale.kind !== 'clan-refresh') throw new Error('Expected clan lease')
@@ -762,7 +773,7 @@ describe('durable Refresh Operations', () => {
 
     const player = await settleWithin(
       'reserve player',
-      operations.reserveInteractivePlayerRefresh({
+      playerRefreshes().reserveInteractivePlayerRefresh({
         dedupeKey: `cross-kind-player:${randomUUID()}`,
         operationKey: `cross-kind-player:${randomUUID()}`,
         brawlhallaId: 42,
@@ -790,10 +801,13 @@ describe('durable Refresh Operations', () => {
 
     await settleWithin(
       'activate player',
-      operations.activateInteractiveRefresh(player.operationId, player.reservationToken),
+      playerRefreshes().activateInteractivePlayerRefresh(player.operationId, player.reservationToken),
     )
 
-    await settleWithin('activate clan', operations.activateInteractiveRefresh(clan.operationId, clan.reservationToken))
+    await settleWithin(
+      'activate clan',
+      createClanRefreshReservations(database).activateClanRefresh(clan.operationId, clan.reservationToken),
+    )
 
     const leases = [
       requireLease(await settleWithin('proof claim', operations.claim('cross-kind-proof', 10_000, admission, 'proof'))),
@@ -1207,7 +1221,7 @@ describe('durable Refresh Operations', () => {
 
     expect(monitoring.scheduleWindowAt).toBe(new Date(verifiedAt.getTime() + intervalMs).toISOString())
 
-    const interactive = await replicas[1].reserveInteractivePlayerRefresh({
+    const interactive = await playerRefreshes(replicaClients[1]).reserveInteractivePlayerRefresh({
       dedupeKey: `interactive-freshness:${randomUUID()}`,
       operationKey: `interactive-freshness:${randomUUID()}`,
       brawlhallaId: 4242,
@@ -1271,7 +1285,7 @@ describe('durable Refresh Operations', () => {
     expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 1, retired: 0 })
     expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 0, retired: 0 })
 
-    const interactiveFirst = await restarted.reserveInteractivePlayerRefresh({
+    const interactiveFirst = await playerRefreshes(restartedClient).reserveInteractivePlayerRefresh({
       dedupeKey: `interactive-first:${randomUUID()}`,
       operationKey: `interactive-first:${randomUUID()}`,
       brawlhallaId: 4343,
@@ -1283,7 +1297,10 @@ describe('durable Refresh Operations', () => {
     if (interactiveFirst.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
     expect(
-      await restarted.activateInteractiveRefresh(interactiveFirst.operationId, interactiveFirst.reservationToken),
+      await playerRefreshes(restartedClient).activateInteractivePlayerRefresh(
+        interactiveFirst.operationId,
+        interactiveFirst.reservationToken,
+      ),
     ).toBe('transitioned')
 
     expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 0 })
@@ -1322,7 +1339,7 @@ describe('durable Refresh Operations', () => {
       }),
     ).toEqual({ created: 1, retired: 0 })
 
-    const partialInteractive = await restarted.reserveInteractivePlayerRefresh({
+    const partialInteractive = await playerRefreshes(restartedClient).reserveInteractivePlayerRefresh({
       dedupeKey: `partial-interactive:${randomUUID()}`,
       operationKey: `partial-interactive:${randomUUID()}`,
       brawlhallaId: partialTarget.brawlhallaId,
@@ -1336,7 +1353,10 @@ describe('durable Refresh Operations', () => {
     expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 0 })
 
     expect(
-      await restarted.activateInteractiveRefresh(partialInteractive.operationId, partialInteractive.reservationToken),
+      await playerRefreshes(restartedClient).activateInteractivePlayerRefresh(
+        partialInteractive.operationId,
+        partialInteractive.reservationToken,
+      ),
     ).toBe('transitioned')
 
     const partialLease = requireLease(
@@ -1377,7 +1397,7 @@ describe('durable Refresh Operations', () => {
 
     await operations.reconcilePrimaryMonitoring({ observedAt: new Date(), targets: [expiredTarget, splitTarget] })
 
-    const abandoned = await operations.reserveInteractivePlayerRefresh({
+    const abandoned = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `abandoned:${randomUUID()}`,
       operationKey: `abandoned:${randomUUID()}`,
       brawlhallaId: expiredTarget.brawlhallaId,
@@ -1413,7 +1433,7 @@ describe('durable Refresh Operations', () => {
 
     expect(await operations.complete(afterAbandoned)).toBe('transitioned')
 
-    const split = await operations.reserveInteractivePlayerRefresh({
+    const split = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `split:${randomUUID()}`,
       operationKey: `split:${randomUUID()}`,
       brawlhallaId: splitTarget.brawlhallaId,
@@ -1424,7 +1444,9 @@ describe('durable Refresh Operations', () => {
 
     if (split.outcome !== 'reserved') throw new Error('Expected split reservation')
 
-    expect(await operations.activateInteractiveRefresh(split.operationId, split.reservationToken)).toBe('transitioned')
+    expect(await playerRefreshes().activateInteractivePlayerRefresh(split.operationId, split.reservationToken)).toBe(
+      'transitioned',
+    )
 
     const splitLease = requireLease(
       await operations.claim('split-worker', 10_000, testAdmission, 'interactive-player-refresh'),
@@ -1602,7 +1624,7 @@ describe('durable Refresh Operations', () => {
     expect(discovery.kind).toBe('player-discovery-projection')
     expect(await operations.claim('reserved-slot', 10_000, admission)).toBeNull()
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `player-refresh:${randomUUID()}`,
       operationKey: `player-refresh:${randomUUID()}`,
       brawlhallaId: 42,
@@ -1613,9 +1635,9 @@ describe('durable Refresh Operations', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
-      'transitioned',
-    )
+    expect(
+      await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken),
+    ).toBe('transitioned')
 
     const interactive = requireLease(await operations.claim('player-refresh', 10_000, admission))
 
@@ -1907,7 +1929,7 @@ async function reserveLegendMetaPublication(operations: Operations): Promise<str
 }
 
 async function reserveInteractivePlayer(operations: Operations): Promise<string> {
-  const reserved = await operations.reserveInteractivePlayerRefresh({
+  const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
     dedupeKey: uniqueKey('claim-player'),
     operationKey: uniqueKey('claim-player-effect'),
     brawlhallaId: 987_001,
@@ -1918,7 +1940,7 @@ async function reserveInteractivePlayer(operations: Operations): Promise<string>
 
   if (reserved.outcome !== 'reserved') throw new Error('Expected a player reservation')
 
-  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+  await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
   return reserved.operationId
 }
@@ -1935,7 +1957,7 @@ async function reserveInteractiveClan(operations: Operations): Promise<string> {
 
   if (reserved.outcome !== 'reserved') throw new Error('Expected a clan reservation')
 
-  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+  await createClanRefreshReservations(database).activateClanRefresh(reserved.operationId, reserved.reservationToken)
 
   return reserved.operationId
 }

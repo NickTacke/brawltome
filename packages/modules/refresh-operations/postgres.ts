@@ -1,34 +1,26 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { acceptOperation } from './db/accept-operation'
-import {
-  activateAdmitted,
-  activateBound,
-  activateReserved,
-  rejectExpired,
-  rejectReserved,
-} from './db/activate-operation'
+import { activateAdmitted, activateBound } from './db/activate-operation'
 import { admissionLockId } from './db/admission-lock'
 import { claimOperation } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
 import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStates } from './db/effect-states'
-import { findActiveOperation, listAwaiting } from './db/find-operations'
+import { listAwaiting } from './db/find-operations'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
 import { materializeDueSchedules } from './db/materialize-due-schedules'
-import { promotePendingWorkClass } from './db/promote-work-class'
 import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
-import { reserveForAdmission, reserveForBinding } from './db/reserve-operation'
+import { reserveForBinding } from './db/reserve-operation'
 import { beginSection, commitSection } from './db/section-checkpoints'
 import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
-import type { Transaction } from './db/transaction'
 import { wakeupChannel } from './db/wakeup'
 import { admissionConfigHash, validateAdmissionConfig } from './domain/admission'
 import { isDiscoveryProjectionKind, isLeaderboardKind } from './domain/operation-kinds'
@@ -49,7 +41,6 @@ import {
   type FencedResult,
   type FreshnessAttempt,
   freshnessPlannerSource,
-  type InteractivePlayerRefreshReservation,
   interactiveRefreshMaxAttempts,
   type ListDeadLettersInput,
   type OperationFailure,
@@ -61,7 +52,6 @@ import {
   primaryMonitoringIntervalMs,
   type ReconcilePrimaryMonitoringResult,
   type RefreshRequestDemand,
-  type ReserveInteractiveRefreshResult,
   type ReserveStatisticsCollection,
   type ReserveStatisticsLegendMetaPublication,
   type ReserveStatisticsPublication,
@@ -72,10 +62,6 @@ import {
 } from './model'
 
 const interactiveRefreshKinds = ['interactive-player-refresh', 'clan-refresh'] as const
-
-function playerResourceKey(brawlhallaId: number): string {
-  return `player:${brawlhallaId}`
-}
 
 export type RefreshOperationsDatabases = {
   database: Database
@@ -126,65 +112,8 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number) {
-      return findActiveOperation(database, {
-        kind: 'interactive-player-refresh',
-        dedupeKey,
-        resourceKey: brawlhallaId ? playerResourceKey(brawlhallaId) : undefined,
-      })
-    },
-
-    reserveInteractivePlayerRefresh(
-      input: InteractivePlayerRefreshReservation,
-    ): Promise<ReserveInteractiveRefreshResult> {
-      const resourceKey = playerResourceKey(input.brawlhallaId)
-
-      const reservation = {
-        kind: 'interactive-player-refresh' as const,
-        dedupeKey: input.dedupeKey,
-        operationKey: input.operationKey,
-        resourceKey,
-        workClass: 'interactive' as const,
-        payload: { brawlhallaId: input.brawlhallaId, staleSections: input.staleSections },
-        provenance: input.provenance,
-        maxAttempts: interactiveRefreshMaxAttempts,
-        reservationTtlSeconds: input.reservationTtlSeconds,
-      }
-
-      // A visitor outranks the background: a queued recently viewed refresh for this player becomes interactive
-      // work, so the visitor waits on interactive priority instead of behind the monitoring queue.
-      const promoteRecentlyViewed = (transaction: Transaction) =>
-        promotePendingWorkClass(transaction, {
-          kind: 'interactive-player-refresh',
-          resourceKey,
-          from: 'primary-monitoring',
-          to: 'interactive',
-          payloadEquals: { cohort: recentlyViewedCohort },
-        })
-
-      return reserveForAdmission(database, reservation, { beforeInsert: promoteRecentlyViewed })
-    },
-
-    activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {
-      return activateReserved(database, { operationId, reservationToken, kinds: interactiveRefreshKinds })
-    },
-
     activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult> {
       return activateAdmitted(database, { operationId, kinds: interactiveRefreshKinds })
-    },
-
-    rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult> {
-      return rejectReserved(database, {
-        operationId,
-        reservationToken,
-        reason,
-        message: 'Interactive refresh admission rejected',
-        kinds: interactiveRefreshKinds,
-      })
-    },
-
-    rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult> {
-      return rejectExpired(database, { operationId, kinds: interactiveRefreshKinds })
     },
 
     async reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult> {

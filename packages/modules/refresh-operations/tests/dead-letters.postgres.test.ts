@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  activateReserved,
   createPostgresRefreshOperations,
   interactiveRefreshMaxAttempts,
   type OperationLease,
@@ -271,18 +272,25 @@ describe('dead-letter operations', () => {
     expect(scheduledReplay.leaseToken).toBeGreaterThan(scheduledLease.leaseToken)
     await operations.complete(scheduledReplay)
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await reserveForAdmission(database, {
+      kind: 'interactive-player-refresh',
       dedupeKey: `interactive-dead-letter:${randomUUID()}`,
       operationKey: `interactive-effect:${randomUUID()}`,
-      brawlhallaId: 42,
-      staleSections: ['ranked', 'stats'],
+      resourceKey: 'player:42',
+      workClass: 'interactive',
+      payload: { brawlhallaId: 42, staleSections: ['ranked', 'stats'] },
       provenance: { source: 'integration-test' },
+      maxAttempts: interactiveRefreshMaxAttempts,
       reservationTtlSeconds: 30,
     })
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await activateReserved(database, {
+      operationId: reserved.operationId,
+      reservationToken: reserved.reservationToken,
+      kinds: ['interactive-player-refresh'],
+    })
 
     const original = requireLease(
       await operations.claim('interactive-original', 10_000, admission, 'interactive-player-refresh'),
@@ -376,7 +384,11 @@ describe('dead-letter operations', () => {
 
     if (clan.outcome !== 'reserved') throw new Error('Expected clan reservation')
 
-    await operations.activateInteractiveRefresh(clan.operationId, clan.reservationToken)
+    await activateReserved(database, {
+      operationId: clan.operationId,
+      reservationToken: clan.reservationToken,
+      kinds: ['clan-refresh'],
+    })
     const clanLease = requireLease(await operations.claim('clan-original', 10_000, admission, 'clan-refresh'))
 
     await operations.fail(clanLease, { code: 'clan_repairable', message: 'clan repairable', retryable: false }, 0)

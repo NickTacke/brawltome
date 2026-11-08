@@ -3,8 +3,7 @@ import {
   desktopRankedLookupInputSchema,
   parseDesktopRankedLookupOutput,
 } from '@brawltome/contracts'
-import type { PlayerReferenceQueries, RankedPlayerQueries } from '@brawltome/player'
-import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
+import type { PlayerReferenceQueries, PlayerRefreshReservations, RankedPlayerQueries } from '@brawltome/player'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import { Hono } from 'hono'
 import { requestInteractivePlayerRefresh } from '../interactive-player-refresh'
@@ -20,7 +19,7 @@ const temporarilyUnavailable = {
 interface DesktopRankedRouteDependencies {
   playerReferences: Pick<PlayerReferenceQueries, 'byId'>
   rankedPlayers: Pick<RankedPlayerQueries, 'byId'>
-  refreshOperations: InteractiveRefreshOperations
+  playerRefreshReservations: PlayerRefreshReservations
   requestAdmission: ActorAdmission
 }
 
@@ -83,7 +82,7 @@ export function createDesktopRankedRoutes(dependencies: DesktopRankedRouteDepend
             dedupeKey: `desktop-player:${input.data.brawlhallaId}:ranked:${timestamp(rankedProfile?.lastSuccessAt)}`,
             staleSections: ['ranked'],
             provenance: { source: 'desktop-api' },
-            refreshOperations: dependencies.refreshOperations,
+            playerRefreshReservations: dependencies.playerRefreshReservations,
             requestAdmission: dependencies.requestAdmission,
             resolveActor: () => ({ kind: 'desktop', ip: clientIp(context.req.raw.headers) }),
           })

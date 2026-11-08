@@ -4,6 +4,7 @@ import { createClanRefreshReservations, createPostgresClans } from '@brawltome/c
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList, type Migration, type ModuleRuntime } from '@brawltome/foundation'
 import {
+  createPlayerRefreshReservations,
   createPostgresCareerPlayers,
   createPostgresLeaderboardRanked,
   createPostgresPlayerReferences,
@@ -102,6 +103,7 @@ const statistics = createPostgresStatistics(database)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
+const playerRefreshReservations = createPlayerRefreshReservations(database)
 const moduleRuntime: ModuleRuntime = { database }
 const orpcRouter = createOrpcRouter(apiModules, moduleRuntime)
 
@@ -139,7 +141,7 @@ const sharedCtx = {
   discoveryQueries: discovery,
   rankedPlayerQueries,
   careerPlayerQueries,
-  refreshOperations,
+  playerRefreshReservations,
   requestAdmission,
   verifyRefreshChallenge: (token: string, remoteIp: string) =>
     observeSourceCall(telemetry, 'turnstile', () => verifyTurnstileResult(token, remoteIp)),
@@ -194,7 +196,7 @@ app.route(
   createDesktopRankedRoutes({
     playerReferences: playerReferenceQueries,
     rankedPlayers: rankedPlayerQueries,
-    refreshOperations,
+    playerRefreshReservations,
     requestAdmission,
   }),
 )

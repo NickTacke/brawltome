@@ -101,7 +101,7 @@ async function resolvePlayerRefresh(
       source: discordUserId ? 'discord' : 'interactive-api',
       requestedBy: discordUserId ?? ctx.account?.id,
     },
-    refreshOperations: ctx.refreshOperations,
+    playerRefreshReservations: ctx.playerRefreshReservations,
     requestAdmission: ctx.requestAdmission,
     resolveActor: async () => {
       if (discordUserId) return { kind: 'discord', discordUserId }

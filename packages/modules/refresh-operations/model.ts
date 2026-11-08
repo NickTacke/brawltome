@@ -375,15 +375,6 @@ export type OperationsTelemetrySnapshot = {
   scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
 }
 
-export type InteractivePlayerRefreshReservation = {
-  dedupeKey: string
-  operationKey: string
-  brawlhallaId: number
-  staleSections: ('ranked' | 'stats')[]
-  provenance: OperationProvenance
-  reservationTtlSeconds: number
-}
-
 // Published by refresh-operations/0026 whenever a player refresh reaches a terminal status.
 export const playerRefreshSettledChannel = 'refresh_operations_player_refresh_settled'
 
@@ -419,12 +410,6 @@ export type ReserveInteractiveRefreshResult =
   | { outcome: 'reserved'; operationId: string; reservationToken: string }
   | { outcome: 'already-active'; operationId: string }
 
-export type ActiveInteractiveRefresh = {
-  operationId: string
-  awaitingAdmission: boolean
-  reservationExpired: boolean
-}
-
 export interface StatisticsOperations {
   reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
   listAwaitingStatisticsCollections(): Promise<string[]>
@@ -438,15 +423,6 @@ export interface StatisticsOperations {
 }
 
 export type StatisticsCollectionOperations = StatisticsOperations
-
-export interface InteractiveRefreshOperations {
-  findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
-  reserveInteractivePlayerRefresh(input: InteractivePlayerRefreshReservation): Promise<ReserveInteractiveRefreshResult>
-  activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult>
-  activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
-  rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult>
-  rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult>
-}
 
 type LeaseFields = {
   operationId: string

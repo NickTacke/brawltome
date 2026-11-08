@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { createPlayerRefreshReservations } from '@brawltome/player'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
@@ -179,7 +180,7 @@ describe('Recently viewed freshness operations', () => {
 
       expect(await operations.enqueueRecentlyViewedRefreshes([50])).toEqual([50])
 
-      const reservation = await operations.reserveInteractivePlayerRefresh({
+      const reservation = await createPlayerRefreshReservations(database).reserveInteractivePlayerRefresh({
         brawlhallaId: 50,
         dedupeKey: 'player:50:visit',
         operationKey: `player:50:${randomUUID()}`,

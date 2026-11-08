@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { PlayerReferenceQueries } from '@brawltome/player'
-import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
+import type { PlayerReferenceQueries, PlayerRefreshReservations } from '@brawltome/player'
 import type { ActorAdmissionResult, SourceAdmissionResult } from '@brawltome/request-admission'
 import { createTelemetry, renderPrometheus, type Telemetry } from '@brawltome/telemetry'
 import { createCanonicalPlayerRefreshRouter, createV2PlayerRefreshRouter } from '../src/router/player.router'
@@ -38,7 +37,7 @@ function harness(
   const operationId = crypto.randomUUID()
   const playerReferenceQueries: PlayerReferenceQueries = { byId: async () => cached }
 
-  const operations: InteractiveRefreshOperations = {
+  const operations: PlayerRefreshReservations = {
     findActiveInteractivePlayerRefresh: async (dedupeKey, brawlhallaId) => {
       activeLookupDedupeKey = dedupeKey
       activeLookupPlayerId = brawlhallaId
@@ -57,18 +56,18 @@ function harness(
 
       return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() }
     },
-    activateInteractiveRefresh: async () => {
+    activateInteractivePlayerRefresh: async () => {
       calls.activate++
 
       return 'transitioned'
     },
-    activateAdmittedInteractiveRefresh: async () => {
+    activateAdmittedInteractivePlayerRefresh: async () => {
       calls.activate++
 
       return 'transitioned'
     },
-    rejectInteractiveRefresh: async () => 'transitioned',
-    rejectExpiredInteractiveRefresh: async () => 'transitioned',
+    rejectInteractivePlayerRefresh: async () => 'transitioned',
+    rejectExpiredInteractivePlayerRefresh: async () => 'transitioned',
   }
 
   const context = {
@@ -112,7 +111,7 @@ function harness(
         return { lastSuccessAt: stored.statsLastUpdated }
       },
     },
-    refreshOperations: operations,
+    playerRefreshReservations: operations,
     requestAdmission: {
       admitActor: async (actor: { kind: string }) => {
         calls.actor++

@@ -36,7 +36,7 @@ describe('desktop ranked lookup route', () => {
     const app = createDesktopRankedRoutes({
       playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Measured Zero', aliases: [] }) },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => {
           calls.active++
 
@@ -98,7 +98,7 @@ describe('desktop ranked lookup route', () => {
           return freshProfile(observedAt)
         },
       },
-      refreshOperations: {} as never,
+      playerRefreshReservations: {} as never,
       requestAdmission: {} as never,
     })
 
@@ -124,7 +124,7 @@ describe('desktop ranked lookup route', () => {
         },
       },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('fresh ranked data must not request refresh')
         },
@@ -153,7 +153,7 @@ describe('desktop ranked lookup route', () => {
           throw new Error('database unavailable')
         },
       },
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('failed reads must not request refresh')
         },
@@ -188,7 +188,7 @@ describe('desktop ranked lookup route', () => {
 
     const active = createDesktopRankedRoutes({
       ...shared,
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => ({
           operationId,
           awaitingAdmission: false,
@@ -213,14 +213,14 @@ describe('desktop ranked lookup route', () => {
 
     const limited = createDesktopRankedRoutes({
       ...shared,
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => ({
           outcome: 'reserved' as const,
           operationId,
           reservationToken: 'reservation-token',
         }),
-        rejectInteractiveRefresh: async () => {
+        rejectInteractivePlayerRefresh: async () => {
           rejected = true
 
           return 'transitioned' as const
@@ -242,7 +242,7 @@ describe('desktop ranked lookup route', () => {
 
     const temporary = createDesktopRankedRoutes({
       ...shared,
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => {
           throw new Error('operations unavailable')
@@ -267,21 +267,21 @@ describe('desktop ranked lookup route', () => {
     const app = createDesktopRankedRoutes({
       playerReferences: { byId: async () => null },
       rankedPlayers: { byId: async () => null },
-      refreshOperations: {
+      playerRefreshReservations: {
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async (input: unknown) => {
           calls.reserve = input
 
           return { outcome: 'reserved' as const, operationId, reservationToken }
         },
-        activateInteractiveRefresh: async (id: string, token: string) => {
+        activateInteractivePlayerRefresh: async (id: string, token: string) => {
           calls.activated = { id, token }
 
           return 'transitioned' as const
         },
-        activateAdmittedInteractiveRefresh: async () => 'transitioned' as const,
-        rejectInteractiveRefresh: async () => 'transitioned' as const,
-        rejectExpiredInteractiveRefresh: async () => 'transitioned' as const,
+        activateAdmittedInteractivePlayerRefresh: async () => 'transitioned' as const,
+        rejectInteractivePlayerRefresh: async () => 'transitioned' as const,
+        rejectExpiredInteractivePlayerRefresh: async () => 'transitioned' as const,
       } as never,
       requestAdmission: {
         admitActor: async (actor: unknown, reservationKey?: string) => {

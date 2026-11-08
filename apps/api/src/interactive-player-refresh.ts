@@ -1,5 +1,5 @@
 import type { RefreshOutcomeContract } from '@brawltome/contracts'
-import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
+import type { PlayerRefreshReservations } from '@brawltome/player'
 import type { ActorAdmission, AdmissionActor } from '@brawltome/request-admission'
 
 const temporarilyUnavailable = {
@@ -14,7 +14,7 @@ interface InteractivePlayerRefreshRequest {
   dedupeKey: string
   staleSections: ('ranked' | 'stats')[]
   provenance: { source: string; requestedBy?: string }
-  refreshOperations: InteractiveRefreshOperations
+  playerRefreshReservations: PlayerRefreshReservations
   requestAdmission: ActorAdmission
   resolveActor: () => Promise<ActorResolution> | ActorResolution
   onError?: (error: unknown) => void
@@ -32,7 +32,7 @@ export async function requestInteractivePlayerRefresh(
   request: InteractivePlayerRefreshRequest,
 ): Promise<RefreshOutcomeContract> {
   try {
-    const active = await request.refreshOperations.findActiveInteractivePlayerRefresh(
+    const active = await request.playerRefreshReservations.findActiveInteractivePlayerRefresh(
       request.dedupeKey,
       request.brawlhallaId,
     )
@@ -40,9 +40,9 @@ export async function requestInteractivePlayerRefresh(
     if (active) {
       if (active.awaitingAdmission) {
         if (await request.requestAdmission.hasActorReservation(active.operationId)) {
-          await request.refreshOperations.activateAdmittedInteractiveRefresh(active.operationId)
+          await request.playerRefreshReservations.activateAdmittedInteractivePlayerRefresh(active.operationId)
         } else if (active.reservationExpired) {
-          await request.refreshOperations.rejectExpiredInteractiveRefresh(active.operationId)
+          await request.playerRefreshReservations.rejectExpiredInteractivePlayerRefresh(active.operationId)
         } else {
           return poll(active.operationId)
         }
@@ -57,7 +57,7 @@ export async function requestInteractivePlayerRefresh(
 
     if ('outcome' in actor) return actor
 
-    const reserved = await request.refreshOperations.reserveInteractivePlayerRefresh({
+    const reserved = await request.playerRefreshReservations.reserveInteractivePlayerRefresh({
       dedupeKey: request.dedupeKey,
       operationKey: request.dedupeKey,
       brawlhallaId: request.brawlhallaId,
@@ -71,7 +71,7 @@ export async function requestInteractivePlayerRefresh(
     const admission = await request.requestAdmission.admitActor(actor, reserved.operationId)
 
     if (admission.outcome === 'rate-limited') {
-      await request.refreshOperations.rejectInteractiveRefresh(
+      await request.playerRefreshReservations.rejectInteractivePlayerRefresh(
         reserved.operationId,
         reserved.reservationToken,
         'actor_rate_limited',
@@ -83,7 +83,7 @@ export async function requestInteractivePlayerRefresh(
       }
     }
 
-    const activated = await request.refreshOperations.activateInteractiveRefresh(
+    const activated = await request.playerRefreshReservations.activateInteractivePlayerRefresh(
       reserved.operationId,
       reserved.reservationToken,
     )

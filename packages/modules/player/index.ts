@@ -48,6 +48,11 @@ export {
 } from './discovery-postgres'
 export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
 export {
+  createPlayerRefreshReservations,
+  type InteractivePlayerRefreshReservation,
+  type PlayerRefreshReservations,
+} from './jobs/player-refresh-reservation'
+export {
   createPostgresLeaderboardPlayerNames,
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,
