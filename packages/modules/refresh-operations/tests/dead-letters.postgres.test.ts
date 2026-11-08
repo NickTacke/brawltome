@@ -50,7 +50,7 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database })
+  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
 
   const accepted = await operations.accept({
     dedupeKey: `dead-letter:${randomUUID()}`,
@@ -209,7 +209,7 @@ describe('dead-letter operations', () => {
   })
 
   test('replay preserves scheduled provenance and stable interactive section effects', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
 
     const schedule = await operations.createSchedule({
@@ -312,7 +312,7 @@ describe('dead-letter operations', () => {
   })
 
   test('preserves clan, leaderboard, and projection kinds, payloads, and effect identity on replay', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
 
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
@@ -539,7 +539,7 @@ describe('dead-letter operations', () => {
   })
 
   test('replays a reserved Statistics collection with stable effect identity', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
     const cohortId = randomUUID()
     const operationKey = `statistics:${cohortId}:42:ranked`
 
