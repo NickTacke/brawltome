@@ -71,6 +71,11 @@ beforeAll(async () => {
       nullable_text text
     );
 
+    CREATE TABLE drift.addresses (
+      id integer PRIMARY KEY,
+      address inet NOT NULL
+    );
+
     CREATE TABLE public.in_public (id integer NOT NULL);
   `)
 })
@@ -346,17 +351,29 @@ describeWithDatabase('expectTablesMatchDatabase', () => {
     })
   })
 
-  test('reports a drizzle type it does not know, even when the database has the same type', async () => {
+  describe('with a drizzle type the check does not know', () => {
     const inet = customType<{ data: string }>({ dataType: () => 'inet' })
 
-    const table = drift.table('members', {
-      id: integer('id').primaryKey(),
-      rank: integer('rank'),
-      name: inet('name').notNull(),
+    test('reports it even when the database column has the same type', async () => {
+      const table = drift.table('addresses', { id: integer('id').primaryKey(), address: inet('address').notNull() })
+
+      const message = await driftMessage([table])
+
+      expect(message).toContain(
+        'drift.addresses: column address has the drizzle type inet, which the table check does not know',
+      )
+      expect(message).not.toContain('in the database but')
     })
 
-    expect(await driftMessage([table])).toContain(
-      'drift.members: column name has the drizzle type inet, which the table check does not know',
-    )
+    test('still compares nullability on the same column', async () => {
+      const table = drift.table('addresses', { id: integer('id').primaryKey(), address: inet('address') })
+
+      const message = await driftMessage([table])
+
+      expect(message).toContain(
+        'drift.addresses: column address has the drizzle type inet, which the table check does not know',
+      )
+      expect(message).toContain('drift.addresses: column address is not null in the database but nullable in drizzle')
+    })
   })
 })

@@ -109,26 +109,33 @@ function columnShapeDifferences(
 }
 
 function singleColumnDifferences(prefix: string, databaseColumn: ColumnShape, drizzleColumn: PgColumn): string[] {
+  return [
+    ...typeDifferences(prefix, databaseColumn, drizzleColumn),
+    ...nullabilityDifferences(prefix, databaseColumn, drizzleColumn),
+  ]
+}
+
+function typeDifferences(prefix: string, databaseColumn: ColumnShape, drizzleColumn: PgColumn): string[] {
   const drizzleType = canonicalDrizzleType(drizzleColumn.getSQLType())
 
   if (drizzleType === undefined) {
     return [`${prefix} has the drizzle type ${drizzleColumn.getSQLType()}, which the table check does not know`]
   }
 
-  const differences: string[] = []
-
   if (drizzleType !== databaseColumn.type) {
-    differences.push(`${prefix} is ${databaseColumn.type} in the database but ${drizzleType} in drizzle`)
+    return [`${prefix} is ${databaseColumn.type} in the database but ${drizzleType} in drizzle`]
   }
 
-  if (drizzleColumn.notNull !== databaseColumn.isNotNull) {
-    const inDatabase = databaseColumn.isNotNull ? 'not null' : 'nullable'
-    const inDrizzle = drizzleColumn.notNull ? 'not null' : 'nullable'
+  return []
+}
 
-    differences.push(`${prefix} is ${inDatabase} in the database but ${inDrizzle} in drizzle`)
-  }
+function nullabilityDifferences(prefix: string, databaseColumn: ColumnShape, drizzleColumn: PgColumn): string[] {
+  if (drizzleColumn.notNull === databaseColumn.isNotNull) return []
 
-  return differences
+  const inDatabase = databaseColumn.isNotNull ? 'not null' : 'nullable'
+  const inDrizzle = drizzleColumn.notNull ? 'not null' : 'nullable'
+
+  return [`${prefix} is ${inDatabase} in the database but ${inDrizzle} in drizzle`]
 }
 
 // postgres does not track array dimensions, so integer[][] and integer[] are the same column
