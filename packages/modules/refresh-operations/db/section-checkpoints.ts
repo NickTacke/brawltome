@@ -69,3 +69,12 @@ export async function allSectionsCommitted(
 
   return effect?.complete ? 'acknowledged' : 'none'
 }
+
+/** Says whether one section has a checkpoint on the effect operation, inside claim's transaction. */
+export function sectionCommitted(
+  transaction: Sql,
+  lease: Pick<Lease<unknown>, 'effectOperationId'>,
+  section: string,
+): Promise<EffectState> {
+  return allSectionsCommitted(transaction, lease, [section])
+}

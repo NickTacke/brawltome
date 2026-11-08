@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { allSectionsCommitted, refreshOperationsModule, reserveForAdmission } from '@brawltome/refresh-operations'
+import {
+  allSectionsCommitted,
+  refreshOperationsModule,
+  reserveForAdmission,
+  sectionCommitted,
+} from '@brawltome/refresh-operations'
 
 let database: TestDatabase
 
@@ -69,5 +74,22 @@ describe('allSectionsCommitted', () => {
     const effectOperationId = await reserveEffectOperation()
 
     expect(await allSectionsCommitted(database.sql, { effectOperationId }, [])).toBe('acknowledged')
+  })
+})
+
+describe('sectionCommitted', () => {
+  test('is acknowledged once that section has a checkpoint on the effect operation', async () => {
+    const effectOperationId = await reserveEffectOperation()
+    const lease = { effectOperationId }
+
+    expect(await sectionCommitted(database.sql, lease, 'ranked')).toBe('none')
+
+    await recordCheckpoint(effectOperationId, 'stats')
+
+    expect(await sectionCommitted(database.sql, lease, 'ranked')).toBe('none')
+
+    await recordCheckpoint(effectOperationId, 'ranked')
+
+    expect(await sectionCommitted(database.sql, lease, 'ranked')).toBe('acknowledged')
   })
 })
