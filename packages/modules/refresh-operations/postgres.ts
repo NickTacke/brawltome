@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import type { EffectStateEntry, EffectStates } from './db/effect-states'
+import { inspectOperation } from './db/inspect-operation'
+import { inspectSchedule } from './db/inspect-schedule'
+import { inspectTelemetry } from './db/inspect-telemetry'
+import { readOperationStatus } from './db/read-operation-status'
 import {
   type AdmissionCreditRow,
   admissionConfigHash,
@@ -12,7 +16,6 @@ import {
   type AcceptOperation,
   type AcceptOperationResult,
   type AdmissionConfig,
-  admissionRejectionCodes,
   type BackgroundWorkClass,
   backgroundWorkClasses,
   type CreateLeaderboardDeepCrawlSchedule,
@@ -27,7 +30,6 @@ import {
   type DeadLetterListItem,
   type DeadLetterOperations,
   type DeadLetterPage,
-  type DeadLetterReason,
   type DiscoveryProjectionKind,
   discoveryProjectionKinds,
   type FencedResult,
@@ -61,7 +63,6 @@ import {
   validateLeaderboardOperationPayload,
   validateRankingRetentionPayload,
   type WorkClass,
-  workClasses,
 } from './model'
 
 const wakeupChannel = 'refresh_operations_wakeup'
@@ -2535,165 +2536,13 @@ export function createPostgresRefreshOperations(
       return disposeDeadLetter('discarded', input)
     },
 
-    async inspectTelemetry() {
-      const [databaseTime] = await client<{ observed_at: Date }[]>`
-        SELECT clock_timestamp() AS observed_at
-      `
+    inspectTelemetry: () => inspectTelemetry(database),
 
-      const oldestPending = await client<{ work_class: WorkClass; age_ms: string | number }[]>`
-        SELECT work_class,
-               -- Waiting time since the work last became runnable: a deep crawl that yields between slices is created once
-               -- but becomes runnable again after every slice, and must not look like one job stuck for the whole crawl.
-               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(available_at))) * 1000)::bigint AS age_ms
-        FROM refresh_operations.operations
-        WHERE status = 'pending' AND available_at <= ${databaseTime.observed_at}
-        GROUP BY work_class
-      `
+    operationStatus: (operationId: string) => readOperationStatus(database, operationId),
 
-      const deadLetters = await client<
-        {
-          work_class: WorkClass
-          kind: OperationLease['kind']
-          reason: DeadLetterReason
-          count: string | number
-        }[]
-      >`
-        SELECT operation.work_class, operation.kind,
-               CASE WHEN operation.last_error ->> 'code' IN ${client([...admissionRejectionCodes])}
-                 THEN 'admission_rejected' ELSE 'execution' END AS reason,
-               count(*)::bigint AS count
-        FROM refresh_operations.operations AS operation
-        WHERE operation.status = 'dead_letter'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM refresh_operations.dead_letter_actions AS action
-            WHERE action.target_operation_id = operation.id
-          )
-        GROUP BY 1, 2, 3
-      `
+    inspect: (operationId: string) => inspectOperation(database, operationId),
 
-      const scheduleLateness = await client<{ kind: OperationLease['kind']; lateness_ms: string | number }[]>`
-        SELECT kind,
-               greatest(0, extract(epoch FROM (${databaseTime.observed_at} - min(next_due_at))) * 1000)::bigint
-                 AS lateness_ms
-        FROM refresh_operations.schedules
-        WHERE enabled
-        GROUP BY kind
-      `
-
-      const pendingByClass = new Map(oldestPending.map((row) => [row.work_class, Number(row.age_ms)]))
-
-      const deadLettersByClassKindAndReason = new Map(
-        deadLetters.map((row) => [`${row.work_class}:${row.kind}:${row.reason}`, Number(row.count)]),
-      )
-
-      const allOperationKinds: OperationLease['kind'][] = [
-        'proof',
-        'interactive-player-refresh',
-        'clan-refresh',
-        'player-discovery-projection',
-        'clan-discovery-projection',
-        'discovery-reconciliation',
-        'ranked-player-pulse',
-        'player-name-verification',
-        'ranking-retention',
-        'leaderboard-deep-crawl',
-        ...leaderboardOperationKinds,
-        ...statisticsCollectionKinds,
-        'statistics-publication',
-        'statistics-legend-meta-publication',
-      ]
-
-      const latenessByKind = new Map(scheduleLateness.map((row) => [row.kind, Number(row.lateness_ms)]))
-
-      return {
-        observedAt: databaseTime.observed_at.toISOString(),
-        oldestPending: workClasses.map((workClass) => ({
-          workClass,
-          ageMs: pendingByClass.get(workClass) ?? 0,
-        })),
-        // Execution series are always present so rate-based alerts see a zero baseline. Admission series stay
-        // sparse outside the interactive kinds to keep the gauge under the per-metric series bound.
-        deadLetters: workClasses.flatMap((workClass) =>
-          allOperationKinds.flatMap((kind) => {
-            const admissionRejected = deadLettersByClassKindAndReason.get(`${workClass}:${kind}:admission_rejected`)
-
-            return [
-              {
-                workClass,
-                kind,
-                reason: 'execution' as const,
-                count: deadLettersByClassKindAndReason.get(`${workClass}:${kind}:execution`) ?? 0,
-              },
-              ...(admissionRejected !== undefined || kind === 'interactive-player-refresh' || kind === 'clan-refresh'
-                ? [{ workClass, kind, reason: 'admission_rejected' as const, count: admissionRejected ?? 0 }]
-                : []),
-            ]
-          }),
-        ),
-        scheduleLateness: (
-          [
-            'proof',
-            'interactive-player-refresh',
-            ...leaderboardOperationKinds,
-            'ranking-retention',
-            'leaderboard-deep-crawl',
-          ] as OperationLease['kind'][]
-        ).map((kind) => ({
-          kind,
-          latenessMs: latenessByKind.get(kind) ?? 0,
-        })),
-      }
-    },
-
-    async operationStatus(operationId: string): Promise<string | null> {
-      const [operation] = await client<{ status: string }[]>`
-        SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
-      `
-
-      return operation?.status ?? null
-    },
-
-    async inspect(operationId: string) {
-      const [operation] = await client`
-        SELECT * FROM refresh_operations.operations WHERE id = ${operationId}
-      `
-
-      const attempts = await client`
-        SELECT * FROM refresh_operations.attempts WHERE operation_id = ${operationId} ORDER BY attempt_number
-      `
-
-      const effects = await client`
-        SELECT * FROM refresh_operations.proof_effects WHERE operation_id = ${operationId}
-      `
-
-      const leaderboardEffects = await client`
-        SELECT * FROM refresh_operations.leaderboard_effects WHERE operation_id = ${operationId}
-      `
-
-      return { operation, attempts, effects, leaderboardEffects }
-    },
-
-    async inspectSchedule(scheduleId: string) {
-      const [schedule] = await client`
-        SELECT * FROM refresh_operations.schedules WHERE id = ${scheduleId}
-      `
-
-      const occurrences = await client`
-        SELECT occurrence.*, coalesce(operation.status, deduplicated.status) AS operation_status,
-               coalesce(operation.attempt_count, deduplicated.attempt_count) AS attempt_count,
-               coalesce(operation.last_error, deduplicated.last_error) AS last_error,
-               coalesce(operation.completed_at, deduplicated.completed_at) AS completed_at
-        FROM refresh_operations.schedule_occurrences occurrence
-        LEFT JOIN refresh_operations.operations operation ON operation.id = occurrence.operation_id
-        LEFT JOIN refresh_operations.operations deduplicated
-          ON deduplicated.id = occurrence.deduplicated_to_operation_id
-        WHERE occurrence.schedule_id = ${scheduleId}
-        ORDER BY occurrence.window_due_at
-      `
-
-      return { schedule, occurrences }
-    },
+    inspectSchedule: (scheduleId: string) => inspectSchedule(database, scheduleId),
 
     listen(onWakeup: (operationId: string) => void) {
       return client.listen(wakeupChannel, onWakeup)
