@@ -16,7 +16,7 @@ ALTER TABLE refresh_operations.leaderboard_deep_crawl_progress SET SCHEMA rankin
 ALTER TABLE refresh_operations.leaderboard_deep_crawl_mode_progress SET SCHEMA rankings;
 
 CREATE VIEW refresh_operations.leaderboard_effects AS
-  SELECT operation_key, operation_id, operation_kind, lease_token, created_at FROM rankings.leaderboard_effects;
+  SELECT operation_key, operation_id, lease_token, created_at, operation_kind FROM rankings.leaderboard_effects;
 CREATE VIEW refresh_operations.leaderboard_deep_crawl_progress AS
   SELECT region, window_at, next_page, total_pages, updated_at FROM rankings.leaderboard_deep_crawl_progress;
 CREATE VIEW refresh_operations.leaderboard_deep_crawl_mode_progress AS
@@ -111,6 +111,6 @@ export const moveEffectTables = {
   identity: 'rankings/0013',
   predecessor: 'rankings/0012',
   requires: ['refresh-operations/0028'],
-  checksum: '9af11638353deadbe200fbf066a5d4a06336d4f8819908b5338473e79f7ed091',
+  checksum: 'd9317cf219a7e5a3af3791538eaa42aff5e370e69d5f7f82013229f842a07b48',
   sql,
 } as const

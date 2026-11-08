@@ -149,7 +149,6 @@ function withEffect(tools: JobTools, commitProofEffect: QueueWorker['commitProof
   return { ...tools, queue: { ...tools.queue, commitProofEffect } }
 }
 
-// proof effects live in the accounts schema; a database without that module has none to read
 // leaderboard effects live in the rankings schema; a database without that module has none applied
 const testReadAppliedLeaderboardEffects: AppliedLeaderboardEffects = async (transaction, effectOperationIds) => {
   const [table] = await transaction.execute<{ table: string | null }>(
