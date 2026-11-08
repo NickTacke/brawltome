@@ -42,7 +42,6 @@ import {
   type AdmissionConfig,
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateLeaderboardSchedule,
-  type CreateRankingRetentionSchedule,
   type CreateSchedule,
   type DeadLetterDispositionInput,
   type DeadLetterOperations,
@@ -569,9 +568,6 @@ export function createPostgresRefreshOperations(
     reconcileLeaderboardSchedule: (input: CreateLeaderboardSchedule) =>
       reconcileFixedSchedule(database, { schedule: input }),
 
-    reconcileRankingRetentionSchedule: (input: CreateRankingRetentionSchedule) =>
-      reconcileFixedSchedule(database, { schedule: input, reenable: true }),
-
     // 1v1 progress stays in the original per-region table; the other modes use the per-mode table.
     async readLeaderboardDeepCrawlProgress(
       mode: string,
@@ -625,9 +621,6 @@ export function createPostgresRefreshOperations(
 
     disableLeaderboardDeepCrawlSchedule: (scheduleKey: string) =>
       disableFixedSchedule(database, { scheduleKey, kind: 'leaderboard-deep-crawl' }),
-
-    disableRankingRetentionSchedule: (scheduleKey: string) =>
-      disableFixedSchedule(database, { scheduleKey, kind: 'ranking-retention' }),
 
     materializeDueSchedules: (limit = 100) => materializeDueSchedules(database, { limit }),
 
