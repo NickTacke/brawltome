@@ -7,7 +7,8 @@ import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
-import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { reconcileInteractiveAdmissions } from '../src/worker/interactive-admissions'
 import {
   createLeaderboardTestJob,
   createProofJob,

@@ -68,12 +68,13 @@ import {
   readPlayerNameVerificationConfig,
 } from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
-import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
+import { runOneRefreshOperation } from './refresh-operations-worker'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
+import { reconcileInteractiveAdmissions } from './worker/interactive-admissions'
 import { createWorkerJobs } from './worker/job-list'
 import { workerModules } from './worker-modules'
 
