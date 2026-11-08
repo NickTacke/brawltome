@@ -41,30 +41,6 @@ export type AdmissionConfig = {
   backgroundWeights: Record<BackgroundWorkClass, number>
 }
 
-export function validateAdmissionConfig(config: AdmissionConfig): AdmissionConfig {
-  const integer = (value: number, name: string, minimum: number, maximum: number) => {
-    if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-      throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
-    }
-  }
-
-  integer(config.totalConcurrency, 'totalConcurrency', 2, 10_000)
-  integer(config.interactiveReservation, 'interactiveReservation', 1, config.totalConcurrency - 1)
-  for (const workClass of workClasses) {
-    integer(config.classConcurrency[workClass], `classConcurrency.${workClass}`, 1, config.totalConcurrency)
-  }
-
-  if (config.classConcurrency.interactive < config.interactiveReservation) {
-    throw new Error('classConcurrency.interactive must cover interactiveReservation')
-  }
-
-  for (const workClass of backgroundWorkClasses) {
-    integer(config.backgroundWeights[workClass], `backgroundWeights.${workClass}`, 1, 10_000)
-  }
-
-  return config
-}
-
 export const leaderboardOperationKinds = [
   'leaderboard-1v1',
   'leaderboard-2v2',

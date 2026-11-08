@@ -8,14 +8,14 @@ import {
   refreshCanonicalRankedPlayer,
   type V0RankedSource,
 } from '@brawltome/player'
-import type {
-  AcceptOperationResult,
-  AcceptPlayerNameVerificationOperation,
-  OperationLease,
+import {
+  type AcceptOperationResult,
+  type AcceptPlayerNameVerificationOperation,
+  type OperationLease,
+  SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
 import type { SourceDomain } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
-import { SourceAdmissionLimitedError } from './refresh-operations-worker'
 
 // V1 leaderboard names can be stale upstream caches or newer than a months-old V0 name. A capped trickle of
 // V0 ranked calls settles which, and only while V0 is quiet, so it never competes with users for the budget.

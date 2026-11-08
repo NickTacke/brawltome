@@ -7,13 +7,14 @@ import {
   type OperationLease,
   type PlayerRefreshSettled,
   refreshOperationsModule,
+  SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { apiModules } from '../src/modules'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
-import { runOneRefreshOperation, SourceAdmissionLimitedError } from '../src/refresh-operations-worker'
+import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
 let database: TestDatabase
