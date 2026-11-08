@@ -806,6 +806,11 @@ export function createPostgresRefreshOperations(
       admission: AdmissionConfig,
       kind?: OperationLease['kind'],
     ): Promise<OperationLease | null> {
+      // without them claim would never finish an acknowledged operation or take its claim lock
+      if (!options.effectStates) {
+        throw new Error(`claim operation for worker ${workerId}: queue was built without effectStates`)
+      }
+
       validateAdmissionConfig(admission)
       const policy = admissionConfigHash(admission)
 
