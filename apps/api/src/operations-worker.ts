@@ -31,6 +31,7 @@ import {
   disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
   fetchLeaderboardPage,
+  readAppliedLeaderboardEffects,
   reconcileLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardSchedule,
   reconcileRankingRetentionSchedule,
@@ -230,7 +231,11 @@ const jobRegistry = createJobRegistry(workerJobs)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { effectStates: createEffectStates(workerJobs), proofEffects: proofEffectStore },
+  {
+    effectStates: createEffectStates(workerJobs),
+    proofEffects: proofEffectStore,
+    readAppliedLeaderboardEffects,
+  },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {

@@ -49,18 +49,11 @@ export type {
   ReplayGuard,
   ReplayGuardTarget,
 } from './db/dead-letter-hooks'
-export {
-  type DeepCrawlProgressRow,
-  readDeepCrawlProgress,
-  type SaveDeepCrawlProgressInput,
-  saveDeepCrawlProgress,
-} from './db/deep-crawl-progress'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
 export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
-  leaderboardEffectState,
   legendMetaPublicationEffectState,
   statisticsCollectionEffectState,
   statisticsPublicationEffectState,
@@ -74,6 +67,7 @@ export {
   type ListAwaitingInput,
   listAwaiting,
 } from './db/find-operations'
+export type { AppliedLeaderboardEffects } from './db/materialize-due-schedules'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
 export {
   type AttemptHistory,
@@ -82,7 +76,6 @@ export {
 } from './db/read-attempt-history'
 export {
   readInteractiveEffects,
-  readLeaderboardEffects,
   readStatisticsEffects,
   readStatisticsPublicationEffects,
 } from './db/read-effect-rows'
@@ -158,7 +151,6 @@ export {
   type LeaderboardEffectResult,
   lockActiveLeaderboardLease,
   lockActiveRankingRetentionLease,
-  recordLeaderboardEffect,
 } from './lease-fences'
 export * from './model'
 export { authenticateDeadLetterOperator, OperatorAuthenticationError } from './operator-auth'

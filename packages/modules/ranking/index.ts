@@ -11,7 +11,9 @@ import { expireV1RankingGenerations } from './migrations/0009-expire-v1-generati
 import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete'
 import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
+import { moveEffectTables } from './migrations/0013-move-effect-tables'
 
+export { readAppliedLeaderboardEffects } from './db/leaderboard-effects'
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
   createLeaderboardCollectionJob,
@@ -86,6 +88,7 @@ const migrations = [
   bitmapRetentionDelete,
   retentionDeleteWithoutSeqScan,
   statementLevelRowImmutability,
+  moveEffectTables,
 ] as const
 
 export const rankingModule = {

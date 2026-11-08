@@ -2011,7 +2011,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: acceptLeaderboard,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.leaderboard_effects (operation_key, operation_id, lease_token, operation_kind)
+        INSERT INTO rankings.leaderboard_effects (operation_key, operation_id, lease_token, operation_kind)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken}, ${lease.kind})
       `
     },

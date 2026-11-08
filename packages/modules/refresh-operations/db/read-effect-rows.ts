@@ -2,7 +2,6 @@ import { asc, eq, sql } from 'drizzle-orm'
 import type { DeadLetterInspection } from '../model'
 import {
   interactiveRefreshEffects,
-  leaderboardEffects,
   statisticsCollectionEffects,
   statisticsLegendMetaPublicationEffects,
   statisticsPublicationEffects,
@@ -23,23 +22,6 @@ export async function readInteractiveEffects(
     section: effect.section,
     leaseToken: effect.leaseToken,
     completedAt: effect.completedAt.toISOString(),
-  }))
-}
-
-export async function readLeaderboardEffects(
-  transaction: Transaction,
-  effectOperationId: string,
-): Promise<DeadLetterInspection['leaderboardEffects']> {
-  const rows = await transaction
-    .select()
-    .from(leaderboardEffects)
-    .where(eq(leaderboardEffects.operationId, effectOperationId))
-    .orderBy(asc(leaderboardEffects.createdAt))
-
-  return rows.map((effect) => ({
-    operationKey: effect.operationKey,
-    leaseToken: effect.leaseToken,
-    createdAt: effect.createdAt.toISOString(),
   }))
 }
 

@@ -12,7 +12,7 @@ import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
-import { materializeDueSchedules } from './db/materialize-due-schedules'
+import { type AppliedLeaderboardEffects, materializeDueSchedules } from './db/materialize-due-schedules'
 import { readOperationStatus } from './db/read-operation-status'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { beginSection, commitSection } from './db/section-checkpoints'
@@ -48,7 +48,11 @@ export type RefreshOperationsDatabases = {
 
 export function createPostgresRefreshOperations(
   { database, renewals = database }: RefreshOperationsDatabases,
-  options: { effectStates?: EffectStates; proofEffects?: ProofEffectStore } = {},
+  options: {
+    effectStates?: EffectStates
+    proofEffects?: ProofEffectStore
+    readAppliedLeaderboardEffects?: AppliedLeaderboardEffects
+  } = {},
 ) {
   const client = database.sql
 
@@ -152,7 +156,11 @@ export function createPostgresRefreshOperations(
 
     createSchedule: (input: CreateSchedule) => createSchedule(database, input),
 
-    materializeDueSchedules: (limit = 100) => materializeDueSchedules(database, { limit }),
+    materializeDueSchedules: (limit = 100) =>
+      materializeDueSchedules(database, {
+        limit,
+        readAppliedLeaderboardEffects: options.readAppliedLeaderboardEffects,
+      }),
 
     async claim(
       workerId: string,

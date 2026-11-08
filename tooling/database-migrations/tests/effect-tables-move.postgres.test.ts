@@ -5,7 +5,7 @@ import postgres from 'postgres'
 import { orderedMigrations } from '../src/inventories'
 
 // the release being replaced: its statements name the old tables, and it may be serving while this migrates
-const movingIdentities = new Set(['accounts/0011', 'players/0021'])
+const movingIdentities = new Set(['accounts/0011', 'players/0021', 'rankings/0013'])
 
 const serverUrl = process.env.DATABASE_URL
 const describeWithDatabase = serverUrl ? describe : describe.skip
@@ -20,6 +20,13 @@ let oldRelease: postgres.Sql
 let admin: postgres.Sql
 
 const watermark = new Date('2026-08-10T00:00:00.000Z')
+
+const leaderboardOperationId = randomUUID()
+const leaderboardOperationKey = `leaderboard:${leaderboardOperationId}`
+const leaderboardKind = 'leaderboard-1v1'
+const leaderboardPayload = { mode: '1v1', pageDepth: 1, intervalMs: 60_000 }
+
+const crawlWindow = new Date('2026-08-11T00:00:00.000Z')
 
 const proofOperationId = randomUUID()
 const proofOperationKey = `proof:${proofOperationId}`
@@ -39,6 +46,7 @@ type LeasedOperation = {
   operationKey: string
   payload: Record<string, unknown>
   status?: string
+  workClass?: string
 }
 
 type OldRunner = postgres.Sql
@@ -49,13 +57,36 @@ async function insertOperation(operation: LeasedOperation): Promise<void> {
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
        status, attempt_count, max_attempts, lease_token, lease_owner, lease_expires_at)
     VALUES (${operation.id}, ${operation.id}, ${operation.kind}, ${`dedupe:${operation.id}`}, ${operation.operationKey},
-            'maintenance', ${owner.json(operation.payload as never)},
+            ${operation.workClass ?? 'maintenance'}, ${owner.json(operation.payload as never)},
             ${owner.json({ source: 'effect-tables-move-test', requestedBy: 'test' })},
             ${operation.status ?? 'leased'}, 1, 3, 1, 'old-release-worker', clock_timestamp() + interval '1 hour')
   `
 }
 
 async function seedRowsBeforeTheMove(): Promise<void> {
+  await insertOperation({
+    id: leaderboardOperationId,
+    kind: leaderboardKind,
+    operationKey: leaderboardOperationKey,
+    payload: leaderboardPayload,
+    workClass: 'leaderboard',
+  })
+
+  await owner`
+    INSERT INTO refresh_operations.leaderboard_effects (operation_key, operation_id, operation_kind, lease_token)
+    VALUES (${`seeded:${leaderboardOperationKey}`}, ${leaderboardOperationId}, ${leaderboardKind}, 1)
+  `
+
+  await owner`
+    INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
+    VALUES ('EU', ${crawlWindow}, 2, 40)
+  `
+
+  await owner`
+    INSERT INTO refresh_operations.leaderboard_deep_crawl_mode_progress (mode, region, window_at, next_page, total_pages)
+    VALUES ('2v2', 'EU', ${crawlWindow}, 3, 50)
+  `
+
   await insertOperation({
     id: proofOperationId,
     kind: 'proof',
@@ -119,6 +150,69 @@ async function oldProofEffectState(sql: OldRunner, effectOperationId: string) {
   `
 }
 
+// the old release's deep-crawl progress statements, verbatim
+async function oldReadCrawlProgress(sql: OldRunner, region: string) {
+  return sql<{ window_at: Date; next_page: number; total_pages: number }[]>`
+    SELECT window_at, next_page, total_pages
+    FROM refresh_operations.leaderboard_deep_crawl_progress WHERE region = ${region}
+  `
+}
+
+async function oldSaveCrawlProgress(
+  sql: OldRunner,
+  region: string,
+  windowAt: Date,
+  nextPage: number,
+  totalPages: number,
+) {
+  await sql`
+    INSERT INTO refresh_operations.leaderboard_deep_crawl_progress (region, window_at, next_page, total_pages)
+    VALUES (${region}, ${windowAt}, ${nextPage}, ${totalPages})
+    ON CONFLICT (region) DO UPDATE SET
+      window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
+      total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
+  `
+}
+
+async function oldReadCrawlModeProgress(sql: OldRunner, mode: string, region: string) {
+  return sql<{ window_at: Date; next_page: number; total_pages: number }[]>`
+    SELECT window_at, next_page, total_pages
+    FROM refresh_operations.leaderboard_deep_crawl_mode_progress WHERE mode = ${mode} AND region = ${region}
+  `
+}
+
+async function oldSaveCrawlModeProgress(sql: OldRunner, mode: string, region: string, nextPage: number) {
+  await sql`
+    INSERT INTO refresh_operations.leaderboard_deep_crawl_mode_progress
+      (mode, region, window_at, next_page, total_pages)
+    VALUES (${mode}, ${region}, ${crawlWindow}, ${nextPage}, ${60})
+    ON CONFLICT (mode, region) DO UPDATE SET
+      window_at = EXCLUDED.window_at, next_page = EXCLUDED.next_page,
+      total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
+  `
+}
+
+async function oldLeaderboardEffectState(sql: OldRunner, effectOperationId: string) {
+  return sql<{ operation_id: string }[]>`
+    SELECT operation_id FROM refresh_operations.leaderboard_effects
+    WHERE operation_id = ${effectOperationId}
+  `
+}
+
+async function oldRecordLeaderboardEffect(sql: OldRunner, operationId: string, operationKey: string) {
+  const [result] = await sql<{ result: string }[]>`
+    SELECT refresh_operations.record_leaderboard_effect(
+      ${operationId},
+      ${operationKey},
+      ${leaderboardKind},
+      ${'old-release-worker'},
+      ${1}
+    ) AS result
+  `
+
+  return result.result
+}
+
 async function prepareOldStatements(): Promise<void> {
   await oldRelease.begin(async (transactionHandle) => {
     const transaction = transactionHandle as unknown as OldRunner
@@ -129,6 +223,15 @@ async function prepareOldStatements(): Promise<void> {
     await oldProofEffectInsert(transaction, `seeded:${proofOperationKey}`, proofOperationId)
     await oldProofEffectRead(transaction, `seeded:${proofOperationKey}`)
     await oldProofEffectState(transaction, proofOperationId)
+    await oldReadCrawlProgress(transaction, 'EU')
+    await oldSaveCrawlProgress(transaction, 'EU', crawlWindow, 2, 40)
+    await oldReadCrawlModeProgress(transaction, '2v2', 'EU')
+    await oldSaveCrawlModeProgress(transaction, '2v2', 'EU', 3)
+    await oldLeaderboardEffectState(transaction, leaderboardOperationId)
+
+    expect(await oldRecordLeaderboardEffect(transaction, leaderboardOperationId, leaderboardOperationKey)).toBe(
+      'effect-conflict',
+    )
   })
 }
 
@@ -171,6 +274,127 @@ afterAll(async () => {
 }, 30_000)
 
 describeWithDatabase('moving queue effect tables to their owners', () => {
+  describe('rankings effect tables', () => {
+    test('owner schema holds the rows seeded before the move, with their foreign key', async () => {
+      const [effect] = await owner<{ operation_id: string; operation_kind: string }[]>`
+        SELECT operation_id, operation_kind FROM rankings.leaderboard_effects
+        WHERE operation_key = ${`seeded:${leaderboardOperationKey}`}
+      `
+
+      expect(effect).toEqual({ operation_id: leaderboardOperationId, operation_kind: leaderboardKind })
+
+      const [progress] = await owner<{ next_page: number }[]>`
+        SELECT next_page FROM rankings.leaderboard_deep_crawl_progress WHERE region = 'EU'
+      `
+
+      expect(progress.next_page).toBe(2)
+
+      const [modeProgress] = await owner<{ next_page: number }[]>`
+        SELECT next_page FROM rankings.leaderboard_deep_crawl_mode_progress WHERE mode = '2v2' AND region = 'EU'
+      `
+
+      expect(modeProgress.next_page).toBe(3)
+
+      await expect(
+        owner`
+          INSERT INTO rankings.leaderboard_effects (operation_key, operation_id, operation_kind, lease_token)
+          VALUES (${`orphan:${randomUUID()}`}, ${randomUUID()}, ${leaderboardKind}, 1)
+        `.execute(),
+      ).rejects.toMatchObject({ code: '23503' })
+    })
+
+    test('old names take the old deep-crawl and effect statements from a session prepared before the move', async () => {
+      const [before] = await oldReadCrawlProgress(oldRelease, 'EU')
+
+      expect(before.next_page).toBe(2)
+
+      const nextWindow = new Date(crawlWindow.getTime() + 86_400_000)
+
+      await oldSaveCrawlProgress(oldRelease, 'EU', nextWindow, 5, 41)
+
+      const [saved] = await owner<{ window_at: Date; next_page: number; total_pages: number; updated_at: Date }[]>`
+        SELECT window_at, next_page, total_pages, updated_at FROM rankings.leaderboard_deep_crawl_progress
+        WHERE region = 'EU'
+      `
+
+      expect(saved).toMatchObject({ window_at: nextWindow, next_page: 5, total_pages: 41 })
+
+      await oldSaveCrawlModeProgress(oldRelease, '2v2', 'EU', 9)
+      await oldSaveCrawlModeProgress(oldRelease, 'solo2v2', 'US-E', 1)
+
+      const [modeSaved] = await oldReadCrawlModeProgress(oldRelease, '2v2', 'EU')
+
+      expect(modeSaved.next_page).toBe(9)
+
+      const [newMode] = await owner<{ next_page: number }[]>`
+        SELECT next_page FROM rankings.leaderboard_deep_crawl_mode_progress WHERE mode = 'solo2v2' AND region = 'US-E'
+      `
+
+      expect(newMode.next_page).toBe(1)
+    })
+
+    test('the old function name still records an effect through the owner body', async () => {
+      const operationId = randomUUID()
+      const operationKey = `old-leaderboard:${operationId}`
+
+      await insertOperation({
+        id: operationId,
+        kind: leaderboardKind,
+        operationKey,
+        payload: leaderboardPayload,
+        workClass: 'leaderboard',
+      })
+
+      expect(await oldRecordLeaderboardEffect(oldRelease, operationId, operationKey)).toBe('applied')
+      expect(await oldRecordLeaderboardEffect(oldRelease, operationId, operationKey)).toBe('already-applied')
+
+      expect([...(await oldLeaderboardEffectState(oldRelease, operationId))]).toEqual([{ operation_id: operationId }])
+
+      const [stored] = await owner<{ operation_key: string }[]>`
+        SELECT operation_key FROM rankings.leaderboard_effects WHERE operation_id = ${operationId}
+      `
+
+      expect(stored.operation_key).toBe(operationKey)
+    })
+
+    test('runtime role reads and writes both names and can call both functions', async () => {
+      const operationId = randomUUID()
+      const operationKey = `runtime-leaderboard:${operationId}`
+
+      await insertOperation({
+        id: operationId,
+        kind: leaderboardKind,
+        operationKey,
+        payload: leaderboardPayload,
+        workClass: 'leaderboard',
+      })
+
+      await owner.begin(async (transactionHandle) => {
+        const transaction = transactionHandle as unknown as OldRunner
+
+        await transaction.unsafe(`SET LOCAL ROLE "${runtimeRole}"`)
+        expect(await oldRecordLeaderboardEffect(transaction, operationId, operationKey)).toBe('applied')
+        await oldLeaderboardEffectState(transaction, operationId)
+        await oldSaveCrawlProgress(transaction, 'BRZ', crawlWindow, 2, 7)
+        await transaction`SELECT next_page FROM rankings.leaderboard_deep_crawl_progress WHERE region = 'BRZ'`
+      })
+
+      await expect(
+        (async () => {
+          await owner.begin(async (transactionHandle) => {
+            const transaction = transactionHandle as unknown as OldRunner
+
+            await transaction.unsafe(`SET LOCAL ROLE "${runtimeRole}"`)
+
+            await transaction`
+              SELECT rankings.record_leaderboard_effect(${operationId}, ${operationKey}, ${leaderboardKind}, ${'old-release-worker'}, ${1})
+            `
+          })
+        })(),
+      ).resolves.toBeUndefined()
+    })
+  })
+
   describe('accounts.proof_effects', () => {
     test('owner schema holds the row seeded before the move', async () => {
       const rows = await owner<{ operation_id: string; effect_value: unknown }[]>`

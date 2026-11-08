@@ -8,15 +8,6 @@ export type EffectStates = Readonly<Partial<Record<OperationLease['kind'], Effec
 
 type EffectLease = Pick<Lease<unknown>, 'operationId' | 'effectOperationId' | 'payload'>
 
-export async function leaderboardEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
-  const [effect] = await sql<{ operation_id: string }[]>`
-    SELECT operation_id FROM refresh_operations.leaderboard_effects
-    WHERE operation_id = ${lease.effectOperationId}
-  `
-
-  return effect ? 'acknowledged' : 'none'
-}
-
 export async function statisticsCollectionEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM refresh_operations.statistics_collection_effects

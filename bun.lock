@@ -230,6 +230,7 @@
         "@brawltome/game-data": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
+        "drizzle-orm": "0.45.4",
       },
       "devDependencies": {
         "typescript": "^5.7.0",

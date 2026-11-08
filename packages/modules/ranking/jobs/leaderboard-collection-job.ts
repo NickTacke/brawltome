@@ -6,9 +6,9 @@ import {
   type LeaderboardOperationKind,
   type LeaderboardOperationPayload,
   type Lease,
-  leaderboardEffectState,
   type RetryTimings,
 } from '@brawltome/refresh-operations'
+import { leaderboardEffectState } from '../db/leaderboard-effects'
 import {
   collectAndPublishLeaderboardGeneration,
   leaderboardModeFromOperationKind,

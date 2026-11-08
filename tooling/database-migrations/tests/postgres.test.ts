@@ -747,6 +747,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         await client`CREATE SCHEMA refresh_operations`
         await client`CREATE SCHEMA players`
         await client`CREATE SCHEMA accounts`
+        await client`CREATE SCHEMA rankings`
 
         await client`
           CREATE TABLE refresh_operations.operations (
@@ -762,6 +763,43 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             singleton boolean PRIMARY KEY,
             observed_at timestamptz NOT NULL
           )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.leaderboard_effects (
+            operation_key text PRIMARY KEY,
+            operation_id uuid NOT NULL,
+            operation_kind text NOT NULL,
+            lease_token bigint NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+          )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.leaderboard_deep_crawl_progress (
+            region text PRIMARY KEY,
+            window_at timestamptz NOT NULL,
+            next_page integer NOT NULL,
+            total_pages integer NOT NULL,
+            updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+          )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.leaderboard_deep_crawl_mode_progress (
+            mode text NOT NULL,
+            region text NOT NULL,
+            window_at timestamptz NOT NULL,
+            next_page integer NOT NULL,
+            total_pages integer NOT NULL,
+            updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+            PRIMARY KEY (mode, region)
+          )
+        `
+
+        await client`
+          CREATE FUNCTION refresh_operations.record_leaderboard_effect(uuid, text, text, text, bigint)
+          RETURNS text LANGUAGE sql AS $$ SELECT 'stub'::text $$
         `
 
         await client`

@@ -137,14 +137,6 @@ export const interactiveRefreshEffects = refreshOperationsSchema.table(
   (table) => [primaryKey({ columns: [table.operationId, table.section] })],
 )
 
-export const leaderboardEffects = refreshOperationsSchema.table('leaderboard_effects', {
-  operationKey: text('operation_key').primaryKey(),
-  operationId: uuid('operation_id').notNull().unique(),
-  operationKind: text('operation_kind').notNull(),
-  leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
 export const statisticsCollectionEffects = refreshOperationsSchema.table('statistics_collection_effects', {
   operationKey: text('operation_key').primaryKey(),
   operationId: uuid('operation_id').notNull().unique(),
@@ -175,26 +167,4 @@ export const statisticsLegendMetaPublicationEffects = refreshOperationsSchema.ta
     leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
   },
-)
-
-// 1v1 progress stays in this per-region table; the other modes use leaderboardDeepCrawlModeProgress
-export const leaderboardDeepCrawlProgress = refreshOperationsSchema.table('leaderboard_deep_crawl_progress', {
-  region: text('region').primaryKey(),
-  windowAt: timestamp('window_at', { withTimezone: true }).notNull(),
-  nextPage: integer('next_page').notNull(),
-  totalPages: integer('total_pages').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
-export const leaderboardDeepCrawlModeProgress = refreshOperationsSchema.table(
-  'leaderboard_deep_crawl_mode_progress',
-  {
-    mode: text('mode').notNull(),
-    region: text('region').notNull(),
-    windowAt: timestamp('window_at', { withTimezone: true }).notNull(),
-    nextPage: integer('next_page').notNull(),
-    totalPages: integer('total_pages').notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(clockTimestamp),
-  },
-  (table) => [primaryKey({ columns: [table.mode, table.region] })],
 )

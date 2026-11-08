@@ -1,8 +1,13 @@
 import { proofEffectStore } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
-import { createLeaderboardCollectionJob, defaultDeepCrawlSlicePages } from '@brawltome/ranking'
 import {
+  createLeaderboardCollectionJob,
+  defaultDeepCrawlSlicePages,
+  readAppliedLeaderboardEffects,
+} from '@brawltome/ranking'
+import {
+  type AppliedLeaderboardEffects,
   createEffectStates,
   createJobRegistry,
   createPostgresDeadLetterOperations,
@@ -21,6 +26,7 @@ import {
   waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
+import { sql } from 'drizzle-orm'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
 import {
   createStatisticsJobs,
@@ -144,6 +150,15 @@ function withEffect(tools: JobTools, commitProofEffect: QueueWorker['commitProof
 }
 
 // proof effects live in the accounts schema; a database without that module has none to read
+// leaderboard effects live in the rankings schema; a database without that module has none applied
+const testReadAppliedLeaderboardEffects: AppliedLeaderboardEffects = async (transaction, effectOperationIds) => {
+  const [table] = await transaction.execute<{ table: string | null }>(
+    sql`SELECT to_regclass('rankings.leaderboard_effects') AS table`,
+  )
+
+  return table.table ? readAppliedLeaderboardEffects(transaction, effectOperationIds) : new Set()
+}
+
 const testProofEffectStore: ProofEffectStore = {
   ...proofEffectStore,
   async readRows(database, operationId) {
@@ -160,6 +175,7 @@ export function createTestQueue(databases: RefreshOperationsDatabases, discovery
   return createPostgresRefreshOperations(databases, {
     effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
     proofEffects: testProofEffectStore,
+    readAppliedLeaderboardEffects: testReadAppliedLeaderboardEffects,
   })
 }
 

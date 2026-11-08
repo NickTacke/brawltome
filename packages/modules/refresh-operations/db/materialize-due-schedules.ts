@@ -12,6 +12,12 @@ type Occurrence = MaterializeSchedulesResult['occurrences'][number]
 
 type DueSchedule = Awaited<ReturnType<typeof lockDueSchedules>>[number]
 
+// ranking owns the effect table; run inside the materialize transaction, after the operation rows are locked
+export type AppliedLeaderboardEffects = (
+  transaction: Transaction,
+  effectOperationIds: readonly string[],
+) => Promise<ReadonlySet<string>>
+
 const maximumLimit = 1_000
 
 // locked rows are skipped, so two workers materializing at once take different schedules
@@ -65,12 +71,41 @@ async function expireStaleReservations(
     )
 }
 
+type LeaderboardTarget = { id: string; effect_operation_id: string }
+
 // a leaderboard window still queued or running without an effect is discarded when the next window arrives
 async function supersedeLeaderboardOperations(
   transaction: Transaction,
   scheduleId: string,
   materializedAt: Date,
+  readAppliedEffects: AppliedLeaderboardEffects | undefined,
 ): Promise<void> {
+  if (!readAppliedEffects) {
+    throw new Error(
+      `supersede leaderboard operations for schedule ${scheduleId}: no applied effect reader was configured`,
+    )
+  }
+
+  // locked first: a worker recording its effect locks this row before it inserts, so the check below can't go stale
+  const lockedOperations = await transaction.execute<LeaderboardTarget>(sql`
+    SELECT operation.id, operation.effect_operation_id
+    FROM refresh_operations.operations operation
+    JOIN refresh_operations.schedule_occurrences occurrence
+      ON occurrence.id = operation.origin_schedule_occurrence_id
+    WHERE occurrence.schedule_id = ${scheduleId}
+      AND operation.status IN ('pending', 'leased')
+    FOR UPDATE OF operation
+  `)
+
+  const applied = await readAppliedEffects(
+    transaction,
+    lockedOperations.map(({ effect_operation_id }) => effect_operation_id),
+  )
+
+  const targets = lockedOperations.filter(({ effect_operation_id }) => !applied.has(effect_operation_id))
+
+  if (targets.length === 0) return
+
   const failure = {
     code: 'superseded_scheduled_operation',
     message: 'A newer scheduled leaderboard window is available',
@@ -79,19 +114,16 @@ async function supersedeLeaderboardOperations(
 
   const failureJson = sql`${JSON.stringify(failure)}::text::jsonb`
 
+  const targetIds = sql.join(
+    targets.map(({ id }) => sql`${id}::uuid`),
+    sql`, `,
+  )
+
   await transaction.execute(sql`
     WITH targets AS MATERIALIZED (
       SELECT operation.id, operation.attempt_count
       FROM refresh_operations.operations operation
-      JOIN refresh_operations.schedule_occurrences occurrence
-        ON occurrence.id = operation.origin_schedule_occurrence_id
-      WHERE occurrence.schedule_id = ${scheduleId}
-        AND operation.status IN ('pending', 'leased')
-        AND NOT EXISTS (
-          SELECT 1 FROM refresh_operations.leaderboard_effects effect
-          WHERE effect.operation_id = operation.effect_operation_id
-        )
-      FOR UPDATE OF operation
+      WHERE operation.id IN (${targetIds})
     ), finished_attempts AS (
       UPDATE refresh_operations.attempts attempt
       SET finished_at = ${materializedAt}, outcome = 'dead_letter', error = ${failureJson}
@@ -229,6 +261,7 @@ async function materializeSchedule(
   transaction: Transaction,
   schedule: DueSchedule,
   materializedAt: Date,
+  readAppliedEffects: AppliedLeaderboardEffects | undefined,
 ): Promise<Occurrence | null> {
   const windows = describeDueWindows({
     nextWindowNumber: schedule.nextWindowNumber,
@@ -242,7 +275,9 @@ async function materializeSchedule(
 
   if (schedule.resourceKey) await expireStaleReservations(transaction, schedule.resourceKey, materializedAt)
 
-  if (isLeaderboardKind(schedule.kind)) await supersedeLeaderboardOperations(transaction, schedule.id, materializedAt)
+  if (isLeaderboardKind(schedule.kind)) {
+    await supersedeLeaderboardOperations(transaction, schedule.id, materializedAt, readAppliedEffects)
+  }
 
   const completedRefreshId = await findCompletedFullRefresh(transaction, schedule, windowDueAt)
 
@@ -285,7 +320,10 @@ async function materializeSchedule(
  */
 export async function materializeDueSchedules(
   database: Database,
-  { limit }: { limit: number },
+  {
+    limit,
+    readAppliedLeaderboardEffects,
+  }: { limit: number; readAppliedLeaderboardEffects?: AppliedLeaderboardEffects },
 ): Promise<MaterializeSchedulesResult> {
   if (!Number.isInteger(limit) || limit < 1 || limit > maximumLimit) {
     throw new Error(`schedule materialization limit must be an integer between 1 and ${maximumLimit}`)
@@ -300,7 +338,12 @@ export async function materializeDueSchedules(
     const occurrences: Occurrence[] = []
 
     for (const schedule of dueSchedules) {
-      const occurrence = await materializeSchedule(transaction, schedule, clock.materialized_at)
+      const occurrence = await materializeSchedule(
+        transaction,
+        schedule,
+        clock.materialized_at,
+        readAppliedLeaderboardEffects,
+      )
 
       if (occurrence) occurrences.push(occurrence)
     }
