@@ -53,7 +53,8 @@ Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 - the `Migration` type and the migration runner
 - `BrawltomeModule`, `ModuleRuntime` and `checkModuleList`
 - `publicProcedure` and `internalProcedure`, the oRPC bases for a module's procedures
-- `@brawltome/foundation/testing`, which has `createTestDatabase`. Only test files may import it.
+- `@brawltome/foundation/testing`, which has `createTestDatabase` and `expectTablesMatchDatabase`. The latter checks
+  a module's drizzle tables against its migrated schema. Only test files may import it.
 
 Tables use `timestamptz`, never `timestamp`: postgres.js reads a `timestamp` in the process's local time zone. A
 `jsonb` or `json` column in a drizzle table uses foundation's `jsonb()` or `json()`. drizzle's own builders encode the
