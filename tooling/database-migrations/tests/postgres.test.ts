@@ -302,11 +302,12 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), playerModule.migrations.slice(0, 2))).toBe(2)
+      // the migrations that move tables out of the queue need its migrations too, and this test loads only Players
+      const playerMigrations = playerModule.migrations.filter((migration: Migration) => !migration.requires?.length)
 
-      expect(await migratePostgres(databaseUrl.toString(), playerModule.migrations)).toBe(
-        playerModule.migrations.length - 2,
-      )
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrations.slice(0, 2))).toBe(2)
+
+      expect(await migratePostgres(databaseUrl.toString(), playerMigrations)).toBe(playerMigrations.length - 2)
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
@@ -742,14 +743,22 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           `
         }
 
-        // the history above is faked, so the one table a pending migration alters has to exist by hand
+        // the history above is faked, so what a pending migration moves or alters has to exist by hand
         await client`CREATE SCHEMA refresh_operations`
+        await client`CREATE SCHEMA players`
 
         await client`
           CREATE TABLE refresh_operations.operations (
             kind text NOT NULL CONSTRAINT operations_kind_check CHECK (true),
             work_class text NOT NULL,
             payload jsonb NOT NULL CONSTRAINT operations_payload_by_kind CHECK (true)
+          )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.primary_monitoring_reconciliation (
+            singleton boolean PRIMARY KEY,
+            observed_at timestamptz NOT NULL
           )
         `
       } finally {

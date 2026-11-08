@@ -16,6 +16,7 @@ import {
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
+import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
 let connectionString = ''
@@ -488,6 +489,7 @@ describe('dead-letter operations', () => {
     await reconcileResourceSchedules(database, {
       provenanceSource: 'primary-player-monitoring',
       observedAt: new Date(),
+      watermark: testWatermark,
       identityPayloadFields: ['assignmentId', 'brawlhallaId'],
       schedules: [
         {

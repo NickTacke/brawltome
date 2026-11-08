@@ -4,6 +4,7 @@ import {
   type ResourceSchedule,
   reconcileResourceSchedules,
 } from '@brawltome/refresh-operations'
+import { primaryMonitoringWatermark } from '../db/primary-monitoring-watermark'
 
 const primaryMonitoringSource = 'primary-player-monitoring'
 const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
@@ -70,6 +71,7 @@ export async function reconcilePrimaryMonitoring(
     provenanceSource: primaryMonitoringSource,
     observedAt: snapshot.observedAt,
     schedules,
+    watermark: primaryMonitoringWatermark,
     identityPayloadFields: ['assignmentId', 'brawlhallaId'],
   })
 }

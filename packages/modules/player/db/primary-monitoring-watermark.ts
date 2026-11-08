@@ -1,0 +1,24 @@
+import type { Sql } from '@brawltome/foundation'
+import type { ReconcileObservationWatermark } from '@brawltome/refresh-operations'
+
+// one row: the snapshot time primary monitoring was last reconciled against, so a slow replica can't undo a newer one
+export const primaryMonitoringWatermark: ReconcileObservationWatermark = {
+  async isSuperseded(sql: Sql, observedAt: Date): Promise<boolean> {
+    const [previous] = await sql<{ observed_at: Date }[]>`
+      SELECT observed_at
+      FROM players.primary_monitoring_reconciliation
+      WHERE singleton
+      FOR UPDATE
+    `
+
+    return previous !== undefined && previous.observed_at.getTime() >= observedAt.getTime()
+  },
+
+  async record(sql: Sql, observedAt: Date): Promise<void> {
+    await sql`
+      INSERT INTO players.primary_monitoring_reconciliation (singleton, observed_at)
+      VALUES (true, ${observedAt})
+      ON CONFLICT (singleton) DO UPDATE SET observed_at = EXCLUDED.observed_at
+    `
+  },
+}

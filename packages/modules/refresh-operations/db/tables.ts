@@ -126,12 +126,6 @@ export const admissionClasses = refreshOperationsSchema.table('admission_classes
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(clockTimestamp),
 })
 
-// one row: when the primary monitoring schedules were last reconciled
-export const primaryMonitoringReconciliation = refreshOperationsSchema.table('primary_monitoring_reconciliation', {
-  singleton: boolean('singleton').primaryKey().default(true),
-  observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
-})
-
 export const proofEffects = refreshOperationsSchema.table('proof_effects', {
   operationKey: text('operation_key').primaryKey(),
   operationId: uuid('operation_id').notNull().unique(),

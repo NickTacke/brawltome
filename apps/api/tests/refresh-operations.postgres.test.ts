@@ -76,7 +76,7 @@ async function settleWithin<T>(label: string, promise: Promise<T>, timeoutMs = 1
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations', modules: apiModules })
   connectionString = database.connectionString
 })
 

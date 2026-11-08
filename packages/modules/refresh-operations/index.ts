@@ -94,6 +94,7 @@ export {
   reconcileFixedSchedule,
 } from './db/reconcile-fixed-schedule'
 export {
+  type ReconcileObservationWatermark,
   type ReconcileResourceSchedulesInput,
   type ReconcileResourceSchedulesResult,
   type ResourceSchedule,
