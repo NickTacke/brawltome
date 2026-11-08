@@ -148,6 +148,52 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('lease_lost')
   })
 
+  test('still reports the attempt as a retry when recording the failure rejects', async () => {
+    const lease: OperationLease = {
+      operationId: crypto.randomUUID(),
+      effectOperationId: crypto.randomUUID(),
+      effectCreatedAt: new Date().toISOString(),
+      operationKey: 'proof:failure-write-rejected',
+      kind: 'proof',
+      workClass: 'interactive',
+      payload: { value: 'proof' },
+      provenance: { source: 'test' },
+      leaseOwner: 'worker',
+      leaseToken: 1,
+      attemptNumber: 1,
+      maxAttempts: 3,
+      scheduleWindowAt: null,
+    }
+
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      fail: async () => {
+        throw new Error('connection lost')
+      },
+    }
+
+    await expect(
+      runOneRefreshOperation(operations as never, 'worker', {
+        leaseMs: 1_000,
+        retryDelayMs: 10,
+        admission,
+        telemetry,
+        executeEffect: async () => {
+          throw new Error('execution failed')
+        },
+      }),
+    ).rejects.toThrow('connection lost')
+
+    const attempts = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_attempts_total')
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
+    expect(attempts?.series[0]?.labels.outcome).toBe('retry')
+    expect(failures?.series[0]?.labels.failure_category).toBe('execution')
+  })
+
   test('logs failed attempts with safe structured failure codes instead of free text', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),

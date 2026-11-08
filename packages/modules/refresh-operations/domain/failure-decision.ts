@@ -34,12 +34,10 @@ export type FailureDecision =
 
 const minimumSourceWaitMs = 60_000
 
-/** How long to wait when the source is down or rate limited, never less than a minute. */
 export function sourceWaitMs(retry: RetryTimings): number {
   return Math.max(minimumSourceWaitMs, retry.sourceUnavailableRetryMs, retry.retryDelayMs)
 }
 
-/** Reads the failure as a signal about the source, or returns null when it says nothing about it. */
 export function decideSourceFailure(error: unknown, retry: RetryTimings): FailureDecision | null {
   if (error instanceof SourceAdmissionLimitedError) {
     return {
@@ -65,7 +63,6 @@ export function decideSourceFailure(error: unknown, retry: RetryTimings): Failur
   }
 }
 
-/** The fallback once nothing more specific matched: fail the attempt, waiting out a source retry-after if given. */
 export function decideExecutionFailure(error: unknown, failureCode: string, delayMs: number): FailureDecision {
   const sourceRetryMs = sourceRetryAfterMs(error)
 

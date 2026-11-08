@@ -19,6 +19,7 @@ import {
   type FailureDecision,
   type FencedResult,
   failureDetails,
+  type OperationFailure,
   type OperationLease,
   type RefreshOperationWorker,
   type RetryTimings,
@@ -353,7 +354,6 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
   return null
 }
 
-// Asks the executor of a discovery projection whether its effect already landed before the attempt failed.
 async function decideProjectionEffectFailure(
   lease: OperationLease,
   options: RunOneRefreshOperationOptions,
@@ -379,8 +379,7 @@ async function decideProjectionEffectFailure(
   return null
 }
 
-// Checks run in a fixed order: ranking errors, then what the source says, then the projection effect, then a plain
-// failure. A source outage on a projection whose effect landed must still wait for the source.
+// order matters: a source outage on a projection whose effect landed must still wait for the source
 async function decideJobFailure(
   lease: OperationLease,
   error: unknown,
@@ -424,6 +423,12 @@ async function pauseSource(
   }
 }
 
+function failedAttemptOutcome(lease: OperationLease, failure: OperationFailure): AttemptExecutionOutcome {
+  const hasAttemptsLeft = failure.retryable && lease.attemptNumber < lease.maxAttempts
+
+  return hasAttemptsLeft ? 'retry' : 'dead_letter'
+}
+
 async function settleFailure(
   operations: RefreshOperationWorker,
   lease: OperationLease,
@@ -457,10 +462,9 @@ async function settleFailure(
   }
 
   const transition = await operations.fail(lease, decision.failure, decision.delayMs)
-  const hasAttemptsLeft = decision.failure.retryable && lease.attemptNumber < lease.maxAttempts
 
   return settledUnlessLeaseLost(transition, {
-    outcome: hasAttemptsLeft ? 'retry' : 'dead_letter',
+    outcome: failedAttemptOutcome(lease, decision.failure),
     category: decision.category,
   })
 }
@@ -1584,6 +1588,13 @@ export async function runOneRefreshOperation(
       if (attemptOutcome === 'lease_lost') failureCategory = 'lease_lost'
     } catch (error) {
       const decision = await decideJobFailure(lease, error, options)
+
+      // set before the write so a rejected write still counts as a failed attempt
+      if (decision.action === 'fail') {
+        attemptOutcome = failedAttemptOutcome(lease, decision.failure)
+        failureCategory = decision.category
+      }
+
       const settlement = await settleFailure(operations, lease, options, decision)
 
       attemptOutcome = settlement.outcome

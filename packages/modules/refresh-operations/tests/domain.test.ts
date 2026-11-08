@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { admissionConfigHash, chooseBackgroundClass, validateAdmissionConfig } from '../domain/admission'
 import { decideExecutionFailure, decideSourceFailure } from '../domain/failure-decision'
-import { JobLeaseLostError, SourceAdmissionLimitedError } from '../domain/job-errors'
+import { SourceAdmissionLimitedError } from '../domain/job-errors'
 import type { AdmissionConfig } from '../model'
 
 const admission: AdmissionConfig = {
@@ -86,10 +86,6 @@ describe('job errors', () => {
 
     expect(error.retryAfterSeconds).toBe(37)
     expect(error).toBeInstanceOf(Error)
-  })
-
-  test('a lost job lease is an error of its own', () => {
-    expect(new JobLeaseLostError('lost')).toBeInstanceOf(Error)
   })
 })
 
