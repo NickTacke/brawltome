@@ -48,7 +48,7 @@ beforeAll(async () => {
 
   for (const scenario of scenarios) await seedClan(database, scenario.clan)
 
-  const router = createOrpcRouter([clanModule], { database, env: {} })
+  const router = createOrpcRouter([clanModule], { database })
   const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
 
   app = new Hono()

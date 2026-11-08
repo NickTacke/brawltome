@@ -25,7 +25,7 @@ const trpcStatusRouter = router({
 function createApp() {
   const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
   // no modules: these tests cover the transport and the status procedure, which needs no database
-  const router = createOrpcRouter([], { database: {} as Database, env: {} })
+  const router = createOrpcRouter([], { database: {} as Database })
   const app = new Hono()
 
   app.route('/', createOrpcRoutes({ telemetry, internalSecret, router }))

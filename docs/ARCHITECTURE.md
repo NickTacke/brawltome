@@ -152,14 +152,15 @@ export const clanModule = {
 } satisfies BrawltomeModule
 ```
 
-`routes(runtime)` gets a `ModuleRuntime` (the shared `database` and the process `env`) and returns the module's oRPC
-procedures, keyed by name. Its type is an oRPC router over foundation's `RequestContext`, so `satisfies
-BrawltomeModule` catches a procedure that expects more from the request than the API gives modules. The procedures
-live in the module's `api/` folder and take their input and output schemas from `@brawltome/contracts`. `serve.ts` calls `createOrpcRouter(apiModules, runtime)` once at startup, which puts each
-module's procedures under the module's name: clan's `byId` is `clan.byId` at `/rpc/clan/byId`, and `GET /v1/clans/{id}`
-through the path in its `.route()`. A module left out of `apiModules` is not served at all. `apiModules` is a const
-tuple and the name is a literal (`'clan' as const`), so `OrpcRouter` (in `router.ts`) keeps every procedure's types
-for a typed client. Without the literal the router type would accept any key.
+`routes(runtime)` gets a `ModuleRuntime` (for now only the shared `database`; modules don't see the process env) and
+returns the module's oRPC procedures, keyed by name. Its type is an oRPC router over foundation's `RequestContext`, so
+`satisfies BrawltomeModule` catches a procedure that expects more from the request than the API gives modules. The
+procedures live in the module's `api/` folder and take their input and output schemas from `@brawltome/contracts`.
+`serve.ts` calls `createOrpcRouter(apiModules, runtime)` once at startup, which puts each module's procedures under the
+module's name: clan's `byId` is `clan.byId` at `/rpc/clan/byId`, and `GET /v1/clans/{id}` through the path in its
+`.route()`. A module left out of `apiModules` is not served at all. `apiModules` is a const tuple and the name is a
+literal (`'clan' as const`), so `OrpcRouter` (in `router.ts`) keeps every procedure's types for a typed client. Without
+the literal the router type would accept any key.
 
 A module builds each procedure on one of two bases from `@brawltome/foundation`: `publicProcedure` for what anyone
 may call, or `internalProcedure` for what only the site and the bot may call, like tRPC's `internalProcedure`. The

@@ -16,7 +16,7 @@ function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): Br
 }
 
 // building the procedures only hands the database to them; nothing here calls a handler that would read it
-const runtime: ModuleRuntime = { database: {} as Database, env: {} }
+const runtime: ModuleRuntime = { database: {} as Database }
 
 describe('module lists', () => {
   test('the API loads every module its modules depend on', () => {
