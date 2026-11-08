@@ -117,7 +117,7 @@ describe('player name verification job', () => {
     expect(failed.map(({ code }) => code)).toEqual(['player_name_verification_failed'])
   })
 
-  test('reads the ranked section on an expired lease', () => {
+  test('declares its kind, work class and effect check', () => {
     const job = createPlayerNameVerificationJob({ verifyName: async () => {} })
 
     expect(job.kind).toBe('player-name-verification')

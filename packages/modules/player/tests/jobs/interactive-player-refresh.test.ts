@@ -333,6 +333,39 @@ describe('interactive player refresh job', () => {
     expect(completions()).toBe(0)
   })
 
+  test('a renewal lost mid-section does not commit', async () => {
+    const lease = refreshLease('interactive', { brawlhallaId: 42, staleSections: ['ranked'] })
+    let sectionStarted = false
+
+    const { queue, committed, completions } = createQueueSpy(lease, {
+      renew: async () => (sectionStarted ? ('lease-lost' as const) : ('renewed' as const)),
+    })
+
+    const { dependencies } = createDependencies({
+      createAdmittedSource: () => ({
+        // the store would accept the snapshot, so only the lost lease can keep this from committing
+        getRanked: async () => {
+          sectionStarted = true
+          await new Promise((resolve) => setTimeout(resolve, 30))
+
+          return rankedSnapshot
+        },
+        getStats: async () => careerSnapshot,
+      }),
+    })
+
+    const outcome = await runJobOnce(queue, createInteractivePlayerRefreshJob(dependencies), {
+      leaseMs: 1_000,
+      renewEveryMs: 1,
+      retryDelayMs: 10,
+      sourceAdmission: admittingSourcePort(),
+    })
+
+    expect(outcome).toBe('lease_lost')
+    expect(committed).toEqual([])
+    expect(completions()).toBe(0)
+  })
+
   test('hands the legend resolver to the career section', async () => {
     const lease = refreshLease('interactive', { brawlhallaId: 42, staleSections: ['stats'] })
     const { queue } = createQueueSpy(lease)
@@ -479,7 +512,7 @@ describe('interactive player refresh job', () => {
     expect(broken.paused).toEqual([])
   })
 
-  test('reads every stale section on an expired lease', async () => {
+  test('declares its kind, work classes, failure code and effect check', async () => {
     const { dependencies } = createDependencies()
     const job = createInteractivePlayerRefreshJob(dependencies)
 

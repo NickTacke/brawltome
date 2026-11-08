@@ -165,7 +165,7 @@ describe('ranked player pulse job', () => {
     expect(failed.map(({ code }) => code)).toEqual(['ranked_player_pulse_failed'])
   })
 
-  test('reads the ranked section on an expired lease', () => {
+  test('declares its kind, work class and effect check', () => {
     const job = createRankedPlayerPulseJob(createDependencies().dependencies)
 
     expect(job.kind).toBe('ranked-player-pulse')
