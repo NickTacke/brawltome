@@ -32,16 +32,18 @@ export type PlayerPropagationDependencies = {
   telemetry: Telemetry
 }
 
+function snapshotRows(candidate: LeaderboardGenerationCandidate) {
+  return [...candidate.snapshots.values()].flat()
+}
+
 function contestants(candidate: LeaderboardGenerationCandidate) {
   const namesById = new Map<number, string>()
 
-  for (const rows of candidate.snapshots.values()) {
-    for (const { identity } of rows) {
-      const players = identity.type === 'fixed-two-vs-two-team' ? identity.players : [identity.player]
+  for (const { identity } of snapshotRows(candidate)) {
+    const players = identity.type === 'fixed-two-vs-two-team' ? identity.players : [identity.player]
 
-      for (const player of players) {
-        if (!namesById.has(player.brawlhallaId)) namesById.set(player.brawlhallaId, player.name)
-      }
+    for (const player of players) {
+      if (!namesById.has(player.brawlhallaId)) namesById.set(player.brawlhallaId, player.name)
     }
   }
 
@@ -51,24 +53,22 @@ function contestants(candidate: LeaderboardGenerationCandidate) {
 function oneVsOneStandings(candidate: LeaderboardGenerationCandidate): LeaderboardPlayerStanding[] {
   const standings = new Map<number, LeaderboardPlayerStanding>()
 
-  for (const rows of candidate.snapshots.values()) {
-    for (const row of rows) {
-      if (row.identity.type !== 'one-vs-one-player') continue
+  for (const row of snapshotRows(candidate)) {
+    if (row.identity.type !== 'one-vs-one-player') continue
 
-      const { brawlhallaId } = row.identity.player
+    const { brawlhallaId } = row.identity.player
 
-      if (standings.has(brawlhallaId)) continue
+    if (standings.has(brawlhallaId)) continue
 
-      standings.set(brawlhallaId, {
-        brawlhallaId,
-        region: row.region,
-        rating: row.rating,
-        peakRating: row.peakRating,
-        tier: row.tier,
-        wins: row.wins,
-        games: row.wins + row.losses,
-      })
-    }
+    standings.set(brawlhallaId, {
+      brawlhallaId,
+      region: row.region,
+      rating: row.rating,
+      peakRating: row.peakRating,
+      tier: row.tier,
+      wins: row.wins,
+      games: row.wins + row.losses,
+    })
   }
 
   return [...standings.values()]

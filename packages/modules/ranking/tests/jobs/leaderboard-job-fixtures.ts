@@ -22,8 +22,7 @@ export type LeaderboardJobOverrides = Partial<
 
 const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
 
-// the same timings the dispatcher uses for these tests' queue, so a deferred error reports the delay it always has
-export const leaderboardJobRetryTimings = { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 }
+const leaderboardJobRetryTimings = { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 }
 
 function idleDependencies(): LeaderboardCollectionJobDependencies & LeaderboardDeepCrawlJobDependencies {
   return {
