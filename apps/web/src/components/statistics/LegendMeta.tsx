@@ -1,10 +1,10 @@
 'use client'
 
-import { trpc } from '@/lib/trpc'
 import type { LegendMetaInput } from '@brawltome/contracts'
 import { useQuery } from '@tanstack/react-query'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
+import { trpc } from '@/lib/trpc'
 import { LegendMetaHistory } from './LegendMetaHistory'
 import { LegendMetaView } from './LegendMetaView'
 import { buildLegendMetaQueryString, parseLegendMetaSearchParams } from './utils'

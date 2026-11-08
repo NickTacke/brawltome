@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { refreshGeneratedData, resolveExtractRoot, validateGeneratedData } from '../scripts/ingest'
 import {
-  OFFICIAL_CROSSOVER_QUERY,
-  type OfficialCrossover,
   buildSkinCatalog,
   fetchOfficialCrossovers,
+  OFFICIAL_CROSSOVER_QUERY,
+  type OfficialCrossover,
   parseCostumeSources,
   parseOfficialCrossovers,
 } from '../scripts/skin-catalog'

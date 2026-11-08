@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import type { LegendReference } from '@brawltome/game-data'
 import type { LifetimeEvidence } from '../source'
 import {
+  aggregateCareerWeaponUsage,
   CAREER_WEAPON_MIN_AGGREGATE_HELD_SECONDS,
   CAREER_WEAPON_MIN_CONTRIBUTORS,
   CAREER_WEAPON_MIN_PLAYER_HELD_SECONDS,
-  aggregateCareerWeaponUsage,
 } from '../weapon-usage'
 
 const legends: LegendReference[] = [

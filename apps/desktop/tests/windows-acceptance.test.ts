@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { renderAcknowledgement } from '@/acceptance'
 import {
+  evaluateWindowsAcceptance,
   type WindowsAcceptanceCheck,
   type WindowsAcceptanceEvidence,
   type WindowsAcceptancePolicy,
-  evaluateWindowsAcceptance,
 } from '../src/windows-acceptance'
 
 const policy: WindowsAcceptancePolicy = {

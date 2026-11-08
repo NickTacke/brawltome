@@ -8,9 +8,9 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 
 import type { PlayerShortcutNavigationItem } from '@/lib/playerShortcuts'
+import { navItems } from './nav-items'
 import { PlayerShortcutAvatar } from './PlayerShortcutAvatar'
 import { useSidebar } from './SidebarProvider'
-import { navItems } from './nav-items'
 import { socialLinks } from './social-links'
 
 interface MobileMenuProps {

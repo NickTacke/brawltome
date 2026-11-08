@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { migrationRunnerConnections } from '@brawltome/foundation'
 import {
-  type WorkerPoolSizes,
   apiMaxConnections,
   createWorkerDatabases,
   listenerConnections,
+  type WorkerPoolSizes,
   workerPoolSizes,
 } from '../src/database-pools'
 import {

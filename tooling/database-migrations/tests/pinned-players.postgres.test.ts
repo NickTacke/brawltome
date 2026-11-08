@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { MAX_PINNED_PLAYERS, accountsModule, createPostgresAccounts } from '@brawltome/accounts'
+import { accountsModule, createPostgresAccounts, MAX_PINNED_PLAYERS } from '@brawltome/accounts'
 import { migratePostgres } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
 import postgres from 'postgres'

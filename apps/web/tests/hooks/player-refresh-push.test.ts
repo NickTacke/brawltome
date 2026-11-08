@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type RefreshEventSource, createRefreshEventPush, playerRefreshEventsUrl } from '../../src/lib/refresh-events'
+import { createRefreshEventPush, playerRefreshEventsUrl, type RefreshEventSource } from '../../src/lib/refresh-events'
 import { type RefreshRunClock, type StaleRefreshSettlement, startRefreshRun } from '../../src/lib/refresh-run'
 
 function fakeClock() {

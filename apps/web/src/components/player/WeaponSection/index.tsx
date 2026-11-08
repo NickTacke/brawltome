@@ -1,12 +1,12 @@
 'use client'
 
-import { Button, Card } from '@/components/ui'
-import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { Button, Card } from '@/components/ui'
+import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
 import { SortControls } from './SortControls'
+import { sortWeapons, type WeaponSortKey } from './utils'
 import { WeaponCard } from './WeaponCard'
-import { type WeaponSortKey, sortWeapons } from './utils'
 
 interface WeaponSectionProps {
   weaponStats: RichWeaponAgg[]

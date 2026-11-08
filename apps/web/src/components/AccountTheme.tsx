@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useAccount, useAccountPreferences } from '@/lib/auth'
 import { type AccountTheme as AccountThemeValue, applyAccountTheme } from '@/lib/theme'
-import { useEffect } from 'react'
 
 type AccountThemeState = {
   account: { id: string } | null

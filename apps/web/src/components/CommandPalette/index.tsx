@@ -1,19 +1,18 @@
 'use client'
-import { legendAvatarUrl } from '@brawltome/game-data'
-
-import { navItems } from '@/components/sidebar/nav-items'
-import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
-import { track } from '@/lib/analytics/browser'
-import { trpc } from '@/lib/trpc'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
+import { legendAvatarUrl } from '@brawltome/game-data'
 import { Shield } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounce } from 'use-debounce'
+import { navItems } from '@/components/sidebar/nav-items'
+import { Avatar, AvatarFallback, AvatarImage, Card } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
+import { trpc } from '@/lib/trpc'
 import { CommandFooter } from './CommandFooter'
 import { CommandRow } from './CommandRow'
 import { SearchInput } from './SearchInput'
-import { type Command, buildCommands, isNumericPlayerId } from './utils'
+import { buildCommands, type Command, isNumericPlayerId } from './utils'
 
 export function CommandPalette() {
   const router = useRouter()

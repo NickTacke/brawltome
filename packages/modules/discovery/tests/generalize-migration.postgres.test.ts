@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { initializeDiscovery } from '../migrations/0001-initialize-discovery'
 import { generalizeDiscovery } from '../migrations/0002-generalize-discovery'

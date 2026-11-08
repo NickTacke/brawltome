@@ -4,12 +4,12 @@ import { getLegendById } from '@brawltome/game-data/legends'
 import { acquireActiveLease, commitInteractiveSection } from '@brawltome/refresh-operations'
 import { selectCanonicalPlayerName } from '../reference'
 import {
+  deriveObservedRatingDirection,
   type MainLegend,
   RANKED_FRESHNESS_SECONDS,
   type RankedPlayerProfile,
   type RankedPlayerQueries,
   type RankedPulseSourceStatus,
-  deriveObservedRatingDirection,
   rankedFreshness,
 } from './model'
 import type { V0RankedSnapshot, V1RankedPulse } from './source'

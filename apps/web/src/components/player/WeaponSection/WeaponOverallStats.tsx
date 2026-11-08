@@ -2,7 +2,7 @@
 
 import { formatNum } from '@/lib/utils'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
-import { WinLossBar, formatCompact, formatHours } from '../shared'
+import { formatCompact, formatHours, WinLossBar } from '../shared'
 import type { WeaponDerived } from './utils'
 
 interface WeaponOverallStatsProps {

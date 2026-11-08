@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  SEASONS,
-  TIER_THRESHOLDS,
   getCurrentSeason,
   getTierFromRating,
   prepareChartData,
+  SEASONS,
+  TIER_THRESHOLDS,
 } from '../../../../src/components/player/RatingChart/utils'
 
 describe('prepareChartData', () => {

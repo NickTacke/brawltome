@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { NextRequest } from 'next/server'
 import { MatchesContent } from '@/app/matches/MatchesContent'
 import { MatchesPreview } from '@/app/matches/MatchesPreview'
-import { ReplayAnalysisPage } from '@/app/matches/ReplayAnalysisPage'
 import { GET } from '@/app/matches/preview/route'
+import { ReplayAnalysisPage } from '@/app/matches/ReplayAnalysisPage'
 import { WorkInProgress } from '@/components/WorkInProgress'
 import { matchesPreviewCookieAuthorized, matchesPreviewCookieName } from '@/lib/matches-preview'
-import { NextRequest } from 'next/server'
 
 const previousToken = process.env.MATCHES_PREVIEW_TOKEN
 const token = 'matches-preview-test-token-at-least-32-bytes'

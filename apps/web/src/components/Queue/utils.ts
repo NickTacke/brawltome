@@ -1,17 +1,17 @@
 import { buildQueryString, parseEnum, parseInteger } from '@/lib/searchParams'
 import {
-  BRACKETS,
   BRACKET_IDS,
+  BRACKETS,
   type BracketId,
   MAX_PAGE,
   PAGE_SIZE,
-  REGIONS,
-  REGION_IDS,
-  type RegionId,
   playerHref,
+  REGION_IDS,
+  REGIONS,
+  type RegionId,
 } from '../Leaderboard/utils'
 
-export { BRACKETS, MAX_PAGE, PAGE_SIZE, REGIONS, playerHref }
+export { BRACKETS, MAX_PAGE, PAGE_SIZE, playerHref, REGIONS }
 
 export type QueueSearchParams = Record<string, string | string[] | undefined>
 

@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import {
-  type PlayerProjectionSnapshot,
-  type PlayerProjectionSource,
   createPostgresDiscovery,
   discoveryModule,
+  type PlayerProjectionSnapshot,
+  type PlayerProjectionSource,
 } from '@brawltome/discovery'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
 let database: TestDatabase

@@ -1,11 +1,11 @@
 'use client'
 
-import { Leaderboard } from '@/components/Leaderboard'
-import { SearchBar } from '@/components/SearchBar'
-import { Skeleton } from '@/components/ui'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
+import { Leaderboard } from '@/components/Leaderboard'
+import { SearchBar } from '@/components/SearchBar'
+import { Skeleton } from '@/components/ui'
 
 export default function Home() {
   const [isSearchFocused, setIsSearchFocused] = useState(false)

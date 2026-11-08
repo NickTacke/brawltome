@@ -29,20 +29,12 @@ export {
   careerFreshness,
 } from './career/model'
 export {
-  RANKED_FRESHNESS_SECONDS,
-  type MainLegend,
-  type RankedPlayerProfile,
-  type RankedPlayerQueries,
-  type RankedSnapshot,
-  rankedFreshness,
-} from './ranked/model'
-export {
-  isUsablePlayerName,
-  selectCanonicalPlayerName,
-  type CanonicalPlayerNameEvidence,
-  type PlayerReference,
-  type PlayerReferenceQueries,
-} from './reference'
+  type CanonicalCareerEffect,
+  createPostgresCareerPlayers,
+  type PostgresCareerPlayers,
+} from './career/postgres'
+export { refreshCanonicalCareerPlayer, type V0CareerSource } from './career/refresh'
+export type { CareerLegendReference, CareerLegendResolver } from './career/source'
 export type {
   PlayerDiscoveryEvent,
   PlayerDiscoveryFact,
@@ -50,36 +42,16 @@ export type {
   PlayerDiscoverySnapshotStream,
   PlayerDiscoverySource,
 } from './discovery-facts'
-
 export {
-  createPostgresCareerPlayers,
-  type CanonicalCareerEffect,
-  type PostgresCareerPlayers,
-} from './career/postgres'
-export { refreshCanonicalCareerPlayer, type V0CareerSource } from './career/refresh'
-export type { CareerLegendResolver, CareerLegendReference } from './career/source'
-export {
-  createPostgresRankedPlayers,
-  type CanonicalRankedEffect,
-  type PostgresRankedPlayers,
-} from './ranked/postgres'
-export {
-  refreshCanonicalRankedPlayer,
-  refreshRankedPlayerPulse,
-  type V0RankedSource,
-  type V1RankedPulseSource,
-} from './ranked/refresh'
+  createPostgresPlayerDiscoverySource,
+  type PostgresPlayerDiscoverySource,
+} from './discovery-postgres'
+export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
 export {
   createPostgresLeaderboardPlayerNames,
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,
 } from './leaderboard-names'
-export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
-export {
-  createPostgresProfileViews,
-  type PostgresProfileViews,
-  type ProfileViewDemand,
-} from './profile-views'
 export {
   createPostgresLeaderboardRanked,
   type LeaderboardRankedObservation,
@@ -98,9 +70,36 @@ export {
 } from './name-verification'
 export { createPostgresPlayerReferences } from './player-references'
 export {
-  createPostgresPlayerDiscoverySource,
-  type PostgresPlayerDiscoverySource,
-} from './discovery-postgres'
+  createPostgresProfileViews,
+  type PostgresProfileViews,
+  type ProfileViewDemand,
+} from './profile-views'
+export {
+  type MainLegend,
+  RANKED_FRESHNESS_SECONDS,
+  type RankedPlayerProfile,
+  type RankedPlayerQueries,
+  type RankedSnapshot,
+  rankedFreshness,
+} from './ranked/model'
+export {
+  type CanonicalRankedEffect,
+  createPostgresRankedPlayers,
+  type PostgresRankedPlayers,
+} from './ranked/postgres'
+export {
+  refreshCanonicalRankedPlayer,
+  refreshRankedPlayerPulse,
+  type V0RankedSource,
+  type V1RankedPulseSource,
+} from './ranked/refresh'
+export {
+  type CanonicalPlayerNameEvidence,
+  isUsablePlayerName,
+  type PlayerReference,
+  type PlayerReferenceQueries,
+  selectCanonicalPlayerName,
+} from './reference'
 export {
   createSteamPlayerEvidenceResolver,
   type SteamPlayerEvidence,

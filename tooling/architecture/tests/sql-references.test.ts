@@ -25,6 +25,7 @@ describe('findSchemaReferences', () => {
   it('reads the text parts of a template literal and skips its substitutions', () => {
     const source = [
       'const query = `',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: scanner input is source text with literal substitutions
       '  SELECT 1 FROM ${players.length}',
       '  JOIN rankings.entries ON true',
       '`',
@@ -113,12 +114,14 @@ describe('findSchemaReferences', () => {
   })
 
   it('carries quote state across a template substitution', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: scanner input is source text with literal substitutions
     const source = "const query = `SELECT '${value}' -- players.profiles`"
 
     expect(findSchemaReferences(source, schemas)).toEqual([])
   })
 
   it('still reads a reference after a quoted substitution', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: scanner input is source text with literal substitutions
     const source = "const query = `SELECT '${value}', x FROM players.profiles`"
 
     expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'players', line: 1 }])
@@ -139,6 +142,7 @@ describe('findSchemaReferences', () => {
   })
 
   it('does not read substitution code as sql, but reads a literal nested in it', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: scanner input is source text with literal substitutions
     const source = 'const query = `SELECT ${players.length} ${sql`FROM rankings.entries`}`'
 
     expect(findSchemaReferences(source, schemas)).toEqual([{ schema: 'rankings', line: 1 }])

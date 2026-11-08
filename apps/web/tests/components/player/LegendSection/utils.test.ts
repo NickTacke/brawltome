@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  type RankedLegend,
   computeLegendStats,
   computeWeaponStats,
+  type RankedLegend,
   sortLegends,
 } from '../../../../src/components/player/LegendSection/utils'
 

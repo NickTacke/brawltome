@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -174,8 +174,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       const deadLease = await operations.claim('dead-letter-worker', 10_000, admission, 'clan-discovery-projection')
 
-      if (!deadLease || deadLease.kind !== 'clan-discovery-projection')
-        throw new Error('Expected Clan projection lease')
+      if (deadLease?.kind !== 'clan-discovery-projection') throw new Error('Expected Clan projection lease')
 
       await operations.fail(deadLease, { code: 'repairable', message: 'repairable', retryable: false }, 0)
       await clans.publishProfile(profile('Current Clan', '900719925474099312345'), new Date('2024-01-02'), provenance)
@@ -219,7 +218,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
         'discovery-reconciliation',
       )
 
-      if (!reconciliationLease || reconciliationLease.kind !== 'discovery-reconciliation') {
+      if (reconciliationLease?.kind !== 'discovery-reconciliation') {
         throw new Error('Expected reconciliation lease')
       }
 
@@ -285,7 +284,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       const lateLease = await operations.claim('late-worker', 10_000, admission, 'discovery-reconciliation')
 
-      if (!lateLease || lateLease.kind !== 'discovery-reconciliation') throw new Error('Expected late lease')
+      if (lateLease?.kind !== 'discovery-reconciliation') throw new Error('Expected late lease')
 
       await control`
         UPDATE refresh_operations.operations

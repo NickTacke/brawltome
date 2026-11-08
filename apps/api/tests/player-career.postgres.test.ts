@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
@@ -9,9 +9,9 @@ import {
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
 import {
+  createPostgresRefreshOperations,
   type OperationLease,
   type PostgresRefreshOperations,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -88,7 +88,7 @@ async function claimCareerOperation(
   await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('career-test-worker', 10_000, admission)
 
-  if (!lease || lease.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
+  if (lease?.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
 
   return lease
 }
@@ -522,7 +522,7 @@ describe('Players-owned canonical career state', () => {
 
     const retry = await operations.claim('career-section-retry', 10_000, admission)
 
-    if (!retry || retry.kind !== 'interactive-player-refresh') throw new Error('Expected a player retry lease')
+    if (retry?.kind !== 'interactive-player-refresh') throw new Error('Expected a player retry lease')
 
     expect(await operations.beginInteractiveSection(retry, 'ranked')).toBe('already-applied')
     expect(await operations.beginInteractiveSection(retry, 'stats')).toBe('execute')
@@ -594,7 +594,7 @@ describe('Players-owned canonical career state', () => {
       await expireLease(oldLease.operationId)
       const newLease = await operations.claim('career-race-successor', 10_000, admission)
 
-      if (!newLease || newLease.kind !== 'interactive-player-refresh') throw new Error('Expected successor lease')
+      if (newLease?.kind !== 'interactive-player-refresh') throw new Error('Expected successor lease')
 
       const [oldWriter, newWriter] = await Promise.allSettled([
         refreshCanonicalCareerPlayer(

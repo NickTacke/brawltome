@@ -27,8 +27,8 @@ import {
 } from './retention'
 import {
   type LeaderboardMode,
-  type RegionalLeaderboardScope,
   leaderboardModes,
+  type RegionalLeaderboardScope,
   regionalLeaderboardScopes,
 } from './v1-leaderboard-source'
 

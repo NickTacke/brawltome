@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  REFRESH_TRUST_COOKIE,
-  REFRESH_TRUST_TTL_SECONDS,
   buildRefreshTrustCookie,
   issueRefreshTrust,
+  REFRESH_TRUST_COOKIE,
+  REFRESH_TRUST_TTL_SECONDS,
   verifyRefreshTrust,
 } from '../src/auth/refresh-trust-cookie'
 

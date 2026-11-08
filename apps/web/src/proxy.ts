@@ -1,6 +1,6 @@
-import { QUEUE_PREFERENCE_COOKIE, parseQueueSearchParams, queuePreferenceValue } from '@/components/Queue/utils'
 import { createEdgeRequestContext, formatTraceparent } from '@brawltome/telemetry/propagation'
 import { type NextRequest, NextResponse } from 'next/server'
+import { parseQueueSearchParams, QUEUE_PREFERENCE_COOKIE, queuePreferenceValue } from '@/components/Queue/utils'
 
 export function proxy(request: NextRequest) {
   const context = createEdgeRequestContext()

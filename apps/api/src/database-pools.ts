@@ -1,4 +1,4 @@
-import { type Database, createDatabase } from '@brawltome/foundation'
+import { createDatabase, type Database } from '@brawltome/foundation'
 import {
   maxProjectionConcurrency,
   type readOperationsWorkerConfig,

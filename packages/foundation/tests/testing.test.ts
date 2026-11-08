@@ -5,7 +5,7 @@ import type { Database } from '../database'
 import type { Migration } from '../migration'
 import { checksumSql } from '../migrations/plan'
 import type { BrawltomeModule } from '../module'
-import { type TestDatabase, createTestDatabase, openTestClient } from '../testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '../testing'
 
 const connectionString = process.env.DATABASE_URL
 const describeWithDatabase = connectionString ? describe : describe.skip

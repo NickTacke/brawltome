@@ -8,12 +8,12 @@ import type {
 import {
   type AccountPreferencesContract,
   type AccountViewContract,
+  accountPreferencesSchema,
   type PinnedPlayersContract,
   type PlayerRankedProfileContract,
   type PlayerReferenceContract,
   type PlayerShortcutsContract,
   type PrimaryPlayerVerificationStateContract,
-  accountPreferencesSchema,
   parseAccountViewOutput,
   parsePinnedPlayersOutput,
   parsePlayerShortcutsOutput,

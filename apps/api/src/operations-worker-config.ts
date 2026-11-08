@@ -6,7 +6,6 @@ import {
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateRankingRetentionSchedule,
   type LeaderboardDeepCrawlMode,
-  type WorkClass,
   leaderboardDeepCrawlRegions,
   maxLeaderboardDeepCrawlIntervalMs,
   maxLeaderboardIntervalMs,
@@ -16,6 +15,7 @@ import {
   minLeaderboardIntervalMs,
   minRankingRetentionHours,
   validateAdmissionConfig,
+  type WorkClass,
 } from '@brawltome/refresh-operations'
 
 function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
@@ -102,11 +102,7 @@ const leaderboardModes = [
   { mode: '3v3', kind: 'leaderboard-3v3' },
 ] as const
 
-export function leaderboardScheduleDefinitions(config: {
-  pageDepth: number
-  intervalMs: number
-  firstDueAt: string
-}) {
+export function leaderboardScheduleDefinitions(config: { pageDepth: number; intervalMs: number; firstDueAt: string }) {
   const baseDueAt = new Date(config.firstDueAt).getTime()
 
   if (!Number.isFinite(baseDueAt)) throw new Error('leaderboard firstDueAt must be a valid timestamp')

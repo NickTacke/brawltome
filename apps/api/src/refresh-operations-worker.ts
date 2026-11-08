@@ -1,16 +1,16 @@
 import {
+  collectAndPublishLeaderboardGeneration,
   type LeaderboardDeepCrawlStanding,
   type LeaderboardDeepCrawlTeam,
   type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardPageSource,
   LeaderboardSourceError,
-  type RankingPublicationStore,
-  type RankingRetentionStore,
-  collectAndPublishLeaderboardGeneration,
   leaderboardDeepCrawlStandings,
   leaderboardDeepCrawlTeams,
   leaderboardModeFromOperationKind,
+  type RankingPublicationStore,
+  type RankingRetentionStore,
 } from '@brawltome/ranking'
 import type {
   AdmissionConfig,
@@ -20,7 +20,7 @@ import type {
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
 import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
-import { type Telemetry, observeSourceCall } from '@brawltome/telemetry'
+import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 
 type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>

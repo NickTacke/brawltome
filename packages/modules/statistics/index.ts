@@ -27,6 +27,7 @@ import type { LifetimeEvidence, RankedEvidence } from './source'
 import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregate } from './weapon-usage'
 
 export {
+  type CohortCandidateSnapshot,
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
   LAUNCH_COHORT_BRACKET,
   LAUNCH_COHORT_CAP,
@@ -38,40 +39,40 @@ export {
   LAUNCH_COHORT_REQUESTS_PER_PLAYER,
   LAUNCH_COHORT_SOURCE_QUOTA_UNITS,
   LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS,
-  type CohortCandidateSnapshot,
   type LaunchCohortBracket,
   type LaunchCohortCapacityEnvelope,
   type LaunchCohortRegion,
+  launchCohortBrackets,
+  launchCohortRegions,
   type SelectedCohortMember,
   type SelectedFullLaunchCohort,
   type SelectedLaunchCohort,
-  launchCohortBrackets,
-  launchCohortRegions,
   selectFullLaunchCohort,
   selectLaunchCohort,
   selectLaunchCohortCell,
 } from './cohort'
 export {
-  STATISTICS_HISTORY_LIMIT,
   buildCareerWeaponUsageHistory,
   buildLegendMetaHistory,
-  classifyAdjacentSnapshots,
   type CareerWeaponHistoryDelta,
   type CareerWeaponHistorySnapshot,
+  classifyAdjacentSnapshots,
   type LegendMetaHistoryDelta,
   type LegendMetaHistorySnapshot,
+  STATISTICS_HISTORY_LIMIT,
   type StatisticsHistoryCompatibilityReason,
   type StatisticsHistoryDirection,
   type StatisticsHistoryEntry,
   type StatisticsSnapshotCompatibility,
 } from './history'
 export {
+  buildLegendMetaArtifact,
+  type ExactRatio,
   LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE,
   LEGEND_META_METHODOLOGY_DISCLOSURE,
   LEGEND_META_METHODOLOGY_VERSION,
   LEGEND_META_MINIMUM_GAMES,
   LEGEND_META_MINIMUM_PLAYERS,
-  type ExactRatio,
   type LegendMetaArtifact,
   type LegendMetaArtifactSlice,
   type LegendMetaFilterBracket,
@@ -80,7 +81,6 @@ export {
   type LegendMetaObservedPlayer,
   type LegendMetaRow,
   type WilsonInterval,
-  buildLegendMetaArtifact,
 } from './legend-meta'
 export {
   type AuditedCellCollectionProgress,
@@ -91,17 +91,17 @@ export {
   validatePublicationDecision,
 } from './publication'
 export {
+  aggregateCareerWeaponUsage,
   CAREER_WEAPON_MIN_AGGREGATE_HELD_SECONDS,
   CAREER_WEAPON_MIN_CONTRIBUTORS,
-  CAREER_WEAPON_USAGE_METHODOLOGY_VERSION,
   CAREER_WEAPON_MIN_PLAYER_HELD_SECONDS,
-  CareerWeaponUsageValidationError,
-  aggregateCareerWeaponUsage,
-  exactRatio,
+  CAREER_WEAPON_USAGE_METHODOLOGY_VERSION,
   type CareerWeaponComparisonReason,
+  type CareerWeaponExactRatio,
   type CareerWeaponUsageAggregate,
   type CareerWeaponUsageRow,
-  type CareerWeaponExactRatio,
+  CareerWeaponUsageValidationError,
+  exactRatio,
 } from './weapon-usage'
 
 export type CollectionProduct = PublicationProduct

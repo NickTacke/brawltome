@@ -13,7 +13,7 @@ import {
   TraceIdRatioBasedSampler,
 } from '@opentelemetry/sdk-trace-base'
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
-import { type Telemetry, createFanoutSink, createJsonConsoleSink, createOtlpHttpSink, createTelemetry } from './index'
+import { createFanoutSink, createJsonConsoleSink, createOtlpHttpSink, createTelemetry, type Telemetry } from './index'
 import { otlpSignalUrl } from './otlp'
 
 const defaultTraceLimits = {

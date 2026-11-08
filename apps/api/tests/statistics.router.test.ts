@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type StatisticsQueries,
   buildLegendMetaArtifact,
   launchCohortBrackets,
   launchCohortRegions,
+  type StatisticsQueries,
 } from '@brawltome/statistics'
 import { statisticsRouter } from '../src/router/statistics.router'
 import type { Context } from '../src/trpc/context'

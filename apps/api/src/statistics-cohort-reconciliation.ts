@@ -3,8 +3,8 @@ import type { StatisticsOperations } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   type LaunchCohortRegion,
-  type StatisticsTracer,
   launchCohortRegions,
+  type StatisticsTracer,
 } from '@brawltome/statistics'
 
 export async function loadLaunchCohortCandidates(

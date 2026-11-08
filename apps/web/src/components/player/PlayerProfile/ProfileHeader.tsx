@@ -1,6 +1,6 @@
 'use client'
 import { legendAvatarUrl } from '@brawltome/game-data'
-
+import Link from 'next/link'
 import {
   Avatar,
   AvatarFallback,
@@ -14,7 +14,6 @@ import {
 } from '@/components/ui'
 import { getPlayerDataUpdatedAt } from '@/lib/player-refresh'
 import { fixEncoding } from '@/lib/utils'
-import Link from 'next/link'
 import { formatHours } from '../shared'
 import { DataAge } from './DataAge'
 import { StaleBadge } from './StaleBadge'

@@ -1,5 +1,5 @@
-import { TrackDeadEnd } from '@/components/TrackDeadEnd'
 import Link from 'next/link'
+import { TrackDeadEnd } from '@/components/TrackDeadEnd'
 
 export default function NotFound() {
   return (

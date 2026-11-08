@@ -1,5 +1,5 @@
 import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI, type ReplayJobDetailContract } from '@brawltome/contracts'
-import { type PlayerAppearance, getLevelById, resolvePlayerAppearance } from '@brawltome/game-data'
+import { getLevelById, type PlayerAppearance, resolvePlayerAppearance } from '@brawltome/game-data'
 
 export type ReplayReportPower = {
   key: string

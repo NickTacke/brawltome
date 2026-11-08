@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { migratePostgres } from '@brawltome/foundation'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { orderedMigrations } from '../src/inventories'
 

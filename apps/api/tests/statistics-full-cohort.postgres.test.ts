@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
@@ -9,8 +9,8 @@ import {
 } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
-  type LaunchCohortAudit,
   createPostgresStatistics,
+  type LaunchCohortAudit,
   launchCohortRegions,
   statisticsModule,
 } from '@brawltome/statistics'
@@ -614,12 +614,12 @@ describe('Statistics full launch cohort publication', () => {
 
     const expired = await operations.claim('expired-publication', 20, admission, 'statistics-publication')
 
-    if (!expired || expired.kind !== 'statistics-publication') throw new Error('publication lease missing')
+    if (expired?.kind !== 'statistics-publication') throw new Error('publication lease missing')
 
     await Bun.sleep(35)
     const replacement = await operations.claim('replacement-publication', 10_000, admission, 'statistics-publication')
 
-    if (!replacement || replacement.kind !== 'statistics-publication') throw new Error('replacement lease missing')
+    if (replacement?.kind !== 'statistics-publication') throw new Error('replacement lease missing')
 
     expect((await statistics.validateAndPublish(publicationAuthorization(expired))).result).toBe('lease-lost')
 
@@ -655,7 +655,7 @@ describe('Statistics full launch cohort publication', () => {
 
     const careerLease = await operations.claim('career-publication-worker', 10_000, admission, 'statistics-publication')
 
-    if (!careerLease || careerLease.kind !== 'statistics-publication') {
+    if (careerLease?.kind !== 'statistics-publication') {
       throw new Error('Career publication lease missing')
     }
 
@@ -692,7 +692,7 @@ describe('Statistics full launch cohort publication', () => {
       'statistics-legend-meta-publication',
     )
 
-    if (!expiredLegendMeta || expiredLegendMeta.kind !== 'statistics-legend-meta-publication') {
+    if (expiredLegendMeta?.kind !== 'statistics-legend-meta-publication') {
       throw new Error('Legend Meta publication lease missing')
     }
 
@@ -705,7 +705,7 @@ describe('Statistics full launch cohort publication', () => {
       'statistics-legend-meta-publication',
     )
 
-    if (!replacementLegendMeta || replacementLegendMeta.kind !== 'statistics-legend-meta-publication') {
+    if (replacementLegendMeta?.kind !== 'statistics-legend-meta-publication') {
       throw new Error('replacement Legend Meta publication lease missing')
     }
 
@@ -1002,7 +1002,7 @@ describe('Statistics full launch cohort publication', () => {
       'statistics-legend-meta-publication',
     )
 
-    if (!acceptedThirdLegendMeta || acceptedThirdLegendMeta.kind !== 'statistics-legend-meta-publication') {
+    if (acceptedThirdLegendMeta?.kind !== 'statistics-legend-meta-publication') {
       throw new Error('third Legend Meta publication lease missing')
     }
 
@@ -1022,7 +1022,7 @@ describe('Statistics full launch cohort publication', () => {
       'statistics-legend-meta-publication',
     )
 
-    if (!rejectedLegendMeta || rejectedLegendMeta.kind !== 'statistics-legend-meta-publication') {
+    if (rejectedLegendMeta?.kind !== 'statistics-legend-meta-publication') {
       throw new Error('rejected Legend Meta publication lease missing')
     }
 

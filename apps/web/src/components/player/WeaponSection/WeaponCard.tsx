@@ -4,8 +4,8 @@ import { Progress } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
 import { formatCompact, formatHours, getWeaponIcon } from '../shared'
-import { WeaponCardExpanded } from './WeaponCardExpanded'
 import { computeWeaponDerived } from './utils'
+import { WeaponCardExpanded } from './WeaponCardExpanded'
 
 interface WeaponCardProps {
   weapon: RichWeaponAgg

@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AccountsStore,
+  createAccounts,
   DEFAULT_ACCOUNT_PREFERENCES,
   type PrimaryPlayerVerificationAttempt,
   type PrimaryPlayerVerificationState,
 } from '../src/accounts'
-import { createAccounts } from '../src/accounts'
 
 const accountId = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'
 const startedAt = new Date('2026-08-10T10:00:00.000Z')

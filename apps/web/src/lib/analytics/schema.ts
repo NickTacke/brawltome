@@ -12,8 +12,8 @@ import {
   viewportBucket,
 } from './labels'
 
-export { dataAgeBucket, deviceClass, routeTemplate, scrubError, scrubQuery, viewportBucket }
 export type { AnalyticsDevice, AnalyticsRoute }
+export { dataAgeBucket, deviceClass, routeTemplate, scrubError, scrubQuery, viewportBucket }
 
 const common = {
   tabId: z.string().regex(/^[0-9a-f]{32}$/),

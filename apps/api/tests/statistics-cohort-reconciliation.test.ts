@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { RankingQueries } from '@brawltome/ranking'
 import type { StatisticsOperations } from '@brawltome/refresh-operations'
-import { type StatisticsTracer, launchCohortRegions } from '@brawltome/statistics'
+import { launchCohortRegions, type StatisticsTracer } from '@brawltome/statistics'
 import {
   loadFullLaunchCohortCandidates,
   loadLaunchCohortCandidates,

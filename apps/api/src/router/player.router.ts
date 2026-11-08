@@ -1,8 +1,8 @@
 import {
   type DiscordPlayerRefreshInputContract,
+  discordPlayerRefreshInputSchema,
   type PlayerRefreshInputContract,
   type PlayerRefreshResponseContract,
-  discordPlayerRefreshInputSchema,
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
   playerViewInputSchema,

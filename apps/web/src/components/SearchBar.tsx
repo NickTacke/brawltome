@@ -1,16 +1,15 @@
 'use client'
-import { legendAvatarUrl } from '@brawltome/game-data'
-
-import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@/components/ui'
-import { track } from '@/lib/analytics/browser'
-import { trpc } from '@/lib/trpc'
-import { fixEncoding, formatNum } from '@/lib/utils'
 import type { DiscoveryClanHitContract, DiscoveryPlayerHitContract } from '@brawltome/contracts'
+import { legendAvatarUrl } from '@brawltome/game-data'
 import { Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDebounce } from 'use-debounce'
+import { Avatar, AvatarFallback, AvatarImage, Card, Input } from '@/components/ui'
+import { track } from '@/lib/analytics/browser'
+import { trpc } from '@/lib/trpc'
+import { fixEncoding, formatNum } from '@/lib/utils'
 
 interface SearchBarProps {
   onFocus?: () => void

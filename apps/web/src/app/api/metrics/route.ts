@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
-import { webTelemetry } from '@/lib/web-telemetry-registry'
 import { renderPrometheus } from '@brawltome/telemetry'
+import { webTelemetry } from '@/lib/web-telemetry-registry'
 
 function authorized(provided: string | null): boolean {
   const expected = process.env.METRICS_SCRAPE_SECRET

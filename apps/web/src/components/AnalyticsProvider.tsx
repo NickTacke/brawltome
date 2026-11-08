@@ -1,10 +1,10 @@
 'use client'
 
-import { flushAnalytics, referrerDomain, track } from '@/lib/analytics/browser'
-import { scrubError } from '@/lib/analytics/labels'
 import { usePathname } from 'next/navigation'
 import { useReportWebVitals } from 'next/web-vitals'
 import { useEffect, useRef } from 'react'
+import { flushAnalytics, referrerDomain, track } from '@/lib/analytics/browser'
+import { scrubError } from '@/lib/analytics/labels'
 
 const vitalNames = ['LCP', 'INP', 'CLS', 'TTFB'] as const
 

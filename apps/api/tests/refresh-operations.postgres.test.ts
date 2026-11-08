@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  createPostgresRefreshOperations,
   type OperationLease,
   type PlayerRefreshSettled,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
@@ -12,7 +12,7 @@ import postgres from 'postgres'
 import { apiModules } from '../src/modules'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
-import { SourceAdmissionLimitedError, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { runOneRefreshOperation, SourceAdmissionLimitedError } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 
 let database: TestDatabase
@@ -650,7 +650,7 @@ describe('durable Refresh Operations', () => {
     expect(reservations.filter((result) => result.outcome === 'reserved')).toHaveLength(1)
     const reserved = reservations.find((result) => result.outcome === 'reserved')
 
-    if (!reserved || reserved.outcome !== 'reserved') throw new Error('Expected clan reservation')
+    if (reserved?.outcome !== 'reserved') throw new Error('Expected clan reservation')
 
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     const stale = requireLease(await operations.claim('clan-a', 1_000, testAdmission, 'clan-refresh'))

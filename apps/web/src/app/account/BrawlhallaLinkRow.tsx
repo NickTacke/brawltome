@@ -1,8 +1,8 @@
 'use client'
 
-import { linkSteam } from '@/lib/auth'
 import type { PrimaryPlayerVerificationStateContract } from '@brawltome/contracts'
 import { Gamepad2, Loader2 } from 'lucide-react'
+import { linkSteam } from '@/lib/auth'
 
 interface BrawlhallaLinkRowProps {
   state: PrimaryPlayerVerificationStateContract | null

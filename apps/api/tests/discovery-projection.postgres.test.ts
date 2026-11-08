@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
 import {
   type AdmissionConfig,
@@ -283,7 +283,7 @@ describe('Players to Discovery projection delivery', () => {
         'player-discovery-projection',
       )
 
-      if (!lease || lease.kind !== 'player-discovery-projection') throw new Error('Expected a projection lease')
+      if (lease?.kind !== 'player-discovery-projection') throw new Error('Expected a projection lease')
 
       await discovery.deliverPendingPlayers(source, lease.payload.batchSize, lease.operationId)
 

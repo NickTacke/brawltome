@@ -7,6 +7,7 @@ import {
   type ClanProjectionSource,
   type ClanSearchHit,
   type DiscoveryQueries,
+  normalizeDiscoveryTerm,
   type PlayerDiscoveryFact,
   type PlayerProjectionEvent,
   type PlayerProjectionSnapshot,
@@ -15,10 +16,9 @@ import {
   type PlayerSearchTerm,
   type ProjectionOwner,
   type ProjectionSnapshotStream,
+  playerSearchTerms,
   type ReconciliationDifference,
   type ReconciliationResult,
-  normalizeDiscoveryTerm,
-  playerSearchTerms,
 } from './model'
 
 type TermRow = {
@@ -674,18 +674,6 @@ export function createPostgresDiscovery(database: Database): DiscoveryQueries & 
       differenceCount,
       details,
     }
-  }
-
-  async function projectionEvidence(sql: Sql, owner: ProjectionOwner) {
-    const hash = termHasher()
-    let projectedCount = 0
-
-    for await (const group of projectedTermGroups(sql, owner)) {
-      hash.update(group.terms)
-      projectedCount++
-    }
-
-    return { hash: hash.digest(), projectedCount }
   }
 
   async function existingReconciliation(sql: Sql, operationId: string): Promise<ReconciliationResult | null> {

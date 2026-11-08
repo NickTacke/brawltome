@@ -1,19 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  LeaderboardCandidateError,
+  collectAndPublishLeaderboardGeneration,
   type LeaderboardGenerationCandidate,
   LeaderboardLeaseLostError,
   type LeaderboardScope,
   type RankingPublicationAuthorization,
   type RankingPublicationStore,
-  collectAndPublishLeaderboardGeneration,
 } from '../leaderboard'
 import {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
+  regionalLeaderboardScopes,
   type SourceLeaderboardIdentity,
   type SourceLeaderboardRow,
-  regionalLeaderboardScopes,
 } from '../v1-leaderboard-source'
 
 const authorization: RankingPublicationAuthorization = {

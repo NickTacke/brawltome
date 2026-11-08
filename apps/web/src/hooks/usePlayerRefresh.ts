@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { getPlayerAction, refreshPlayerAction } from '@/app/player/[id]/actions'
 import type { PlayerData } from '@/components/player/shared'
 import { flushAnalytics, track } from '@/lib/analytics/browser'
@@ -14,12 +15,12 @@ import {
 import { publicApiUrl } from '@/lib/api-url'
 import { keepLastStanding } from '@/lib/player-reference'
 import {
+  getPendingPlayerSections,
+  hasCompletedPlayerRefresh,
+  type PendingPlayerSections,
   PLAYER_REFRESH_FALLBACK_POLL_MS,
   PLAYER_REFRESH_MAX_WAIT_MS,
   PLAYER_REFRESH_PUSHED_POLL_MS,
-  type PendingPlayerSections,
-  getPendingPlayerSections,
-  hasCompletedPlayerRefresh,
 } from '@/lib/player-refresh'
 import {
   createLatestRequestTracker,
@@ -29,7 +30,6 @@ import {
   shouldRecheckOnVisible,
 } from '@/lib/player-refresh-status'
 import { createRefreshEventPush, playerRefreshEventsUrl } from '@/lib/refresh-events'
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useStaleRefresh } from './useStaleRefresh'
 
 interface RefreshBaseline {

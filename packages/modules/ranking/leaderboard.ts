@@ -2,9 +2,9 @@ import { resolveTier } from './commands/sweep-helpers'
 import {
   type LeaderboardMode,
   type RegionalLeaderboardScope,
+  regionalLeaderboardScopes,
   type SourceLeaderboardIdentity,
   type SourceLeaderboardPage,
-  regionalLeaderboardScopes,
 } from './v1-leaderboard-source'
 
 export const defaultLeaderboardPageDepth = 20

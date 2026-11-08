@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type LegendReference,
   createLegendReferenceIndex,
+  type LegendReference,
   legendAvatarUrl,
   legendSlug,
   normalizeWeaponName,

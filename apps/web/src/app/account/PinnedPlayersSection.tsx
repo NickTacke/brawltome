@@ -1,11 +1,11 @@
 'use client'
 
-import { WinLossBar } from '@/components/player/shared'
-import { Card } from '@/components/ui'
 import { MAX_PINNED_PLAYERS, type PinnedPlayerContract, type PinnedPlayersContract } from '@brawltome/contracts'
 import { ArrowDown, ArrowUp, PinOff } from 'lucide-react'
 import Link from 'next/link'
 import type { RefObject } from 'react'
+import { WinLossBar } from '@/components/player/shared'
+import { Card } from '@/components/ui'
 
 interface PinnedPlayersSectionProps {
   pinnedPlayers: PinnedPlayersContract

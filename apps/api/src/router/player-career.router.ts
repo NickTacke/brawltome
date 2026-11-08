@@ -1,6 +1,6 @@
 import {
-  type PlayerCareerProfileContract,
   nullablePlayerCareerProfileSchema,
+  type PlayerCareerProfileContract,
   parsePlayerCareerProfileOutput,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'

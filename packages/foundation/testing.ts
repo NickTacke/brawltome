@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import postgres from 'postgres'
-import { type Database, createDatabase } from './database'
+import { createDatabase, type Database } from './database'
 import type { Migration } from './migration'
 import { orderMigrations } from './migrations/order'
 import { migratePostgres } from './migrations/postgres'

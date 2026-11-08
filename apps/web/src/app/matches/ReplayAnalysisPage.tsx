@@ -1,8 +1,5 @@
 'use client'
 
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
-import { publicApiUrl } from '@/lib/api-url'
-import { signIn, useAccount } from '@/lib/auth'
 import {
   REPLAY_UPLOAD_LIMIT_BYTES,
   type ReplayJobDetailContract,
@@ -12,6 +9,9 @@ import {
 } from '@brawltome/contracts'
 import { Activity, Clock3, FileUp, History, LockKeyhole, Upload } from 'lucide-react'
 import { type DragEvent, type FormEvent, useCallback, useEffect, useState } from 'react'
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { publicApiUrl } from '@/lib/api-url'
+import { signIn, useAccount } from '@/lib/auth'
 import { ReplayResultView } from './ReplayResultView'
 
 type ReplayJobStatus = ReplayJobSummaryContract['status']

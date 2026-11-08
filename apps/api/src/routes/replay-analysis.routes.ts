@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import {
-  REPLAY_UPLOAD_LIMIT_BYTES,
   analysisResultV1Schema,
+  REPLAY_UPLOAD_LIMIT_BYTES,
   replayJobDetailSchema,
   replayJobFailureSchema,
   replayJobSummarySchema,
@@ -10,7 +10,7 @@ import {
 import { ActiveReplayJobError, type ReplayAnalysisJobs } from '@brawltome/replay-analysis'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { SESSION_COOKIE, parseCookies } from '../auth/cookies'
+import { parseCookies, SESSION_COOKIE } from '../auth/cookies'
 import { internalSecretValid } from '../auth/internal-secret'
 
 const RESULT_LIMIT_BYTES = 64 * 1024 * 1024
@@ -97,11 +97,7 @@ function bridgeAuthorized(request: Request, secret: string): boolean {
   return authorization?.startsWith('Bearer ') === true && internalSecretValid(authorization.slice(7), secret)
 }
 
-export function createReplayAnalysisRoutes(deps: {
-  accounts: Accounts
-  jobs: ReplayAnalysisJobs
-  webOrigin: string
-}) {
+export function createReplayAnalysisRoutes(deps: { accounts: Accounts; jobs: ReplayAnalysisJobs; webOrigin: string }) {
   const app = new Hono()
 
   app.post('/replays', async (c) => {

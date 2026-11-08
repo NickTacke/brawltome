@@ -41,9 +41,7 @@ export async function loadPlayerWithReference<TRanked, TCareer>(
     client.player.careerById.query({ id }),
     client.clan.membershipByPlayerId.query({ id }),
     // Best effort: the profile renders without it.
-    client.player.leaderboardStandingById
-      .query({ id })
-      .catch(() => undefined),
+    client.player.leaderboardStandingById.query({ id }).catch(() => undefined),
   ])
 
   if (!reference) return { reference: null, player: null }

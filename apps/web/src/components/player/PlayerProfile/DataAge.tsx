@@ -1,8 +1,8 @@
 'use client'
 
-import { timeAgo } from '@/lib/utils'
 import { Clock } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { timeAgo } from '@/lib/utils'
 
 const TICK_MS = 60_000
 

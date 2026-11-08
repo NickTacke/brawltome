@@ -1,15 +1,15 @@
+import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
+import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
 import type { LeaderboardStanding } from '@/lib/player-reference'
 import { oneVsOneFreshness } from '@/lib/section-freshness'
 import { aggregateRichWeaponStats } from '@/lib/weapon-aggregation'
-import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
-import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
 import { CombatCard } from '../CombatCard'
 import { LegendSection } from '../LegendSection'
 import { RankedCard } from '../RankedCard'
 import { RatingChart } from '../RatingChart'
+import type { PlayerData } from '../shared'
 import { TeamSection } from '../TeamSection'
 import { WeaponSection } from '../WeaponSection'
-import type { PlayerData } from '../shared'
 import { ProfileHeader } from './ProfileHeader'
 
 export interface CanonicalPlayerProfileView {

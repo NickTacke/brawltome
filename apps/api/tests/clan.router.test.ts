@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Telemetry, createTelemetry, renderPrometheus } from '@brawltome/telemetry'
+import { createTelemetry, renderPrometheus, type Telemetry } from '@brawltome/telemetry'
 import { createClanRouter } from '../src/router/clan.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/trpc'

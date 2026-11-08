@@ -1,11 +1,11 @@
 'use client'
 
-import { Card, CardContent } from '@/components/ui'
-import { fixEncoding, formatNum } from '@/lib/utils'
 import type { PlayerRankedProfileContract } from '@brawltome/contracts'
 import Link from 'next/link'
+import { Card, CardContent } from '@/components/ui'
+import { fixEncoding, formatNum } from '@/lib/utils'
 import { FreshnessBadge } from './FreshnessBadge'
-import { WinLossBar, getRankBanner } from './shared'
+import { getRankBanner, WinLossBar } from './shared'
 
 type RankedSnapshot = NonNullable<PlayerRankedProfileContract['snapshot']>
 type FixedTeam = RankedSnapshot['fixedTeams'][number]

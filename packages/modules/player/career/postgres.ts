@@ -7,7 +7,7 @@ import {
   type CareerSnapshotSource,
   careerFreshness,
 } from './model'
-import { type V0CareerSnapshot, decodeV0CareerNameCandidate } from './source'
+import { decodeV0CareerNameCandidate, type V0CareerSnapshot } from './source'
 
 export type CanonicalCareerEffect = {
   operationId: string

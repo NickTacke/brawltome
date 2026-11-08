@@ -1,5 +1,7 @@
 'use client'
 
+import type { ClanProfileContract } from '@brawltome/contracts'
+import { Search } from 'lucide-react'
 import {
   Button,
   Card,
@@ -20,10 +22,8 @@ import {
   TableRow,
 } from '@/components/ui'
 import { timeAgo } from '@/lib/utils'
-import type { ClanProfileContract } from '@brawltome/contracts'
-import { Search } from 'lucide-react'
 import { MemberRow } from './MemberRow'
-import { type ClanMember, type SortKey, filterMembers, paginateMembers, sortMembers } from './utils'
+import { type ClanMember, filterMembers, paginateMembers, type SortKey, sortMembers } from './utils'
 
 interface MemberListProps {
   members: ClanMember[]

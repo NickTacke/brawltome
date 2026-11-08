@@ -1,6 +1,6 @@
-import { Card } from '@/components/ui'
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
 import { legendAvatarUrl } from '@brawltome/game-data'
+import { Card } from '@/components/ui'
 import { CareerStatistics } from '../CareerStatistics'
 import { RatingChart } from '../RatingChart'
 import { type RankedTeam, TeamSection } from '../TeamSection'

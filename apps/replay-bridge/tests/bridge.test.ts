@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type ReplayBridgeConfig, processNextReplay } from '../src/index'
+import { processNextReplay, type ReplayBridgeConfig } from '../src/index'
 
 const leaseToken = randomUUID()
 

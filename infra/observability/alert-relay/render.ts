@@ -1,4 +1,4 @@
-import { type Embed, type MessageBody, SUPPRESS_NOTIFICATIONS, noMentions, pageMentions } from './discord'
+import { type Embed, type MessageBody, noMentions, pageMentions, SUPPRESS_NOTIFICATIONS } from './discord'
 
 export type Alert = {
   fingerprint: string

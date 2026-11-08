@@ -1,5 +1,5 @@
 import type { Telemetry } from '@brawltome/telemetry'
-import { type Caller, type RequestQueue, createBhApiRequestQueue } from './request-queue'
+import { type Caller, createBhApiRequestQueue, type RequestQueue } from './request-queue'
 
 export class RateLimitError extends Error {
   constructor(
@@ -10,6 +10,7 @@ export class RateLimitError extends Error {
     this.name = 'RateLimitError'
   }
 }
+
 import type {
   BhApiPlayerRanked,
   BhApiPlayerStats,
@@ -55,11 +56,7 @@ export interface BhApiClientOptions {
   telemetry?: Telemetry
   queue?: RequestQueue
   beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
-  onRateLimited?: (event: {
-    domain: BhApiSourceDomain
-    path: string
-    retryAfterMs: number
-  }) => Promise<void>
+  onRateLimited?: (event: { domain: BhApiSourceDomain; path: string; retryAfterMs: number }) => Promise<void>
 }
 
 export interface CallOptions {

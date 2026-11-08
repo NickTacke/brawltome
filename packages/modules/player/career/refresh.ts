@@ -1,5 +1,5 @@
 import type { CanonicalCareerEffect, PostgresCareerPlayers } from './postgres'
-import { type CareerLegendResolver, type V0CareerSnapshot, decodeV0CareerSnapshot } from './source'
+import { type CareerLegendResolver, decodeV0CareerSnapshot, type V0CareerSnapshot } from './source'
 
 export interface V0CareerSource {
   getStats(

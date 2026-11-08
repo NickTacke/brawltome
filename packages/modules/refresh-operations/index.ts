@@ -26,18 +26,18 @@ import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
-export * from './model'
 export {
   acquireActiveLease,
   commitInteractiveSection,
   completeRankingRetentionLease,
+  type HeldLeaderboardLease,
+  type HeldLease,
+  type LeaderboardEffectResult,
   lockActiveLeaderboardLease,
   lockActiveRankingRetentionLease,
   recordLeaderboardEffect,
-  type HeldLease,
-  type HeldLeaderboardLease,
-  type LeaderboardEffectResult,
 } from './lease-fences'
+export * from './model'
 export {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
