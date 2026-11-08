@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { clanModule, createPostgresClans } from '../index'
 
@@ -16,7 +17,10 @@ const lockWaitTimeoutMs = 3_000
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_read_during_refresh', modules: [clanModule] })
+  database = await createTestDatabase({
+    label: 'clan_read_during_refresh',
+    modules: [refreshOperationsModule, clanModule],
+  })
 }, 20_000)
 
 afterAll(async () => {

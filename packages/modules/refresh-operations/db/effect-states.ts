@@ -6,6 +6,7 @@ import {
   type OperationLease,
   statisticsCollectionKinds,
 } from '../model'
+import { allSectionsCommitted } from './section-checkpoints'
 
 export type EffectStateEntry = Pick<JobDefinition<unknown>, 'effectState' | 'claimLockKey'>
 
@@ -59,22 +60,10 @@ async function legendMetaPublicationEffectState(sql: Sql, lease: EffectLease): P
   return effect ? 'acknowledged' : 'none'
 }
 
-async function allSectionsCommitted(sql: Sql, lease: EffectLease): Promise<EffectState> {
-  const [effect] = await sql<{ complete: boolean }[]>`
-    SELECT NOT EXISTS (
-      SELECT 1
-      FROM jsonb_array_elements_text(operation.payload -> 'staleSections') AS required(section)
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM refresh_operations.interactive_refresh_effects effect
-        WHERE effect.operation_id = operation.effect_operation_id AND effect.section = required.section
-      )
-    ) AS complete
-    FROM refresh_operations.operations operation
-    WHERE operation.id = ${lease.operationId}
-  `
+function staleSectionsCommitted(sql: Sql, lease: EffectLease): Promise<EffectState> {
+  const { staleSections } = lease.payload as { staleSections: string[] }
 
-  return effect?.complete ? 'acknowledged' : 'none'
+  return allSectionsCommitted(sql, lease, staleSections)
 }
 
 async function rankedSectionCommitted(sql: Sql, lease: EffectLease): Promise<EffectState> {
@@ -97,15 +86,14 @@ function entriesForKinds<Kind extends string>(
 }
 
 // these jobs live in their owning module and bring their effect checks with them
-type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation'
+type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation' | 'clan-refresh'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect
 export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): EffectStates {
   const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
     proof: { effectState: proofEffectState },
-    'interactive-player-refresh': { effectState: allSectionsCommitted },
-    'clan-refresh': { effectState: allSectionsCommitted },
+    'interactive-player-refresh': { effectState: staleSectionsCommitted },
     'ranked-player-pulse': { effectState: rankedSectionCommitted },
     'player-name-verification': { effectState: rankedSectionCommitted },
     'ranking-retention': {},

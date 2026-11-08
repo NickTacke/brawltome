@@ -7,7 +7,11 @@ import {
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
-import { createWorkerJobs, type WorkerDiscoveryDependencies } from '../../src/worker/job-list'
+import {
+  createWorkerJobs,
+  type WorkerClanDependencies,
+  type WorkerDiscoveryDependencies,
+} from '../../src/worker/job-list'
 
 type DiscoveryEffectChecks = WorkerDiscoveryDependencies['checks']
 
@@ -30,6 +34,10 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
       playerSource: {} as WorkerDiscoveryDependencies['playerSource'],
       clanSource: {} as WorkerDiscoveryDependencies['clanSource'],
       leaseActive: async () => true,
+    },
+    clan: {
+      clans: {} as WorkerClanDependencies['clans'],
+      createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
     },
   })
 }

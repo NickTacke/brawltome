@@ -384,15 +384,6 @@ export type InteractivePlayerRefreshReservation = {
   reservationTtlSeconds: number
 }
 
-export type InteractiveClanRefreshReservation = {
-  dedupeKey: string
-  operationKey: string
-  clanId: number
-  staleSections: ('profile' | 'roster')[]
-  provenance: OperationProvenance
-  reservationTtlSeconds: number
-}
-
 // Published by refresh-operations/0026 whenever a player refresh reaches a terminal status.
 export const playerRefreshSettledChannel = 'refresh_operations_player_refresh_settled'
 
@@ -450,9 +441,7 @@ export type StatisticsCollectionOperations = StatisticsOperations
 
 export interface InteractiveRefreshOperations {
   findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
-  findActiveInteractiveClanRefresh(dedupeKey: string): Promise<ActiveInteractiveRefresh | null>
   reserveInteractivePlayerRefresh(input: InteractivePlayerRefreshReservation): Promise<ReserveInteractiveRefreshResult>
-  reserveInteractiveClanRefresh(input: InteractiveClanRefreshReservation): Promise<ReserveInteractiveRefreshResult>
   activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult>
   activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
   rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult>

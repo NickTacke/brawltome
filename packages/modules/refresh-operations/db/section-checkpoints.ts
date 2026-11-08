@@ -1,5 +1,5 @@
 import type { Database, Sql } from '@brawltome/foundation'
-import type { Lease } from '../jobs/job-definition'
+import type { EffectState, Lease } from '../jobs/job-definition'
 import type { SectionCheckpointResult, TransitionResult } from '../model'
 
 /** Says whether a section still has to run under this lease, or was committed by an earlier attempt. */
@@ -47,4 +47,25 @@ export function commitSection(database: Database, lease: Lease<unknown>, section
 
     return 'transitioned' as const
   })
+}
+
+/** Says whether every given section has a checkpoint on the effect operation, inside claim's transaction. */
+export async function allSectionsCommitted(
+  transaction: Sql,
+  lease: Pick<Lease<unknown>, 'effectOperationId'>,
+  sections: readonly string[],
+): Promise<EffectState> {
+  const [effect] = await transaction<{ complete: boolean }[]>`
+    SELECT NOT EXISTS (
+      SELECT 1
+      FROM unnest(${[...sections]}::text[]) AS required(section)
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM refresh_operations.interactive_refresh_effects effect
+        WHERE effect.operation_id = ${lease.effectOperationId} AND effect.section = required.section
+      )
+    ) AS complete
+  `
+
+  return effect?.complete ? 'acknowledged' : 'none'
 }

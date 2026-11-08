@@ -17,8 +17,14 @@ export interface ClanSource {
 
 export type ClanRefreshResult = { section: ClanRefreshSection; outcome: 'published' | 'preserved'; error?: string }
 
+/** What refreshing a section reads and writes; the job adds what it needs to revoke a lost lease. */
+export type ClanSectionStore = Pick<
+  PostgresClans,
+  'prepareRefreshEffect' | 'publishProfile' | 'publishRoster' | 'recordProfileCheck' | 'recordRosterCheck'
+>
+
 type SectionRefresh = {
-  clans: PostgresClans
+  clans: ClanSectionStore
   source: ClanSource
   clanId: number
   section: ClanRefreshSection
@@ -71,7 +77,7 @@ async function recordFailedCheck(refresh: SectionRefresh, error: unknown): Promi
  * so a fenced worker never spends a source call. A failed fetch keeps the stored section and records the check.
  */
 export async function processRefreshClanSection(
-  clans: PostgresClans,
+  clans: ClanSectionStore,
   source: ClanSource,
   clanId: number,
   section: ClanRefreshSection,

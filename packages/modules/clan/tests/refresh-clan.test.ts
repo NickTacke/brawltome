@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { clanModule, createPostgresClans, processRefreshClanSection } from '../index'
-import { processRefreshClan } from '../jobs/refresh-clan'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { clanModule, createPostgresClans } from '../index'
+import { processRefreshClan, processRefreshClanSection } from '../jobs/refresh-clan'
 
 let database: TestDatabase
 let clans: ReturnType<typeof createPostgresClans>
@@ -32,7 +33,7 @@ const alpha = {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_refresh', modules: [clanModule] })
+  database = await createTestDatabase({ label: 'clan_refresh', modules: [refreshOperationsModule, clanModule] })
   clans = createPostgresClans(database)
 })
 

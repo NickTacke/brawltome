@@ -1,13 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
 let database: TestDatabase
 let connectionString = ''
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_discovery_source', modules: [clanModule] })
+  database = await createTestDatabase({
+    label: 'clan_discovery_source',
+    modules: [refreshOperationsModule, clanModule],
+  })
+
   connectionString = database.connectionString
 }, 20_000)
 

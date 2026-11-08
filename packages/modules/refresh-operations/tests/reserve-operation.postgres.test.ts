@@ -146,6 +146,7 @@ describe('reserveForAdmission', () => {
     const wrongToken = await activateReserved(database, {
       operationId: reserved.operationId,
       reservationToken: randomUUID(),
+      kinds: ['proof'],
     })
 
     expect(wrongToken).toBe('lease-lost')
@@ -154,6 +155,7 @@ describe('reserveForAdmission', () => {
       const activated = await activateReserved(database, {
         operationId: reserved.operationId,
         reservationToken: reserved.reservationToken,
+        kinds: ['proof'],
       })
 
       expect(activated).toBe('transitioned')
@@ -244,6 +246,7 @@ describe('reserveForAdmission', () => {
       reservationToken: reserved.reservationToken,
       reason: 'actor_rate_limited',
       message: 'Admission rejected',
+      kinds: ['proof'] as const,
     }
 
     expect(await rejectReserved(database, { ...rejection, reservationToken: randomUUID() })).toBe('lease-lost')

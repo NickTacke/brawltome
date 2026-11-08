@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { clanModule } from '@brawltome/clan'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createORPCClient } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
@@ -44,7 +45,7 @@ let database: TestDatabase
 let app: Hono
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'orpc_clan', modules: [clanModule] })
+  database = await createTestDatabase({ label: 'orpc_clan', modules: [refreshOperationsModule, clanModule] })
 
   for (const scenario of scenarios) await seedClan(database, scenario.clan)
 

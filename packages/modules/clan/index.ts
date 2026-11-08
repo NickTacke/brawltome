@@ -11,14 +11,23 @@ export { readPlayerClanMembership } from './api/read-player-clan-membership'
 export { createPostgresClanDiscoverySource } from './db/postgres-clan-discovery-source'
 export { type ClanQueries, createPostgresClans } from './db/postgres-clans'
 export type { ClanProvenance } from './domain/provenance'
-export { processRefreshClanSection } from './jobs/refresh-clan'
+export {
+  type ClanRefreshJobDependencies,
+  createClanRefreshJob,
+} from './jobs/clan-refresh-job'
+export {
+  type ClanRefreshReservations,
+  createClanRefreshReservations,
+  reserveClanRefresh,
+} from './jobs/clan-refresh-reservation'
+export type { ClanSource } from './jobs/refresh-clan'
 
 const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 
 export const clanModule = {
   // a literal, so the API router can serve the procedures under this name with their types
   name: 'clan' as const,
-  dependsOn: [],
+  dependsOn: ['refresh-operations'],
   migrations,
   routes: createClanProcedures,
 } satisfies BrawltomeModule

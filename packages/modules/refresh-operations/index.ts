@@ -61,6 +61,7 @@ export {
   reserveForAdmission,
   reserveForBinding,
 } from './db/reserve-operation'
+export { allSectionsCommitted } from './db/section-checkpoints'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,

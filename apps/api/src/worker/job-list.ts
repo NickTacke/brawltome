@@ -1,3 +1,5 @@
+import type { BhApiClientOptions } from '@brawltome/bhapi'
+import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
 import {
   type ClanProjectionSource,
   createClanDiscoveryProjectionJob,
@@ -20,11 +22,18 @@ export type WorkerDiscoveryDependencies = {
   leaseActive(lease: Lease<unknown>): Promise<boolean>
 }
 
+export type WorkerClanDependencies = {
+  clans: ClanRefreshJobDependencies['clans']
+  // the worker's Brawlhalla client, built around one section's source admission
+  createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
+}
+
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
   isRankingRetentionEnabled: boolean
   telemetry: Telemetry
   discovery: WorkerDiscoveryDependencies
+  clan: WorkerClanDependencies
 }
 
 function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
@@ -56,6 +65,15 @@ function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinit
   return [playerProjection, clanProjection, reconciliation]
 }
 
+function createClanJobs({ clans, createBrawlhallaClient }: WorkerClanDependencies): JobDefinition<unknown>[] {
+  const clanRefresh = createClanRefreshJob({
+    clans,
+    createAdmittedSource: (admitSource) => createBrawlhallaClient(({ domain }) => admitSource(domain)),
+  })
+
+  return [clanRefresh]
+}
+
 // the jobs that live in their owning module; the rest are still wrapped in refresh-operations-worker.ts
 export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefinition<unknown>[] {
   const rankingRetention = createRankingRetentionJob({
@@ -64,5 +82,5 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     telemetry: dependencies.telemetry,
   })
 
-  return [rankingRetention, ...createDiscoveryJobs(dependencies.discovery)]
+  return [rankingRetention, ...createDiscoveryJobs(dependencies.discovery), ...createClanJobs(dependencies.clan)]
 }

@@ -6,8 +6,10 @@ import { join, resolve } from 'node:path'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresRefreshOperations,
+  interactiveRefreshMaxAttempts,
   type OperationLease,
   refreshOperationsModule,
+  reserveForAdmission,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 
@@ -361,12 +363,14 @@ describe('dead-letter operations', () => {
     expect(leaderboardSuccessor.leaseToken).toBeGreaterThan(leaderboardLease.leaseToken)
     await operations.complete(leaderboardSuccessor)
 
-    const clan = await operations.reserveInteractiveClanRefresh({
+    const clan = await reserveForAdmission(database, {
+      kind: 'clan-refresh',
       dedupeKey: `clan-dead-letter:${randomUUID()}`,
       operationKey: `clan-effect:${randomUUID()}`,
-      clanId: 73,
-      staleSections: ['profile', 'roster'],
+      workClass: 'interactive',
+      payload: { clanId: 73, staleSections: ['profile', 'roster'] },
       provenance: { source: 'integration-test', requestedBy: 'issue-198' },
+      maxAttempts: interactiveRefreshMaxAttempts,
       reservationTtlSeconds: 30,
     })
 

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { reserveClanRefresh } from '@brawltome/clan'
 import type { Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
@@ -455,7 +456,7 @@ describe('durable Refresh Operations', () => {
       reservationTtlSeconds: 30,
     })
 
-    const clan = await operations.reserveInteractiveClanRefresh({
+    const clan = await reserveClanRefresh(database, {
       dedupeKey: `clan:${randomUUID()}`,
       operationKey: `clan:${randomUUID()}`,
       clanId: 4_404,
@@ -601,7 +602,7 @@ describe('durable Refresh Operations', () => {
 
       await operations.rejectInteractiveRefresh(rejected.operationId, rejected.reservationToken, 'actor_rate_limited')
 
-      const clan = await operations.reserveInteractiveClanRefresh({
+      const clan = await reserveClanRefresh(database, {
         dedupeKey: `clan:${randomUUID()}`,
         operationKey: `clan:${randomUUID()}`,
         clanId: 77,
@@ -638,7 +639,7 @@ describe('durable Refresh Operations', () => {
 
     const reservations = await Promise.all(
       Array.from({ length: 8 }, () =>
-        operations.reserveInteractiveClanRefresh({
+        reserveClanRefresh(database, {
           dedupeKey,
           operationKey: dedupeKey,
           clanId: 77,
@@ -768,7 +769,7 @@ describe('durable Refresh Operations', () => {
 
     const clan = await settleWithin(
       'reserve clan',
-      operations.reserveInteractiveClanRefresh({
+      reserveClanRefresh(database, {
         dedupeKey: `cross-kind-clan:${randomUUID()}`,
         operationKey: `cross-kind-clan:${randomUUID()}`,
         clanId: 77,
@@ -1914,7 +1915,7 @@ async function reserveInteractivePlayer(operations: Operations): Promise<string>
 }
 
 async function reserveInteractiveClan(operations: Operations): Promise<string> {
-  const reserved = await operations.reserveInteractiveClanRefresh({
+  const reserved = await reserveClanRefresh(database, {
     dedupeKey: uniqueKey('claim-clan'),
     operationKey: uniqueKey('claim-clan-effect'),
     clanId: 987_002,

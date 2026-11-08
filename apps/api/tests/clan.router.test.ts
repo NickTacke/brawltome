@@ -58,20 +58,20 @@ function harness(
     clanRepo: {
       getById: async () => options.stored ?? cached,
     },
-    refreshOperations: {
-      findActiveInteractiveClanRefresh: async (dedupeKey: string) => {
+    clanRefreshReservations: {
+      findActiveClanRefresh: async (dedupeKey: string) => {
         activeDedupeKey = dedupeKey
 
         return options.active ? { operationId, awaitingAdmission: false, reservationExpired: false } : null
       },
-      reserveInteractiveClanRefresh: async (input: { dedupeKey: string }) => {
+      reserveClanRefresh: async (input: { dedupeKey: string }) => {
         calls.reserve++
         reservedDedupeKey = input.dedupeKey
 
         return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() } as const
       },
-      activateInteractiveRefresh: async () => 'transitioned' as const,
-      rejectInteractiveRefresh: async () => 'transitioned' as const,
+      activateClanRefresh: async () => 'transitioned' as const,
+      rejectClanRefresh: async () => 'transitioned' as const,
     },
     requestAdmission: {
       admitActor: async (actor: { kind: string }) => {

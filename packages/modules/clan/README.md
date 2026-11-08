@@ -30,7 +30,8 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 - `api/`: `procedures.ts` holds the oRPC procedures. `read-clan-profile.ts` and `read-player-clan-membership.ts`
   call the `db/` use cases with the database and turn the result into the public shape. `clan-profile-contract.ts`
   does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
-- `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it.
+- `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it. `clan-refresh-job.ts` is the queue
+  job that runs it, section by section. `clan-refresh-reservation.ts` reserves and activates the queue operation.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
 ## Public surface
@@ -41,7 +42,9 @@ Everything other packages may import is exported from `index.ts`, and only what 
 - `readClanProfile` and `readPlayerClanMembership`: the reads the tRPC adapters share with the oRPC procedures
 - `toClanProfileContract`: turns a stored clan into its public shape, for the tRPC refresh
 - `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
-- `createPostgresClanDiscoverySource` and `processRefreshClanSection`, for the operations worker
+- `createPostgresClanDiscoverySource`, for the operations worker
+- `createClanRefreshJob`, for the operations worker's job list
+- `createClanRefreshReservations`, for the tRPC clan refresh, and `reserveClanRefresh`, for the API's queue tests
 - the `ClanProvenance` type, for the API's test fixtures
 
 ## oRPC procedures
@@ -60,9 +63,8 @@ same read functions, `readClanProfile` and `readPlayerClanMembership`, so both r
 
 ## Refresh
 
-`clan.refresh` and `clan.refreshDiscord` are still tRPC only. The refresh runs on the old refresh-operations queue
-until the queue is replaced (phase 3c). The worker wiring in `apps/api/src/operations-worker.ts` moves into this
-module then.
+`clan.refresh` and `clan.refreshDiscord` are still tRPC only. The refresh runs on the refresh-operations queue as
+the `clan-refresh` job from `jobs/clan-refresh-job.ts`.
 
 1. The API sees a stale section, reserves a refresh operation and admits the caller.
 2. The operations worker leases the operation. `prepareRefreshEffect` records the lease in `refresh_effects`.
