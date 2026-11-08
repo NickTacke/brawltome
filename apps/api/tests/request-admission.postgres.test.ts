@@ -83,8 +83,6 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('50 concurrent duplicates reserve one operation and consume actor/source once', async () => {
-    const operations = createTestQueue({ database })
-
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 300 },

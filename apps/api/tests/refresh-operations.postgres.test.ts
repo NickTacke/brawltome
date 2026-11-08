@@ -1931,7 +1931,7 @@ async function reserveLegendMetaPublication(operations: Operations): Promise<str
   return reserved.operationId
 }
 
-async function reserveInteractivePlayer(operations: Operations): Promise<string> {
+async function reserveInteractivePlayer(): Promise<string> {
   const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
     dedupeKey: uniqueKey('claim-player'),
     operationKey: uniqueKey('claim-player-effect'),
@@ -1948,7 +1948,7 @@ async function reserveInteractivePlayer(operations: Operations): Promise<string>
   return reserved.operationId
 }
 
-async function reserveInteractiveClan(operations: Operations): Promise<string> {
+async function reserveInteractiveClan(): Promise<string> {
   const reserved = await reserveClanRefresh(database, {
     dedupeKey: uniqueKey('claim-clan'),
     operationKey: uniqueKey('claim-clan-effect'),

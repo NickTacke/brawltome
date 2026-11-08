@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BhApiHttpError, RateLimitError } from '@brawltome/bhapi'
+import { RateLimitError } from '@brawltome/bhapi'
 import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
 import {
