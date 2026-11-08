@@ -2304,3 +2304,29 @@ describe('refresh operations worker failure handling', () => {
     expect(failed).toBe(false)
   })
 })
+
+describe('refresh operations worker claim latency', () => {
+  test('records how long a claim took, labelled by whether it found work', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const claims = [leaseOfKind('proof'), null]
+
+    const operations = {
+      claim: async () => claims.shift() ?? null,
+      renew: async () => 'renewed' as const,
+      commitProofEffect: async () => 'applied' as const,
+      complete: async () => 'transitioned' as const,
+    }
+
+    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry }
+
+    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(true)
+    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(false)
+
+    const claimLatency = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_claim_duration_ms')
+    const series = claimLatency?.series.map(({ labels, count }) => ({ labels, count }))
+
+    expect(series).toHaveLength(2)
+    expect(series).toContainEqual({ labels: { outcome: 'claimed' }, count: 1 })
+    expect(series).toContainEqual({ labels: { outcome: 'empty' }, count: 1 })
+  })
+})

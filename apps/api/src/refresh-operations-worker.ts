@@ -1367,23 +1367,7 @@ export async function runOneRefreshOperation(
   workerId: string,
   options: RunOneRefreshOperationOptions,
 ): Promise<boolean> {
-  const claimed = await operations.claim(workerId, options.leaseMs, options.admission)
-
-  if (!claimed) return false
-
-  const lease: OperationLease = claimed
-
   const telemetry = options.telemetry
-  const started = performance.now()
-  let attemptOutcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost' = 'succeeded'
-
-  let failureCategory:
-    | 'admission_deferred'
-    | 'source_rate_limited'
-    | 'source_unavailable'
-    | 'execution'
-    | 'lease_lost'
-    | 'unknown' = 'unknown'
 
   function record(recording: (active: Telemetry) => void): void {
     if (!telemetry) return
@@ -1394,6 +1378,29 @@ export async function runOneRefreshOperation(
       return
     }
   }
+
+  const claimStarted = performance.now()
+  const claimed = await operations.claim(workerId, options.leaseMs, options.admission)
+  const claimDurationMs = performance.now() - claimStarted
+
+  record((active) =>
+    active.metrics.observe('operation_claim_duration_ms', claimDurationMs, { outcome: claimed ? 'claimed' : 'empty' }),
+  )
+
+  if (!claimed) return false
+
+  const lease: OperationLease = claimed
+
+  const started = performance.now()
+  let attemptOutcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost' = 'succeeded'
+
+  let failureCategory:
+    | 'admission_deferred'
+    | 'source_rate_limited'
+    | 'source_unavailable'
+    | 'execution'
+    | 'lease_lost'
+    | 'unknown' = 'unknown'
 
   async function executeClaimed(): Promise<boolean> {
     record((active) =>

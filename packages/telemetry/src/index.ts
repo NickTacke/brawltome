@@ -66,6 +66,7 @@ export type MetricName =
   | 'http_server_duration_ms'
   | 'operation_attempts_total'
   | 'operation_duration_ms'
+  | 'operation_claim_duration_ms'
   | 'operation_oldest_pending_age_ms'
   | 'operation_dead_letters'
   | 'schedule_lateness_ms'
@@ -205,6 +206,8 @@ const outcome = [
   'not_found',
 ] as const
 
+const claimOutcome = ['claimed', 'empty'] as const
+
 const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'discord', 'steam', 'turnstile', 'api'] as const
 const interactionKind = ['command', 'select', 'button'] as const
 const command = ['player', 'clan', 'status', 'component', 'unknown'] as const
@@ -245,6 +248,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     help: 'Durable operation attempt duration',
     labels: { kind: operationKind, work_class: workClass, outcome },
     buckets: [10, 50, 100, 250, 500, 1000, 5000, 15000, 60000],
+  },
+  operation_claim_duration_ms: {
+    kind: 'histogram',
+    help: 'Time to claim the next durable operation, by whether one was found',
+    labels: { outcome: claimOutcome },
+    buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 5000],
   },
   operation_oldest_pending_age_ms: {
     kind: 'gauge',
