@@ -109,7 +109,7 @@ describe('Recently viewed freshness operations', () => {
 
   test('enqueues background refreshes once per player and skips players with an active refresh', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
 
     try {
       await insertVisitorRefresh(control, 30, 0, false)

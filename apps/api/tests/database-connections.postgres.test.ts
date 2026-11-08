@@ -219,7 +219,12 @@ describe('one database client per process', () => {
 
   test('a lease renewal completes while every main connection is held by a long transaction', async () => {
     const databases = createWorkerDatabases(database.connectionString, workerConfig)
-    const operations = createPostgresRefreshOperations({ database: databases.main, renewals: databases.renewals })
+
+    const operations = createPostgresRefreshOperations(
+      { database: databases.main, renewals: databases.renewals },
+      { effectStates: {} },
+    )
+
     const holdSeconds = 3
 
     try {

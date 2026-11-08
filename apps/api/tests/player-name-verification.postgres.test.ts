@@ -109,7 +109,7 @@ describe('Player name verification through durable operations', () => {
 
     await accounts.accounts.pinPlayer(signedIn.account.id, 502)
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
     const verifications = createPostgresPlayerNameVerifications(database)
     const rankedPlayers = createPostgresRankedPlayers(database)
     const discovery = createPostgresPlayerDiscoverySource(database)
