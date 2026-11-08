@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { createPostgresAccounts } from '@brawltome/accounts'
 import {
@@ -75,8 +74,8 @@ import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
-import { reconcileInteractiveAdmissions } from './worker/interactive-admissions'
 import { createWorkerJobs } from './worker/job-list'
+import { createPlanners, runPlanners } from './worker/planners'
 import { workerModules } from './worker-modules'
 
 const configuredConnectionString = process.env.DATABASE_URL
@@ -400,7 +399,39 @@ const freshnessPlanner = createFreshnessPlanner({
   telemetry,
 })
 
-let leaderboardSchedulesReconciled = false
+const planners = createPlanners({
+  operations,
+  actorAdmission: requestAdmission,
+  primaryMonitoring: {
+    readSnapshot: () => accounts.primaryMonitoring.readSnapshot(),
+    reconcile: (snapshot) => reconcilePrimaryMonitoring(databases.main, snapshot),
+  },
+  discovery: {
+    sources: { player: playerDiscoveryChecks, clan: clanDiscoveryChecks },
+    checks: discoveryChecks,
+    reconciliationBackoff: discoveryReconciliationBackoff,
+    config: {
+      projectionBatchSize: workerConfig.discovery.projectionBatchSize,
+      reconciliationIntervalMs: workerConfig.discovery.reconciliationIntervalMs,
+    },
+  },
+  statisticsCohort: { reconcile: () => reconcileStatisticsCohort(statistics, statisticsReservations, ranking.queries) },
+  nameVerification: nameVerificationPlanner,
+  freshness: freshnessPlanner,
+  schedules: {
+    store: {
+      leaderboard: (schedule) => reconcileLeaderboardSchedule(databases.main, schedule),
+      retention: (schedule) => reconcileRankingRetentionSchedule(databases.main, schedule),
+      disableRetention: (scheduleKey) => disableRankingRetentionSchedule(databases.main, scheduleKey),
+      deepCrawl: (schedule) => reconcileLeaderboardDeepCrawlSchedule(databases.main, schedule),
+      disableDeepCrawl: (scheduleKey) => disableLeaderboardDeepCrawlSchedule(databases.main, scheduleKey),
+    },
+    leaderboard: leaderboardSchedules,
+    rankingRetention: { config: workerConfig.rankingRetention, definition: rankingRetentionSchedule },
+    deepCrawl: { config: workerConfig.deepCrawl, definitions: deepCrawlSchedules },
+  },
+  telemetry,
+})
 
 try {
   await runOperationsWorker({
@@ -417,122 +448,7 @@ try {
       process.exitCode = 1
       requestShutdown()
     },
-    reconcile: async () => {
-      const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
-
-      const primaryMonitoring = await reconcilePrimaryMonitoring(
-        databases.main,
-        await accounts.primaryMonitoring.readSnapshot(),
-      )
-
-      let reconciledDiscovery = 0
-
-      for (const definition of [
-        {
-          owner: 'player' as const,
-          kind: 'player-discovery-projection' as const,
-          source: playerDiscoveryChecks,
-        },
-        {
-          owner: 'clan' as const,
-          kind: 'clan-discovery-projection' as const,
-          source: clanDiscoveryChecks,
-        },
-      ]) {
-        if ((await definition.source.lag()) > 0) {
-          const projection = await operations.accept({
-            kind: definition.kind,
-            dedupeKey: `discovery:${definition.owner}:pending`,
-            operationKey: `discovery:${definition.owner}:${randomUUID()}`,
-            workClass: 'projection',
-            payload: { batchSize: workerConfig.discovery.projectionBatchSize },
-            provenance: { source: 'projection-delivery', requestedBy: 'issue-200' },
-          })
-
-          if (projection.outcome === 'accepted') reconciledDiscovery++
-        }
-
-        if (
-          (await discoveryChecks.reconciliationDue(
-            definition.owner,
-            workerConfig.discovery.reconciliationIntervalMs,
-          )) &&
-          (await discoveryReconciliationBackoff.shouldEnqueue(definition.owner))
-        ) {
-          const reconciliation = await operations.accept({
-            kind: 'discovery-reconciliation',
-            dedupeKey: `discovery:${definition.owner}:reconciliation`,
-            operationKey: `discovery:${definition.owner}:reconciliation:${randomUUID()}`,
-            workClass: 'projection',
-            payload: { owner: definition.owner },
-            provenance: { source: 'owner-fact-reconciliation', requestedBy: 'issue-200' },
-          })
-
-          discoveryReconciliationBackoff.recordEnqueued(definition.owner, reconciliation.operationId)
-          if (reconciliation.outcome === 'accepted') reconciledDiscovery++
-        }
-      }
-
-      const reconciledStatistics =
-        (await reconcileStatisticsCohort(statistics, statisticsReservations, ranking.queries)) +
-        (await nameVerificationPlanner.tick()) +
-        (await freshnessPlanner.tick())
-
-      if (leaderboardSchedulesReconciled) {
-        return (
-          interactiveAdmissions +
-          reconciledDiscovery +
-          reconciledStatistics +
-          primaryMonitoring.created +
-          primaryMonitoring.retired
-        )
-      }
-
-      let reconciledSchedules = 0
-
-      for (const definition of leaderboardSchedules) {
-        const schedule = await reconcileLeaderboardSchedule(databases.main, definition)
-
-        if (schedule.outcome !== 'already-exists') reconciledSchedules++
-      }
-
-      const retention = workerConfig.rankingRetention.enabled
-        ? await reconcileRankingRetentionSchedule(databases.main, rankingRetentionSchedule)
-        : await disableRankingRetentionSchedule(databases.main, rankingRetentionSchedule.scheduleKey)
-
-      if (retention.outcome !== 'already-exists' && retention.outcome !== 'already-disabled') reconciledSchedules++
-
-      telemetry.logger.info('ranking.retention.scheduled', {
-        enabled: workerConfig.rankingRetention.enabled,
-        outcome: retention.outcome,
-        retentionHours: workerConfig.rankingRetention.retentionHours,
-        maxGenerations: workerConfig.rankingRetention.maxGenerations,
-      })
-
-      for (const definition of deepCrawlSchedules) {
-        const crawl = workerConfig.deepCrawl.enabled
-          ? await reconcileLeaderboardDeepCrawlSchedule(databases.main, definition)
-          : await disableLeaderboardDeepCrawlSchedule(databases.main, definition.scheduleKey)
-
-        if (crawl.outcome !== 'already-exists' && crawl.outcome !== 'already-disabled') reconciledSchedules++
-      }
-
-      telemetry.logger.info('leaderboard.deep_crawl.scheduled', {
-        enabled: workerConfig.deepCrawl.enabled,
-        intervalMs: workerConfig.deepCrawl.intervalMs,
-      })
-
-      leaderboardSchedulesReconciled = true
-
-      return (
-        interactiveAdmissions +
-        reconciledDiscovery +
-        reconciledStatistics +
-        reconciledSchedules +
-        primaryMonitoring.created +
-        primaryMonitoring.retired
-      )
-    },
+    reconcile: () => runPlanners(planners),
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
     },
