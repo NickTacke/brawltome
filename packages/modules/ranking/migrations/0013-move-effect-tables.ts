@@ -1,8 +1,8 @@
-// Leaderboard effects and deep-crawl progress move to their owner. The release still serving, and a rollback to it,
-// keep the old names through views and a wrapper function until a later release drops them. The three tables are
-// locked ACCESS EXCLUSIVE, always in this order, for the length of this short transaction; nothing here takes a lock
-// on refresh_operations.operations, so a running worker can't deadlock with the migration. The record function moves
-// with the table, and its body is recreated because plpgsql stores the old schema as text.
+// leaderboard effects and deep-crawl progress move to their owner; the release still serving and a rollback to it keep
+// the old names through views and a wrapper function until a later release drops them. the three tables lock access
+// exclusive, always in this order, for this short transaction; nothing here locks refresh_operations.operations, so a
+// running worker can't deadlock with the migration. the record function's body is recreated because plpgsql stores the
+// old schema as text
 const sql = `SET LOCAL lock_timeout = '5s';
 
 LOCK TABLE

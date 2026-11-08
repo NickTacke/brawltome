@@ -23,7 +23,6 @@ export const leaderboardEffects = rankingsSchema.table('leaderboard_effects', {
 
 type EffectLookup = { effectOperationId: string }
 
-/** How an expired lease learns whether its leaderboard effect already landed. */
 export async function leaderboardEffectState(sql: Sql, lease: EffectLookup): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM rankings.leaderboard_effects
@@ -50,7 +49,6 @@ export async function readLeaderboardEffects(
   }))
 }
 
-/** Which of these effect operations have a recorded leaderboard effect, so their windows are not superseded. */
 export async function readAppliedLeaderboardEffects(
   transaction: Transaction,
   effectOperationIds: readonly string[],
@@ -65,7 +63,6 @@ export async function readAppliedLeaderboardEffects(
   return new Set(rows.map(({ operationId }) => operationId))
 }
 
-/** Records the effect under the lease fence, inside the caller's transaction. */
 export async function recordLeaderboardEffect(
   transaction: Sql,
   lease: HeldLeaderboardLease,

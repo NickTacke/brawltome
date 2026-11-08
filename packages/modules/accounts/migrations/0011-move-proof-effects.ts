@@ -1,7 +1,7 @@
-// Proof effects move to their owner. The release still serving, and a rollback to it, keep reading and writing the old
-// name through a view until the views are dropped in a later release. One table, so one short ACCESS EXCLUSIVE lock.
-// The dead-letter role can read proof effects today and that grant moved with the table, but a view is a new object,
-// so it is granted here too: the operator role keeps working on both names before its script next runs.
+// proof effects move to their owner; the release still serving and a rollback to it keep reading and writing the old
+// name through a view until a later release drops it. one table, so one short access exclusive lock. the dead-letter
+// role's table grant moved with the table but a view is a new object, so it is granted here too and the operator role
+// keeps working on both names before its script next runs
 const sql = `SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE refresh_operations.proof_effects SET SCHEMA accounts;

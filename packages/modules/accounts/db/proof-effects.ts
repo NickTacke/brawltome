@@ -26,7 +26,6 @@ export const proofEffects = accountsSchema.table('proof_effects', {
 
 type EffectLookup = { effectOperationId: string }
 
-/** How an expired lease learns whether its proof effect already landed. */
 export async function proofEffectState(sql: Sql, lease: EffectLookup): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM accounts.proof_effects
@@ -78,5 +77,4 @@ async function readRows(database: Database, operationId: string): Promise<postgr
   return database.sql`SELECT * FROM accounts.proof_effects WHERE operation_id = ${operationId}`
 }
 
-/** The queue fences the lease; this is what it hands the row to. */
 export const proofEffectStore: ProofEffectStore = { write: writeProofEffect, readRows }

@@ -1,5 +1,5 @@
-// The watermark moves to its owner. The release still serving, and a rollback to it, keep reading and writing the old
-// name through a view until the views are dropped in a later release. One table, so one short ACCESS EXCLUSIVE lock.
+// the watermark moves to its owner; the release still serving and a rollback to it keep reading and writing the old
+// name through a view until a later release drops it. one table, so one short access exclusive lock
 const sql = `SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE refresh_operations.primary_monitoring_reconciliation SET SCHEMA players;
