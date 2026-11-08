@@ -12,6 +12,7 @@ import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete
 import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 import { moveEffectTables } from './migrations/0013-move-effect-tables'
+import { dropEffectTableCompatibility } from './migrations/0014-drop-effect-table-compatibility'
 
 export { readAppliedLeaderboardEffects } from './db/leaderboard-effects'
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
@@ -89,6 +90,7 @@ const migrations = [
   retentionDeleteWithoutSeqScan,
   statementLevelRowImmutability,
   moveEffectTables,
+  dropEffectTableCompatibility,
 ] as const
 
 export const rankingModule = {

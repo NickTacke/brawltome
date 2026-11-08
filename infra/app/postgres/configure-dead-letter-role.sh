@@ -79,14 +79,8 @@ GRANT SELECT ON
 TO brawltome_dead_letter;
 GRANT SELECT ON
   refresh_operations.attempts,
-  refresh_operations.proof_effects,
   refresh_operations.interactive_refresh_effects,
-  refresh_operations.leaderboard_effects,
-  refresh_operations.statistics_collection_effects,
-  refresh_operations.statistics_publication_effects,
-  refresh_operations.statistics_legend_meta_publication_effects,
   refresh_operations.schedule_occurrences,
-  refresh_operations.schedules,
-  refresh_operations.statistics_collection_seals
+  refresh_operations.schedules
 TO brawltome_dead_letter;
 SQL

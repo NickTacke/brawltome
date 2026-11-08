@@ -23,6 +23,7 @@ import { addFullLaunchCohort } from './migrations/0002-full-launch-cohort'
 import { addLegendMetaPublications } from './migrations/0003-add-legend-meta-publications'
 import { addCareerWeaponUsage } from './migrations/0004-add-career-weapon-usage'
 import { moveEffectTables } from './migrations/0005-move-effect-tables'
+import { dropEffectTableCompatibility } from './migrations/0006-drop-effect-table-compatibility'
 import type { CellCollectionProgress, PublicationDecisionEvidence, PublicationProduct } from './publication'
 import type { LifetimeEvidence, RankedEvidence } from './source'
 
@@ -474,6 +475,7 @@ const migrations = [
   addLegendMetaPublications,
   addCareerWeaponUsage,
   moveEffectTables,
+  dropEffectTableCompatibility,
 ] as const
 
 // statistics tables reference refresh_operations.operations, and its writes are fenced by lease functions
