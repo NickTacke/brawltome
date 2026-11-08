@@ -1,4 +1,4 @@
-// no released code uses the old names any more. each drop locks only the view or function it names, so the tables
+// no running service uses the old names any more. each drop locks only the view or function it names, so the tables
 // behind them and refresh_operations.operations are not touched
 const sql = `SET LOCAL lock_timeout = '5s';
 

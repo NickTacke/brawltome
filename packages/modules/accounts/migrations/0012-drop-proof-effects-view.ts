@@ -1,4 +1,4 @@
-// no released code uses the old name any more. dropping a view locks only the view, so the table behind it and
+// no running service uses the old name any more. dropping a view locks only the view, so the table behind it and
 // refresh_operations.operations are not touched
 const sql = `SET LOCAL lock_timeout = '5s';
 
