@@ -30,6 +30,7 @@
         "@brawltome/telemetry": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
         "@orpc/contract": "1.16.2",
+        "@orpc/json-schema": "1.16.2",
         "@orpc/openapi": "1.16.2",
         "@orpc/server": "1.16.2",
         "@orpc/zod": "1.16.2",
@@ -182,7 +183,9 @@
     "packages/modules/clan": {
       "name": "@brawltome/clan",
       "dependencies": {
+        "@brawltome/contracts": "workspace:*",
         "@brawltome/foundation": "workspace:*",
+        "@orpc/server": "1.16.2",
         "drizzle-orm": "0.45.4",
         "postgres": "^3.4.8",
       },

@@ -36,9 +36,9 @@ export const rankingModule = {
 } satisfies BrawltomeModule
 ```
 
-`dependsOn` lists the modules that must be loaded beside it. At run time that is all a module registers: the rest of
-`index.ts` is plain exports, mostly `createPostgres<Thing>(database)` factories. Adding a module to the build checks is
-a separate step, listed under Checks.
+`dependsOn` lists the modules that must be loaded beside it. At run time that, plus the optional `routes` described
+under API, is all a module registers: the rest of `index.ts` is plain exports, mostly `createPostgres<Thing>(database)`
+factories. Adding a module to the build checks is a separate step, listed under Checks.
 
 Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 [`packages/modules/README.md`](../packages/modules/README.md) for the target one.
@@ -51,7 +51,7 @@ Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 - `jsonb()` and `json()`, the column builders for json in drizzle tables
 - `parsePositiveInteger`, `parseBoundedInteger` and `requirePositiveInteger` for reading config
 - the `Migration` type and the migration runner
-- `BrawltomeModule` and `checkModuleList`
+- `BrawltomeModule`, `ModuleRuntime` and `checkModuleList`
 - `@brawltome/foundation/testing`, which has `createTestDatabase`. Only test files may import it.
 
 Tables use `timestamptz`, never `timestamp`: postgres.js reads a `timestamp` in the process's local time zone. A
@@ -136,5 +136,28 @@ is registered for these checks, along with that test and the three module lists 
 The API is Hono. tRPC (`apps/api/src/router`, `apps/api/src/trpc`) serves the site and the bot at `/trpc/*`, and a few
 plain routes live in `apps/api/src/routes`. oRPC (`apps/api/src/orpc`) runs beside it while the modules move over one
 at a time: `/rpc/*` speaks the oRPC protocol, `/v1/*` is the same router as plain HTTP, and `/openapi.json` is the
-generated OpenAPI document, which lists only what `/v1` serves. So far there is one public procedure, `status`. tRPC
-stays until each module's routes have moved.
+generated OpenAPI document, which lists only what `/v1` serves. tRPC stays until each module's routes have moved.
+
+The API's own `status` procedure lives in `apps/api/src/orpc`. Everything else comes from the modules. A module
+contributes procedures through its module object:
+
+```ts
+export const clanModule = {
+  name: 'clan' as const,
+  dependsOn: [],
+  migrations,
+  routes: createClanProcedures,
+} satisfies BrawltomeModule
+```
+
+`routes(runtime)` gets a `ModuleRuntime` (the shared `database` and the process `env`) and returns the module's oRPC
+procedures, keyed by name. The procedures live in the module's `api/` folder and take their input and output schemas
+from `@brawltome/contracts`. `serve.ts` calls `createOrpcRouter(apiModules, runtime)` once at startup, which puts each
+module's procedures under the module's name: clan's `byId` is `clan.byId` at `/rpc/clan/byId`, and `GET /v1/clans/{id}`
+through the path in its `.route()`. A module left out of `apiModules` is not served at all. `apiModules` is a const
+tuple and the name is a literal (`'clan' as const`), so `OrpcRouter` (in `router.ts`) keeps every procedure's types
+for a typed client. Without the literal the router type would accept any key.
+
+While the website still calls tRPC, a moved read is served twice. The tRPC procedure in `apps/api/src/router` becomes
+a thin adapter: it calls the same exported module function as the oRPC procedure, such as `readClanProfile`, so both
+answer with one implementation. The adapters go once the website has switched to oRPC.

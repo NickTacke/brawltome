@@ -8,7 +8,7 @@ import { createTelemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { apiModules } from '../src/modules'
 import { createOrpcRoutes } from '../src/orpc/mount'
-import { createOrpcRouter } from '../src/orpc/router'
+import { createOrpcRouter, type OrpcRouter } from '../src/orpc/router'
 import { workerModules } from '../src/worker-modules'
 
 function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): BrawltomeModule[] {
@@ -43,6 +43,22 @@ describe('module lists', () => {
 })
 
 describe('oRPC router built from a module list', () => {
+  test('puts the procedures of each module under its name', () => {
+    const router = createOrpcRouter(apiModules, runtime)
+
+    expect(Object.keys(router).sort()).toEqual(['clan', 'status'])
+    expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId'])
+  })
+
+  test('types the router with exactly the served keys', () => {
+    const servedKeys: (keyof OrpcRouter)[] = ['status', 'clan']
+
+    // @ts-expect-error a module name that widened to string would let any key through
+    const unservedKey: keyof OrpcRouter = 'nothing'
+
+    expect(servedKeys).not.toContain(unservedKey)
+  })
+
   test('has no clan key without the clan module, and still answers /v1/status', async () => {
     const router = createOrpcRouter(without(apiModules, clanModule), runtime)
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })

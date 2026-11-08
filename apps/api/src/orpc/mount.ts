@@ -1,5 +1,6 @@
 import type { Telemetry } from '@brawltome/telemetry'
 import type { AnyContractRouter } from '@orpc/contract'
+import { SmartCoercionPlugin } from '@orpc/json-schema'
 import { OpenAPIGenerator } from '@orpc/openapi'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { ORPCError, onError, type Router } from '@orpc/server'
@@ -80,7 +81,11 @@ export function createOrpcRoutes(options: { telemetry: Telemetry; router: Mounta
 
   const rpcHandler = new RPCHandler(router, { interceptors: [onError(logServerFailure)] })
 
-  const restHandler = new OpenAPIHandler(router, { interceptors: [onError(logServerFailure)] })
+  const restHandler = new OpenAPIHandler(router, {
+    interceptors: [onError(logServerFailure)],
+    // path parameters arrive as text; this turns them into the numbers the contract schemas expect
+    plugins: [new SmartCoercionPlugin({ schemaConverters: [new ZodToJsonSchemaConverter()] })],
+  })
 
   mountHandler(routes, RPC_PREFIX, rpcHandler, telemetry)
   mountHandler(routes, REST_PREFIX, restHandler, telemetry)
