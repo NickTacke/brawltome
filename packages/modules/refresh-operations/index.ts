@@ -45,12 +45,15 @@ export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disab
 export { createEffectStates, type EffectStateEntry, type EffectStates, proofEffectState } from './db/effect-states'
 export {
   type ActiveOperation,
+  type CountActiveInput,
+  countActive,
   type FindActiveOperationInput,
   findActiveOperation,
   type ListAwaitingInput,
   listAwaiting,
 } from './db/find-operations'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
+export { type AttemptHistory, type ReadAttemptHistoryInput, readAttemptHistory } from './db/read-attempt-history'
 export {
   type FixedSchedule,
   type ReconcileFixedScheduleInput,

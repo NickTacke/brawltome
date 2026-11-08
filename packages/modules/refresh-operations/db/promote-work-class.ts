@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 import type { OperationKind } from '../domain/operation-kinds'
 import type { WorkClass } from '../model'
+import { payloadMatches } from './payload-matches'
 import { operations } from './tables'
 import type { Transaction } from './transaction'
 
@@ -18,10 +19,6 @@ export async function promotePendingWorkClass(
   transaction: Transaction,
   input: PromotePendingWorkClassInput,
 ): Promise<void> {
-  const payloadMatches = Object.entries(input.payloadEquals).map(
-    ([key, value]) => sql`${operations.payload}->>${key}::text = ${value}`,
-  )
-
   await transaction
     .update(operations)
     .set({ workClass: input.to, updatedAt: sql`clock_timestamp()` })
@@ -31,7 +28,7 @@ export async function promotePendingWorkClass(
         eq(operations.resourceKey, input.resourceKey),
         eq(operations.status, 'pending'),
         eq(operations.workClass, input.from),
-        ...payloadMatches,
+        ...payloadMatches(input.payloadEquals),
       ),
     )
 }
