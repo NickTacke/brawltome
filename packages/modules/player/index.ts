@@ -53,6 +53,11 @@ export {
   type PlayerRefreshReservations,
 } from './jobs/player-refresh-reservation'
 export {
+  createRecentlyViewedRefreshes,
+  type FreshnessAttempt,
+  type RefreshRequestDemand,
+} from './jobs/recently-viewed-refreshes'
+export {
   createPostgresLeaderboardPlayerNames,
   type LeaderboardPlayerName,
   type PostgresLeaderboardPlayerNames,

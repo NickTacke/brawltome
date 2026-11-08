@@ -20,6 +20,7 @@ import {
   createPostgresPlayerNameVerifications,
   createPostgresProfileViews,
   createPostgresRankedPlayers,
+  createRecentlyViewedRefreshes,
   createSteamPlayerEvidenceResolver,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
@@ -311,7 +312,7 @@ const nameVerificationPlanner = createPlayerNameVerificationPlanner({
 const freshnessPlanner = createFreshnessPlanner({
   config: readFreshnessPlannerConfig(process.env),
   readSourceUsage: readV0SourceUsage,
-  operations,
+  operations: createRecentlyViewedRefreshes(databases.main),
   profileViews,
   freshness: playerFreshness,
   telemetry,
