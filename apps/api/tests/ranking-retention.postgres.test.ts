@@ -2,12 +2,13 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresRanking, type LeaderboardMode, type LeaderboardScope, rankingModule } from '@brawltome/ranking'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { rankingRetentionScheduleDefinition, readOperationsWorkerConfig } from '../src/operations-worker-config'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
 const hour = 60 * 60 * 1000
@@ -1069,7 +1070,7 @@ describe('Ranking snapshot retention', () => {
 
   test('runs the scheduled maintenance operation lease-fenced and records what it expired', async () => {
     const { sql, database } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
@@ -1190,7 +1191,7 @@ describe('Ranking snapshot retention', () => {
 
   test('pauses the schedule and completes leftover runs as no-ops when retention is disabled', async () => {
     const { sql, database } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const sink = createMemorySink()
     const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
 
@@ -1271,7 +1272,7 @@ describe('Ranking snapshot retention', () => {
 
   test('completes a retention batch that outlives its lease together with the delete', async () => {
     const { sql, database } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     try {
@@ -1420,7 +1421,7 @@ describe('Ranking snapshot retention', () => {
 
   test('rejects ranking retention payloads outside the safe bounds before and inside the database', async () => {
     const { sql, database } = await migratedDatabase()
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     try {
       const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)

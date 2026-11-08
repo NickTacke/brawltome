@@ -26,6 +26,7 @@ import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
+export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,

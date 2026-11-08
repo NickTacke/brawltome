@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import type { Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
-  createPostgresRefreshOperations,
   type OperationLease,
   type PlayerRefreshSettled,
   refreshOperationsModule,
@@ -16,6 +15,7 @@ import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -108,7 +108,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('reports bounded authoritative oldest-job, schedule-lateness, and dead-letter gauges', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -225,7 +225,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('measures the oldest pending job from when it last became runnable, not from its creation', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
     let yielded: Awaited<ReturnType<typeof operations.accept>> | undefined
 
@@ -307,7 +307,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('renews an active lease until its durable effect and completion commit', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
       dedupeKey: `renew:${randomUUID()}`,
@@ -337,7 +337,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('deduplicates acceptance, notifies, and reconciles a final-attempt crash after one effect', async () => {
-    const producer = createPostgresRefreshOperations({ database })
+    const producer = createTestQueue({ database })
     let notifiedOperationId = ''
     let resolveNotification: (() => void) | undefined
 
@@ -367,7 +367,7 @@ describe('durable Refresh Operations', () => {
     expect(notifiedOperationId).toBe(accepted[0].operationId)
     await listener.unlisten()
 
-    const worker = createPostgresRefreshOperations({ database })
+    const worker = createTestQueue({ database })
     const lease = requireLease(await worker.claim('worker-a', 1_000, testAdmission), 'proof')
 
     expect(await worker.commitProofEffect(lease)).toBe('applied')
@@ -395,7 +395,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('rejects expired and superseded leases and detects conflicting effect keys', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
       dedupeKey: `fence:${randomUUID()}`,
@@ -444,7 +444,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('gives interactive player and clan refreshes four attempts to ride out brief source failures', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const player = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
@@ -469,7 +469,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('reports an operation status cheaply for scheduler backoff decisions', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
       kind: 'discovery-reconciliation',
@@ -494,7 +494,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('checkpoints completed interactive sections across lease expiry', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `interactive:${randomUUID()}`,
@@ -536,7 +536,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('notifies when a player refresh settles and pushes it to open event streams', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
     const settled: PlayerRefreshSettled[] = []
     const listener = await operations.listenPlayerRefreshSettled((event) => settled.push(event))
@@ -633,7 +633,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('deduplicates concurrent clan refreshes and fences profile and roster checkpoints', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const dedupeKey = `clan:${randomUUID()}`
 
     const reservations = await Promise.all(
@@ -672,7 +672,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('admits every implemented operation kind under shared cross-kind concurrency', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = {
       ...testAdmission,
@@ -874,7 +874,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('runs the real route-to-polling-worker seam and dead-letters bounded runtime failures', async () => {
-    const producer = createPostgresRefreshOperations({ database })
+    const producer = createTestQueue({ database })
     const secret = 'operations-integration-secret-operations'
     const app = createRefreshOperationRoutes(producer, secret)
 
@@ -892,7 +892,7 @@ describe('durable Refresh Operations', () => {
 
     expect(response.status).toBe(202)
 
-    const worker = createPostgresRefreshOperations({ database })
+    const worker = createTestQueue({ database })
 
     expect(
       await runOneRefreshOperation(worker, 'poll-worker', {
@@ -947,7 +947,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('defers retry-aware source failures without consuming the durable attempt budget', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const deferred = await operations.accept({
       dedupeKey: `source-deferral:${randomUUID()}`,
@@ -996,7 +996,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('supersedes obsolete pending leaderboard windows without leaving retry or alert backlog', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
     const intervalMs = 60_000
 
@@ -1072,7 +1072,7 @@ describe('durable Refresh Operations', () => {
     const firstDueAt = new Date(Date.now() - 5 * intervalMs - 10_000).toISOString()
     // two scheduler replicas, then a restart: each process gets a client of its own
     const schedulerClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
-    const schedulers = schedulerClients.map((client) => createPostgresRefreshOperations({ database: client }))
+    const schedulers = schedulerClients.map((client) => createTestQueue({ database: client }))
 
     await expect(
       schedulers[0].createSchedule({
@@ -1135,7 +1135,7 @@ describe('durable Refresh Operations', () => {
     await Promise.all(schedulerClients.map((client) => client.close()))
 
     const restartedClient = openTestClient(database.connectionString)
-    const restarted = createPostgresRefreshOperations({ database: restartedClient })
+    const restarted = createTestQueue({ database: restartedClient })
     const history = await restarted.inspectSchedule(created.scheduleId)
 
     expect(history.occurrences).toHaveLength(1)
@@ -1165,7 +1165,7 @@ describe('durable Refresh Operations', () => {
     const verifiedAt = new Date(Date.now() - intervalMs - 10_000)
     // two replicas, then a restart: each process gets a client of its own
     const replicaClients = [openTestClient(database.connectionString), openTestClient(database.connectionString)]
-    const replicas = replicaClients.map((client) => createPostgresRefreshOperations({ database: client }))
+    const replicas = replicaClients.map((client) => createTestQueue({ database: client }))
     const assignmentId = randomUUID()
     const observedAt = new Date()
     const target = { assignmentId, brawlhallaId: 4242, verifiedAt }
@@ -1221,7 +1221,7 @@ describe('durable Refresh Operations', () => {
     await Promise.all(replicaClients.map((client) => client.close()))
 
     const restartedClient = openTestClient(database.connectionString)
-    const restarted = createPostgresRefreshOperations({ database: restartedClient })
+    const restarted = createTestQueue({ database: restartedClient })
     const history = await restarted.inspectSchedule(schedule.id)
 
     expect(history.schedule).toMatchObject({
@@ -1354,7 +1354,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('expires abandoned blockers and requires both full-refresh checkpoints after the due watermark', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
     const intervalMs = 24 * 60 * 60 * 1_000
 
@@ -1464,7 +1464,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('keeps scheduled effects idempotent without colliding across schedules', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const sharedPrefix = `shared-schedule-effect:${randomUUID()}`
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
 
@@ -1495,7 +1495,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('hard-reserves interactive capacity while background work is due', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = {
       ...testAdmission,
@@ -1519,7 +1519,7 @@ describe('durable Refresh Operations', () => {
       })
     }
 
-    const claimers = Array.from({ length: 8 }, () => createPostgresRefreshOperations({ database }))
+    const claimers = Array.from({ length: 8 }, () => createTestQueue({ database }))
 
     const concurrentClaims = await Promise.all(
       claimers.map((claimer, index) => claimer.claim(`background-${index}`, 10_000, admission)),
@@ -1552,7 +1552,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('keeps a two-slot worker available for Player refresh during Discovery work', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = {
       ...testAdmission,
@@ -1640,7 +1640,7 @@ describe('durable Refresh Operations', () => {
       },
     } as const
 
-    const producer = createPostgresRefreshOperations({ database })
+    const producer = createTestQueue({ database })
 
     await producer.configureAdmission(admission)
 
@@ -1658,7 +1658,7 @@ describe('durable Refresh Operations', () => {
       })
     }
 
-    const boundedReplicas = Array.from({ length: 4 }, () => createPostgresRefreshOperations({ database }))
+    const boundedReplicas = Array.from({ length: 4 }, () => createTestQueue({ database }))
 
     const boundedClaims = await Promise.all(
       boundedReplicas.map((replica, index) => replica.claim(`bounded-${index}`, 10_000, admission)),
@@ -1689,7 +1689,7 @@ describe('durable Refresh Operations', () => {
     const sequence: string[] = []
 
     for (let replicaNumber = 0; replicaNumber < 2; replicaNumber += 1) {
-      const replica = createPostgresRefreshOperations({ database })
+      const replica = createTestQueue({ database })
 
       for (let index = 0; index < 8; index += 1) {
         const lease = requireLease(await replica.claim(`replica-${replicaNumber}`, 10_000, admission))
@@ -1708,7 +1708,7 @@ describe('durable Refresh Operations', () => {
       ]).flat(),
     )
 
-    const cleanup = createPostgresRefreshOperations({ database })
+    const cleanup = createTestQueue({ database })
 
     for (;;) {
       const lease = await cleanup.claim('weighted-cleanup', 10_000, admission)
@@ -1720,7 +1720,7 @@ describe('durable Refresh Operations', () => {
   })
 })
 
-type Operations = ReturnType<typeof createPostgresRefreshOperations>
+type Operations = ReturnType<typeof createTestQueue>
 type ControlClient = ReturnType<typeof postgres>
 
 type EffectFixture = {
@@ -2031,7 +2031,7 @@ async function insertProofRow(
 }
 
 async function drainClaimableOperations(): Promise<void> {
-  const operations = createPostgresRefreshOperations({ database })
+  const operations = createTestQueue({ database })
 
   await operations.configureAdmission(testAdmission)
 
@@ -2049,7 +2049,7 @@ describe('claiming durable operations', () => {
   beforeAll(drainClaimableOperations)
 
   test('claim orders by available_at, then created_at, then id', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
     const base = Date.now() - 60 * 60 * 1_000
     const at = (offsetMinutes: number) => new Date(base + offsetMinutes * 60 * 1_000)
@@ -2083,7 +2083,7 @@ describe('claiming durable operations', () => {
   })
 
   test('lease token rises by one on every claim of the same operation', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const operationId = await acceptProof(operations, 4)
     const tokens: number[] = []
 
@@ -2103,7 +2103,7 @@ describe('claiming durable operations', () => {
   })
 
   test.each(allKindsWithEffects)('an expired lease finishes when its effect landed: %s', async (kind) => {
-    const operations = createPostgresRefreshOperations({ database }, { discoveryEffects: landedDiscoveryEffects })
+    const operations = createTestQueue({ database }, landedDiscoveryEffects)
     const control = postgres(connectionString, { max: 1 })
     const fixture = effectFixtures[kind]
 
@@ -2133,7 +2133,7 @@ describe('claiming durable operations', () => {
   })
 
   test('an expired lease on an applied discovery effect is retried past max attempts', async () => {
-    const operations = createPostgresRefreshOperations({ database }, { discoveryEffects: appliedProjectionEffects })
+    const operations = createTestQueue({ database }, appliedProjectionEffects)
     const operationId = await acceptPlayerProjection(operations, 1)
 
     const first = requireLease(
@@ -2158,7 +2158,7 @@ describe('claiming durable operations', () => {
   })
 
   test('an expired final attempt with no effect goes to dead letter', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const operationId = await acceptProof(operations, 1)
 
     requireLease(await operations.claim('final-a', 1_000, testAdmission, 'proof'))

@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
+import type { EffectStateEntry, EffectStates } from './db/effect-states'
 import {
   type AdmissionCreditRow,
   admissionConfigHash,
   chooseBackgroundClass,
   validateAdmissionConfig,
 } from './domain/admission'
+import type { EffectState } from './jobs/job-definition'
 import {
   type AcceptOperation,
   type AcceptOperationResult,
@@ -26,8 +28,6 @@ import {
   type DeadLetterOperations,
   type DeadLetterPage,
   type DeadLetterReason,
-  type DiscoveryEffectChecks,
-  type DiscoveryOwner,
   type DiscoveryProjectionKind,
   discoveryProjectionKinds,
   type FencedResult,
@@ -351,12 +351,22 @@ function isDiscoveryProjectionKind(kind: string): kind is DiscoveryProjectionKin
   return (discoveryProjectionKinds as readonly string[]).includes(kind)
 }
 
-function projectionOwner(kind: DiscoveryProjectionKind): DiscoveryOwner {
-  return kind === 'player-discovery-projection' ? 'player' : 'clan'
-}
-
 function isStatisticsCollectionKind(kind: string): kind is StatisticsCollectionKind {
   return (statisticsCollectionKinds as readonly string[]).includes(kind)
+}
+
+function readEffectState(
+  effects: EffectStateEntry | undefined,
+  sql: Database['sql'],
+  candidate: OperationRow,
+): Promise<EffectState> {
+  if (!effects?.effectState) return Promise.resolve('none')
+
+  return effects.effectState(sql, {
+    operationId: candidate.id,
+    effectOperationId: candidate.effect_operation_id,
+    payload: candidate.payload,
+  })
 }
 
 function validateScheduleIdentity(input: {
@@ -438,7 +448,7 @@ export type RefreshOperationsDatabases = {
 
 export function createPostgresRefreshOperations(
   { database, renewals = database }: RefreshOperationsDatabases,
-  options: { discoveryEffects?: DiscoveryEffectChecks } = {},
+  options: { effectStates?: EffectStates } = {},
 ) {
   const client = database.sql
   const renewalClient = renewals.sql
@@ -1890,94 +1900,21 @@ export function createPostgresRefreshOperations(
 
           if (!candidate) return { kind: 'retry' as const }
 
-          if (isDiscoveryProjectionKind(candidate.kind) || candidate.kind === 'discovery-reconciliation') {
+          const effects = options.effectStates?.[candidate.kind]
+          const claimLockKey = effects?.claimLockKey?.(candidate.effect_operation_id)
+
+          if (claimLockKey) {
             await sql`
               SELECT pg_advisory_xact_lock(
-                hashtextextended(${`discovery-effect:${candidate.effect_operation_id}`}, 200)
+                hashtextextended(${claimLockKey}, 200)
               )
             `
           }
 
           if (candidate.status === 'leased') {
-            const [proofEffect] =
-              candidate.kind === 'proof'
-                ? await sql<{ operation_id: string }[]>`
-                    SELECT operation_id FROM refresh_operations.proof_effects
-                    WHERE operation_id = ${candidate.effect_operation_id}
-                  `
-                : []
+            const effectState = await readEffectState(effects, sql, candidate)
 
-            const [leaderboardEffect] = isLeaderboardKind(candidate.kind)
-              ? await sql<{ operation_id: string }[]>`
-                    SELECT operation_id FROM refresh_operations.leaderboard_effects
-                    WHERE operation_id = ${candidate.effect_operation_id}
-                  `
-              : []
-
-            const [statisticsEffect] = isStatisticsCollectionKind(candidate.kind)
-              ? await sql<{ operation_id: string }[]>`
-                  SELECT operation_id FROM refresh_operations.statistics_collection_effects
-                  WHERE operation_id = ${candidate.effect_operation_id}
-                `
-              : candidate.kind === 'statistics-publication'
-                ? await sql<{ operation_id: string }[]>`
-                    SELECT operation_id FROM refresh_operations.statistics_publication_effects
-                    WHERE operation_id = ${candidate.effect_operation_id}
-                  `
-                : candidate.kind === 'statistics-legend-meta-publication'
-                  ? await sql<{ operation_id: string }[]>`
-                        SELECT operation_id
-                        FROM refresh_operations.statistics_legend_meta_publication_effects
-                        WHERE operation_id = ${candidate.effect_operation_id}
-                      `
-                  : []
-
-            const [interactiveEffect] =
-              candidate.kind === 'interactive-player-refresh' || candidate.kind === 'clan-refresh'
-                ? await sql<{ complete: boolean }[]>`
-                    SELECT NOT EXISTS (
-                      SELECT 1
-                      FROM jsonb_array_elements_text(operation.payload -> 'staleSections') AS required(section)
-                      WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM refresh_operations.interactive_refresh_effects effect
-                        WHERE effect.operation_id = operation.effect_operation_id AND effect.section = required.section
-                      )
-                    ) AS complete
-                    FROM refresh_operations.operations operation
-                    WHERE operation.id = ${candidate.id}
-                  `
-                : candidate.kind === 'ranked-player-pulse' || candidate.kind === 'player-name-verification'
-                  ? await sql<{ complete: boolean }[]>`
-                      SELECT EXISTS (
-                        SELECT 1
-                        FROM refresh_operations.interactive_refresh_effects effect
-                        WHERE effect.operation_id = ${candidate.effect_operation_id} AND effect.section = 'ranked'
-                      ) AS complete
-                    `
-                  : []
-
-            const projectionEffect =
-              isDiscoveryProjectionKind(candidate.kind) && options.discoveryEffects
-                ? await options.discoveryEffects.projectionEffectState(
-                    projectionOwner(candidate.kind),
-                    candidate.effect_operation_id,
-                  )
-                : 'none'
-
-            const reconciliationEffectApplied =
-              candidate.kind === 'discovery-reconciliation' && options.discoveryEffects
-                ? await options.discoveryEffects.reconciliationEffectApplied(candidate.effect_operation_id)
-                : false
-
-            if (
-              proofEffect ||
-              leaderboardEffect ||
-              statisticsEffect ||
-              interactiveEffect?.complete ||
-              projectionEffect === 'acknowledged' ||
-              reconciliationEffectApplied
-            ) {
+            if (effectState === 'acknowledged') {
               await sql`
                 UPDATE refresh_operations.attempts
                 SET finished_at = clock_timestamp(), outcome = 'succeeded'
@@ -2003,11 +1940,7 @@ export function createPostgresRefreshOperations(
                 AND finished_at IS NULL
             `
 
-            if (
-              candidate.attempt_count >= candidate.max_attempts &&
-              projectionEffect !== 'applied' &&
-              !reconciliationEffectApplied
-            ) {
+            if (candidate.attempt_count >= candidate.max_attempts && effectState !== 'applied') {
               await sql`
                 UPDATE refresh_operations.operations
                 SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,

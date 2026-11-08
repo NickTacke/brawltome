@@ -3,7 +3,6 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -12,6 +11,7 @@ import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from '../src/statistics-collection-source'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -108,7 +108,7 @@ describe('Statistics durable production worker', () => {
   test('admits each V1 attempt, survives restart, and never calls team or guild endpoints', async () => {
     // each simulated worker process has its own client, closed and reopened at every restart
     let workerClient = openTestClient(database.connectionString)
-    let operations = createPostgresRefreshOperations({ database: workerClient })
+    let operations = createTestQueue({ database: workerClient })
     let statistics = createPostgresStatistics(workerClient)
 
     const sourceAdmission = createPostgresRequestAdmission(database, {
@@ -119,7 +119,7 @@ describe('Statistics durable production worker', () => {
     async function restart(): Promise<void> {
       await workerClient.close()
       workerClient = openTestClient(database.connectionString)
-      operations = createPostgresRefreshOperations({ database: workerClient })
+      operations = createTestQueue({ database: workerClient })
       statistics = createPostgresStatistics(workerClient)
     }
 

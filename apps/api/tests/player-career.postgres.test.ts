@@ -9,12 +9,12 @@ import {
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
 import {
-  createPostgresRefreshOperations,
   type OperationLease,
   type PostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -163,7 +163,7 @@ async function expireLease(operationId: string) {
 describe('Players-owned canonical career state', () => {
   test('persists measured zero and authoritative empty collections through a fenced stats operation', async () => {
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimCareerOperation(operations, 91913839)
 
     expect(await operations.beginInteractiveSection(lease, 'stats')).toBe('execute')
@@ -205,7 +205,7 @@ describe('Players-owned canonical career state', () => {
   test('records the prior career name as a searchable alias', async () => {
     const brawlhallaId = 91913850
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -240,7 +240,7 @@ describe('Players-owned canonical career state', () => {
   test('repairs source mojibake without preserving the corrupted prior name as an alias', async () => {
     const brawlhallaId = 91913851
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -373,7 +373,7 @@ describe('Players-owned canonical career state', () => {
   test('retains the last success after a malformed attempt and authoritatively clears children on retry', async () => {
     const brawlhallaId = 91913840
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const populated = {
       ...emptySnapshot,
@@ -470,7 +470,7 @@ describe('Players-owned canonical career state', () => {
     const brawlhallaId = 91913843
     const careerPlayers = createPostgresCareerPlayers(database)
     const rankedPlayers = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const rankedPayload = {
       name: 'Independent Sections',
@@ -545,7 +545,7 @@ describe('Players-owned canonical career state', () => {
   test('upgrades a legacy stats marker and still writes the complete canonical snapshot', async () => {
     const brawlhallaId = 91913844
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -585,7 +585,7 @@ describe('Players-owned canonical career state', () => {
   test('lets only the reclaimed lease publish when old and new writers overlap', async () => {
     const brawlhallaId = 91913845
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -633,7 +633,7 @@ describe('Players-owned canonical career state', () => {
     const brawlhallaId = 91913846
     const careerPlayers = createPostgresCareerPlayers(database)
     const rankedPlayers = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimCareerOperation(operations, brawlhallaId, ['stats', 'ranked'])
 
     await refreshCanonicalCareerPlayer(
@@ -672,7 +672,7 @@ describe('Players-owned canonical career state', () => {
   test('rejects writes after lease expiry', async () => {
     const brawlhallaId = 91913841
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimCareerOperation(operations, brawlhallaId)
 
     await expireLease(lease.operationId)
@@ -699,7 +699,7 @@ describe('Players-owned canonical career state', () => {
   test('reconciles a crash after the atomic career checkpoint without replaying the effect', async () => {
     const brawlhallaId = 91913842
     const players = createPostgresCareerPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimCareerOperation(operations, brawlhallaId)
 
     await refreshCanonicalCareerPlayer(

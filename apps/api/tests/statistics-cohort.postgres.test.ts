@@ -3,7 +3,6 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
-  createPostgresRefreshOperations,
   type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
@@ -15,6 +14,7 @@ import {
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -82,7 +82,7 @@ function fullSnapshots(seed: number): CohortCandidateSnapshot[] {
 
 async function enqueue(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   intent: CohortCollectionIntent,
   maxAttempts = 2,
 ) {
@@ -150,7 +150,7 @@ function authorization(
 describe('Statistics EU Diamond+ production tracer', () => {
   test('rejects known-insufficient full cells without creating source collection intents', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const generation = await statistics.reconcileLaunchCohort(fullSnapshots(1))
 
     expect(generation.state).toBe('insufficient-evidence')
@@ -219,7 +219,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('repairs missing cross-owner enqueue with exactly two stable independent operations per member', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(10))
     const intents = await statistics.collectionIntents()
@@ -287,7 +287,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('tracks ranked success independently while lifetime exhausts bounded retries', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(20, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
@@ -359,7 +359,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('does not spend execution attempts on admission deferral and caps replay-inclusive source attempts at three', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(23, 1))
     const rankedIntent = (await statistics.collectionIntents()).find(({ product }) => product === 'ranked')
@@ -443,7 +443,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('acknowledges an already-applied observation by durable identity when current evidence changes or drifts', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(25, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
@@ -493,8 +493,8 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('rejects an expired owner, accepts the superseding lease, and bounds concurrent global Statistics claims', async () => {
     const statistics = createPostgresStatistics(database)
-    const first = createPostgresRefreshOperations({ database })
-    const second = createPostgresRefreshOperations({ database })
+    const first = createTestQueue({ database })
+    const second = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(30, 1))
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, first, intent)))
@@ -529,7 +529,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('recovers a committed final-attempt effect after worker crash without duplicating evidence', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(40, 1))
 

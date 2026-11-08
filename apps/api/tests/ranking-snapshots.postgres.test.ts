@@ -15,7 +15,6 @@ import {
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
-  createPostgresRefreshOperations,
   type LeaderboardOperationKind,
   type OperationLease,
   refreshOperationsModule,
@@ -23,6 +22,7 @@ import {
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
 let admin: ReturnType<typeof postgres>
@@ -206,7 +206,7 @@ function activityCandidate(
 }
 
 async function publishActivityGeneration(
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   ranking: ReturnType<typeof createPostgresRanking>,
   input: {
     mode: LeaderboardMode
@@ -238,7 +238,7 @@ async function publishActivityGeneration(
 }
 
 async function leaseOperation(
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   mode: LeaderboardMode,
   label: string,
   options: { operationKey?: string; maxAttempts?: number } = {},
@@ -395,7 +395,7 @@ describe('Ranking mode migrations', () => {
 
 describe('recent ranked activity', () => {
   test('supports valid pinned history and rejects legacy, unfinalized, wrong-mode, or wrong-scope snapshots', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
 
@@ -579,7 +579,7 @@ describe('recent ranked activity', () => {
   })
 
   test('returns not_enough_history when the newest official generation is missing the requested current scope', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
     const previousWindow = new Date('2000-02-01T00:00:00Z')
@@ -639,7 +639,7 @@ describe('recent ranked activity', () => {
   })
 
   test('returns positive game deltas for stable identities in all four modes and both Global and EU scopes', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     for (const [index, mode] of leaderboardModes.entries()) {
@@ -685,7 +685,7 @@ describe('recent ranked activity', () => {
   })
 
   test('aggregates activity from the 75-minute fallback baseline across skipped scans', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-06-01T00:00:00Z')
 
@@ -724,7 +724,7 @@ describe('recent ranked activity', () => {
   })
 
   test('stays fresh through one delayed refresh and becomes stale after two missed windows', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date('2001-07-01T00:00:00Z')
 
@@ -780,7 +780,7 @@ describe('recent ranked activity', () => {
   })
 
   test('sorts by current rating then games delta and pins pagination to the requested current snapshot', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2002-01-01T00:00:00Z')
     const ratings = [2300, 2400, 2300]
@@ -871,7 +871,7 @@ describe('recent ranked activity', () => {
   })
 
   test('excludes rating-only changes, regressed counters, reset rows, appearances, and disappearances', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-01-01T00:00:00Z')
 
@@ -917,7 +917,7 @@ describe('recent ranked activity', () => {
   })
 
   test('does not use unrelated old history when no hour baseline exists', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2003-06-01T00:00:00Z')
 
@@ -951,7 +951,7 @@ describe('recent ranked activity', () => {
   })
 
   test('keeps valid empty and stale activity states explicit', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const previousWindow = new Date('2004-01-01T00:00:00Z')
 
@@ -1011,7 +1011,7 @@ describe('recent ranked activity', () => {
 
 describe('immutable Ranking snapshots for every mode', () => {
   test('publishes all modes independently with fixed-team identity and restart parity', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     // the ranking repository restarts below, so it gets a client of its own to close and reopen
     let rankingClient = openTestClient(database.connectionString)
     let ranking = createPostgresRanking(rankingClient)
@@ -1114,7 +1114,7 @@ describe('immutable Ranking snapshots for every mode', () => {
   })
 
   test('replays a mode-specific dead letter with stable effect identity and fences cross-kind key reuse', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     const original = await leaseOperation(operations, 'solo2v2', 'mode-replay', { maxAttempts: 1 })
@@ -1171,7 +1171,7 @@ describe('immutable Ranking snapshots for every mode', () => {
   })
 
   test('keeps failure and stale state isolated per mode', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const baselineWindow = new Date(Date.now() + 10 * intervalMs)
 
@@ -1212,7 +1212,7 @@ describe('immutable Ranking snapshots for every mode', () => {
   })
 
   test('fences concurrent effects, rolls back invalid fixed identity, and enforces immutability', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const sharedKey = `shared:${randomUUID()}`
     const first = await leaseOperation(operations, '2v2', 'concurrent-first', { operationKey: sharedKey })
@@ -1354,7 +1354,7 @@ describe('immutable Ranking snapshots for every mode', () => {
   })
 
   test('uses schedule windows for latest selection and pins pagination for every mode', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     for (const [modeIndex, mode] of leaderboardModes.entries()) {
@@ -1444,7 +1444,7 @@ describe('immutable Ranking snapshots for every mode', () => {
   })
 
   test('derives Player Valhallan evidence from each latest official generation', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const playerId = 77_777
     const teammateId = 88_888
@@ -1554,8 +1554,8 @@ describe('durable multi-mode collection operations', () => {
     // two replicas, then a restart: each process gets a client of its own
     const firstClient = openTestClient(database.connectionString)
     const secondClient = openTestClient(database.connectionString)
-    const first = createPostgresRefreshOperations({ database: firstClient })
-    const second = createPostgresRefreshOperations({ database: secondClient })
+    const first = createTestQueue({ database: firstClient })
+    const second = createTestQueue({ database: secondClient })
     const base = Date.now() - intervalMs
 
     const definitions = leaderboardModes.map((mode, index) => ({
@@ -1591,7 +1591,7 @@ describe('durable multi-mode collection operations', () => {
     await Promise.all([firstClient.close(), secondClient.close()])
 
     const restartedClient = openTestClient(database.connectionString)
-    const restarted = createPostgresRefreshOperations({ database: restartedClient })
+    const restarted = createTestQueue({ database: restartedClient })
 
     for (const definition of definitions) {
       expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
@@ -1601,7 +1601,7 @@ describe('durable multi-mode collection operations', () => {
   })
 
   test('publishes an empty region as a fresh empty snapshot instead of serving older rows', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const firstWindow = new Date('2200-01-01T00:00:00Z')
     const secondWindow = new Date(firstWindow.getTime() + intervalMs)
@@ -1639,7 +1639,7 @@ describe('durable multi-mode collection operations', () => {
   })
 
   test('admits every V1 page with stable attempt/mode/region/page identity before source access', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     const sourceAdmission = createPostgresRequestAdmission(database, {
@@ -1695,8 +1695,8 @@ describe('durable multi-mode collection operations', () => {
   })
 
   test('stops admission, page calls, and publication when the lease is expired and replaced', async () => {
-    const operations = createPostgresRefreshOperations({ database })
-    const replacementOperations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
+    const replacementOperations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
 
     const sourceAdmission = createPostgresRequestAdmission(database, {

@@ -9,13 +9,13 @@ import {
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
 import {
-  createPostgresRefreshOperations,
   type OperationLease,
   type PostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -167,7 +167,7 @@ const pulseSource = (oneVsOne: unknown, fixedTeams: unknown = null) => ({
 describe('Players-owned canonical ranked state', () => {
   test('persists measured zero and keeps Solo Queue separate through a fenced interactive operation', async () => {
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimRankedOperation(operations, 91913839)
 
     expect(await operations.beginInteractiveSection(lease, 'ranked')).toBe('execute')
@@ -201,7 +201,7 @@ describe('Players-owned canonical ranked state', () => {
   test('falls back to the career main legend without holding a connection while it asks', async () => {
     const brawlhallaId = 91913850
     const writer = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
     const refreshed = { ...snapshot, brawlhalla_id: brawlhallaId, '2v2': [] }
 
@@ -236,7 +236,7 @@ describe('Players-owned canonical ranked state', () => {
   test('publishes ranked facts without inventing identity when V0 omits the player name', async () => {
     const brawlhallaId = 91913948
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
 
     expect(
@@ -262,7 +262,7 @@ describe('Players-owned canonical ranked state', () => {
     const brawlhallaId = 91913849
     const control = postgres(connectionString, { max: 1 })
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     try {
       await control`
@@ -294,7 +294,7 @@ describe('Players-owned canonical ranked state', () => {
   test('reconciles a crash after the atomic ranked effect without dead-lettering or reapplying', async () => {
     const brawlhallaId = 91913841
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const lease = await claimRankedOperation(operations, brawlhallaId)
 
     await refreshCanonicalRankedPlayer(
@@ -323,7 +323,7 @@ describe('Players-owned canonical ranked state', () => {
   test('preserves last success on malformed attempts, then authoritatively applies empty arrays on retry', async () => {
     const brawlhallaId = 91913840
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const populated = {
       ...snapshot,
@@ -437,7 +437,7 @@ describe('Players-owned canonical ranked state', () => {
   test('runs a durable Primary-monitoring pulse through the worker and Players read seam', async () => {
     const brawlhallaId = 91913848
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
 
     await refreshCanonicalRankedPlayer(
@@ -501,7 +501,7 @@ describe('Players-owned canonical ranked state', () => {
     const brawlhallaId = 91913843
     const partnerId = 42
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
 
     await refreshCanonicalRankedPlayer(
@@ -782,7 +782,7 @@ describe('Players-owned canonical ranked state', () => {
   test('keeps empty and failed V1 attempts as no-ops without advancing pulse last-success', async () => {
     const brawlhallaId = 91913844
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
 
     await refreshCanonicalRankedPlayer(
@@ -881,7 +881,7 @@ describe('Players-owned canonical ranked state', () => {
   test('applies delayed team evidence independently when a newer pulse omitted that canonical team', async () => {
     const brawlhallaId = 91913846
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
 
     const canonicalTeams = [
@@ -1000,7 +1000,7 @@ describe('Players-owned canonical ranked state', () => {
     // the repository restarts below, so it gets a client of its own to close and reopen
     let playersClient = openTestClient(database.connectionString)
     let players = createPostgresRankedPlayers(playersClient)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const canonicalLease = await claimRankedOperation(operations, brawlhallaId)
 
     await refreshCanonicalRankedPlayer(
@@ -1090,7 +1090,7 @@ describe('Players-owned canonical ranked state', () => {
   test('rejects delayed older V0 completion without rewriting canonical state or history', async () => {
     const brawlhallaId = 91913847
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const older = await claimPulseOperation(operations, brawlhallaId)
 
     await Bun.sleep(2)
@@ -1161,7 +1161,7 @@ describe('Players-owned canonical ranked state', () => {
   test('rejects canonical writes from an expired ranked lease', async () => {
     const brawlhallaId = 91913842
     const players = createPostgresRankedPlayers(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const reserved = await operations.reserveInteractivePlayerRefresh({
       dedupeKey: `ranked:${randomUUID()}`,
