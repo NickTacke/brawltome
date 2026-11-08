@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { Database } from '@brawltome/foundation'
 import { createTelemetry } from '@brawltome/telemetry'
 import { trpcServer } from '@hono/trpc-server'
 import { createORPCClient } from '@orpc/client'
@@ -6,7 +7,7 @@ import { RPCLink } from '@orpc/client/fetch'
 import type { RouterClient } from '@orpc/server'
 import { Hono } from 'hono'
 import { createOrpcRoutes } from '../src/orpc/mount'
-import type { orpcRouter } from '../src/orpc/router'
+import { createOrpcRouter, type OrpcRouter } from '../src/orpc/router'
 import { createStatusRouter } from '../src/router/status.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, router } from '../src/trpc/trpc'
@@ -23,9 +24,11 @@ const trpcStatusRouter = router({
 
 function createApp() {
   const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
+  // no modules: these tests cover the transport and the status procedure, which needs no database
+  const router = createOrpcRouter([], { database: {} as Database, env: {} })
   const app = new Hono()
 
-  app.route('/', createOrpcRoutes({ telemetry }))
+  app.route('/', createOrpcRoutes({ telemetry, router }))
 
   app.use(
     '/trpc/*',
@@ -42,7 +45,7 @@ function createApp() {
   return app
 }
 
-function createRpcClient(app: Hono): RouterClient<typeof orpcRouter> {
+function createRpcClient(app: Hono): RouterClient<OrpcRouter> {
   const link = new RPCLink({
     url: 'http://api.test/rpc',
     fetch: async (request) => app.fetch(request),

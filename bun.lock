@@ -29,6 +29,7 @@
         "@brawltome/statistics": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "@hono/trpc-server": "^0.3.0",
+        "@orpc/contract": "1.16.2",
         "@orpc/openapi": "1.16.2",
         "@orpc/server": "1.16.2",
         "@orpc/zod": "1.16.2",

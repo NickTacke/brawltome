@@ -1,12 +1,12 @@
 import type { Telemetry } from '@brawltome/telemetry'
+import type { AnyContractRouter } from '@orpc/contract'
 import { OpenAPIGenerator } from '@orpc/openapi'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
-import { ORPCError, onError } from '@orpc/server'
+import { ORPCError, onError, type Router } from '@orpc/server'
 import { RPCHandler } from '@orpc/server/fetch'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
 import { Hono } from 'hono'
 import { createOrpcContext, type OrpcContext } from './context'
-import { orpcRouter } from './router'
 
 const RPC_PREFIX = '/rpc' as const
 // plain HTTP routes of the same router; /v1 is free of the other mounts in serve.ts
@@ -16,23 +16,29 @@ const openApiGenerator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],
 })
 
-// the router never changes while the process runs, so the document is generated once, on first use
-let openApiDocument: ReturnType<typeof openApiGenerator.generate> | undefined
+// any router whose procedures run on the context this file creates
+type MountableRouter = Router<AnyContractRouter, OrpcContext>
+type OpenApiDocument = Awaited<ReturnType<typeof openApiGenerator.generate>>
 
-function readOpenApiDocument() {
-  openApiDocument ??= openApiGenerator
-    .generate(orpcRouter, {
-      info: { title: 'BrawlTome API', version: '1.0.0' },
-      // operation paths are relative to where the REST handler is mounted
-      servers: [{ url: REST_PREFIX }],
-    })
-    .catch((error: unknown) => {
-      // do not cache a failure: the next request tries again
-      openApiDocument = undefined
-      throw error
-    })
+// the router never changes while the process runs, so its document is generated once, on first use
+function createOpenApiDocumentReader(router: MountableRouter): () => Promise<OpenApiDocument> {
+  let openApiDocument: Promise<OpenApiDocument> | undefined
 
-  return openApiDocument
+  return () => {
+    openApiDocument ??= openApiGenerator
+      .generate(router, {
+        info: { title: 'BrawlTome API', version: '1.0.0' },
+        // operation paths are relative to where the REST handler is mounted
+        servers: [{ url: REST_PREFIX }],
+      })
+      .catch((error: unknown) => {
+        // do not cache a failure: the next request tries again
+        openApiDocument = undefined
+        throw error
+      })
+
+    return openApiDocument
+  }
 }
 
 function isServerFailure(error: unknown): boolean {
@@ -60,9 +66,10 @@ function mountHandler(
 }
 
 // the serve.ts wrapper already covers admission, telemetry and shutdown; this adds the routes behind it
-export function createOrpcRoutes(options: { telemetry: Telemetry }): Hono {
-  const { telemetry } = options
+export function createOrpcRoutes(options: { telemetry: Telemetry; router: MountableRouter }): Hono {
+  const { telemetry, router } = options
   const routes = new Hono()
+  const readOpenApiDocument = createOpenApiDocumentReader(router)
 
   const logServerFailure = (error: unknown) => {
     // bad input and the like are the caller's problem, not an incident
@@ -71,8 +78,9 @@ export function createOrpcRoutes(options: { telemetry: Telemetry }): Hono {
     telemetry.logger.error('orpc.request.failed', error)
   }
 
-  const rpcHandler = new RPCHandler(orpcRouter, { interceptors: [onError(logServerFailure)] })
-  const restHandler = new OpenAPIHandler(orpcRouter, { interceptors: [onError(logServerFailure)] })
+  const rpcHandler = new RPCHandler(router, { interceptors: [onError(logServerFailure)] })
+
+  const restHandler = new OpenAPIHandler(router, { interceptors: [onError(logServerFailure)] })
 
   mountHandler(routes, RPC_PREFIX, rpcHandler, telemetry)
   mountHandler(routes, REST_PREFIX, restHandler, telemetry)
