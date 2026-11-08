@@ -25,7 +25,12 @@ import {
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
-import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking'
+import {
+  createPostgresRanking,
+  disableRankingRetentionSchedule,
+  fetchLeaderboardPage,
+  reconcileRankingRetentionSchedule,
+} from '@brawltome/ranking'
 import {
   createEffectStates,
   createPostgresRefreshOperations,
@@ -62,6 +67,7 @@ import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
+import { createWorkerJobs } from './worker/job-list'
 import { workerModules } from './worker-modules'
 
 const configuredConnectionString = process.env.DATABASE_URL
@@ -383,8 +389,8 @@ try {
       }
 
       const retention = workerConfig.rankingRetention.enabled
-        ? await operations.reconcileRankingRetentionSchedule(rankingRetentionSchedule)
-        : await operations.disableRankingRetentionSchedule(rankingRetentionSchedule.scheduleKey)
+        ? await reconcileRankingRetentionSchedule(databases.main, rankingRetentionSchedule)
+        : await disableRankingRetentionSchedule(databases.main, rankingRetentionSchedule.scheduleKey)
 
       if (retention.outcome !== 'already-exists' && retention.outcome !== 'already-disabled') reconciledSchedules++
 
@@ -427,6 +433,11 @@ try {
         ...common,
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
+        movedJobs: createWorkerJobs({
+          ranking,
+          isRankingRetentionEnabled: workerConfig.rankingRetention.enabled,
+          telemetry,
+        }),
         executeEffect: async (lease) => {
           if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
 
@@ -451,8 +462,6 @@ try {
           return operations.commitProofEffect(lease)
         },
         ranking,
-        rankingRetention: ranking,
-        rankingRetentionEnabled: workerConfig.rankingRetention.enabled,
         leaderboardPlayerNames,
         leaderboardRanked,
         deepCrawlPageDelayMs: workerConfig.deepCrawl.pageDelayMs,

@@ -39,6 +39,7 @@ export {
   rejectExpired,
   rejectReserved,
 } from './db/activate-operation'
+export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
 export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
 export {
   type ActiveOperation,
@@ -48,6 +49,11 @@ export {
   listAwaiting,
 } from './db/find-operations'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
+export {
+  type FixedSchedule,
+  type ReconcileFixedScheduleInput,
+  reconcileFixedSchedule,
+} from './db/reconcile-fixed-schedule'
 export {
   type ReserveForAdmissionInput,
   type ReserveForAdmissionOptions,
