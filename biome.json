@@ -1,17 +1,15 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true
   },
-  "organizeImports": {
-    "enabled": true
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "preset": "recommended"
     }
   },
   "formatter": {
@@ -26,17 +24,42 @@
       "semicolons": "asNeeded"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/**", "apps/desktop/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "warn",
+            "useAriaPropsSupportedByRole": "warn",
+            "useSemanticElements": "warn"
+          },
+          "correctness": { "noComponentHookFactories": "warn" },
+          "suspicious": { "noArrayIndexKey": "warn" }
+        }
+      }
+    }
+  ],
   "files": {
-    "ignore": [
-      "node_modules",
-      "dist",
-      "target",
-      ".next",
-      "research",
-      "packages/game-data/src/generated",
-      "packages/contracts/openapi",
-      "apps/web/next-env.d.ts",
-      "apps/desktop/app/gen"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/target",
+      "!**/.next",
+      "!**/research",
+      "!**/packages/game-data/src/generated",
+      "!**/packages/contracts/openapi",
+      "!**/apps/web/next-env.d.ts",
+      "!**/apps/desktop/app/gen",
+      "!**/*.md",
+      "!**/*.yml",
+      "!**/*.yaml"
     ]
   }
 }

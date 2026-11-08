@@ -2,7 +2,12 @@
   "name": "brawltome",
   "private": true,
   "packageManager": "bun@1.4.4",
-  "workspaces": ["apps/*", "packages/*", "packages/modules/*", "tooling/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/modules/*",
+    "tooling/*"
+  ],
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
@@ -27,7 +32,7 @@
     "db:migrate": "bun run --filter @brawltome/database-migrations migrate"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
+    "@biomejs/biome": "2.6.6",
     "@stylistic/eslint-plugin": "5.10.0",
     "@typescript-eslint/parser": "8.72.1",
     "eslint": "10.14.0"
