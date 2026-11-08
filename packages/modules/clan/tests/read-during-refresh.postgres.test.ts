@@ -11,6 +11,7 @@ const newRosterAt = new Date('2026-08-10T11:00:00.000Z')
 const rosterProvenance = { source: 'v1-guild-members', outcome: 'success' } as const
 const readTimeoutMs = 2_000
 const lockWaitPollMs = 10
+const lockWaitTimeoutMs = 3_000
 
 let database: TestDatabase
 
@@ -117,8 +118,8 @@ async function lockMembersTable(): Promise<MembersTableLock> {
   }
 }
 
-async function waitForLockWait(): Promise<void> {
-  for (;;) {
+async function pollForLockWait(signal: AbortSignal): Promise<void> {
+  while (!signal.aborted) {
     const [row] = await database.sql<{ waiting: number }[]>`
       SELECT count(*)::integer AS waiting FROM pg_stat_activity
       WHERE datname = current_database() AND wait_event_type = 'Lock'
@@ -127,6 +128,31 @@ async function waitForLockWait(): Promise<void> {
     if (row?.waiting) return
 
     await Bun.sleep(lockWaitPollMs)
+  }
+}
+
+// an operation that settles before it reaches the lock can't be waiting on it, so the test fails at once rather
+// than polling until the deadline
+function failWhenSettled(operation: Promise<unknown>, what: string): Promise<never> {
+  return operation.then(
+    () => {
+      throw new Error(`${what} finished before it waited on the lock`)
+    },
+    (error: unknown) => {
+      throw new Error(`${what} failed before it waited on the lock`, { cause: error })
+    },
+  )
+}
+
+/** Resolves once some query in the test database waits on a lock; fails if the operation settles first. */
+async function waitForLockWait(operation: Promise<unknown>, what: string): Promise<void> {
+  const polling = new AbortController()
+  const lockWait = Promise.race([pollForLockWait(polling.signal), failWhenSettled(operation, what)])
+
+  try {
+    await finishesWithin(lockWait, lockWaitTimeoutMs, `${what} waiting on the lock`)
+  } finally {
+    polling.abort()
   }
 }
 
@@ -168,7 +194,7 @@ describe('reading a clan while its roster refresh is in flight', () => {
       const newRoster = [member(3, '7'), member(1, '6')]
       const refresh = clans.publishRoster(clanId, newRoster, newRosterAt, rosterProvenance, effect)
 
-      await waitForLockWait()
+      await waitForLockWait(refresh, 'the roster refresh')
       const during = await finishesWithin(clans.getById(clanId), readTimeoutMs, 'read during the refresh')
 
       await lock.release()
@@ -210,7 +236,7 @@ describe('reading a clan while its roster refresh is in flight', () => {
       // change commits while it waits
       const read = clans.getById(snapshotClanId)
 
-      await waitForLockWait()
+      await waitForLockWait(read, 'the clan read')
 
       await lock.commitWith(async (sql) => {
         await sql`
