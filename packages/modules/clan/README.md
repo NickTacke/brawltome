@@ -16,8 +16,8 @@ The `clans` schema. The tables are described in `db/tables.ts`:
 - `discovery_state`: one row with the source version
 - `discovery_outbox`: one event per changed clan, for the discovery projection
 
-The migrations in `migrations/` own the defaults, checks, indexes and triggers. The tables in `db/tables.ts` only
-describe the columns the code uses.
+`db/tables.ts` has every column of each table the code uses, because `tests/tables.test.ts` compares each column
+with the database. The migrations in `migrations/` own the defaults, checks, indexes and triggers.
 
 The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_ledger`, `legacy_import_rejections` and
 `import_conflicts` behind. They still exist but aren't modelled. They can be dropped in a later migration.

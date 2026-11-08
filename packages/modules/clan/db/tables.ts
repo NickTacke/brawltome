@@ -3,7 +3,8 @@ import { sql } from 'drizzle-orm'
 import { bigint, boolean, integer, numeric, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import type { ClanProvenance } from '../domain/provenance'
 
-// the migrations own defaults, checks, indexes and triggers; these tables only describe the columns the code uses
+// every column of each table the code uses, since tests/tables.test.ts compares them all with the database;
+// defaults, checks, indexes and triggers stay in the migrations
 
 export const clansSchema = pgSchema('clans')
 
