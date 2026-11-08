@@ -9,7 +9,12 @@ import {
   type WorkerAccountsDependencies,
   type WorkerDiscoveryDependencies,
 } from '../src/worker/job-list'
-import { createTestDeadLetters, createTestQueue, idlePlayerDependencies } from './fixtures/queue'
+import {
+  createTestDeadLetters,
+  createTestQueue,
+  idlePlayerDependencies,
+  idleStatisticsDependencies,
+} from './fixtures/queue'
 
 let database: TestDatabase
 let queue: ReturnType<typeof createTestQueue>
@@ -53,6 +58,7 @@ function createVerificationJobs(verify: Verify) {
     clan: { clans: {} as never, createBrawlhallaClient: () => ({}) as never },
     accounts,
     player: idlePlayerDependencies,
+    statistics: idleStatisticsDependencies,
   })
 
   return (kind: string): JobDefinition<unknown> => {

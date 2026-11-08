@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { RateLimitError } from '@brawltome/bhapi'
 import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
 import {
@@ -691,245 +690,6 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
-  test('defers Statistics source admission without consuming its execution attempt', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'statistics:cohort:42:ranked',
-      kind: 'statistics-ranked-collection',
-      workClass: 'global-statistics',
-      payload: { cohortId: crypto.randomUUID(), brawlhallaId: 42 },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 3,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let deferredMs: number | undefined
-    let failed = false
-    let recorded = false
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      defer: async (_lease: OperationLease, _failure: OperationFailure, retryDelayMs: number) => {
-        deferredMs = retryDelayMs
-
-        return 'transitioned' as const
-      },
-      complete: async () => 'transitioned' as const,
-      fail: async () => {
-        failed = true
-
-        return 'transitioned' as const
-      },
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
-        pauseSource: async () => {},
-      },
-      statistics: {
-        preflightCollection: async () => 'missing',
-        preflightCollectionAttempt: async () => 'allowed',
-        recordCollectionAttempt: async () => {
-          recorded = true
-
-          return 'recorded'
-        },
-      } as never,
-      executeStatisticsCollection: async () => {
-        throw new Error('rate-limited work must not call the source')
-      },
-    })
-
-    expect(deferredMs).toBe(37_000)
-    expect(failed).toBe(false)
-    expect(recorded).toBe(false)
-  })
-
-  test('consumes an attempt for an upstream Statistics 429 after recording its immutable fence', async () => {
-    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'statistics:cohort:43:ranked',
-      kind: 'statistics-ranked-collection',
-      workClass: 'global-statistics',
-      payload: { cohortId: crypto.randomUUID(), brawlhallaId: 43 },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 1,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let deferred = false
-    let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      defer: async () => {
-        deferred = true
-
-        return 'transitioned' as const
-      },
-      complete: async () => 'transitioned' as const,
-      fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-        failed = { failure, retryDelayMs }
-
-        return 'transitioned' as const
-      },
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      telemetry,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
-        pauseSource: async () => {},
-      },
-      statistics: {
-        preflightCollection: async () => 'missing',
-        preflightCollectionAttempt: async () => 'allowed',
-        recordCollectionAttempt: async () => 'recorded',
-      } as never,
-      executeStatisticsCollection: async () => {
-        throw new RateLimitError('Upstream source is rate limited', 37_000)
-      },
-    })
-
-    expect(failed).toEqual({
-      failure: { code: 'source_rate_limited', message: 'Upstream source is rate limited', retryable: true },
-      retryDelayMs: 37_000,
-    })
-
-    expect(deferred).toBe(false)
-    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
-
-    expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
-  })
-
-  test('dispatches the fenced Legend Meta publication without treating it as source collection', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'statistics:10000000-0000-4000-8000-000000000001:legend-meta',
-      kind: 'statistics-legend-meta-publication',
-      workClass: 'global-statistics',
-      payload: { generationId: '10000000-0000-4000-8000-000000000001' },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 1,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let built = false
-    let completed = false
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      complete: async () => {
-        completed = true
-
-        return 'transitioned' as const
-      },
-      fail: async () => 'transitioned' as const,
-    }
-
-    expect(
-      await runOneRefreshOperation(operations as never, 'worker', {
-        leaseMs: 1_000,
-        retryDelayMs: 10,
-        admission,
-        statistics: {
-          preflightLegendMetaPublication: async () => 'missing' as const,
-          buildAndPublishLegendMeta: async () => {
-            built = true
-
-            return { result: 'applied' as const, decision: null }
-          },
-        } as never,
-        executeStatisticsCollection: async () => {
-          throw new Error('Legend Meta publication must not call the Statistics source collector')
-        },
-      }),
-    ).toBe(true)
-
-    expect(built).toBe(true)
-    expect(completed).toBe(true)
-  })
-
-  test('reports Legend Meta execution and lease-loss failures through bounded telemetry', async () => {
-    for (const [transition, expectedCategory] of [
-      ['transitioned', 'execution'],
-      ['lease-lost', 'lease_lost'],
-    ] as const) {
-      const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-
-      const lease: OperationLease = {
-        operationId: crypto.randomUUID(),
-        effectOperationId: crypto.randomUUID(),
-        effectCreatedAt: new Date().toISOString(),
-        operationKey: `statistics:legend-meta:${transition}`,
-        kind: 'statistics-legend-meta-publication',
-        workClass: 'global-statistics',
-        payload: { generationId: crypto.randomUUID() },
-        provenance: { source: 'test' },
-        leaseOwner: 'worker',
-        leaseToken: 1,
-        attemptNumber: 1,
-        maxAttempts: 3,
-        scheduleWindowAt: null,
-      }
-
-      const operations = {
-        claim: async () => lease,
-        renew: async () => 'renewed' as const,
-        fail: async () => transition,
-      }
-
-      await runOneRefreshOperation(operations as never, 'worker', {
-        leaseMs: 1_000,
-        retryDelayMs: 10,
-        admission,
-        telemetry,
-        statistics: {
-          preflightLegendMetaPublication: async () => 'missing' as const,
-          buildAndPublishLegendMeta: async () => {
-            throw new Error('Legend Meta publication failed')
-          },
-        } as never,
-      })
-
-      const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
-
-      expect(failures?.series[0]?.labels).toEqual({
-        kind: 'statistics-legend-meta-publication',
-        failure_category: expectedCategory,
-      })
-
-      expect(telemetry.stats().seriesDropped).toBe(0)
-    }
-  })
-
   test('backs off retryable execution failures exponentially so a brief source hiccup is not dead-lettered', async () => {
     const delays: number[] = []
 
@@ -1576,38 +1336,27 @@ type WrappedKind = Exclude<
   | 'interactive-player-refresh'
   | 'ranked-player-pulse'
   | 'player-name-verification'
+  | 'statistics-ranked-collection'
+  | 'statistics-lifetime-collection'
+  | 'statistics-publication'
+  | 'statistics-legend-meta-publication'
 >
 
 // every kind and the code its worker reports when the executor throws a plain error
 const failureCodes = [
   ['proof', 'proof_execution_failed'],
   ['leaderboard-deep-crawl', 'leaderboard_deep_crawl_failed'],
-  ['statistics-ranked-collection', 'statistics_collection_failed'],
-  ['statistics-lifetime-collection', 'statistics_collection_failed'],
-  ['statistics-publication', 'statistics_publication_failed'],
-  ['statistics-legend-meta-publication', 'statistics_legend_meta_publication_failed'],
   ['leaderboard-1v1', 'leaderboard_collection_failed'],
   ['leaderboard-2v2', 'leaderboard_collection_failed'],
   ['leaderboard-solo-2v2', 'leaderboard_collection_failed'],
   ['leaderboard-3v3', 'leaderboard_collection_failed'],
 ] as const satisfies readonly (readonly [WrappedKind, string])[]
 
-const generationId = '10000000-0000-4000-8000-000000000001'
 const leaderboardPayload = { pageDepth: 1, intervalMs: 900_000 }
 
 const leaseShapes: Record<WrappedKind, { workClass: string; payload: object }> = {
   proof: { workClass: 'interactive', payload: { value: 'proof' } },
   'leaderboard-deep-crawl': { workClass: 'leaderboard', payload: { region: 'AUS', intervalMs: 3_600_000 } },
-  'statistics-ranked-collection': {
-    workClass: 'global-statistics',
-    payload: { cohortId: generationId, brawlhallaId: 42 },
-  },
-  'statistics-lifetime-collection': {
-    workClass: 'global-statistics',
-    payload: { cohortId: generationId, brawlhallaId: 42 },
-  },
-  'statistics-publication': { workClass: 'global-statistics', payload: { generationId, product: 'ranked' } },
-  'statistics-legend-meta-publication': { workClass: 'global-statistics', payload: { generationId } },
   'leaderboard-1v1': { workClass: 'leaderboard', payload: leaderboardPayload },
   'leaderboard-2v2': { workClass: 'leaderboard', payload: leaderboardPayload },
   'leaderboard-solo-2v2': { workClass: 'leaderboard', payload: leaderboardPayload },
@@ -1637,18 +1386,6 @@ const failingOptions: Record<WrappedKind, Partial<WorkerOptions>> = {
     leaderboardPlayerNames: { applyLeaderboardNames: async () => ({ changed: 0 }) },
     leaderboardRanked: { applyLeaderboardRanked: async () => ({ changed: 0 }) },
   },
-  'statistics-ranked-collection': {
-    sourceAdmission: admittingSource,
-    executeStatisticsCollection: explode,
-    statistics: { preflightCollection: explode } as never,
-  },
-  'statistics-lifetime-collection': {
-    sourceAdmission: admittingSource,
-    executeStatisticsCollection: explode,
-    statistics: { preflightCollection: explode } as never,
-  },
-  'statistics-publication': { statistics: { preflightPublication: explode } as never },
-  'statistics-legend-meta-publication': { statistics: { preflightLegendMetaPublication: explode } as never },
   'leaderboard-1v1': {
     sourceAdmission: admittingSource,
     ranking: idleRanking,

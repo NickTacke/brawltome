@@ -26,9 +26,20 @@ import type { CellCollectionProgress, PublicationDecisionEvidence, PublicationPr
 import type { LifetimeEvidence, RankedEvidence } from './source'
 
 export {
-  createStatisticsReservations,
-  type StatisticsReservations,
-} from './jobs/statistics-reservations'
+  createStatisticsLifetimeCollectionJob,
+  createStatisticsRankedCollectionJob,
+  type StatisticsCollectionJobDependencies,
+  type StatisticsCollectionLease,
+} from './jobs/statistics-collection-job'
+export {
+  createStatisticsLegendMetaPublicationJob,
+  type StatisticsLegendMetaPublicationJobDependencies,
+} from './jobs/statistics-legend-meta-publication-job'
+export {
+  createStatisticsPublicationJob,
+  type StatisticsPublicationJobDependencies,
+} from './jobs/statistics-publication-job'
+export { createStatisticsReservations, type StatisticsReservations } from './jobs/statistics-reservations'
 
 import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregate } from './weapon-usage'
 

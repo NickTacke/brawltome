@@ -7,7 +7,7 @@ import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from '../src/statistics-collection-source'
-import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -200,9 +200,10 @@ describe('Statistics durable production worker', () => {
       retryDelayMs: 0,
       admission,
       sourceAdmission,
-      statistics,
-      executeStatisticsCollection: (lease: Parameters<typeof collectStatisticsEvidence>[1]) =>
-        collectStatisticsEvidence(source, lease),
+      movedJobs: createStatisticsTestJobs(statistics, {
+        sourceAdmission,
+        collectEvidence: (lease) => collectStatisticsEvidence(source, lease),
+      }),
     })
 
     expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
@@ -267,10 +268,13 @@ describe('Statistics durable production worker', () => {
       expect(
         await runOneRefreshOperation(operations, 'replay-worker', {
           ...options(),
-          executeStatisticsCollection: async () => {
-            replaySourceCalls++
-            throw new Error('source drift must not be read for an already-applied observation')
-          },
+          movedJobs: createStatisticsTestJobs(statistics, {
+            sourceAdmission,
+            collectEvidence: async () => {
+              replaySourceCalls++
+              throw new Error('source drift must not be read for an already-applied observation')
+            },
+          }),
         }),
       ).toBe(true)
 

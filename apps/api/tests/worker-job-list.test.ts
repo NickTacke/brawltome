@@ -2,12 +2,15 @@ import { describe, expect, test } from 'bun:test'
 import { type JobDefinition, type Lease, proofEffectState, workClasses } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
+  createStatisticsJobs,
   createWorkerJobs,
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
   type WorkerPlayerDependencies,
+  type WorkerStatisticsDependencies,
 } from '../src/worker/job-list'
+import { idleStatisticsDependencies } from './fixtures/queue'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
 const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
@@ -78,6 +81,7 @@ function createRecordingJobs(
     clan,
     accounts,
     player,
+    statistics: idleStatisticsDependencies,
   })
 
   return { calls, jobs }
@@ -420,5 +424,57 @@ describe('worker job list', () => {
     expect(proof.failureCode).toBe('proof_execution_failed')
     expect(proof.effectState).toBe(proofEffectState)
     expect(jobOfKind(jobs, 'primary-player-verification').effectState).toBe(proofEffectState)
+  })
+
+  test('statistics jobs reach the worker source admission and evidence collector', async () => {
+    const collected: string[] = []
+    const reservationKeys: string[] = []
+
+    const statistics = {
+      preflightCollection: async () => 'missing',
+      preflightCollectionAttempt: async () => 'allowed',
+      recordCollectionAttempt: async () => 'recorded',
+      commitObservation: async () => 'applied',
+    } as unknown as WorkerStatisticsDependencies['statistics']
+
+    const jobs = createStatisticsJobs({
+      statistics,
+      sourceAdmission: {
+        admitSource: async (input) => {
+          reservationKeys.push(input.reservationKey)
+
+          return { outcome: 'admitted' }
+        },
+      },
+      collectEvidence: async (lease) => {
+        collected.push(lease.kind)
+
+        return {} as never
+      },
+    })
+
+    expect(jobs.map((job) => job.kind)).toEqual([
+      'statistics-ranked-collection',
+      'statistics-lifetime-collection',
+      'statistics-publication',
+      'statistics-legend-meta-publication',
+    ])
+
+    expect(jobs.every((job) => job.workClasses.length === 1 && job.workClasses[0] === 'global-statistics')).toBe(true)
+
+    const lease = leaseWithPayload('statistics-ranked-collection', { cohortId: 'cohort', brawlhallaId: 42 })
+
+    const tools = {
+      queue: { renew: async () => 'renewed', complete: async () => 'transitioned' },
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      signal: new AbortController().signal,
+      createSourceAdmitter: () => async () => {},
+      watchLease: () => () => {},
+    }
+
+    expect(await jobOfKind(jobs, 'statistics-ranked-collection').run(lease, tools as never)).toBe('succeeded')
+    expect(collected).toEqual(['statistics-ranked-collection'])
+    expect(reservationKeys).toEqual([`${lease.operationId}:${lease.attemptNumber}:statistics-ranked-collection`])
   })
 })

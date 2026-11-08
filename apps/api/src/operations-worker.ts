@@ -128,6 +128,9 @@ const accounts = createPostgresAccounts(databases.main)
 const discovery = createPostgresDiscovery(databases.discovery)
 const discoveryChecks = createPostgresDiscovery(databases.main)
 
+const statistics = createPostgresStatistics(databases.main)
+const statisticsReservations = createStatisticsReservations(databases.main)
+
 const ranking = createPostgresRanking(databases.main)
 const clans = createPostgresClans(databases.main)
 
@@ -183,6 +186,11 @@ const workerJobs = createWorkerJobs({
     resolveLegendReference,
     verifyName: executePlayerNameVerification,
   },
+  statistics: {
+    statistics,
+    sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
+    collectEvidence: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
+  },
 })
 
 const operations = createPostgresRefreshOperations(
@@ -230,8 +238,6 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
   })
 }
 
-const statistics = createPostgresStatistics(databases.main)
-const statisticsReservations = createStatisticsReservations(databases.main)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
 const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
 const playerFreshness = createPostgresPlayerFreshness(databases.main)
@@ -517,8 +523,6 @@ try {
               onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
             }),
         },
-        statistics,
-        executeStatisticsCollection: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
       }),
   })
 } catch (error) {

@@ -4,7 +4,7 @@ import {
   type DiscoveryProjectionKind,
   leaderboardOperationKinds,
   type OperationLease,
-  statisticsCollectionKinds,
+  type StatisticsCollectionKind,
 } from '../model'
 
 export type EffectStateEntry = Pick<JobDefinition<unknown>, 'effectState' | 'claimLockKey'>
@@ -31,7 +31,7 @@ async function leaderboardEffectState(sql: Sql, lease: EffectLease): Promise<Eff
   return effect ? 'acknowledged' : 'none'
 }
 
-async function statisticsCollectionEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
+export async function statisticsCollectionEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM refresh_operations.statistics_collection_effects
     WHERE operation_id = ${lease.effectOperationId}
@@ -40,7 +40,7 @@ async function statisticsCollectionEffectState(sql: Sql, lease: EffectLease): Pr
   return effect ? 'acknowledged' : 'none'
 }
 
-async function statisticsPublicationEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
+export async function statisticsPublicationEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM refresh_operations.statistics_publication_effects
     WHERE operation_id = ${lease.effectOperationId}
@@ -49,7 +49,7 @@ async function statisticsPublicationEffectState(sql: Sql, lease: EffectLease): P
   return effect ? 'acknowledged' : 'none'
 }
 
-async function legendMetaPublicationEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
+export async function legendMetaPublicationEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id
     FROM refresh_operations.statistics_legend_meta_publication_effects
@@ -76,6 +76,9 @@ type JobOwnedEffectKind =
   | 'interactive-player-refresh'
   | 'ranked-player-pulse'
   | 'player-name-verification'
+  | StatisticsCollectionKind
+  | 'statistics-publication'
+  | 'statistics-legend-meta-publication'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect
@@ -83,9 +86,6 @@ export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): Eff
   const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
     'ranking-retention': {},
     'leaderboard-deep-crawl': {},
-    'statistics-publication': { effectState: statisticsPublicationEffectState },
-    'statistics-legend-meta-publication': { effectState: legendMetaPublicationEffectState },
-    ...entriesForKinds(statisticsCollectionKinds, { effectState: statisticsCollectionEffectState }),
     ...entriesForKinds(leaderboardOperationKinds, { effectState: leaderboardEffectState }),
   }
 

@@ -12,7 +12,7 @@ import {
 } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -925,7 +925,7 @@ describe('Statistics full launch cohort publication', () => {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
@@ -934,7 +934,7 @@ describe('Statistics full launch cohort publication', () => {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
@@ -1109,7 +1109,7 @@ describe('Statistics full launch cohort publication', () => {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 

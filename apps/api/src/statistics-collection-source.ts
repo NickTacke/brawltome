@@ -1,10 +1,4 @@
-import type { OperationLease } from '@brawltome/refresh-operations'
-import { decodeLifetimeEvidence, decodeRankedEvidence } from '@brawltome/statistics'
-
-type StatisticsLease = Extract<
-  OperationLease,
-  { kind: 'statistics-ranked-collection' | 'statistics-lifetime-collection' }
->
+import { decodeLifetimeEvidence, decodeRankedEvidence, type StatisticsCollectionLease } from '@brawltome/statistics'
 
 type StatisticsPlayerSource = {
   getPlayerStatsV1Payload(
@@ -14,7 +8,10 @@ type StatisticsPlayerSource = {
   ): Promise<unknown | null>
 }
 
-export async function collectStatisticsEvidence(source: StatisticsPlayerSource, lease: StatisticsLease) {
+export async function collectStatisticsEvidence(
+  source: StatisticsPlayerSource,
+  lease: Pick<StatisticsCollectionLease, 'kind' | 'payload'>,
+) {
   const mode = lease.kind === 'statistics-ranked-collection' ? 'ranked_1v1' : 'all'
   const payload = await source.getPlayerStatsV1Payload(lease.payload.brawlhallaId, mode, { caller: 'background' })
 

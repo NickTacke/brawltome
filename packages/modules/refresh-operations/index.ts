@@ -50,7 +50,15 @@ export type {
   ReplayGuardTarget,
 } from './db/dead-letter-hooks'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
-export { createEffectStates, type EffectStateEntry, type EffectStates, proofEffectState } from './db/effect-states'
+export {
+  createEffectStates,
+  type EffectStateEntry,
+  type EffectStates,
+  legendMetaPublicationEffectState,
+  proofEffectState,
+  statisticsCollectionEffectState,
+  statisticsPublicationEffectState,
+} from './db/effect-states'
 export {
   type ActiveOperation,
   type CountActiveInput,

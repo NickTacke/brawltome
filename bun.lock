@@ -275,6 +275,7 @@
         "@brawltome/refresh-operations": "workspace:*",
       },
       "devDependencies": {
+        "@brawltome/telemetry": "workspace:*",
         "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
