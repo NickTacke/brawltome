@@ -9,7 +9,7 @@ import {
   type WorkerAccountsDependencies,
   type WorkerDiscoveryDependencies,
 } from '../src/worker/job-list'
-import { createTestQueue } from './fixtures/queue'
+import { createTestQueue, idlePlayerDependencies } from './fixtures/queue'
 
 let database: TestDatabase
 let queue: ReturnType<typeof createTestQueue>
@@ -36,6 +36,7 @@ function createVerificationJobs(verify: Verify) {
       },
     },
     createEvidenceResolver: () => ({ resolve: async () => null }),
+    primaryMonitoring: { readSnapshot: async () => ({ observedAt: new Date(0), targets: [] }) },
   }
 
   const jobs = createWorkerJobs({
@@ -51,6 +52,7 @@ function createVerificationJobs(verify: Verify) {
     },
     clan: { clans: {} as never, createBrawlhallaClient: () => ({}) as never },
     accounts,
+    player: idlePlayerDependencies,
   })
 
   return (kind: string): JobDefinition<unknown> => {

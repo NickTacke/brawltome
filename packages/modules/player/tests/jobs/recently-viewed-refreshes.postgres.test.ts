@@ -3,6 +3,13 @@ import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
+import { reserveInteractivePlayerRefresh } from '../../jobs/player-refresh-reservation'
+import {
+  activeRecentlyViewedRefreshes,
+  enqueueRecentlyViewedRefreshes,
+  recentFreshnessAttempts,
+  refreshRequestDemand,
+} from '../../jobs/recently-viewed-refreshes'
 
 let database: TestDatabase
 let connectionString = ''
@@ -73,7 +80,6 @@ async function insertVisitorRefresh(
 describe('Recently viewed freshness operations', () => {
   test('counts request days per player and the planner attempts within the window', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database })
 
     try {
       for (let index = 0; index < 3; index++) await insertVisitorRefresh(control, 10, 1, true)
@@ -84,7 +90,7 @@ describe('Recently viewed freshness operations', () => {
       await insertVisitorRefresh(control, 13, 1, true, 'desktop-api')
       await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'actor_rate_limited')
       await insertVisitorRefresh(control, 14, 1, false, 'interactive-api', 'admission_reservation_expired')
-      await operations.enqueueRecentlyViewedRefreshes([11])
+      await enqueueRecentlyViewedRefreshes(database, [11])
 
       await control`
         UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
@@ -92,14 +98,14 @@ describe('Recently viewed freshness operations', () => {
       `
 
       // Distinct days, not request counts: three requests on one day count once.
-      const demand = await operations.refreshRequestDemand({ windowDays: 30 })
+      const demand = await refreshRequestDemand(database, { windowDays: 30 })
 
       expect(demand.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([
         { brawlhallaId: 10, viewDays: 2 },
         { brawlhallaId: 11, viewDays: 1 },
       ])
 
-      expect(await operations.recentFreshnessAttempts({ windowDays: 30 })).toEqual([
+      expect(await recentFreshnessAttempts(database, { windowDays: 30 })).toEqual([
         { brawlhallaId: 11, lastPlannedAt: expect.any(Date), lastFailedAt: expect.any(Date) },
       ])
     } finally {
@@ -114,9 +120,9 @@ describe('Recently viewed freshness operations', () => {
     try {
       await insertVisitorRefresh(control, 30, 0, false)
 
-      expect(await operations.enqueueRecentlyViewedRefreshes([20, 21, 30])).toEqual([20, 21])
-      expect(await operations.enqueueRecentlyViewedRefreshes([20])).toEqual([])
-      expect(await operations.activeRecentlyViewedRefreshes()).toBe(2)
+      expect(await enqueueRecentlyViewedRefreshes(database, [20, 21, 30])).toEqual([20, 21])
+      expect(await enqueueRecentlyViewedRefreshes(database, [20])).toEqual([])
+      expect(await activeRecentlyViewedRefreshes(database)).toBe(2)
 
       const [row] = await control<{ work_class: string; payload: unknown; resource_key: string }[]>`
         SELECT work_class, payload, resource_key FROM refresh_operations.operations
@@ -172,14 +178,13 @@ describe('Recently viewed freshness operations', () => {
 
   test('promotes a queued background refresh when a visitor asks for the same player', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database })
 
     try {
-      const activeBefore = await operations.activeRecentlyViewedRefreshes()
+      const activeBefore = await activeRecentlyViewedRefreshes(database)
 
-      expect(await operations.enqueueRecentlyViewedRefreshes([50])).toEqual([50])
+      expect(await enqueueRecentlyViewedRefreshes(database, [50])).toEqual([50])
 
-      const reservation = await operations.reserveInteractivePlayerRefresh({
+      const reservation = await reserveInteractivePlayerRefresh(database, {
         brawlhallaId: 50,
         dedupeKey: 'player:50:visit',
         operationKey: `player:50:${randomUUID()}`,
@@ -196,7 +201,7 @@ describe('Recently viewed freshness operations', () => {
       expect(reservation).toEqual({ outcome: 'already-active', operationId: background.id })
       expect(background.work_class).toBe('interactive')
       // The promoted refresh no longer occupies a background slot.
-      expect(await operations.activeRecentlyViewedRefreshes()).toBe(activeBefore)
+      expect(await activeRecentlyViewedRefreshes(database)).toBe(activeBefore)
     } finally {
       await control.end()
     }

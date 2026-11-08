@@ -25,7 +25,6 @@ export type BackgroundWorkClass = (typeof backgroundWorkClasses)[number]
 export const minLeaderboardIntervalMs = 60_000
 export const maxLeaderboardIntervalMs = 24 * 60 * 60 * 1000
 export const maxLeaderboardPageDepth = 20
-export const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
 // Four attempts with the worker's exponential retry backoff span roughly 2s + 6s + 15s, so a brief upstream
 // outage is ridden out while the profile page is still waiting for the refresh.
 export const interactiveRefreshMaxAttempts = 4
@@ -325,22 +324,6 @@ export type CreateSchedule =
   | CreateRankingRetentionSchedule
   | CreateLeaderboardDeepCrawlSchedule
 
-export type PrimaryMonitoringTarget = {
-  assignmentId: string
-  brawlhallaId: number
-  verifiedAt: Date
-}
-
-export type PrimaryMonitoringSnapshot = {
-  observedAt: Date
-  targets: PrimaryMonitoringTarget[]
-}
-
-export type ReconcilePrimaryMonitoringResult = {
-  created: number
-  retired: number
-}
-
 export type CreateScheduleResult = {
   outcome: 'created' | 'already-exists' | 'reconciled'
   scheduleId: string
@@ -373,15 +356,6 @@ export type OperationsTelemetrySnapshot = {
     count: number
   }[]
   scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
-}
-
-export type InteractivePlayerRefreshReservation = {
-  dedupeKey: string
-  operationKey: string
-  brawlhallaId: number
-  staleSections: ('ranked' | 'stats')[]
-  provenance: OperationProvenance
-  reservationTtlSeconds: number
 }
 
 // Published by refresh-operations/0026 whenever a player refresh reaches a terminal status.
@@ -419,12 +393,6 @@ export type ReserveInteractiveRefreshResult =
   | { outcome: 'reserved'; operationId: string; reservationToken: string }
   | { outcome: 'already-active'; operationId: string }
 
-export type ActiveInteractiveRefresh = {
-  operationId: string
-  awaitingAdmission: boolean
-  reservationExpired: boolean
-}
-
 export interface StatisticsOperations {
   reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
   listAwaitingStatisticsCollections(): Promise<string[]>
@@ -438,15 +406,6 @@ export interface StatisticsOperations {
 }
 
 export type StatisticsCollectionOperations = StatisticsOperations
-
-export interface InteractiveRefreshOperations {
-  findActiveInteractivePlayerRefresh(dedupeKey: string, brawlhallaId?: number): Promise<ActiveInteractiveRefresh | null>
-  reserveInteractivePlayerRefresh(input: InteractivePlayerRefreshReservation): Promise<ReserveInteractiveRefreshResult>
-  activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult>
-  activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
-  rejectInteractiveRefresh(operationId: string, reservationToken: string, reason: string): Promise<TransitionResult>
-  rejectExpiredInteractiveRefresh(operationId: string): Promise<TransitionResult>
-}
 
 type LeaseFields = {
   operationId: string
@@ -464,13 +423,6 @@ type LeaseFields = {
 // Background refreshes that keep recently viewed players fresh; they share the primary-monitoring work class but
 // belong to no account assignment.
 export const recentlyViewedCohort = 'recently-viewed' as const
-export const freshnessPlannerSource = 'freshness-planner' as const
-
-// Days within the window on which a player's profile was refreshed on request: demand the view counter cannot see
-// (Discord lookups, views before the counter existed).
-export type RefreshRequestDemand = { brawlhallaId: number; viewDays: number }
-// The freshness planner's own last background refresh for a player and its last dead-lettered one, if any.
-export type FreshnessAttempt = { brawlhallaId: number; lastPlannedAt: Date | null; lastFailedAt: Date | null }
 
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })

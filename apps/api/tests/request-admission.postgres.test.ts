@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
+import { createPlayerRefreshReservations } from '@brawltome/player'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createProofJob, createTestQueue } from './fixtures/queue'
+import { createProofJob, createScriptedPlayerRefreshJob, createTestQueue } from './fixtures/queue'
 
 const testAdmission = {
   totalConcurrency: 2,
@@ -30,6 +32,8 @@ const testAdmission = {
 
 let database: TestDatabase
 let connectionString = ''
+
+const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
 
 beforeAll(async () => {
   database = await createTestDatabase({
@@ -79,8 +83,6 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('50 concurrent duplicates reserve one operation and consume actor/source once', async () => {
-    const operations = createTestQueue({ database })
-
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 300 },
@@ -90,7 +92,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const attempts = await Promise.all(
       Array.from({ length: 50 }, async () => {
-        const reserved = await operations.reserveInteractivePlayerRefresh({
+        const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
           dedupeKey,
           operationKey: dedupeKey,
           brawlhallaId: 42,
@@ -116,9 +118,9 @@ describe('PostgreSQL interactive refresh admission', () => {
 
         expect(source.outcome).toBe('admitted')
 
-        expect(await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)).toBe(
-          'transitioned',
-        )
+        expect(
+          await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken),
+        ).toBe('transitioned')
 
         return reserved
       }),
@@ -216,7 +218,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const key = `activation-crash:${randomUUID()}`
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
       brawlhallaId: 42,
@@ -468,7 +470,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     const operations = createTestQueue({ database })
     const dedupeKey = `expired:${randomUUID()}`
 
-    const first = await operations.reserveInteractivePlayerRefresh({
+    const first = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey,
       operationKey: dedupeKey,
       brawlhallaId: 77,
@@ -489,7 +491,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       await control.end()
     }
 
-    const replacement = await operations.reserveInteractivePlayerRefresh({
+    const replacement = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey,
       operationKey: dedupeKey,
       brawlhallaId: 77,
@@ -513,7 +515,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const key = `multi-call:${randomUUID()}`
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
       brawlhallaId: 42,
@@ -524,7 +526,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
     expect(
       await runOneRefreshOperation(operations, 'multi-call-worker', {
@@ -532,10 +534,12 @@ describe('PostgreSQL interactive refresh admission', () => {
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        executeSection: async (_lease, _section, admitSourceCall) => {
-          await admitSourceCall('brawlhalla-v1')
-          await admitSourceCall('brawlhalla-v1')
-        },
+        movedJobs: [
+          createScriptedPlayerRefreshJob(async (_lease, _section, admitSourceCall) => {
+            await admitSourceCall('brawlhalla-v1')
+            await admitSourceCall('brawlhalla-v1')
+          }),
+        ],
       }),
     ).toBe(true)
 
@@ -559,7 +563,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       provenance: { source: 'integration-test' },
     })
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `dispatch-interactive:${randomUUID()}`,
       operationKey: `dispatch-interactive:${randomUUID()}`,
       brawlhallaId: 42,
@@ -570,7 +574,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
     const leaderboard = await operations.accept({
       kind: 'leaderboard-1v1',
@@ -582,12 +586,11 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const options = {
-      movedJobs: [createProofJob()],
+      movedJobs: [createProofJob(), createScriptedPlayerRefreshJob()],
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      executeSection: async () => undefined,
       leaderboardSource: {
         async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
           if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
@@ -639,7 +642,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       sourceLimits: { 'brawlhalla-v0': 180 },
     })
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `renew-interactive:${randomUUID()}`,
       operationKey: `renew-interactive:${randomUUID()}`,
       brawlhallaId: 42,
@@ -650,7 +653,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
     let sectionStarted: (() => void) | undefined
 
     const started = new Promise<void>((resolve) => {
@@ -665,10 +668,12 @@ describe('PostgreSQL interactive refresh admission', () => {
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      executeSection: async () => {
-        sectionStarted?.()
-        await Bun.sleep(1_750)
-      },
+      movedJobs: [
+        createScriptedPlayerRefreshJob(async () => {
+          sectionStarted?.()
+          await Bun.sleep(1_750)
+        }),
+      ],
     })
 
     await started
@@ -692,7 +697,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const key = `source-retry:${randomUUID()}`
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
       brawlhallaId: 42,
@@ -703,7 +708,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
     const first = await operations.claim('source-worker-a', 1_000, testAdmission, 'interactive-player-refresh')
 
     if (first?.kind !== 'interactive-player-refresh') throw new Error('Expected first interactive lease')
@@ -753,7 +758,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const key = `source-replay:${randomUUID()}`
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: key,
       operationKey: key,
       brawlhallaId: 42,
@@ -764,7 +769,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected interactive reservation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
     const original = await operations.claim(
       'source-replay-original',
@@ -799,11 +804,13 @@ describe('PostgreSQL interactive refresh admission', () => {
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        executeSection: async (lease, _section, admitSourceCall) => {
-          expect(lease.effectOperationId).toBe(original.effectOperationId)
-          expect(lease.operationId).toBe(replay.replayOperationId)
-          await admitSourceCall('brawlhalla-v1')
-        },
+        movedJobs: [
+          createScriptedPlayerRefreshJob(async (lease, _section, admitSourceCall) => {
+            expect(lease.effectOperationId).toBe(original.effectOperationId)
+            expect(lease.operationId).toBe(replay.replayOperationId)
+            await admitSourceCall('brawlhalla-v1')
+          }),
+        ],
       }),
     ).toBe(true)
 

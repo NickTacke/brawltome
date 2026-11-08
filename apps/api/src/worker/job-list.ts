@@ -1,5 +1,5 @@
 import { createPrimaryPlayerVerificationJob, type PrimaryPlayerVerificationJobDependencies } from '@brawltome/accounts'
-import type { BhApiClientOptions } from '@brawltome/bhapi'
+import type { BhApiClient, BhApiClientOptions } from '@brawltome/bhapi'
 import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
 import {
   type ClanProjectionSource,
@@ -9,6 +9,16 @@ import {
   type PlayerProjectionSource,
   type PostgresDiscovery,
 } from '@brawltome/discovery'
+import {
+  type CareerLegendResolver,
+  createInteractivePlayerRefreshJob,
+  createPlayerNameVerificationJob,
+  createRankedPlayerPulseJob,
+  type PlayerNameVerificationJobDependencies,
+  type PostgresCareerPlayers,
+  type PostgresRankedPlayers,
+  type PrimaryMonitoringSnapshot,
+} from '@brawltome/player'
 import { createRankingRetentionJob, type RankingRetentionStore } from '@brawltome/ranking'
 import {
   completeWithProofEffect,
@@ -37,7 +47,23 @@ export type WorkerClanDependencies = {
   createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
 }
 
-export type WorkerAccountsDependencies = PrimaryPlayerVerificationJobDependencies
+export type WorkerAccountsDependencies = PrimaryPlayerVerificationJobDependencies & {
+  primaryMonitoring: { readSnapshot(): Promise<PrimaryMonitoringSnapshot> }
+}
+
+type PlayerBrawlhallaClient = Pick<
+  BhApiClient,
+  'getPlayerRanked' | 'getPlayerStats' | 'getPlayerStatsV1Payload' | 'getPlayerTeamsV1Payload'
+>
+
+export type WorkerPlayerDependencies = {
+  rankedPlayers: PostgresRankedPlayers
+  careerPlayers: PostgresCareerPlayers
+  // the worker's Brawlhalla client, built around one section's source admission
+  createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): PlayerBrawlhallaClient
+  resolveLegendReference: CareerLegendResolver
+  verifyName: PlayerNameVerificationJobDependencies['verifyName']
+}
 
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
@@ -46,6 +72,7 @@ export type WorkerJobDependencies = {
   discovery: WorkerDiscoveryDependencies
   clan: WorkerClanDependencies
   accounts: WorkerAccountsDependencies
+  player: WorkerPlayerDependencies
 }
 
 function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
@@ -86,6 +113,50 @@ function createClanJobs({ clans, createBrawlhallaClient }: WorkerClanDependencie
   return [clanRefresh]
 }
 
+function createPlayerJobs(
+  player: WorkerPlayerDependencies,
+  primaryMonitoring: WorkerAccountsDependencies['primaryMonitoring'],
+): JobDefinition<unknown>[] {
+  const { rankedPlayers, careerPlayers, createBrawlhallaClient, resolveLegendReference, verifyName } = player
+
+  const interactiveRefresh = createInteractivePlayerRefreshJob({
+    rankedPlayers,
+    careerPlayers,
+    resolveLegendReference,
+    isPrimaryMonitoringTarget: async (assignmentId, brawlhallaId) => {
+      const snapshot = await primaryMonitoring.readSnapshot()
+
+      return snapshot.targets.some(
+        (target) => target.assignmentId === assignmentId && target.brawlhallaId === brawlhallaId,
+      )
+    },
+    createAdmittedSource: (admitSource) => {
+      const client = createBrawlhallaClient(({ domain }) => admitSource(domain))
+
+      return {
+        getRanked: (brawlhallaId, options) => client.getPlayerRanked(brawlhallaId, options),
+        getStats: (brawlhallaId, options) => client.getPlayerStats(brawlhallaId, options),
+      }
+    },
+  })
+
+  const rankedPulse = createRankedPlayerPulseJob({
+    rankedPlayers,
+    createAdmittedPulseSource: (admitSource) => {
+      const client = createBrawlhallaClient(({ domain }) => admitSource(domain))
+
+      return {
+        getOneVsOne: (brawlhallaId, options) => client.getPlayerStatsV1Payload(brawlhallaId, 'ranked_1v1', options),
+        getFixedTeams: (brawlhallaId, options) => client.getPlayerTeamsV1Payload(brawlhallaId, options),
+      }
+    },
+  })
+
+  const nameVerification = createPlayerNameVerificationJob({ verifyName })
+
+  return [interactiveRefresh, rankedPulse, nameVerification]
+}
+
 // a proof row with a primary-player key is a verification written before the kind existed, or a replay of one
 function createProofJob(
   primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
@@ -119,6 +190,7 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     rankingRetention,
     ...createDiscoveryJobs(dependencies.discovery),
     ...createClanJobs(dependencies.clan),
+    ...createPlayerJobs(dependencies.player, dependencies.accounts.primaryMonitoring),
     primaryPlayerVerification,
     createProofJob(primaryPlayerVerification),
   ]

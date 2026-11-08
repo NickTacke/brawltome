@@ -1,5 +1,5 @@
 import { parseBoundedInteger } from '@brawltome/foundation'
-import type { FreshnessAttempt, RefreshRequestDemand } from '@brawltome/refresh-operations'
+import type { FreshnessAttempt, RefreshRequestDemand } from '@brawltome/player'
 import type { Telemetry } from '@brawltome/telemetry'
 import { type SourceUsage, sourceBudgetOpen } from './player-name-verification'
 

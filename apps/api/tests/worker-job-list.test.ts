@@ -6,6 +6,7 @@ import {
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
+  type WorkerPlayerDependencies,
 } from '../src/worker/job-list'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
@@ -21,11 +22,21 @@ const evidenceResolver = { resolve: async () => null }
 const idleAccountsDependencies: WorkerAccountsDependencies = {
   accounts: { resolvePrimaryPlayerVerification: async () => ({}) as never },
   createEvidenceResolver: () => evidenceResolver,
+  primaryMonitoring: { readSnapshot: async () => ({ observedAt: new Date(0), targets: [] }) },
+}
+
+const idlePlayerDependencies: WorkerPlayerDependencies = {
+  rankedPlayers: {} as WorkerPlayerDependencies['rankedPlayers'],
+  careerPlayers: {} as WorkerPlayerDependencies['careerPlayers'],
+  createBrawlhallaClient: () => ({}) as ReturnType<WorkerPlayerDependencies['createBrawlhallaClient']>,
+  resolveLegendReference: () => null,
+  verifyName: async () => undefined,
 }
 
 function createRecordingJobs(
   clan: WorkerClanDependencies = idleClanDependencies,
   accounts: WorkerAccountsDependencies = idleAccountsDependencies,
+  player: WorkerPlayerDependencies = idlePlayerDependencies,
 ) {
   const calls: unknown[][] = []
 
@@ -66,6 +77,7 @@ function createRecordingJobs(
     },
     clan,
     accounts,
+    player,
   })
 
   return { calls, jobs }
@@ -208,6 +220,116 @@ describe('worker job list', () => {
     expect(admittedDomains).toEqual(['brawlhalla-v1'])
   })
 
+  test('player refresh builds its Brawlhalla client around the running section and checks the assignment', async () => {
+    const assignmentId = crypto.randomUUID()
+    const admittedDomains: string[] = []
+    const rankedCallers: string[] = []
+    const checkedSnapshots: string[] = []
+
+    const accounts: WorkerAccountsDependencies = {
+      ...idleAccountsDependencies,
+      primaryMonitoring: {
+        readSnapshot: async () => {
+          checkedSnapshots.push('read')
+
+          return {
+            observedAt: new Date(0),
+            targets: [{ assignmentId, brawlhallaId: 42, verifiedAt: new Date(0) }],
+          }
+        },
+      },
+    }
+
+    const player: WorkerPlayerDependencies = {
+      ...idlePlayerDependencies,
+      rankedPlayers: {
+        recordChecked: async () => 'no-op',
+      } as unknown as WorkerPlayerDependencies['rankedPlayers'],
+      createBrawlhallaClient: (beforeRequest) =>
+        ({
+          getPlayerRanked: async (_id: number, options: { caller: string }) => {
+            await beforeRequest?.({ domain: 'brawlhalla-v0', path: '/player/42/ranked' })
+            rankedCallers.push(options.caller)
+
+            return null
+          },
+        }) as unknown as ReturnType<WorkerPlayerDependencies['createBrawlhallaClient']>,
+    }
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, accounts, player)
+
+    const tools = {
+      queue: { renew: async () => 'renewed', beginInteractiveSection: async () => 'execute' },
+      leaseMs: 1_000,
+      signal: new AbortController().signal,
+      createSourceAdmitter: () => async (domain: string) => {
+        admittedDomains.push(domain)
+      },
+      watchLease: () => () => {},
+    }
+
+    const lease = {
+      ...leaseWithPayload('interactive-player-refresh', {
+        assignmentId,
+        brawlhallaId: 42,
+        staleSections: ['ranked'],
+      }),
+      workClass: 'primary-monitoring' as const,
+    }
+
+    await expect(jobOfKind(jobs, 'interactive-player-refresh').run(lease, tools as never)).rejects.toThrow(
+      'V0 ranked snapshot unavailable for player 42',
+    )
+
+    expect(admittedDomains).toEqual(['brawlhalla-v0'])
+    expect(rankedCallers).toEqual(['background'])
+    expect(checkedSnapshots.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('the ranked pulse reaches the V1 endpoints through the admitted client', async () => {
+    const calls: string[] = []
+
+    const player: WorkerPlayerDependencies = {
+      ...idlePlayerDependencies,
+      rankedPlayers: {
+        recordPulseChecked: async () => 'no-op',
+      } as unknown as WorkerPlayerDependencies['rankedPlayers'],
+      createBrawlhallaClient: (beforeRequest) =>
+        ({
+          getPlayerStatsV1Payload: async (_id: number, mode: string) => {
+            await beforeRequest?.({ domain: 'brawlhalla-v1', path: '/player/42' })
+            calls.push(mode)
+
+            return null
+          },
+          getPlayerTeamsV1Payload: async () => {
+            calls.push('teams')
+
+            return null
+          },
+        }) as unknown as ReturnType<WorkerPlayerDependencies['createBrawlhallaClient']>,
+    }
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, idleAccountsDependencies, player)
+    const admittedSections: string[] = []
+
+    const tools = {
+      queue: { complete: async () => 'transitioned' },
+      leaseMs: 1_000,
+      signal: new AbortController().signal,
+      createSourceAdmitter: (section: string) => async () => {
+        admittedSections.push(section)
+      },
+      watchLease: () => () => {},
+    }
+
+    const lease = leaseWithPayload('ranked-player-pulse', { brawlhallaId: 42 })
+
+    expect(await jobOfKind(jobs, 'ranked-player-pulse').run(lease, tools as never)).toBe('succeeded')
+    expect(calls).toEqual(['ranked_1v1', 'teams'])
+    expect(admittedSections).toEqual(['ranked-pulse'])
+  })
+
   test('a plain proof commits its effect without verifying a primary player', async () => {
     const verifiedAttempts: string[] = []
 
@@ -264,6 +386,7 @@ describe('worker job list', () => {
         },
       },
       createEvidenceResolver: () => evidenceResolver,
+      primaryMonitoring: { readSnapshot: async () => ({ observedAt: new Date(0), targets: [] }) },
     }
 
     const { jobs } = createRecordingJobs(idleClanDependencies, accounts)

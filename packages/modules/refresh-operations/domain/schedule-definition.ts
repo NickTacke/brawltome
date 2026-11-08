@@ -1,7 +1,6 @@
 import {
   type CreateSchedule,
   type LeaderboardDeepCrawlPayload,
-  type primaryMonitoringIntervalMs,
   validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
   validateRankingRetentionPayload,
@@ -9,23 +8,6 @@ import {
 import { isLeaderboardKind } from './operation-kinds'
 
 const utcDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
-
-export type PrimaryMonitoringScheduleDefinition = {
-  kind: 'interactive-player-refresh'
-  scheduleKey: string
-  operationKeyPrefix: string
-  resourceKey: string
-  workClass: 'primary-monitoring'
-  intervalMs: typeof primaryMonitoringIntervalMs
-  firstDueAt: string
-  payload: {
-    assignmentId: string
-    brawlhallaId: number
-    staleSections: ['ranked', 'stats']
-  }
-  provenance: { source: string; requestedBy: string }
-  maxAttempts: number
-}
 
 function parseFirstDueAt(value: string): Date {
   if (!utcDateTime.test(value)) throw new Error('firstDueAt must be an ISO-8601 UTC timestamp ending in Z')
@@ -44,7 +26,7 @@ function parseFirstDueAt(value: string): Date {
   return parsed
 }
 
-function validateScheduleIdentity(input: {
+export function validateScheduleIdentity(input: {
   scheduleKey: string
   operationKeyPrefix: string
   intervalMs: number
@@ -91,25 +73,6 @@ export function validateSchedule(input: CreateSchedule): Date {
     if (payload.intervalMs !== input.intervalMs) {
       throw new Error('leaderboard deep crawl payload intervalMs must match the schedule intervalMs')
     }
-  }
-
-  return firstDueAt
-}
-
-export function validatePrimaryMonitoringSchedule(input: PrimaryMonitoringScheduleDefinition): Date {
-  const firstDueAt = validateScheduleIdentity(input)
-  const { payload } = input
-
-  if (input.resourceKey !== `player:${payload.brawlhallaId}`) {
-    throw new Error('Primary monitoring requires a canonical player resource key')
-  }
-
-  if (!Number.isSafeInteger(payload.brawlhallaId) || payload.brawlhallaId <= 0) {
-    throw new Error('Primary monitoring requires a positive safe Brawlhalla ID')
-  }
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.assignmentId)) {
-    throw new Error('Primary monitoring requires a UUID assignmentId')
   }
 
   return firstDueAt

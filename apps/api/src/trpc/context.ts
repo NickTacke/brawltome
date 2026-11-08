@@ -5,11 +5,11 @@ import type { Database } from '@brawltome/foundation'
 import type {
   CareerPlayerQueries,
   PlayerReferenceQueries,
+  PlayerRefreshReservations,
   PostgresLeaderboardRanked,
   RankedPlayerQueries,
 } from '@brawltome/player'
 import type { PlayerValhallanQueries, RankingQueries } from '@brawltome/ranking'
-import type { InteractiveRefreshOperations } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { CareerWeaponUsageQueries, StatisticsHistoryQueries, StatisticsQueries } from '@brawltome/statistics'
 import type { Telemetry } from '@brawltome/telemetry'
@@ -21,7 +21,7 @@ export interface Context {
   discoveryQueries: DiscoveryQueries
   rankedPlayerQueries: RankedPlayerQueries
   careerPlayerQueries: CareerPlayerQueries
-  refreshOperations: InteractiveRefreshOperations
+  playerRefreshReservations: PlayerRefreshReservations
   requestAdmission: ActorAdmission
   refreshTrust: { trusted: boolean; grant(): void }
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>

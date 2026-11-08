@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BhApiHttpError, RateLimitError } from '@brawltome/bhapi'
+import { RateLimitError } from '@brawltome/bhapi'
 import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
 import {
@@ -691,154 +691,6 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
-  test('runs recently viewed refreshes in the background without a Primary assignment', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'freshness:42:op',
-      kind: 'interactive-player-refresh',
-      workClass: 'primary-monitoring',
-      payload: { cohort: 'recently-viewed', brawlhallaId: 42, staleSections: ['ranked', 'stats'] },
-      provenance: { source: 'freshness-planner' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 1,
-      maxAttempts: 4,
-      scheduleWindowAt: null,
-    }
-
-    const sections: string[] = []
-    const callers: string[] = []
-    let eligibilityChecked = false
-    let completed = false
-
-    await runOneRefreshOperation(
-      {
-        claim: async () => lease,
-        renew: async () => 'renewed' as const,
-        beginInteractiveSection: async () => 'execute' as const,
-        commitInteractiveSection: async () => 'transitioned' as const,
-        complete: async () => {
-          completed = true
-
-          return 'transitioned' as const
-        },
-        fail: async () => 'transitioned' as const,
-      } as never,
-      'worker',
-      {
-        leaseMs: 1_000,
-        retryDelayMs: 10,
-        admission,
-        sourceAdmission: {
-          admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
-          pauseSource: async () => {},
-        },
-        isPrimaryMonitoringTarget: async () => {
-          eligibilityChecked = true
-
-          return false
-        },
-        executeSection: async (_lease, section, admitSourceCall, caller) => {
-          sections.push(section)
-          callers.push(caller)
-          await admitSourceCall('brawlhalla-v0')
-        },
-      },
-    )
-
-    expect(eligibilityChecked).toBe(false)
-    expect(sections).toEqual(['ranked', 'stats'])
-    expect(callers).toEqual(['background', 'background'])
-    expect(completed).toBe(true)
-  })
-
-  test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'primary-player:42',
-      kind: 'interactive-player-refresh',
-      workClass: 'primary-monitoring',
-      payload: {
-        assignmentId: crypto.randomUUID(),
-        brawlhallaId: 42,
-        staleSections: ['ranked', 'stats'],
-      },
-      provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 1,
-      maxAttempts: 3,
-      scheduleWindowAt: '2026-08-10T00:00:00.000Z',
-    }
-
-    const sections: string[] = []
-    const callers: string[] = []
-    let sourceAdmissions = 0
-    let completed = false
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      beginInteractiveSection: async () => 'execute' as const,
-      commitInteractiveSection: async () => 'transitioned' as const,
-      complete: async () => {
-        completed = true
-
-        return 'transitioned' as const
-      },
-      fail: async () => 'transitioned' as const,
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      sourceAdmission: {
-        admitSource: async () => {
-          sourceAdmissions++
-
-          return { outcome: 'admitted', deduplicated: false }
-        },
-        pauseSource: async () => {},
-      },
-      isPrimaryMonitoringTarget: async () => true,
-      executeSection: async (_lease, section, admitSourceCall, caller) => {
-        sections.push(section)
-        callers.push(caller)
-        await admitSourceCall('brawlhalla-v0')
-      },
-    })
-
-    expect(sections).toEqual(['ranked', 'stats'])
-    expect(callers).toEqual(['background', 'background'])
-    expect(sourceAdmissions).toBe(2)
-    expect(completed).toBe(true)
-
-    sections.length = 0
-    completed = false
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
-        pauseSource: async () => {},
-      },
-      isPrimaryMonitoringTarget: async () => false,
-      executeSection: async (_lease, section) => {
-        sections.push(section)
-      },
-    })
-
-    expect(sections).toEqual([])
-    expect(completed).toBe(true)
-  })
-
   test('defers Statistics source admission without consuming its execution attempt', async () => {
     const lease: OperationLease = {
       operationId: crypto.randomUUID(),
@@ -969,91 +821,6 @@ describe('refresh operations worker source retry', () => {
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
 
     expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
-  })
-
-  test('waits out Brawlhalla maintenance instead of spending attempts and dead-lettering', async () => {
-    const lease = (attemptNumber: number): OperationLease => ({
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'player:maintenance',
-      kind: 'interactive-player-refresh',
-      workClass: 'interactive',
-      payload: { brawlhallaId: 42, staleSections: ['ranked'] },
-      provenance: { source: 'interactive-api' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    })
-
-    const run = async (operationLease: OperationLease, error: Error) => {
-      const transitions: Array<{ kind: 'defer' | 'fail'; code: string; retryDelayMs: number }> = []
-      const paused: Array<[string, number]> = []
-
-      await runOneRefreshOperation(
-        {
-          claim: async () => operationLease,
-          renew: async () => 'renewed' as const,
-          beginInteractiveSection: async () => 'execute' as const,
-          commitInteractiveSection: async () => 'transitioned' as const,
-          complete: async () => 'transitioned' as const,
-          defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-            transitions.push({ kind: 'defer', code: failure.code, retryDelayMs })
-
-            return 'transitioned' as const
-          },
-          fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-            transitions.push({ kind: 'fail', code: failure.code, retryDelayMs })
-
-            return 'transitioned' as const
-          },
-        } as never,
-        'worker',
-        {
-          leaseMs: 1_000,
-          retryDelayMs: 10,
-          sourceUnavailableRetryMs: 120_000,
-          admission,
-          sourceAdmission: {
-            admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
-            pauseSource: async (domain, seconds) => {
-              paused.push([domain, seconds])
-            },
-          },
-          executeSection: async () => {
-            throw error
-          },
-        },
-      )
-
-      return { transitions, paused }
-    }
-
-    const unavailable = new BhApiHttpError(
-      'Brawlhalla API error: 503 Service Unavailable for /player/42/ranked',
-      503,
-      'brawlhalla-v0',
-    )
-
-    // Even the final attempt waits for the source: deferral does not spend an attempt.
-    expect(await run(lease(3), unavailable)).toEqual({
-      transitions: [{ kind: 'defer', code: 'source_unavailable', retryDelayMs: 120_000 }],
-      paused: [['brawlhalla-v0', 120]],
-    })
-
-    expect(
-      (await run(lease(1), new Error('Ranked refresh failed', { cause: unavailable }))).transitions[0],
-    ).toMatchObject({ kind: 'defer', code: 'source_unavailable' })
-
-    const broken = await run(
-      lease(3),
-      new BhApiHttpError('Brawlhalla API error: 500 Internal Server Error', 500, 'brawlhalla-v0'),
-    )
-
-    expect(broken.transitions[0]?.kind).toBe('fail')
-    expect(broken.paused).toEqual([])
   })
 
   test('dispatches the fenced Legend Meta publication without treating it as source collection', async () => {
@@ -1806,14 +1573,14 @@ type WrappedKind = Exclude<
   | 'discovery-reconciliation'
   | 'clan-refresh'
   | 'primary-player-verification'
+  | 'interactive-player-refresh'
+  | 'ranked-player-pulse'
+  | 'player-name-verification'
 >
 
 // every kind and the code its worker reports when the executor throws a plain error
 const failureCodes = [
   ['proof', 'proof_execution_failed'],
-  ['interactive-player-refresh', 'interactive_player_refresh_failed'],
-  ['ranked-player-pulse', 'ranked_player_pulse_failed'],
-  ['player-name-verification', 'player_name_verification_failed'],
   ['leaderboard-deep-crawl', 'leaderboard_deep_crawl_failed'],
   ['statistics-ranked-collection', 'statistics_collection_failed'],
   ['statistics-lifetime-collection', 'statistics_collection_failed'],
@@ -1830,12 +1597,6 @@ const leaderboardPayload = { pageDepth: 1, intervalMs: 900_000 }
 
 const leaseShapes: Record<WrappedKind, { workClass: string; payload: object }> = {
   proof: { workClass: 'interactive', payload: { value: 'proof' } },
-  'interactive-player-refresh': {
-    workClass: 'interactive',
-    payload: { brawlhallaId: 42, staleSections: ['ranked'] },
-  },
-  'ranked-player-pulse': { workClass: 'primary-monitoring', payload: { brawlhallaId: 42 } },
-  'player-name-verification': { workClass: 'maintenance', payload: { brawlhallaId: 42, playerName: 'Name' } },
   'leaderboard-deep-crawl': { workClass: 'leaderboard', payload: { region: 'AUS', intervalMs: 3_600_000 } },
   'statistics-ranked-collection': {
     workClass: 'global-statistics',
@@ -1867,13 +1628,9 @@ const idleRanking = {
   recordCollectionFailure: async () => 'recorded' as const,
 }
 
-// the dependencies each kind needs to reach its executor, with the first call into the outside world throwing;
-// interactive work throws on its own when its dependencies are missing
+// the dependencies each kind needs to reach its executor, with the first call into the outside world throwing
 const failingOptions: Record<WrappedKind, Partial<WorkerOptions>> = {
   proof: { movedJobs: [createProofJob(explode)] },
-  'interactive-player-refresh': {},
-  'ranked-player-pulse': { sourceAdmission: admittingSource, executeRankedPulse: explode },
-  'player-name-verification': { sourceAdmission: admittingSource, executePlayerNameVerification: explode },
   'leaderboard-deep-crawl': {
     sourceAdmission: admittingSource,
     leaderboardSource: { fetchPage: explode },

@@ -1,11 +1,15 @@
+import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import {
   type AdmissionConfig,
   createEffectStates,
   createPostgresRefreshOperations,
+  defineJob,
   type JobDefinition,
   type JobTools,
+  type Lease,
   type QueueWorker,
   type RefreshOperationsDatabases,
+  type SourceAdmitter,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
@@ -14,6 +18,7 @@ import {
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
+  type WorkerPlayerDependencies,
 } from '../../src/worker/job-list'
 
 type DiscoveryEffectChecks = WorkerDiscoveryDependencies['checks']
@@ -28,6 +33,15 @@ const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
 const idleAccounts: WorkerAccountsDependencies = {
   accounts: { resolvePrimaryPlayerVerification: async () => ({}) as never },
   createEvidenceResolver: () => ({ resolve: async () => null }),
+  primaryMonitoring: { readSnapshot: async () => ({ observedAt: new Date(0), targets: [] }) },
+}
+
+export const idlePlayerDependencies: WorkerPlayerDependencies = {
+  rankedPlayers: {} as WorkerPlayerDependencies['rankedPlayers'],
+  careerPlayers: {} as WorkerPlayerDependencies['careerPlayers'],
+  createBrawlhallaClient: () => ({}) as ReturnType<WorkerPlayerDependencies['createBrawlhallaClient']>,
+  resolveLegendReference: () => null,
+  verifyName: async () => undefined,
 }
 
 // the job list only runs these when a job executes, and these tests are about what the jobs tell claim
@@ -48,6 +62,7 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
       createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
     },
     accounts: idleAccounts,
+    player: idlePlayerDependencies,
   })
 }
 
@@ -98,5 +113,94 @@ export function createTestJobs(): JobDefinition<unknown>[] {
     retryDelayMs: 1_000,
     admission: jobListAdmission,
     movedJobs: createIdleWorkerJobs(noDiscoveryEffects),
+  })
+}
+
+function scriptedRankedSnapshot(brawlhallaId: number) {
+  return {
+    name: 'Scripted Player',
+    brawlhalla_id: brawlhallaId,
+    rating: 1000,
+    peak_rating: 1000,
+    tier: 'Gold 1',
+    wins: 1,
+    games: 2,
+    region: 'US-E',
+    global_rank: 100,
+    region_rank: 20,
+    legends: [],
+    '2v2': [],
+  }
+}
+
+function scriptedCareerSnapshot(brawlhallaId: number) {
+  return {
+    brawlhalla_id: brawlhallaId,
+    name: 'Scripted Player',
+    xp: 1,
+    level: 1,
+    xp_percentage: 0,
+    games: 2,
+    wins: 1,
+    damagebomb: '0',
+    damagemine: '0',
+    damagespikeball: '0',
+    damagesidekick: '0',
+    hitsnowball: 0,
+    kobomb: 0,
+    komine: 0,
+    kospikeball: 0,
+    kosidekick: 0,
+    kosnowball: 0,
+    legends: [],
+  }
+}
+
+// the real player refresh job with its stores stubbed, so a test can script what a section does at the source
+export function createScriptedPlayerRefreshJob(
+  runSection: (
+    lease: Lease<unknown>,
+    section: 'ranked' | 'stats',
+    admitSource: SourceAdmitter,
+  ) => Promise<void> = async () => undefined,
+): JobDefinition<unknown> {
+  let currentLease: Lease<unknown> | undefined
+
+  const dependencies: InteractivePlayerRefreshJobDependencies = {
+    rankedPlayers: {
+      applySnapshot: async () => 'applied',
+      recordChecked: async () => 'no-op',
+    } as unknown as InteractivePlayerRefreshJobDependencies['rankedPlayers'],
+    careerPlayers: {
+      applySnapshot: async () => 'applied',
+      recordChecked: async () => 'no-op',
+    } as unknown as InteractivePlayerRefreshJobDependencies['careerPlayers'],
+    createAdmittedSource: (admitSource) => ({
+      getRanked: async (brawlhallaId, options) => {
+        options.onAttempt()
+        await runSection(currentLease as Lease<unknown>, 'ranked', admitSource)
+
+        return scriptedRankedSnapshot(brawlhallaId)
+      },
+      getStats: async (brawlhallaId, options) => {
+        options.onAttempt()
+        await runSection(currentLease as Lease<unknown>, 'stats', admitSource)
+
+        return scriptedCareerSnapshot(brawlhallaId)
+      },
+    }),
+    isPrimaryMonitoringTarget: async () => true,
+    resolveLegendReference: () => null,
+  }
+
+  const job = createInteractivePlayerRefreshJob(dependencies) as JobDefinition<unknown>
+
+  return defineJob<unknown>({
+    ...job,
+    run(lease, tools) {
+      currentLease = lease
+
+      return job.run(lease, tools)
+    },
   })
 }

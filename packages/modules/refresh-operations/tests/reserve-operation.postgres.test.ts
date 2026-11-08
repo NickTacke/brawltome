@@ -312,3 +312,59 @@ describe('reserveForBinding', () => {
     expect(awaiting).toHaveLength(1)
   })
 })
+
+describe('acceptOperation with a resource', () => {
+  const resourceInput = (brawlhallaId: number) => {
+    const key = randomUUID()
+
+    return {
+      kind: 'interactive-player-refresh' as const,
+      dedupeKey: `freshness:${brawlhallaId}:${key}`,
+      operationKey: `freshness:${brawlhallaId}:${key}`,
+      resourceKey: `player:${brawlhallaId}`,
+      workClass: 'primary-monitoring' as const,
+      payload: {
+        cohort: 'recently-viewed' as const,
+        brawlhallaId,
+        staleSections: ['ranked', 'stats'] as ['ranked', 'stats'],
+      },
+      provenance: { source: 'integration-test' },
+    }
+  }
+
+  test('reports the operation holding the resource instead of failing on the unique index', async () => {
+    const holder = await acceptOperation(database, resourceInput(3_001))
+
+    expect(await acceptOperation(database, resourceInput(3_001))).toEqual({
+      outcome: 'already-active',
+      operationId: holder.operationId,
+    })
+  })
+
+  test('reports an awaiting-admission holder too, since it also holds the resource', async () => {
+    const key = randomUUID()
+
+    const reserved = await reserveForAdmission(database, {
+      kind: 'interactive-player-refresh',
+      dedupeKey: `held:${key}`,
+      operationKey: `held:${key}`,
+      resourceKey: 'player:3002',
+      workClass: 'interactive',
+      payload: { brawlhallaId: 3_002, staleSections: ['ranked'] },
+      provenance: { source: 'integration-test' },
+      maxAttempts: 4,
+      reservationTtlSeconds: 60,
+    })
+
+    expect(await acceptOperation(database, resourceInput(3_002))).toEqual({
+      outcome: 'already-active',
+      operationId: reserved.operationId,
+    })
+  })
+
+  test('accepts the operation when the resource is free', async () => {
+    const accepted = await acceptOperation(database, resourceInput(3_003))
+
+    expect(accepted.outcome).toBe('accepted')
+  })
+})

@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  createPlayerRefreshReservations,
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
   playerModule,
@@ -18,6 +20,8 @@ import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
+
+const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
 
 const emptySnapshot = {
   brawlhalla_id: 91913839,
@@ -74,7 +78,7 @@ async function claimCareerOperation(
   brawlhallaId: number,
   staleSections: Array<'ranked' | 'stats'> = ['stats'],
 ) {
-  const reserved = await operations.reserveInteractivePlayerRefresh({
+  const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
     dedupeKey: `career:${randomUUID()}`,
     operationKey: `career:${randomUUID()}`,
     brawlhallaId,
@@ -85,7 +89,7 @@ async function claimCareerOperation(
 
   if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
 
-  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+  await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('career-test-worker', 10_000, admission)
 
   if (lease?.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')

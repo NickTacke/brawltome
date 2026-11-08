@@ -1,6 +1,8 @@
 import type { Database } from '@brawltome/foundation'
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { OperationKind } from '../domain/operation-kinds'
+import type { WorkClass } from '../model'
+import { payloadMatches } from './payload-matches'
 import { operations } from './tables'
 
 const activeStatuses = ['awaiting_admission', 'pending', 'leased'] as const
@@ -68,4 +70,28 @@ export async function listAwaiting(database: Database, input: ListAwaitingInput)
     .limit(input.limit)
 
   return rows.map((row) => row.id)
+}
+
+export type CountActiveInput = {
+  kind: OperationKind
+  workClass: WorkClass
+  // top-level payload keys the operation must hold, as text
+  payloadEquals: Record<string, string>
+}
+
+/** How many operations of this kind and class are waiting for admission, pending or leased. */
+export async function countActive(database: Database, input: CountActiveInput): Promise<number> {
+  const [row] = await database.db
+    .select({ count: sql<number>`count(*)::integer` })
+    .from(operations)
+    .where(
+      and(
+        eq(operations.kind, input.kind),
+        eq(operations.workClass, input.workClass),
+        inArray(operations.status, activeStatuses),
+        ...payloadMatches(input.payloadEquals),
+      ),
+    )
+
+  return row.count
 }

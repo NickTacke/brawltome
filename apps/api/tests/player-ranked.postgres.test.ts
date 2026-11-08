@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { createDatabase } from '@brawltome/foundation'
+import { createDatabase, type Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  createPlayerRefreshReservations,
   createPostgresRankedPlayers,
+  createRankedPlayerPulseJob,
   playerModule,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
@@ -19,6 +21,8 @@ import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
+
+const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
 
 const snapshot = {
   name: 'Canonical Player',
@@ -78,7 +82,7 @@ const admission = {
 } as const
 
 async function claimRankedOperation(operations: PostgresRefreshOperations, brawlhallaId: number) {
-  const reserved = await operations.reserveInteractivePlayerRefresh({
+  const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
     dedupeKey: `ranked:${randomUUID()}`,
     operationKey: `ranked:${randomUUID()}`,
     brawlhallaId,
@@ -89,7 +93,7 @@ async function claimRankedOperation(operations: PostgresRefreshOperations, brawl
 
   if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
 
-  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+  await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('ranked-test-worker', 10_000, admission, 'interactive-player-refresh')
 
   if (lease?.kind !== 'interactive-player-refresh' || lease.operationId !== reserved.operationId) {
@@ -469,15 +473,12 @@ describe('Players-owned canonical ranked state', () => {
           admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
           pauseSource: async () => {},
         },
-        executeRankedPulse: async (lease) => {
-          await refreshRankedPlayerPulse(
-            players,
-            pulseSource({ brawlhalla_id: brawlhallaId, rating: 1750, games: 14 }),
-            brawlhallaId,
-            { caller: 'background' },
-            effectFor(lease),
-          )
-        },
+        movedJobs: [
+          createRankedPlayerPulseJob({
+            rankedPlayers: players,
+            createAdmittedPulseSource: () => pulseSource({ brawlhalla_id: brawlhallaId, rating: 1750, games: 14 }),
+          }),
+        ],
       }),
     ).toBe(true)
 
@@ -1163,7 +1164,7 @@ describe('Players-owned canonical ranked state', () => {
     const players = createPostgresRankedPlayers(database)
     const operations = createTestQueue({ database })
 
-    const reserved = await operations.reserveInteractivePlayerRefresh({
+    const reserved = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `ranked:${randomUUID()}`,
       operationKey: `ranked:${randomUUID()}`,
       brawlhallaId,
@@ -1174,7 +1175,7 @@ describe('Players-owned canonical ranked state', () => {
 
     if (reserved.outcome !== 'reserved') throw new Error('Expected a reserved operation')
 
-    await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+    await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
     const lease = await operations.claim('expired-ranked-worker', 10_000, admission)
 
     if (lease?.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')

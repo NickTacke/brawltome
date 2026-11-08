@@ -6,7 +6,6 @@ import {
   type OperationLease,
   statisticsCollectionKinds,
 } from '../model'
-import { allSectionsCommitted } from './section-checkpoints'
 
 export type EffectStateEntry = Pick<JobDefinition<unknown>, 'effectState' | 'claimLockKey'>
 
@@ -60,24 +59,6 @@ async function legendMetaPublicationEffectState(sql: Sql, lease: EffectLease): P
   return effect ? 'acknowledged' : 'none'
 }
 
-function staleSectionsCommitted(sql: Sql, lease: EffectLease): Promise<EffectState> {
-  const { staleSections } = lease.payload as { staleSections: string[] }
-
-  return allSectionsCommitted(sql, lease, staleSections)
-}
-
-async function rankedSectionCommitted(sql: Sql, lease: EffectLease): Promise<EffectState> {
-  const [effect] = await sql<{ complete: boolean }[]>`
-    SELECT EXISTS (
-      SELECT 1
-      FROM refresh_operations.interactive_refresh_effects effect
-      WHERE effect.operation_id = ${lease.effectOperationId} AND effect.section = 'ranked'
-    ) AS complete
-  `
-
-  return effect?.complete ? 'acknowledged' : 'none'
-}
-
 function entriesForKinds<Kind extends string>(
   kinds: readonly Kind[],
   entry: EffectStateEntry,
@@ -92,14 +73,14 @@ type JobOwnedEffectKind =
   | 'clan-refresh'
   | 'proof'
   | 'primary-player-verification'
+  | 'interactive-player-refresh'
+  | 'ranked-player-pulse'
+  | 'player-name-verification'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect
 export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): EffectStates {
   const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
-    'interactive-player-refresh': { effectState: staleSectionsCommitted },
-    'ranked-player-pulse': { effectState: rankedSectionCommitted },
-    'player-name-verification': { effectState: rankedSectionCommitted },
     'ranking-retention': {},
     'leaderboard-deep-crawl': {},
     'statistics-publication': { effectState: statisticsPublicationEffectState },
