@@ -20,6 +20,7 @@ import { addProfileViewDays } from './migrations/0018-add-profile-view-days'
 import { addLeaderboardTeamModeObservations } from './migrations/0019-add-leaderboard-team-mode-observations'
 import { addLeaderboardTeamObservationsSecondPlayerIndex } from './migrations/0020-add-leaderboard-team-observations-second-player-index'
 import { movePrimaryMonitoringWatermark } from './migrations/0021-move-primary-monitoring-watermark'
+import { dropPrimaryMonitoringWatermarkView } from './migrations/0022-drop-primary-monitoring-watermark-view'
 
 export {
   CAREER_FRESHNESS_SECONDS,
@@ -152,6 +153,7 @@ const migrations = [
   addLeaderboardTeamModeObservations,
   addLeaderboardTeamObservationsSecondPlayerIndex,
   movePrimaryMonitoringWatermark,
+  dropPrimaryMonitoringWatermarkView,
 ] as const
 
 export const playerModule = {
