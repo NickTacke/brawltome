@@ -18,7 +18,7 @@ import {
   createPlayerNameVerificationPlanner,
   readPlayerNameVerificationConfig,
 } from '../src/player-name-verification'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 let control: ReturnType<typeof postgres>
@@ -175,12 +175,12 @@ describe('Player name verification through durable operations', () => {
     })
 
     const run = () =>
-      runOneRefreshOperation(operations, 'worker', {
+      runOneWithJobs(operations, 'worker', {
         leaseMs: 10_000,
         retryDelayMs: 1,
         admission,
         sourceAdmission,
-        movedJobs: [createPlayerNameVerificationJob({ verifyName: execute })],
+        jobs: [createPlayerNameVerificationJob({ verifyName: execute })],
       })
 
     expect(await run()).toBe(true)

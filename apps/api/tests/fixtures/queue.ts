@@ -2,8 +2,8 @@ import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import { createLeaderboardCollectionJob, defaultDeepCrawlSlicePages } from '@brawltome/ranking'
 import {
-  type AdmissionConfig,
   createEffectStates,
+  createJobRegistry,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   defineJob,
@@ -13,12 +13,13 @@ import {
   type Lease,
   type QueueWorker,
   type RefreshOperationsDatabases,
+  type RunOneJobOptions,
+  runOneJob,
   type SourceAdmitter,
   waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
-import { createJobsFromOptions } from '../../src/refresh-operations-worker'
 import {
   createStatisticsJobs,
   createWorkerJobs,
@@ -152,34 +153,18 @@ export function createTestDeadLetters(database: Database) {
   return createPostgresDeadLetterOperations(database, createDeadLetterHooks())
 }
 
-const jobListAdmission: AdmissionConfig = {
-  totalConcurrency: 4,
-  interactiveReservation: 1,
-  classConcurrency: {
-    interactive: 2,
-    'primary-monitoring': 1,
-    leaderboard: 1,
-    'global-statistics': 1,
-    projection: 1,
-    maintenance: 1,
-  },
-  backgroundWeights: {
-    'primary-monitoring': 5,
-    leaderboard: 4,
-    'global-statistics': 3,
-    projection: 2,
-    maintenance: 1,
-  },
-}
-
 // the worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do
 export function createTestJobs(): JobDefinition<unknown>[] {
-  return createJobsFromOptions({
-    leaseMs: 30_000,
-    retryDelayMs: 1_000,
-    admission: jobListAdmission,
-    movedJobs: createIdleWorkerJobs(noDiscoveryEffects),
-  })
+  return createIdleWorkerJobs(noDiscoveryEffects)
+}
+
+// the worker's dispatch, claiming the next due operation and running the job of its kind from the given list
+export function runOneWithJobs(
+  queue: QueueWorker,
+  workerId: string,
+  { jobs, ...options }: RunOneJobOptions & { jobs: readonly JobDefinition<unknown>[] },
+): Promise<boolean> {
+  return runOneJob(queue, workerId, createJobRegistry(jobs), options)
 }
 
 function scriptedRankedSnapshot(brawlhallaId: number) {

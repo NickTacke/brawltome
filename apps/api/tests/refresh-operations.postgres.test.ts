@@ -18,9 +18,8 @@ import postgres from 'postgres'
 import { apiModules } from '../src/modules'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { createProofJob, createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -325,12 +324,12 @@ describe('durable Refresh Operations', () => {
       provenance: { source: 'integration-test', requestedBy: 'issue-214' },
     })
 
-    await runOneRefreshOperation(operations, 'renewing-worker', {
+    await runOneWithJobs(operations, 'renewing-worker', {
       leaseMs: 1_000,
       renewEveryMs: 100,
       retryDelayMs: 1,
       admission: testAdmission,
-      movedJobs: [
+      jobs: [
         createProofJob(async (lease) => {
           await Bun.sleep(1_200)
 
@@ -396,11 +395,11 @@ describe('durable Refresh Operations', () => {
     expect(afterTerminal.operationId).not.toBe(lease.operationId)
 
     expect(
-      await runOneRefreshOperation(worker, 'worker-c', {
+      await runOneWithJobs(worker, 'worker-c', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
-        movedJobs: [createProofJob()],
+        jobs: [createProofJob()],
       }),
     ).toBe(true)
   })
@@ -436,11 +435,11 @@ describe('durable Refresh Operations', () => {
     })
 
     expect(
-      await runOneRefreshOperation(operations, 'worker-c', {
+      await runOneWithJobs(operations, 'worker-c', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
-        movedJobs: [createProofJob()],
+        jobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -918,11 +917,11 @@ describe('durable Refresh Operations', () => {
     const worker = createTestQueue({ database })
 
     expect(
-      await runOneRefreshOperation(worker, 'poll-worker', {
+      await runOneWithJobs(worker, 'poll-worker', {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
-        movedJobs: [createProofJob()],
+        jobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -945,11 +944,11 @@ describe('durable Refresh Operations', () => {
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
-      movedJobs: [createProofJob(failEffect)],
+      jobs: [createProofJob(failEffect)],
     }
 
-    expect(await runOneRefreshOperation(worker, 'worker-a', options)).toBe(true)
-    expect(await runOneRefreshOperation(worker, 'worker-b', options)).toBe(true)
+    expect(await runOneWithJobs(worker, 'worker-a', options)).toBe(true)
+    expect(await runOneWithJobs(worker, 'worker-b', options)).toBe(true)
 
     const state = await worker.inspect(poison.operationId)
 
@@ -986,11 +985,11 @@ describe('durable Refresh Operations', () => {
 
     try {
       expect(
-        await runOneRefreshOperation(operations, 'source-deferral-worker', {
+        await runOneWithJobs(operations, 'source-deferral-worker', {
           leaseMs: 1_000,
           retryDelayMs: 1,
           admission: testAdmission,
-          movedJobs: [
+          jobs: [
             createProofJob(async () => {
               throw new SourceAdmissionLimitedError(37)
             }),

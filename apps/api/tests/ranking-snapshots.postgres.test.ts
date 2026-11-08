@@ -22,8 +22,7 @@ import {
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createLeaderboardTestJob, createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createLeaderboardTestJob, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
 let admin: ReturnType<typeof postgres>
@@ -1657,11 +1656,11 @@ describe('durable multi-mode collection operations', () => {
     const sourceCalls: string[] = []
 
     expect(
-      await runOneRefreshOperation(operations, 'source-admission-worker', {
+      await runOneWithJobs(operations, 'source-admission-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        movedJobs: [
+        jobs: [
           createLeaderboardTestJob('leaderboard-solo-2v2', {
             publication: ranking,
             sourceAdmission,
@@ -1722,12 +1721,12 @@ describe('durable multi-mode collection operations', () => {
     const sourceCalls: string[] = []
 
     expect(
-      await runOneRefreshOperation(operations, 'expiring-leaderboard-worker', {
+      await runOneWithJobs(operations, 'expiring-leaderboard-worker', {
         leaseMs: 10_000,
         renewEveryMs: 60_000,
         retryDelayMs: 0,
         admission,
-        movedJobs: [
+        jobs: [
           createLeaderboardTestJob('leaderboard-1v1', {
             publication: ranking,
             sourceAdmission: {

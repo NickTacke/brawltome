@@ -38,8 +38,10 @@ import {
 } from '@brawltome/ranking'
 import {
   createEffectStates,
+  createJobRegistry,
   createPostgresRefreshOperations,
   type Lease,
+  runOneJob,
   SourceAdmissionLimitedError,
   waitForRenewal,
 } from '@brawltome/refresh-operations'
@@ -68,7 +70,6 @@ import {
   readPlayerNameVerificationConfig,
 } from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
-import { runOneRefreshOperation } from './refresh-operations-worker'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
@@ -225,6 +226,8 @@ const workerJobs = createWorkerJobs({
     collectEvidence: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
   },
 })
+
+const jobRegistry = createJobRegistry(workerJobs)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
@@ -534,11 +537,10 @@ try {
       listener ??= await operations.listen(onWakeup)
     },
     runOne: (repository, slotWorkerId, common) =>
-      runOneRefreshOperation(repository, slotWorkerId, {
+      runOneJob(repository, slotWorkerId, jobRegistry, {
         ...common,
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
-        movedJobs: workerJobs,
       }),
   })
 } catch (error) {

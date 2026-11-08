@@ -11,8 +11,7 @@ import {
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -921,20 +920,20 @@ describe('Statistics full launch cohort publication', () => {
     await bindPublication(statistics, second.generationId, 'lifetime')
 
     expect(
-      await runOneRefreshOperation(operations, 'rejected-publication-worker', {
+      await runOneWithJobs(operations, 'rejected-publication-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        movedJobs: createStatisticsTestJobs(statistics),
+        jobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
     expect(
-      await runOneRefreshOperation(operations, 'rejected-career-publication-worker', {
+      await runOneWithJobs(operations, 'rejected-career-publication-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        movedJobs: createStatisticsTestJobs(statistics),
+        jobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
@@ -1105,11 +1104,11 @@ describe('Statistics full launch cohort publication', () => {
     expect(replay.outcome).toBe('replayed')
 
     expect(
-      await runOneRefreshOperation(operations, 'publication-replay-worker', {
+      await runOneWithJobs(operations, 'publication-replay-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        movedJobs: createStatisticsTestJobs(statistics),
+        jobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 

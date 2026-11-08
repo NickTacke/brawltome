@@ -6,8 +6,7 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
 import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let connectionString = ''
 let database: TestDatabase
@@ -196,11 +195,11 @@ describe('Players to Discovery projection delivery', () => {
       let firstDelivery: { appliedEvents: number; eventIds: string[] } | undefined
 
       expect(
-        await runOneRefreshOperation(operations, 'projection-worker', {
+        await runOneWithJobs(operations, 'projection-worker', {
           leaseMs: 10_000,
           retryDelayMs: 10,
           admission,
-          movedJobs: [
+          jobs: [
             createPlayerDiscoveryProjectionJob({
               deliverPending: async (batchSize, effectOperationId) => {
                 firstDelivery = await discovery.deliverPendingPlayers(source, batchSize, effectOperationId)
@@ -312,11 +311,11 @@ describe('Players to Discovery projection delivery', () => {
       const acknowledgmentFailure = new Error('simulated owner acknowledgment failure')
 
       expect(
-        await runOneRefreshOperation(operations, 'failed-ack-worker', {
+        await runOneWithJobs(operations, 'failed-ack-worker', {
           leaseMs: 10_000,
           retryDelayMs: 0,
           admission,
-          movedJobs: [
+          jobs: [
             createPlayerDiscoveryProjectionJob({
               deliverPending: (batchSize, effectOperationId) =>
                 discovery.deliverPendingPlayers(
@@ -347,11 +346,11 @@ describe('Players to Discovery projection delivery', () => {
       operations = createTestQueue({ database: operationsClient }, discovery)
 
       expect(
-        await runOneRefreshOperation(operations, 'restarted-projection-worker', {
+        await runOneWithJobs(operations, 'restarted-projection-worker', {
           leaseMs: 10_000,
           retryDelayMs: 0,
           admission,
-          movedJobs: [
+          jobs: [
             createPlayerDiscoveryProjectionJob({
               deliverPending: (batchSize, effectOperationId) =>
                 discovery.deliverPendingPlayers(source, batchSize, effectOperationId),

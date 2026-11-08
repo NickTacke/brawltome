@@ -7,8 +7,7 @@ import {
   retryDelayForAttempt,
 } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createProofJob } from './fixtures/queue'
+import { createProofJob, runOneWithJobs } from './fixtures/queue'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -65,12 +64,12 @@ describe('refresh operations worker source retry', () => {
     }
 
     expect(
-      await runOneRefreshOperation(operations as never, 'worker', {
+      await runOneWithJobs(operations as never, 'worker', {
         leaseMs: 1_000,
         retryDelayMs: 10,
         admission,
         telemetry,
-        movedJobs: [createProofJob()],
+        jobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -95,12 +94,12 @@ describe('refresh operations worker source retry', () => {
 
     completed = false
 
-    await runOneRefreshOperation(operations as never, 'worker', {
+    await runOneWithJobs(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
       telemetry: failingTelemetry,
-      movedJobs: [createProofJob()],
+      jobs: [createProofJob()],
     })
 
     await expect(failingTelemetry.shutdown(5)).resolves.toBeUndefined()
@@ -132,12 +131,12 @@ describe('refresh operations worker source retry', () => {
       fail: async () => 'lease-lost' as const,
     }
 
-    await runOneRefreshOperation(operations as never, 'worker', {
+    await runOneWithJobs(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
       telemetry,
-      movedJobs: [
+      jobs: [
         createProofJob(async () => {
           throw new Error('execution failed')
         }),
@@ -180,12 +179,12 @@ describe('refresh operations worker source retry', () => {
     }
 
     await expect(
-      runOneRefreshOperation(operations as never, 'worker', {
+      runOneWithJobs(operations as never, 'worker', {
         leaseMs: 1_000,
         retryDelayMs: 10,
         admission,
         telemetry,
-        movedJobs: [
+        jobs: [
           createProofJob(async () => {
             throw new Error('execution failed')
           }),
@@ -227,12 +226,12 @@ describe('refresh operations worker source retry', () => {
       const sink = createMemorySink()
       const telemetry = createTelemetry({ service: 'worker', sink, drainIntervalMs: 0 })
 
-      await runOneRefreshOperation(operations as never, 'worker', {
+      await runOneWithJobs(operations as never, 'worker', {
         leaseMs: 1_000,
         retryDelayMs: 10,
         admission,
         telemetry,
-        movedJobs: [
+        jobs: [
           createProofJob(async () => {
             throw error
           }),
@@ -285,7 +284,7 @@ describe('refresh operations worker source retry', () => {
         scheduleWindowAt: null,
       }
 
-      await runOneRefreshOperation(
+      await runOneWithJobs(
         {
           claim: async () => lease,
           renew: async () => 'renewed' as const,
@@ -301,7 +300,7 @@ describe('refresh operations worker source retry', () => {
           retryDelayMs: 2_000,
           retryBackoff: { multiplier: 3, maxDelayMs: 15_000, jitterRatio: 0.2, random: () => 0.5 },
           admission,
-          movedJobs: [
+          jobs: [
             createProofJob(async () => {
               throw new Error('Brawlhalla v0 returned 502')
             }),
@@ -366,11 +365,11 @@ describe('refresh operations worker failure handling', () => {
       },
     }
 
-    await runOneRefreshOperation(operations as never, 'worker', {
+    await runOneWithJobs(operations as never, 'worker', {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      movedJobs: [createProofJob(explode)],
+      jobs: [createProofJob(explode)],
     })
 
     expect(failures.map(({ code }) => code)).toEqual(['proof_execution_failed'])
@@ -389,10 +388,10 @@ describe('refresh operations worker claim latency', () => {
       complete: async () => 'transitioned' as const,
     }
 
-    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry, movedJobs: [createProofJob()] }
+    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry, jobs: [createProofJob()] }
 
-    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(true)
-    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(false)
+    expect(await runOneWithJobs(operations as never, 'worker', options)).toBe(true)
+    expect(await runOneWithJobs(operations as never, 'worker', options)).toBe(false)
 
     const claimLatency = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_claim_duration_ms')
     const series = claimLatency?.series.map(({ labels, count }) => ({ labels, count }))
