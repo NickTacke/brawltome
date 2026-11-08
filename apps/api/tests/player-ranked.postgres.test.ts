@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createDatabase } from '@brawltome/foundation'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresRankedPlayers,
   playerModule,
@@ -9,9 +9,9 @@ import {
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
 import {
+  createPostgresRefreshOperations,
   type OperationLease,
   type PostgresRefreshOperations,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -92,7 +92,7 @@ async function claimRankedOperation(operations: PostgresRefreshOperations, brawl
   await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
   const lease = await operations.claim('ranked-test-worker', 10_000, admission, 'interactive-player-refresh')
 
-  if (!lease || lease.kind !== 'interactive-player-refresh' || lease.operationId !== reserved.operationId) {
+  if (lease?.kind !== 'interactive-player-refresh' || lease.operationId !== reserved.operationId) {
     throw new Error('Expected an interactive lease')
   }
 
@@ -111,7 +111,7 @@ async function claimPulseOperation(operations: PostgresRefreshOperations, brawlh
 
   const lease = await operations.claim(`ranked-pulse-worker:${randomUUID()}`, 10_000, admission, 'ranked-player-pulse')
 
-  if (!lease || lease.kind !== 'ranked-player-pulse' || lease.operationId !== accepted.operationId) {
+  if (lease?.kind !== 'ranked-player-pulse' || lease.operationId !== accepted.operationId) {
     throw new Error('Expected a ranked pulse lease')
   }
 
@@ -1177,7 +1177,7 @@ describe('Players-owned canonical ranked state', () => {
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     const lease = await operations.claim('expired-ranked-worker', 10_000, admission)
 
-    if (!lease || lease.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
+    if (lease?.kind !== 'interactive-player-refresh') throw new Error('Expected an interactive lease')
 
     await expireLease(lease.operationId)
 

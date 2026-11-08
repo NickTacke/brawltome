@@ -1,7 +1,7 @@
 'use client'
-import { legendAvatarUrl } from '@brawltome/game-data'
 
 import { type PlayerShortcutsContract, parsePlayerShortcutsOutput } from '@brawltome/contracts'
+import { legendAvatarUrl } from '@brawltome/game-data'
 import { useQuery, type useQueryClient } from '@tanstack/react-query'
 import { pinnedPlayersKey } from './pinnedPlayersCache'
 import { trpc } from './trpc'

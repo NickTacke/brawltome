@@ -3,7 +3,7 @@ import { eq, sql as rawSql } from 'drizzle-orm'
 import { date, jsonb as drizzleJsonb, integer, pgTable, timestamp } from 'drizzle-orm/pg-core'
 import postgres from 'postgres'
 import { json, jsonb } from '../columns'
-import { type Database, createDatabase } from '../database'
+import { createDatabase, type Database } from '../database'
 
 const connectionString = process.env.DATABASE_URL
 const describeWithDatabase = connectionString ? describe : describe.skip

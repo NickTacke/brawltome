@@ -1,14 +1,14 @@
+import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import { QueueLoadError, QueueView } from '@/components/Queue'
 import {
   PAGE_SIZE,
-  QUEUE_PREFERENCE_COOKIE,
-  type QueueSearchParams,
   parseQueuePreference,
   parseQueueSearchParams,
+  QUEUE_PREFERENCE_COOKIE,
+  type QueueSearchParams,
 } from '@/components/Queue/utils'
 import { getServerTrpc } from '@/lib/trpc-server'
-import type { Metadata } from 'next'
-import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 

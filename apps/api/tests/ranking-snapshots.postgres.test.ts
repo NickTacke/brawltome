@@ -1,23 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  collectAndPublishLeaderboardGeneration,
+  createPostgresRanking,
   type LeaderboardGenerationCandidate,
   type LeaderboardMode,
   type LeaderboardScope,
+  leaderboardModes,
   type PublishedLeaderboardRow,
   type RankingPublicationAuthorization,
   type RegionalLeaderboardScope,
-  collectAndPublishLeaderboardGeneration,
-  createPostgresRanking,
-  leaderboardModes,
   rankingModule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
+  createPostgresRefreshOperations,
   type LeaderboardOperationKind,
   type OperationLease,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -1024,8 +1024,7 @@ describe('immutable Ranking snapshots for every mode', () => {
         const euRows = publication.snapshots.get('EU')
 
         if (
-          !euRows ||
-          euRows[0].identity.type !== 'fixed-two-vs-two-team' ||
+          euRows?.[0].identity.type !== 'fixed-two-vs-two-team' ||
           euRows[1].identity.type !== 'fixed-two-vs-two-team'
         ) {
           throw new Error('Expected fixed-team rows')
@@ -1132,7 +1131,7 @@ describe('immutable Ranking snapshots for every mode', () => {
 
     const successor = await operations.claim('mode-replay-worker', 10_000, admission, 'leaderboard-solo-2v2')
 
-    if (!successor || successor.kind !== 'leaderboard-solo-2v2') throw new Error('Expected Solo 2v2 replay lease')
+    if (successor?.kind !== 'leaderboard-solo-2v2') throw new Error('Expected Solo 2v2 replay lease')
 
     expect(successor.effectOperationId).toBe(original.effectOperationId)
 
@@ -1237,7 +1236,7 @@ describe('immutable Ranking snapshots for every mode', () => {
     const malformed = candidate('2v2', rollback.operationKey, undefined, 1, 32)
     const eu = malformed.snapshots.get('EU')
 
-    if (!eu || eu[0].identity.type !== 'fixed-two-vs-two-team') throw new Error('Expected fixed candidate')
+    if (eu?.[0].identity.type !== 'fixed-two-vs-two-team') throw new Error('Expected fixed candidate')
 
     const players = eu[0].identity.players
 

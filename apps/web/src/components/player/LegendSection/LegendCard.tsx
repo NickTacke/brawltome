@@ -1,14 +1,14 @@
+import { legendAvatarUrl, normalizeWeaponName } from '@brawltome/game-data'
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
-import { legendAvatarUrl, normalizeWeaponName } from '@brawltome/game-data'
 import {
-  type PlayerData,
-  WinLossBar,
   calculateEloReset,
   formatCompact,
   formatHours,
   getRankBanner,
+  type PlayerData,
   parseNum,
+  WinLossBar,
 } from '../shared'
 import { WeaponStatRow } from './WeaponStatRow'
 

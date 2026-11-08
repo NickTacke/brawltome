@@ -3,10 +3,10 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
-  type OperationLease,
   createPostgresRefreshOperations,
+  type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
@@ -118,7 +118,8 @@ async function runCli(args: string[], env: Record<string, string>) {
 describe('dead-letter operations', () => {
   test('lists redacted records and inspects full immutable evidence', async () => {
     const { operations, operationId } = await createDeadLetter()
-    const second = await createDeadLetter('second-sensitive-payload')
+
+    await createDeadLetter('second-sensitive-payload')
 
     const firstPage = await operations.listDeadLetters({ limit: 1 })
 
@@ -718,7 +719,7 @@ describe('dead-letter operations', () => {
     expect(`${missingAuth.stdout}${missingAuth.stderr}`).not.toContain(rawToken)
     expect(`${missingAuth.stdout}${missingAuth.stderr}`).not.toContain('ECONNREFUSED')
 
-    const { operations, operationId } = await createDeadLetter('cli-sensitive-payload')
+    const { operationId } = await createDeadLetter('cli-sensitive-payload')
     const listed = await runCli(['list', '--limit', '10'], operatorEnv(rawToken))
 
     expect(listed.exitCode).toBe(0)

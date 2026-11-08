@@ -1,12 +1,12 @@
 import './globals.css'
+import type { Metadata, Viewport } from 'next'
+import { cookies } from 'next/headers'
 import { MaintenancePage } from '@/components/MaintenancePage'
 import { Providers } from '@/components/Providers'
 import { SidebarLayout } from '@/components/sidebar/SidebarLayout'
 import { SidebarProvider } from '@/components/sidebar/SidebarProvider'
 import { resolveInitialAccountTheme } from '@/lib/theme'
 import { getServerTrpc } from '@/lib/trpc-server'
-import type { Metadata, Viewport } from 'next'
-import { cookies } from 'next/headers'
 
 export const metadata: Metadata = {
   title: {

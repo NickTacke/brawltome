@@ -19,9 +19,8 @@ export const appRouter = router({
   statistics: statisticsRouter,
 }) satisfies ContractAppRouter
 
-type Equal<Left, Right> = (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
-  ? true
-  : false
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2 ? true : false
 type Assert<Condition extends true> = Condition
 export type AppRouterMatchesContract = Assert<
   Equal<inferRouterInputs<typeof appRouter>, inferRouterInputs<ContractAppRouter>> extends true

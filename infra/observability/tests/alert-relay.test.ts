@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DiscordClient, type MessageBody, SUPPRESS_NOTIFICATIONS, pageMentions } from '../alert-relay/discord'
+import { DiscordClient, type MessageBody, pageMentions, SUPPRESS_NOTIFICATIONS } from '../alert-relay/discord'
 import { AlertRelay, type ApiAlert, FileStateStore, type RelayState, type WebhookAlert } from '../alert-relay/relay'
 import { formatDuration, grafanaLink, pageMessage, renderBoard } from '../alert-relay/render'
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 
 let database: TestDatabase

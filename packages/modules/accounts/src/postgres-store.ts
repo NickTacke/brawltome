@@ -3,7 +3,6 @@ import {
   ACCOUNT_THEMES,
   type Account,
   type AccountPreferences,
-  type AccountPreferencesUpdate,
   type AccountsStore,
   InvalidPinnedPlayerError,
   LEADERBOARD_BRACKETS,

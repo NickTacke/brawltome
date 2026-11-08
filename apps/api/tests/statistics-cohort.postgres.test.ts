@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   type AdmissionConfig,
-  type OperationLease,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
+  type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import {
@@ -179,7 +179,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
     const publication = await operations.claim('insufficient-publication', 1_000, admission, 'statistics-publication')
 
-    if (!publication || publication.kind !== 'statistics-publication') throw new Error('publication lease missing')
+    if (publication?.kind !== 'statistics-publication') throw new Error('publication lease missing')
 
     const rejected = await statistics.validateAndPublish({
       operationId: publication.operationId,
@@ -294,7 +294,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const ranked = await operations.claim('ranked-worker', 1_000, admission, 'statistics-ranked-collection')
 
     expect(ranked?.kind).toBe('statistics-ranked-collection')
-    if (!ranked || ranked.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
+    if (ranked?.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
 
     await expect(
       statistics.commitObservation({
@@ -314,7 +314,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     const lifetime = await operations.claim('lifetime-worker', 1_000, admission, 'statistics-lifetime-collection')
 
-    if (!lifetime || lifetime.kind !== 'statistics-lifetime-collection') throw new Error('lifetime lease missing')
+    if (lifetime?.kind !== 'statistics-lifetime-collection') throw new Error('lifetime lease missing')
 
     const retryControl = postgres(connectionString, { max: 1 })
 
@@ -326,7 +326,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     await operations.fail(lifetime, { code: 'source_failed', message: 'temporary', retryable: true }, 0)
     const retry = await operations.claim('lifetime-worker', 1_000, admission, 'statistics-lifetime-collection')
 
-    if (!retry || retry.kind !== 'statistics-lifetime-collection') throw new Error('lifetime retry missing')
+    if (retry?.kind !== 'statistics-lifetime-collection') throw new Error('lifetime retry missing')
 
     expect(retry.operationId).toBe(lifetime.operationId)
     await operations.fail(retry, { code: 'source_failed', message: 'still broken', retryable: true }, 0)
@@ -370,7 +370,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     const denied = await operations.claim('admission-denied', 1_000, admission, 'statistics-ranked-collection')
 
-    if (!denied || denied.kind !== 'statistics-ranked-collection') throw new Error('denied lease missing')
+    if (denied?.kind !== 'statistics-ranked-collection') throw new Error('denied lease missing')
 
     expect(denied.attemptNumber).toBe(1)
 
@@ -385,7 +385,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
       const lease = await operations.claim('source-worker', 1_000, admission, 'statistics-ranked-collection')
 
-      if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('source lease missing')
+      if (lease?.kind !== 'statistics-ranked-collection') throw new Error('source lease missing')
 
       expect(lease.attemptNumber).toBe(attemptNumber)
 
@@ -417,7 +417,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     const replayLease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
 
-    if (!replayLease || replayLease.kind !== 'statistics-ranked-collection') throw new Error('replay lease missing')
+    if (replayLease?.kind !== 'statistics-ranked-collection') throw new Error('replay lease missing')
 
     expect(
       await statistics.preflightCollectionAttempt({
@@ -449,7 +449,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
     const lease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
 
-    if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
+    if (lease?.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
 
     const durableAuthorization = { ...authorization(lease), kind: lease.kind }
 
@@ -500,13 +500,12 @@ describe('Statistics EU Diamond+ production tracer', () => {
     await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, first, intent)))
     const expired = await first.claim('expired-worker', 20, admission, 'statistics-lifetime-collection')
 
-    if (!expired || expired.kind !== 'statistics-lifetime-collection') throw new Error('expiring lease missing')
+    if (expired?.kind !== 'statistics-lifetime-collection') throw new Error('expiring lease missing')
 
     await Bun.sleep(35)
     const replacement = await second.claim('replacement-worker', 1_000, admission, 'statistics-lifetime-collection')
 
-    if (!replacement || replacement.kind !== 'statistics-lifetime-collection')
-      throw new Error('replacement lease missing')
+    if (replacement?.kind !== 'statistics-lifetime-collection') throw new Error('replacement lease missing')
 
     expect(
       await statistics.commitObservation({
@@ -561,7 +560,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     await setup.end()
     const lease = await operations.claim('crashing-worker', 5_000, admission, 'statistics-ranked-collection')
 
-    if (!lease || lease.kind !== 'statistics-ranked-collection') throw new Error('crash lease missing')
+    if (lease?.kind !== 'statistics-ranked-collection') throw new Error('crash lease missing')
 
     expect(lease.operationId).toBe(finalAttempt.id)
 

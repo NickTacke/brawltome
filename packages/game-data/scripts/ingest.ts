@@ -2,7 +2,7 @@
 // Regenerates packages/game-data/src/generated/* from locally-extracted SWZ dumps.
 // Prereq: BRAWLTOME_SWZ_EXTRACT_ROOT points to a complete extract directory.
 
-import { constants, accessSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { crossoverAliases } from '../src/crossover-aliases'
 import type { Hurtbox, Legend, LevelMeta, Power, Skin } from '../src/types'

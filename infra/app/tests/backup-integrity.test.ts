@@ -77,6 +77,7 @@ esac
   chmodSync(rclone, 0o755)
   for (const [command, body] of [
     ['flock', '#!/bin/sh\nexit 0\n'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion in a stub script
     ['sha256sum', '#!/bin/sh\nsleep "${FAKE_SHA256_DELAY:-0}"\nexec shasum -a 256 "$@"\n'],
   ] as const) {
     const path = join(bin, command)

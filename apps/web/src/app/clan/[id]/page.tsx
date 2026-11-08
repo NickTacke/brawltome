@@ -1,8 +1,8 @@
+import type { Metadata } from 'next'
+import { cache } from 'react'
 import { ClanProfile } from '@/components/clan/ClanProfile'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
-import type { Metadata } from 'next'
-import { cache } from 'react'
 
 export const dynamic = 'force-dynamic'
 

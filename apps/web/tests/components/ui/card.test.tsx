@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 
 describe('Card local contract', () => {
   test('renders the existing primitive through the web barrel', () => {

@@ -1,9 +1,9 @@
 'use client'
 
-import { TableCell, TableRow } from '@/components/ui'
-import { fixEncoding, formatNum } from '@/lib/utils'
 import { Crown, Shield, User, UserPlus } from 'lucide-react'
 import Link from 'next/link'
+import { TableCell, TableRow } from '@/components/ui'
+import { fixEncoding, formatNum } from '@/lib/utils'
 import type { ClanMember } from './utils'
 
 const getRankIcon = (rank: string | null) => {

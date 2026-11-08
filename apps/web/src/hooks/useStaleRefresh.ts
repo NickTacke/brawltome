@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   type PollDelay,
   type RefreshPush,
-  type StaleRefreshSettlement,
   resolvePollDelay,
+  type StaleRefreshSettlement,
   startRefreshRun,
 } from '../lib/refresh-run'
 import { isStale } from '../lib/staleness'
@@ -36,8 +36,8 @@ export {
   type PollDelay,
   type RefreshPush,
   RefreshTimeoutError,
-  type StaleRefreshSettlement,
   resolvePollDelay,
+  type StaleRefreshSettlement,
 } from '../lib/refresh-run'
 
 interface UseStaleRefreshOptions<T> {

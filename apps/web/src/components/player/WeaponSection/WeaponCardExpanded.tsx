@@ -1,9 +1,9 @@
 'use client'
 
 import type { RichWeaponAgg } from '@/lib/weapon-aggregation'
+import { computeWeaponDerived } from './utils'
 import { WeaponOverallStats } from './WeaponOverallStats'
 import { WeaponRankedStats } from './WeaponRankedStats'
-import { computeWeaponDerived } from './utils'
 
 interface WeaponCardExpandedProps {
   weapon: RichWeaponAgg

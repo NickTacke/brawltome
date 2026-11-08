@@ -1,10 +1,9 @@
 'use client'
 import { legendAvatarUrl } from '@brawltome/game-data'
-
+import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage, Badge, TableCell, TableRow } from '@/components/ui'
 import { fixEncoding } from '@/lib/utils'
-import Link from 'next/link'
-import { type SoloLeaderboardEntry, type TeamLeaderboardEntry, getRankStyle, playerHref } from './utils'
+import { getRankStyle, playerHref, type SoloLeaderboardEntry, type TeamLeaderboardEntry } from './utils'
 
 function PlayerLink({ brawlhallaId, name }: { brawlhallaId: number; name: string }) {
   const href = playerHref(brawlhallaId)

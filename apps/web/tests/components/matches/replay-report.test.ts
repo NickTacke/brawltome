@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI } from '@brawltome/contracts'
 import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
 import { replayReportFromJob } from '@/app/matches/replay-report'
-import { MATCH_SUMMARY_EXTENSION_URI, NATIVE_EXTENSION_URI } from '@brawltome/contracts'
 import { completedReplayJob } from '../../fixtures/completed-replay-job'
 
 describe('real replay report adapter', () => {

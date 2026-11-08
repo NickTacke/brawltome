@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@/components/ui'
 import { Menu } from 'lucide-react'
+import { Button } from '@/components/ui'
 
 import { useSidebar } from './SidebarProvider'
 

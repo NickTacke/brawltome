@@ -5,8 +5,8 @@ import {
   type NameVerificationOutcome,
   type PostgresPlayerNameVerifications,
   type PostgresRankedPlayers,
-  type V0RankedSource,
   refreshCanonicalRankedPlayer,
+  type V0RankedSource,
 } from '@brawltome/player'
 import type {
   AcceptOperationResult,

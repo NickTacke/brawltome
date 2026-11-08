@@ -412,7 +412,7 @@ function getPlayersFromMessage(
 
     const select = row.components[0]
 
-    if (!select || select.type !== 3) return [] // 3 = StringSelect
+    if (select?.type !== 3) return [] // 3 = StringSelect
 
     interface SelectOption {
       label: string

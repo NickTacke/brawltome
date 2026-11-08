@@ -1,10 +1,10 @@
 'use client'
 
-import { Skeleton } from '@/components/ui'
-import { signIn, useAccount } from '@/lib/auth'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { Skeleton } from '@/components/ui'
+import { signIn, useAccount } from '@/lib/auth'
 import { DiscordIcon } from './DiscordIcon'
 import { SignedInState } from './SignedInState'
 

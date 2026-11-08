@@ -4,8 +4,8 @@ import {
   type AccountPreferencesContract,
   type AccountPreferencesUpdateContract,
   type AccountViewContract,
-  type PrimaryPlayerVerificationStateContract,
   accountPreferencesSchema,
+  type PrimaryPlayerVerificationStateContract,
   parseAccountViewOutput,
   parsePrimaryPlayerVerificationStateOutput,
 } from '@brawltome/contracts'

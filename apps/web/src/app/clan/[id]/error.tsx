@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import { track } from '@/lib/analytics/browser'
 import { scrubError } from '@/lib/analytics/labels'
-import { useEffect } from 'react'
 
 interface ErrorProps {
   error: Error & { digest?: string }

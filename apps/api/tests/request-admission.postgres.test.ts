@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -704,7 +704,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
     const first = await operations.claim('source-worker-a', 1_000, testAdmission, 'interactive-player-refresh')
 
-    if (!first || first.kind !== 'interactive-player-refresh') throw new Error('Expected first interactive lease')
+    if (first?.kind !== 'interactive-player-refresh') throw new Error('Expected first interactive lease')
 
     expect(
       await admission.admitSource({
@@ -728,7 +728,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     const retry = await operations.claim('source-worker-b', 1_000, testAdmission, 'interactive-player-refresh')
 
-    if (!retry || retry.kind !== 'interactive-player-refresh') throw new Error('Expected retry interactive lease')
+    if (retry?.kind !== 'interactive-player-refresh') throw new Error('Expected retry interactive lease')
 
     expect(
       await admission.admitSource({
@@ -771,7 +771,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       'interactive-player-refresh',
     )
 
-    if (!original || original.kind !== 'interactive-player-refresh') throw new Error('Expected original lease')
+    if (original?.kind !== 'interactive-player-refresh') throw new Error('Expected original lease')
 
     expect(
       await admission.admitSource({

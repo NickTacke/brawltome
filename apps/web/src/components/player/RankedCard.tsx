@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
 import { FreshnessBadge } from './FreshnessBadge'
-import { type PlayerData, WinLossBar, calculateEloReset, calculateGlory, getRankBanner } from './shared'
+import { calculateEloReset, calculateGlory, getRankBanner, type PlayerData, WinLossBar } from './shared'
 
 interface RankedCardProps {
   player: PlayerData

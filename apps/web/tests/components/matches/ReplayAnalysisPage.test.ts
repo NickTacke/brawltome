@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { selectLoadedReplay, selectUploadedReplay } from '@/app/matches/ReplayAnalysisPage'
-import { ReplayReportView } from '@/app/matches/ReplayReportView'
-import { ReplayResultView, formatDuration, timelineX } from '@/app/matches/ReplayResultView'
-import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
 import { MATCH_SUMMARY_EXTENSION_URI } from '@brawltome/contracts'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { getPreviewMatch, replayReportFromPreview } from '@/app/matches/matches-preview-fixtures'
+import { selectLoadedReplay, selectUploadedReplay } from '@/app/matches/ReplayAnalysisPage'
+import { ReplayReportView } from '@/app/matches/ReplayReportView'
+import { formatDuration, ReplayResultView, timelineX } from '@/app/matches/ReplayResultView'
 import { completedReplayJob } from '../../fixtures/completed-replay-job'
 
 describe('replay result graphs', () => {

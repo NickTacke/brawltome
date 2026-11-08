@@ -1,8 +1,8 @@
 'use client'
 
-import { Button, Card } from '@/components/ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
+import { Button, Card } from '@/components/ui'
 import { FreshnessBadge } from '../FreshnessBadge'
 import { type PlayerData, parseNum } from '../shared'
 import { LegendCard } from './LegendCard'

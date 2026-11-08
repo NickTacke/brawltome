@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createOtlpHttpSink } from '../src/index'
-import { createTelemetry } from '../src/index'
+import { createOtlpHttpSink, createTelemetry } from '../src/index'
 import { createBrawltomeTraceProvider, createNodeRuntimeTelemetry } from '../src/node'
 
 const record = {

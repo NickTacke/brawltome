@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { launchCohortBrackets, launchCohortRegions } from '../cohort'
 import {
-  type LegendMetaLegend,
-  type LegendMetaObservedPlayer,
   aggregateLegendMetaSlice,
   buildLegendMetaArtifact,
+  type LegendMetaLegend,
+  type LegendMetaObservedPlayer,
   wilsonInterval95,
 } from '../legend-meta'
 

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type LeaderboardMode,
-  LeaderboardSourceError,
   decodeLeaderboardPage,
   fetchLeaderboardPage,
+  type LeaderboardMode,
+  LeaderboardSourceError,
 } from '../v1-leaderboard-source'
 
 const metrics = {

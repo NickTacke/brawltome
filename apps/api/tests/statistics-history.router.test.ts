@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { StatisticsHistoryQueries } from '@brawltome/statistics'
 import {
-  type CareerWeaponHistoryViewSnapshot,
-  type LegendMetaHistoryViewSnapshot,
   buildCareerWeaponUsageHistory,
   buildLegendMetaHistory,
+  type CareerWeaponHistoryViewSnapshot,
+  type LegendMetaHistoryViewSnapshot,
 } from '@brawltome/statistics'
 import { statisticsRouter } from '../src/router/statistics.router'
 import type { Context } from '../src/trpc/context'

@@ -5,9 +5,9 @@ import { createPostgresLeaderboardPlayerNames } from './leaderboard-names'
 import { createPostgresRankedPlayers } from './ranked/postgres'
 import {
   type CanonicalPlayerNameEvidence,
+  isUsablePlayerName,
   type PlayerReference,
   type PlayerReferenceQueries,
-  isUsablePlayerName,
   selectCanonicalPlayerName,
 } from './reference'
 

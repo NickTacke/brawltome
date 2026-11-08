@@ -13,10 +13,10 @@ export function currentOneVsOneBracket(rating: number): CurrentOneVsOneBracket |
 
 export {
   createLegendReferenceIndex,
+  type LegendReference,
   legendAvatarUrl,
   legendSlug,
   normalizeWeaponName,
-  type LegendReference,
 } from './src/reference-data'
 
 import { hurtboxes } from './src/generated/hurtboxes'
@@ -27,7 +27,7 @@ import { skins } from './src/generated/skins'
 import { legendAvatarUrl, legendSlug } from './src/reference-data'
 import type { Hurtbox, Legend, LevelMeta, PlayerAppearance, Power } from './src/types'
 
-export { legends, powers, hurtboxes }
+export { hurtboxes, legends, powers }
 
 const legendById = new Map(legends.map((l) => [l.heroId, l]))
 const levelById = new Map(levels.map((l) => [l.levelId, l]))

@@ -1,6 +1,6 @@
-import { Badge } from '@/components/ui'
-import { type SectionFreshness, freshnessLabel } from '@/lib/section-freshness'
 import { Clock } from 'lucide-react'
+import { Badge } from '@/components/ui'
+import { freshnessLabel, type SectionFreshness } from '@/lib/section-freshness'
 
 /** How old a profile section's data is, and where it came from when that is the leaderboard crawl. */
 export function FreshnessBadge({ freshness }: { freshness: SectionFreshness }) {

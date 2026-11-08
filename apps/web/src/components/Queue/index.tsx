@@ -1,6 +1,8 @@
 'use client'
+import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
 import { legendAvatarUrl } from '@brawltome/game-data'
-
+import Link from 'next/link'
+import { useEffect } from 'react'
 import { WinLossBar } from '@/components/player/shared'
 import {
   Avatar,
@@ -16,17 +18,14 @@ import {
 } from '@/components/ui'
 import { track } from '@/lib/analytics/browser'
 import { fixEncoding } from '@/lib/utils'
-import type { LeaderboardRecentActivityEntry, LeaderboardRecentActivityOutput } from '@brawltome/contracts'
-import Link from 'next/link'
-import { useEffect } from 'react'
 import {
   BRACKETS,
-  type QueueFilters,
-  REGIONS,
   buildQueueFilterQueryString,
   buildQueuePageQueryString,
   formatSignedDelta,
   playerHref,
+  type QueueFilters,
+  REGIONS,
 } from './utils'
 
 type AvailableActivity = Extract<LeaderboardRecentActivityOutput, { status: 'fresh' | 'stale' }>

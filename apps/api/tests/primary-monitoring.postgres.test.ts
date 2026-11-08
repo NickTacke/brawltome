@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule, createPostgresAccounts } from '@brawltome/accounts'
-import { type TestDatabase, createTestDatabase, openTestClient } from '@brawltome/foundation/testing'
+import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
@@ -258,8 +258,6 @@ describe('Primary Player monitoring', () => {
 
     await Promise.all([control.end(), ...replicaClients.map((client) => client.close())])
 
-    const restartedClient = openTestClient(database.connectionString)
-    const restarted = createPostgresRefreshOperations({ database: restartedClient })
     const restartedControl = postgres(connectionString, { max: 1 })
 
     const [enabled] = await restartedControl`
@@ -269,6 +267,6 @@ describe('Primary Player monitoring', () => {
     `
 
     expect(enabled.count).toBe(0)
-    await Promise.all([restartedControl.end(), restartedClient.close()])
+    await restartedControl.end()
   })
 })

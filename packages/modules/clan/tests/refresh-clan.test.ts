@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { processRefreshClan, processRefreshClanSection } from '../commands/refresh-clan'
 import { clanModule } from '../index'
 import { createPostgresClans } from '../postgres'

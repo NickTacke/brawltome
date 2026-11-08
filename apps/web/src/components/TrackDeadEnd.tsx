@@ -1,7 +1,7 @@
 'use client'
 
-import { track } from '@/lib/analytics/browser'
 import { useEffect } from 'react'
+import { track } from '@/lib/analytics/browser'
 
 // Only definitive dead ends are tracked here; polling timeouts are already counted as refresh.state 'timed_out'.
 type DeadEndKind = '404'

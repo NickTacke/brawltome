@@ -1,10 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatNum } from '@/lib/utils'
-import { useState } from 'react'
 import { FreshnessBadge } from './FreshnessBadge'
-import { type PlayerData, WinLossBar, getVirtualLevel, getXpForLevel, parseNum } from './shared'
+import { getVirtualLevel, getXpForLevel, type PlayerData, parseNum, WinLossBar } from './shared'
 
 interface CombatCardProps {
   player: PlayerData

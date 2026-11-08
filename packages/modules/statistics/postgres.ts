@@ -3,7 +3,6 @@ import type { Database, JsonValue } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import { acquireActiveLease } from '@brawltome/refresh-operations'
 import {
-  type CohortCandidateSnapshot,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
   type LaunchCohortCapacityEnvelope,
@@ -14,10 +13,10 @@ import {
   selectLaunchCohort,
 } from './cohort'
 import {
-  type CareerWeaponHistorySnapshot,
-  type LegendMetaHistorySnapshot,
   buildCareerWeaponUsageHistory,
   buildLegendMetaHistory,
+  type CareerWeaponHistorySnapshot,
+  type LegendMetaHistorySnapshot,
 } from './history'
 import type {
   CareerWeaponUsageFilters,
@@ -31,7 +30,6 @@ import type {
   CollectionAttemptResult,
   CollectionAuthorization,
   CollectionCommitResult,
-  CollectionObservation,
   CollectionPreflightResult,
   CollectionProduct,
   LaunchCellAudit,
@@ -45,7 +43,6 @@ import type {
   LegendMetaPublicationReason,
   LegendMetaQueryResult,
   ProductCollectionProgressAudit,
-  PublicationAuthorization,
   PublicationCommitResult,
   PublicationDecisionAudit,
   PublicationIntent,
@@ -53,10 +50,10 @@ import type {
   StatisticsTracer,
 } from './index'
 import {
+  buildLegendMetaArtifact,
   type LegendMetaArtifact,
   LegendMetaBuildError,
   type LegendMetaCell,
-  buildLegendMetaArtifact,
 } from './legend-meta'
 import {
   type CellCollectionProgress,
@@ -65,10 +62,10 @@ import {
 } from './publication'
 import { type LifetimeEvidence, validateLifetimeEvidence, validateRankedEvidence } from './source'
 import {
+  aggregateCareerWeaponUsage,
   CAREER_WEAPON_USAGE_METHODOLOGY_VERSION,
   type CareerWeaponUsageAggregate,
   CareerWeaponUsageValidationError,
-  aggregateCareerWeaponUsage,
   exactRatio,
 } from './weapon-usage'
 

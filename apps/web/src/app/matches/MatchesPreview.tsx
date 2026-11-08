@@ -1,19 +1,19 @@
 'use client'
 
-import { Avatar, AvatarFallback, Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import Link from 'next/link'
 import { useState } from 'react'
-import { ReplayReportView } from './ReplayReportView'
-import { formatDuration } from './ReplayResultView'
+import { Avatar, AvatarFallback, Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import {
-  type PreviewMatch,
   getPreviewAppearance,
   getPreviewMatch,
   getPreviewPlayer,
+  type PreviewMatch,
   previewMatches,
   previewMatchesForPlayer,
   replayReportFromPreview,
 } from './matches-preview-fixtures'
+import { ReplayReportView } from './ReplayReportView'
+import { formatDuration } from './ReplayResultView'
 
 export function MatchesPreview({
   matchId,

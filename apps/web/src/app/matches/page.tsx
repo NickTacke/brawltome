@@ -1,6 +1,6 @@
-import { matchesPreviewCookieName } from '@/lib/matches-preview'
 import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
+import { matchesPreviewCookieName } from '@/lib/matches-preview'
 import { MatchesContent } from './MatchesContent'
 
 export const metadata: Metadata = {

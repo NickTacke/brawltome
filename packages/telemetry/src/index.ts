@@ -3,13 +3,13 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
 import {
   type Context,
+  isSpanContextValid,
+  context as otelContext,
+  trace as otelTrace,
   type Span,
   type SpanContext,
   SpanStatusCode,
   type Tracer,
-  isSpanContextValid,
-  context as otelContext,
-  trace as otelTrace,
 } from '@opentelemetry/api'
 import {
   analyticsDevices,
@@ -26,17 +26,18 @@ export {
   analyticsTrpcCode,
   analyticsTrpcProcedure,
 } from './analytics-labels'
+
 import { otlpSignalUrl } from './otlp'
 import {
-  type TelemetryContext,
-  type TelemetryIds,
   formatTraceparent,
   parseTraceparent,
   requestContextFromHeaders,
+  type TelemetryContext,
+  type TelemetryIds,
 } from './propagation'
 
-export { formatTraceparent, parseTraceparent, requestContextFromHeaders }
 export type { TelemetryContext, TelemetryIds }
+export { formatTraceparent, parseTraceparent, requestContextFromHeaders }
 
 export type TelemetryScalar = string | number | boolean
 export type TelemetryAttributes = Readonly<Record<string, unknown>>
@@ -496,7 +497,7 @@ function normalizeAttributes(attributes?: TelemetryAttributes): Readonly<Record<
   let inspected = 0
 
   for (const key in attributes) {
-    if (!Object.prototype.hasOwnProperty.call(attributes, key)) continue
+    if (!Object.hasOwn(attributes, key)) continue
 
     if (inspected++ >= 24) break
 

@@ -3,7 +3,7 @@ import type { PlayerRefreshSettled } from '@brawltome/refresh-operations'
 import { createTelemetry, renderPrometheus } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { type RefreshEventStreamsOptions, createRefreshEventStreams } from '../src/refresh-event-streams'
+import { createRefreshEventStreams, type RefreshEventStreamsOptions } from '../src/refresh-event-streams'
 import { createRefreshEventRoutes } from '../src/routes/refresh-events.routes'
 
 function fakeSource() {

@@ -1,10 +1,10 @@
 'use client'
 
-import { Avatar, AvatarFallback, Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Crown } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { ComparisonBars, KnockoutTimeline, MovementBars, PositioningBars, formatDuration } from './ReplayReportCharts'
+import { Avatar, AvatarFallback, Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
+import { ComparisonBars, formatDuration, KnockoutTimeline, MovementBars, PositioningBars } from './ReplayReportCharts'
 import type { ReplayReport, ReplayReportPlayer } from './replay-report'
 
 function formatMetric(value: number | null): string {

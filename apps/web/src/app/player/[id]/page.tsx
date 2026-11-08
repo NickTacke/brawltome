@@ -1,10 +1,10 @@
+import { legendAvatarUrl } from '@brawltome/game-data'
+import type { Metadata } from 'next'
+import { cache } from 'react'
 import { PlayerProfile } from '@/components/player/PlayerProfile'
 import { loadPlayerWithReference } from '@/lib/player-reference'
 import { getServerTrpc } from '@/lib/trpc-server'
 import { fixEncoding } from '@/lib/utils'
-import { legendAvatarUrl } from '@brawltome/game-data'
-import type { Metadata } from 'next'
-import { cache } from 'react'
 
 export const dynamic = 'force-dynamic'
 

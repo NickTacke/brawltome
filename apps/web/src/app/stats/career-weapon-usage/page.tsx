@@ -1,7 +1,7 @@
+import type { Metadata } from 'next'
 import { CareerWeaponUsage, CareerWeaponUsageLoadError } from '@/components/statistics/CareerWeaponUsage'
 import { type CareerWeaponUsageSearchParams, parseCareerWeaponUsageFilters } from '@/components/statistics/filters'
 import { getServerTrpc } from '@/lib/trpc-server'
-import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 

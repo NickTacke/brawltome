@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
-import { type Telemetry, renderPrometheus } from '@brawltome/telemetry'
+import { renderPrometheus, type Telemetry } from '@brawltome/telemetry'
 
 function authorized(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected || provided.length !== expected.length) return false

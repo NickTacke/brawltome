@@ -1,6 +1,5 @@
 'use client'
 
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { useMemo, useState } from 'react'
 import {
   Area,
@@ -13,14 +12,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { ChartTooltip } from './ChartTooltip'
 import {
   type ChartPoint,
+  prepareChartData,
   type RatingHistoryEntry,
   SEASONS,
   type SeasonDef,
   TIER_THRESHOLDS,
-  prepareChartData,
 } from './utils'
 
 interface RatingChartProps {

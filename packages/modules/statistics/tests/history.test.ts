@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type CareerWeaponHistorySnapshot,
-  type LegendMetaHistorySnapshot,
   buildCareerWeaponUsageHistory,
   buildLegendMetaHistory,
+  type CareerWeaponHistorySnapshot,
   classifyAdjacentSnapshots,
+  type LegendMetaHistorySnapshot,
 } from '../history'
 
 const scope = { region: 'EU', bracket: 'Diamond+' }

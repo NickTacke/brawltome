@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { type TestDatabase, createTestDatabase } from '@brawltome/foundation/testing'
-import { type LeaderboardMode, type LeaderboardScope, createPostgresRanking, rankingModule } from '@brawltome/ranking'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { createPostgresRanking, type LeaderboardMode, type LeaderboardScope, rankingModule } from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
@@ -1108,7 +1108,7 @@ describe('Ranking snapshot retention', () => {
       // A stale lease cannot expire anything: the delete commits only with the lease row locked and current.
       const lease = await operations.claim('retention-worker', 30_000, admission, 'ranking-retention')
 
-      if (!lease || lease.kind !== 'ranking-retention') throw new Error('Expected a ranking retention lease')
+      if (lease?.kind !== 'ranking-retention') throw new Error('Expected a ranking retention lease')
 
       expect(lease.payload).toEqual({ retentionHours: 24, maxGenerations: 2 })
 

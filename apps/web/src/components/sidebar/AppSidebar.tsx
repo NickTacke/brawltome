@@ -1,15 +1,15 @@
 'use client'
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import type { AccountContract } from '@brawltome/contracts'
 import { User } from '@solar-icons/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 
 import type { PlayerShortcutNavigationItem } from '@/lib/playerShortcuts'
-import { PlayerShortcutAvatar } from './PlayerShortcutAvatar'
 import { navItems } from './nav-items'
+import { PlayerShortcutAvatar } from './PlayerShortcutAvatar'
 import { socialLinks } from './social-links'
 
 const SIDEBAR_WIDTH = 57

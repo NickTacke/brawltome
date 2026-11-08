@@ -1,5 +1,8 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Card,
   Select,
@@ -17,9 +20,6 @@ import {
 import { track } from '@/lib/analytics/browser'
 import { saveAccountPreferences, useAccount, useAccountPreferences } from '@/lib/auth'
 import { trpc } from '@/lib/trpc'
-import { useQueryClient } from '@tanstack/react-query'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LeaderboardErrorState } from './LeaderboardErrorState'
 import { SoloLeaderboardRow, TeamLeaderboardRow } from './LeaderboardRow'
 import { LeaderboardSkeletonRows } from './LeaderboardSkeleton'
@@ -27,18 +27,18 @@ import { PaginationControls } from './PaginationControls'
 import {
   BRACKETS,
   type BracketId,
+  buildLeaderboardQueryString,
   DEFAULT_LEADERBOARD_PREFERENCES,
+  isTeamEntry,
   type LeaderboardEntry,
   type LeaderboardFilters,
+  leaderboardPageFeatures,
   MAX_PAGE,
   PAGE_SIZE,
-  REGIONS,
-  type RegionId,
-  buildLeaderboardQueryString,
-  isTeamEntry,
-  leaderboardPageFeatures,
   parseLeaderboardSearchParams,
   preferencesForLeaderboardUpdate,
+  REGIONS,
+  type RegionId,
   shouldWaitForPreferences,
   snapshotNotice,
 } from './utils'

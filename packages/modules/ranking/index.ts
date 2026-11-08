@@ -13,21 +13,21 @@ import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delet
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 
 export {
-  LeaderboardCandidateError,
-  LeaderboardLeaseLostError,
   collectAndPublishLeaderboardGeneration,
   defaultLeaderboardIntervalMs,
   defaultLeaderboardPageDepth,
+  LeaderboardCandidateError,
+  type LeaderboardDeepCrawlStanding,
+  type LeaderboardDeepCrawlTeam,
+  type LeaderboardGenerationCandidate,
+  LeaderboardLeaseLostError,
+  type LeaderboardPageSource,
+  type LeaderboardScope,
+  type LeaderboardView,
   leaderboardDeepCrawlStandings,
   leaderboardDeepCrawlTeams,
   leaderboardModeFromOperationKind,
   maxLeaderboardPageDepth,
-  type LeaderboardDeepCrawlStanding,
-  type LeaderboardDeepCrawlTeam,
-  type LeaderboardGenerationCandidate,
-  type LeaderboardPageSource,
-  type LeaderboardScope,
-  type LeaderboardView,
   type PlayerValhallanEvidence,
   type PlayerValhallanQueries,
   type PublishedLeaderboardRow,
@@ -48,12 +48,12 @@ export {
   type RankingRetentionStore,
 } from './retention'
 export {
-  LeaderboardSourceError,
   fetchLeaderboardPage,
-  leaderboardModes,
-  regionalLeaderboardScopes,
   type LeaderboardMode,
+  LeaderboardSourceError,
+  leaderboardModes,
   type RegionalLeaderboardScope,
+  regionalLeaderboardScopes,
 } from './v1-leaderboard-source'
 
 const migrations = [

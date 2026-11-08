@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchesPreview, nextPreviewImageUrl } from '@/app/matches/MatchesPreview'
 import {
   getPreviewAppearance,
@@ -7,8 +9,6 @@ import {
   previewMatches,
   previewMatchesForPlayer,
 } from '@/app/matches/matches-preview-fixtures'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 
 describe('matches preview fixtures', () => {
   test('form one consistent three-match graph with validated appearances', () => {

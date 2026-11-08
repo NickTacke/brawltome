@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AccountsStore,
+  createAccounts,
   DEFAULT_ACCOUNT_PREFERENCES,
   InvalidAccountPreferencesError,
-  createAccounts,
 } from '../src/accounts'
 
 const ACCOUNT_ID = '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295'

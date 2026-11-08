@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Migration, checkDeployedMigrationsPresent, deployedOrder, orderMigrations } from '@brawltome/foundation'
+import { checkDeployedMigrationsPresent, deployedOrder, type Migration, orderMigrations } from '@brawltome/foundation'
 import { migrationModules } from '../src/modules'
 
 function migration(identity: string, predecessor: string | null, requires?: readonly string[]): Migration {

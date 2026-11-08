@@ -1,4 +1,3 @@
-import { Card } from '@/components/ui'
 import {
   type CareerWeaponExactRatioContract,
   type CareerWeaponUsageHistoryOutputContract,
@@ -9,6 +8,7 @@ import {
 } from '@brawltome/contracts'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { Card } from '@/components/ui'
 import { CareerWeaponUsageHistory } from './CareerWeaponUsageHistory'
 
 const regionLabels: Record<(typeof careerWeaponUsageRegionScopes)[number], string> = {
@@ -246,11 +246,7 @@ function CareerWeaponUsageShell({
   )
 }
 
-export function CareerWeaponUsageLoadError({
-  filters,
-}: {
-  filters: CareerWeaponUsageOutputContract['filters']
-}) {
+export function CareerWeaponUsageLoadError({ filters }: { filters: CareerWeaponUsageOutputContract['filters'] }) {
   return (
     <CareerWeaponUsageShell filters={filters}>
       <Card role="alert" className="border-destructive/50 bg-destructive/10 p-6">
