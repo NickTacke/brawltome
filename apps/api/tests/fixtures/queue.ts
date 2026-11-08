@@ -13,7 +13,7 @@ const noDiscoveryEffects: DiscoveryEffectChecks = {
   reconciliationEffectApplied: async () => false,
 }
 
-/** Builds the queue the way the worker does, so expired leases read the same effect tables. */
+// built the way the worker builds it, so expired leases read the same effect tables
 export function createTestQueue(databases: RefreshOperationsDatabases, discovery = noDiscoveryEffects) {
   return createPostgresRefreshOperations(databases, { effectStates: createEffectStates({ discovery }) })
 }
@@ -38,7 +38,7 @@ const jobListAdmission: AdmissionConfig = {
   },
 }
 
-/** The worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do. */
+// the worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do
 export function createTestJobs(): JobDefinition<unknown>[] {
   return createJobsFromOptions({ leaseMs: 30_000, retryDelayMs: 1_000, admission: jobListAdmission })
 }

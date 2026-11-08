@@ -24,7 +24,7 @@ const testAdmission: AdmissionConfig = {
   },
 }
 
-/** Claims the next operation of the job's kind and runs that job on it, in place of the worker's dispatch. */
+// claims the next operation of the job's kind and runs that job on it, in place of the worker's dispatch
 export async function runJobOnce<Payload>(
   queue: QueueWorker,
   job: JobDefinition<Payload>,
