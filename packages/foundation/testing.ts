@@ -6,6 +6,8 @@ import { orderMigrations } from './migrations/order'
 import { migratePostgres } from './migrations/postgres'
 import { type BrawltomeModule, checkModuleList } from './module'
 
+export { expectTablesMatchDatabase } from './table-drift'
+
 export type CreateTestDatabaseOptions = {
   // names the test in the database name and in errors, e.g. player_ranked
   label: string
