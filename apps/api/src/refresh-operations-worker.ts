@@ -27,25 +27,15 @@ import {
   type RetryBackoff,
   type RetryTimings,
   runOneJob,
-  SourceAdmissionLimitedError,
   sourceWaitMs,
-  statisticsCollectionKinds,
   type WorkClass,
   waitForRenewal,
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission } from '@brawltome/request-admission'
-import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
 import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 
 type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
 type LeaderboardLease = Exclude<Extract<OperationLease, { workClass: 'leaderboard' }>, LeaderboardDeepCrawlLease>
-type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
-type StatisticsCollectionLease = Extract<
-  StatisticsLease,
-  { kind: 'statistics-ranked-collection' | 'statistics-lifetime-collection' }
->
-type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-publication' }>
-type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
 
 type RunOneRefreshOperationOptions = {
   leaseMs: number
@@ -112,18 +102,6 @@ type RunOneRefreshOperationOptions = {
   }
   deepCrawlSlicePages?: number
   deepCrawlPageDelayMs?: number
-  statistics?: Pick<
-    StatisticsTracer,
-    | 'preflightCollection'
-    | 'preflightCollectionAttempt'
-    | 'recordCollectionAttempt'
-    | 'commitObservation'
-    | 'preflightPublication'
-    | 'validateAndPublish'
-    | 'preflightLegendMetaPublication'
-    | 'buildAndPublishLegendMeta'
-  >
-  executeStatisticsCollection?(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
   telemetry?: Telemetry
   // jobs that live in their owning module, added to the wrapped ones
   movedJobs?: readonly JobDefinition<unknown>[]
@@ -166,307 +144,6 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
   }
 
   return null
-}
-
-async function executeStatisticsCollection(
-  operations: LeaseOperations,
-  lease: StatisticsCollectionLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.statistics || !options.executeStatisticsCollection || !options.sourceAdmission) {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_executor_unavailable', message: 'Statistics executor is not configured', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  const authorization = {
-    operationId: lease.operationId,
-    effectOperationId: lease.effectOperationId,
-    operationKey: lease.operationKey,
-    kind: lease.kind,
-    leaseOwner: lease.leaseOwner,
-    leaseToken: lease.leaseToken,
-    attemptNumber: lease.attemptNumber,
-    cohortId: lease.payload.cohortId,
-    brawlhallaId: lease.payload.brawlhallaId,
-  }
-
-  const preflight = await options.statistics.preflightCollection(authorization)
-
-  if (preflight === 'already-applied') {
-    return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-  }
-
-  if (preflight === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  const attemptPreflight = await options.statistics.preflightCollectionAttempt(authorization)
-
-  if (attemptPreflight === 'lease-lost') return 'lease_lost'
-
-  if (attemptPreflight === 'capacity-exceeded') {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'statistics_capacity_exceeded',
-        message: 'Statistics source attempt capacity is exhausted',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if (attemptPreflight === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics attempt identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  const admission = await options.sourceAdmission.admitSource({
-    domain: 'brawlhalla-v1',
-    reservationKey: `${lease.operationId}:${lease.attemptNumber}:${lease.kind}`,
-    units: 1,
-    caller: 'background',
-  })
-
-  if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  const attempt = await options.statistics.recordCollectionAttempt(authorization)
-
-  if (attempt === 'lease-lost') return 'lease_lost'
-
-  if (attempt === 'capacity-exceeded') {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'statistics_capacity_exceeded',
-        message: 'Statistics source attempt capacity is exhausted',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if (attempt === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics attempt identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  const evidence = await options.executeStatisticsCollection(lease)
-
-  const committed =
-    lease.kind === 'statistics-ranked-collection'
-      ? await options.statistics.commitObservation({
-          authorization: { ...authorization, kind: lease.kind },
-          evidence: evidence as RankedEvidence,
-        })
-      : await options.statistics.commitObservation({
-          authorization: { ...authorization, kind: lease.kind },
-          evidence: evidence as LifetimeEvidence,
-        })
-
-  if (committed === 'lease-lost') return 'lease_lost'
-
-  if (committed === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics effect identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-async function executeStatisticsPublication(
-  operations: LeaseOperations,
-  lease: StatisticsPublicationLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.statistics) {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_executor_unavailable', message: 'Statistics executor is not configured', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  const authorization = {
-    operationId: lease.operationId,
-    effectOperationId: lease.effectOperationId,
-    operationKey: lease.operationKey,
-    kind: lease.kind,
-    leaseOwner: lease.leaseOwner,
-    leaseToken: lease.leaseToken,
-    generationId: lease.payload.generationId,
-    product: lease.payload.product,
-  }
-
-  const preflight = await options.statistics.preflightPublication(authorization)
-
-  if (preflight === 'already-applied') {
-    return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-  }
-
-  if (preflight === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics publication identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  const published = await options.statistics.validateAndPublish(authorization)
-
-  if (published.result === 'lease-lost') return 'lease_lost'
-
-  if (published.result === 'collection-active') {
-    const transition = await operations.defer(
-      lease,
-      {
-        code: 'statistics_collection_active',
-        message: 'Statistics collection replay is still active',
-        retryable: true,
-      },
-      options.retryDelayMs,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'retry'
-  }
-
-  if (published.result === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'statistics_effect_conflict', message: 'Statistics publication identity conflicts', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-async function executeStatisticsLegendMetaPublication(
-  operations: LeaseOperations,
-  lease: StatisticsLegendMetaPublicationLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.statistics) {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'statistics_executor_unavailable',
-        message: 'Statistics executor is not configured',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  const authorization = {
-    operationId: lease.operationId,
-    effectOperationId: lease.effectOperationId,
-    operationKey: lease.operationKey,
-    kind: lease.kind,
-    leaseOwner: lease.leaseOwner,
-    leaseToken: lease.leaseToken,
-    generationId: lease.payload.generationId,
-  }
-
-  const preflight = await options.statistics.preflightLegendMetaPublication(authorization)
-
-  if (preflight === 'already-applied') {
-    return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-  }
-
-  if (preflight === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'statistics_legend_meta_effect_conflict',
-        message: 'Statistics Legend Meta publication identity conflicts',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  const published = await options.statistics.buildAndPublishLegendMeta(authorization)
-
-  if (published.result === 'lease-lost') return 'lease_lost'
-
-  if (published.result === 'prerequisite-missing') {
-    const transition = await operations.defer(
-      lease,
-      {
-        code: 'statistics_legend_meta_prerequisite_missing',
-        message: 'Statistics ranked validation decision is not available yet',
-        retryable: true,
-      },
-      options.retryDelayMs,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'retry'
-  }
-
-  if (published.result === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'statistics_legend_meta_effect_conflict',
-        message: 'Statistics Legend Meta publication identity conflicts',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 // Transient V1 page failures retry in place; 429s stay with durable rate-limit backoff.
@@ -918,33 +595,6 @@ function wrapJob<WrappedLease extends OperationLease>(job: WrappedJob<WrappedLea
   })
 }
 
-function statisticsJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  const collectionJobs = statisticsCollectionKinds.map((kind) =>
-    wrapJob<StatisticsCollectionLease>({
-      kind,
-      workClasses: ['global-statistics'],
-      failureCode: 'statistics_collection_failed',
-      run: (lease, tools) => executeStatisticsCollection(tools.queue, lease, options),
-    }),
-  )
-
-  return [
-    ...collectionJobs,
-    wrapJob<StatisticsPublicationLease>({
-      kind: 'statistics-publication',
-      workClasses: ['global-statistics'],
-      failureCode: 'statistics_publication_failed',
-      run: (lease, tools) => executeStatisticsPublication(tools.queue, lease, options),
-    }),
-    wrapJob<StatisticsLegendMetaPublicationLease>({
-      kind: 'statistics-legend-meta-publication',
-      workClasses: ['global-statistics'],
-      failureCode: 'statistics_legend_meta_publication_failed',
-      run: (lease, tools) => executeStatisticsLegendMetaPublication(tools.queue, lease, options),
-    }),
-  ]
-}
-
 function leaderboardJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
   const decideFailure = async (error: unknown) => decideRankingFailure(error, retryTimings(options))
 
@@ -971,7 +621,7 @@ function leaderboardJobs(options: RunOneRefreshOperationOptions): JobDefinition<
 }
 
 export function createJobsFromOptions(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [...statisticsJobs(options), ...leaderboardJobs(options), ...(options.movedJobs ?? [])]
+  return [...leaderboardJobs(options), ...(options.movedJobs ?? [])]
 }
 
 export function runOneRefreshOperation(

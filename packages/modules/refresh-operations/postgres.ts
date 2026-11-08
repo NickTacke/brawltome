@@ -1,13 +1,13 @@
 import type { Database } from '@brawltome/foundation'
 import { acceptOperation } from './db/accept-operation'
-import { activateAdmitted, activateBound } from './db/activate-operation'
+import { activateAdmitted } from './db/activate-operation'
 import { admissionLockId } from './db/admission-lock'
 import { claimOperation } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
+import type { DeadLetterHooks } from './db/dead-letter-hooks'
 import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStates } from './db/effect-states'
-import { listAwaiting } from './db/find-operations'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
@@ -17,7 +17,6 @@ import { materializeDueSchedules } from './db/materialize-due-schedules'
 import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
-import { reserveForBinding } from './db/reserve-operation'
 import { beginSection, commitSection } from './db/section-checkpoints'
 import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
 import { wakeupChannel } from './db/wakeup'
@@ -31,19 +30,13 @@ import {
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateLeaderboardSchedule,
   type CreateSchedule,
-  type DeadLetterDispositionInput,
   type DeadLetterOperations,
   type FencedResult,
-  type ListDeadLettersInput,
   type OperationFailure,
   type OperationLease,
   type PlayerRefreshSettled,
   parsePlayerRefreshSettled,
   playerRefreshSettledChannel,
-  type ReserveStatisticsCollection,
-  type ReserveStatisticsLegendMetaPublication,
-  type ReserveStatisticsPublication,
-  statisticsCollectionKinds,
   type TransitionResult,
   validateLeaderboardOperationPayload,
 } from './model'
@@ -101,109 +94,6 @@ export function createPostgresRefreshOperations(
 
     activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult> {
       return activateAdmitted(database, { operationId, kinds: interactiveRefreshKinds })
-    },
-
-    async reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult> {
-      if (input.dedupeKey !== input.operationKey) {
-        throw new Error('statistics collection dedupeKey must equal its stable operationKey')
-      }
-
-      if (input.workClass !== 'global-statistics') {
-        throw new Error('statistics collection requires global-statistics work class')
-      }
-
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.cohortId)) {
-        throw new Error('statistics collection cohortId must be a UUID')
-      }
-
-      if (!Number.isSafeInteger(input.payload.brawlhallaId) || input.payload.brawlhallaId <= 0) {
-        throw new Error('statistics collection brawlhallaId must be a positive safe integer')
-      }
-
-      return reserveForBinding(database, {
-        ...input,
-        operationKeyKinds: statisticsCollectionKinds,
-        lockNamespace: 209,
-        mismatchMessage: 'statistics collection operation key has a different definition',
-      })
-    },
-
-    listAwaitingStatisticsCollections(): Promise<string[]> {
-      return listAwaiting(database, { kinds: statisticsCollectionKinds, status: 'awaiting_binding', limit: 500 })
-    },
-
-    activateStatisticsCollection(operationId: string): Promise<TransitionResult> {
-      return activateBound(database, operationId, { kinds: statisticsCollectionKinds })
-    },
-
-    async reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult> {
-      if (input.dedupeKey !== input.operationKey) {
-        throw new Error('statistics publication dedupeKey must equal its stable operationKey')
-      }
-
-      if (input.workClass !== 'global-statistics') {
-        throw new Error('statistics publication requires global-statistics work class')
-      }
-
-      if (
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.generationId)
-      ) {
-        throw new Error('statistics publication generationId must be a UUID')
-      }
-
-      if (input.payload.product !== 'ranked' && input.payload.product !== 'lifetime') {
-        throw new Error('statistics publication product is unsupported')
-      }
-
-      return reserveForBinding(database, {
-        ...input,
-        lockNamespace: 210,
-        mismatchMessage: 'statistics publication operation key has a different definition',
-      })
-    },
-
-    listAwaitingStatisticsPublications(): Promise<string[]> {
-      return listAwaiting(database, { kinds: ['statistics-publication'], status: 'awaiting_binding', limit: 100 })
-    },
-
-    activateStatisticsPublication(operationId: string): Promise<TransitionResult> {
-      return activateBound(database, operationId, { kinds: ['statistics-publication'] })
-    },
-
-    async reserveStatisticsLegendMetaPublication(
-      input: ReserveStatisticsLegendMetaPublication,
-    ): Promise<AcceptOperationResult> {
-      if (input.dedupeKey !== input.operationKey) {
-        throw new Error('Statistics Legend Meta publication dedupeKey must equal its stable operationKey')
-      }
-
-      if (input.workClass !== 'global-statistics') {
-        throw new Error('Statistics Legend Meta publication requires global-statistics work class')
-      }
-
-      if (
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.payload.generationId)
-      ) {
-        throw new Error('Statistics Legend Meta publication generationId must be a UUID')
-      }
-
-      return reserveForBinding(database, {
-        ...input,
-        lockNamespace: 211,
-        mismatchMessage: 'Statistics Legend Meta operation key has a different definition',
-      })
-    },
-
-    listAwaitingStatisticsLegendMetaPublications(): Promise<string[]> {
-      return listAwaiting(database, {
-        kinds: ['statistics-legend-meta-publication'],
-        status: 'awaiting_binding',
-        limit: 100,
-      })
-    },
-
-    activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult> {
-      return activateBound(database, operationId, { kinds: ['statistics-legend-meta-publication'] })
     },
 
     async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
@@ -434,16 +324,6 @@ export function createPostgresRefreshOperations(
     fail: (lease: OperationLease, failure: OperationFailure, retryDelayMs: number) =>
       failOperation(database, lease, failure, retryDelayMs),
 
-    listDeadLetters: (input?: ListDeadLettersInput) => listDeadLetters(database, input),
-
-    inspectDeadLetter: (operationId: string) => inspectDeadLetter(database, operationId),
-
-    replayDeadLetter: (input: DeadLetterDispositionInput) =>
-      disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
-
-    discardDeadLetter: (input: DeadLetterDispositionInput) =>
-      disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
-
     inspectTelemetry: () => inspectTelemetry(database),
 
     operationStatus: (operationId: string) => readOperationStatus(database, operationId),
@@ -474,14 +354,14 @@ export function createPostgresRefreshOperations(
 
 export type PostgresRefreshOperations = ReturnType<typeof createPostgresRefreshOperations>
 
-export function createPostgresDeadLetterOperations(database: Database): DeadLetterOperations {
+export function createPostgresDeadLetterOperations(database: Database, hooks: DeadLetterHooks): DeadLetterOperations {
   return {
     listDeadLetters: (input) => listDeadLetters(database, input),
 
-    inspectDeadLetter: (operationId) => inspectDeadLetter(database, operationId),
+    inspectDeadLetter: (operationId) => inspectDeadLetter(database, operationId, hooks),
 
-    replayDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'replayed' }),
+    replayDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'replayed' }, hooks),
 
-    discardDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'discarded' }),
+    discardDeadLetter: (input) => disposeDeadLetter(database, { ...input, disposition: 'discarded' }, hooks),
   }
 }

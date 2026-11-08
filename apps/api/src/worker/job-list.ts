@@ -29,6 +29,15 @@ import {
   proofEffectState,
   workClasses,
 } from '@brawltome/refresh-operations'
+import {
+  createStatisticsLegendMetaPublicationJob,
+  createStatisticsLifetimeCollectionJob,
+  createStatisticsPublicationJob,
+  createStatisticsRankedCollectionJob,
+  type StatisticsCollectionJobDependencies,
+  type StatisticsLegendMetaPublicationJobDependencies,
+  type StatisticsPublicationJobDependencies,
+} from '@brawltome/statistics'
 import type { Telemetry } from '@brawltome/telemetry'
 
 export type WorkerDiscoveryDependencies = {
@@ -65,6 +74,12 @@ export type WorkerPlayerDependencies = {
   verifyName: PlayerNameVerificationJobDependencies['verifyName']
 }
 
+export type WorkerStatisticsDependencies = Omit<StatisticsCollectionJobDependencies, 'statistics'> & {
+  statistics: StatisticsCollectionJobDependencies['statistics'] &
+    StatisticsPublicationJobDependencies['statistics'] &
+    StatisticsLegendMetaPublicationJobDependencies['statistics']
+}
+
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
   isRankingRetentionEnabled: boolean
@@ -73,6 +88,7 @@ export type WorkerJobDependencies = {
   clan: WorkerClanDependencies
   accounts: WorkerAccountsDependencies
   player: WorkerPlayerDependencies
+  statistics: WorkerStatisticsDependencies
 }
 
 function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
@@ -157,6 +173,15 @@ function createPlayerJobs(
   return [interactiveRefresh, rankedPulse, nameVerification]
 }
 
+export function createStatisticsJobs(statistics: WorkerStatisticsDependencies): JobDefinition<unknown>[] {
+  return [
+    createStatisticsRankedCollectionJob(statistics),
+    createStatisticsLifetimeCollectionJob(statistics),
+    createStatisticsPublicationJob(statistics),
+    createStatisticsLegendMetaPublicationJob(statistics),
+  ]
+}
+
 // a proof row with a primary-player key is a verification written before the kind existed, or a replay of one
 function createProofJob(
   primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
@@ -191,6 +216,7 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     ...createDiscoveryJobs(dependencies.discovery),
     ...createClanJobs(dependencies.clan),
     ...createPlayerJobs(dependencies.player, dependencies.accounts.primaryMonitoring),
+    ...createStatisticsJobs(dependencies.statistics),
     primaryPlayerVerification,
     createProofJob(primaryPlayerVerification),
   ]

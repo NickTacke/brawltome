@@ -1,22 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type AdmissionConfig,
-  createPostgresDeadLetterOperations,
-  type OperationLease,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, type OperationLease, refreshOperationsModule } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   type CohortCollectionIntent,
   createPostgresStatistics,
+  createStatisticsReservations,
   launchCohortRegions,
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
+const reservations = () => createStatisticsReservations(database)
 let connectionString = ''
 
 const admission: AdmissionConfig = {
@@ -82,11 +79,10 @@ function fullSnapshots(seed: number): CohortCandidateSnapshot[] {
 
 async function enqueue(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createTestQueue>,
   intent: CohortCollectionIntent,
   maxAttempts = 2,
 ) {
-  const accepted = await operations.reserveStatisticsCollection({
+  const accepted = await reservations().reserveStatisticsCollection({
     kind: intent.kind,
     dedupeKey: intent.operationKey,
     operationKey: intent.operationKey,
@@ -97,7 +93,7 @@ async function enqueue(
   })
 
   await statistics.recordCollectionOperation(intent, accepted.operationId)
-  await operations.activateStatisticsCollection(accepted.operationId)
+  await reservations().activateStatisticsCollection(accepted.operationId)
 
   return accepted.operationId
 }
@@ -165,7 +161,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     const intent = publicationIntents[0]
 
-    const reserved = await operations.reserveStatisticsPublication({
+    const reserved = await reservations().reserveStatisticsPublication({
       kind: intent.kind,
       dedupeKey: intent.operationKey,
       operationKey: intent.operationKey,
@@ -176,7 +172,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     })
 
     expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
-    expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
+    expect(await reservations().activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
     const publication = await operations.claim('insufficient-publication', 1_000, admission, 'statistics-publication')
 
     if (publication?.kind !== 'statistics-publication') throw new Error('publication lease missing')
@@ -219,18 +215,17 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
   test('repairs missing cross-owner enqueue with exactly two stable independent operations per member', async () => {
     const statistics = createPostgresStatistics(database)
-    const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(10))
     const intents = await statistics.collectionIntents()
 
     expect(intents).toHaveLength(6)
-    await Promise.all(intents.map((intent) => enqueue(statistics, operations, intent)))
+    await Promise.all(intents.map((intent) => enqueue(statistics, intent)))
     expect(await statistics.collectionIntents()).toEqual([])
 
     const firstIntent = intents[0]
 
-    const repeated = await operations.reserveStatisticsCollection({
+    const repeated = await reservations().reserveStatisticsCollection({
       kind: firstIntent.kind,
       dedupeKey: firstIntent.operationKey,
       operationKey: firstIntent.operationKey,
@@ -252,7 +247,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     expect(repeated.operationId).toBe(recordedOperationId)
 
     await expect(
-      operations.reserveStatisticsCollection({
+      reservations().reserveStatisticsCollection({
         kind: firstIntent.kind,
         dedupeKey: firstIntent.operationKey,
         operationKey: firstIntent.operationKey,
@@ -290,7 +285,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(20, 1))
-    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
+    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, intent)))
     const ranked = await operations.claim('ranked-worker', 1_000, admission, 'statistics-ranked-collection')
 
     expect(ranked?.kind).toBe('statistics-ranked-collection')
@@ -366,7 +361,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     if (!rankedIntent) throw new Error('ranked intent missing')
 
-    const operationId = await enqueue(statistics, operations, rankedIntent, 3)
+    const operationId = await enqueue(statistics, rankedIntent, 3)
 
     const denied = await operations.claim('admission-denied', 1_000, admission, 'statistics-ranked-collection')
 
@@ -405,7 +400,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
       ).toBe('transitioned')
     }
 
-    const deadLetters = createPostgresDeadLetterOperations(database)
+    const deadLetters = createTestDeadLetters(database)
 
     const replay = await deadLetters.replayDeadLetter({
       operationId,
@@ -446,7 +441,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const operations = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(25, 1))
-    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent)))
+    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, intent)))
     const lease = await operations.claim('replay-worker', 1_000, admission, 'statistics-ranked-collection')
 
     if (lease?.kind !== 'statistics-ranked-collection') throw new Error('ranked lease missing')
@@ -497,7 +492,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const second = createTestQueue({ database })
 
     await statistics.reconcileCohort(snapshot(30, 1))
-    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, first, intent)))
+    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, intent)))
     const expired = await first.claim('expired-worker', 20, admission, 'statistics-lifetime-collection')
 
     if (expired?.kind !== 'statistics-lifetime-collection') throw new Error('expiring lease missing')
@@ -533,9 +528,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     await statistics.reconcileCohort(snapshot(40, 1))
 
-    await Promise.all(
-      (await statistics.collectionIntents()).map((intent) => enqueue(statistics, operations, intent, 1)),
-    )
+    await Promise.all((await statistics.collectionIntents()).map((intent) => enqueue(statistics, intent, 1)))
 
     const setup = postgres(connectionString, { max: 1 })
 

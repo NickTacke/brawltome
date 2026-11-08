@@ -9,7 +9,12 @@ import {
   type WorkerAccountsDependencies,
   type WorkerDiscoveryDependencies,
 } from '../src/worker/job-list'
-import { createTestQueue, idlePlayerDependencies } from './fixtures/queue'
+import {
+  createTestDeadLetters,
+  createTestQueue,
+  idlePlayerDependencies,
+  idleStatisticsDependencies,
+} from './fixtures/queue'
 
 let database: TestDatabase
 let queue: ReturnType<typeof createTestQueue>
@@ -53,6 +58,7 @@ function createVerificationJobs(verify: Verify) {
     clan: { clans: {} as never, createBrawlhallaClient: () => ({}) as never },
     accounts,
     player: idlePlayerDependencies,
+    statistics: idleStatisticsDependencies,
   })
 
   return (kind: string): JobDefinition<unknown> => {
@@ -94,7 +100,7 @@ describe('primary player verification on the real queue', () => {
 
     shouldFail = false
 
-    const replayed = await queue.replayDeadLetter({
+    const replayed = await createTestDeadLetters(database).replayDeadLetter({
       operationId: accepted.operationId,
       actorId: 'operator:integration',
       reason: 'steam is back',
@@ -145,7 +151,7 @@ describe('primary player verification on the real queue', () => {
 
     shouldFail = false
 
-    const replayed = await queue.replayDeadLetter({
+    const replayed = await createTestDeadLetters(database).replayDeadLetter({
       operationId: accepted.operationId,
       actorId: 'operator:integration',
       reason: 'steam is back',

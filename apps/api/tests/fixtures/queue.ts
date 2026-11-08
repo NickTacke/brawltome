@@ -1,7 +1,9 @@
+import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import {
   type AdmissionConfig,
   createEffectStates,
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   defineJob,
   type JobDefinition,
@@ -12,13 +14,16 @@ import {
   type SourceAdmitter,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
+import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
 import {
+  createStatisticsJobs,
   createWorkerJobs,
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
   type WorkerPlayerDependencies,
+  type WorkerStatisticsDependencies,
 } from '../../src/worker/job-list'
 
 type DiscoveryEffectChecks = WorkerDiscoveryDependencies['checks']
@@ -44,6 +49,22 @@ export const idlePlayerDependencies: WorkerPlayerDependencies = {
   verifyName: async () => undefined,
 }
 
+export const idleStatisticsDependencies: WorkerStatisticsDependencies = {
+  statistics: {} as WorkerStatisticsDependencies['statistics'],
+  sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
+  collectEvidence: async () => {
+    throw new Error('this test never collects Statistics evidence')
+  },
+}
+
+// the worker's four Statistics jobs, for tests that run one against real stores
+export function createStatisticsTestJobs(
+  statistics: WorkerStatisticsDependencies['statistics'],
+  overrides: Partial<WorkerStatisticsDependencies> = {},
+): JobDefinition<unknown>[] {
+  return createStatisticsJobs({ ...idleStatisticsDependencies, statistics, ...overrides })
+}
+
 // the job list only runs these when a job executes, and these tests are about what the jobs tell claim
 function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefinition<unknown>[] {
   return createWorkerJobs({
@@ -63,6 +84,7 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
     },
     accounts: idleAccounts,
     player: idlePlayerDependencies,
+    statistics: idleStatisticsDependencies,
   })
 }
 
@@ -84,6 +106,11 @@ export function createTestQueue(databases: RefreshOperationsDatabases, discovery
   return createPostgresRefreshOperations(databases, {
     effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
   })
+}
+
+// the dead letter operations the CLI builds, with every owner's guards and effect listings
+export function createTestDeadLetters(database: Database) {
+  return createPostgresDeadLetterOperations(database, createDeadLetterHooks())
 }
 
 const jobListAdmission: AdmissionConfig = {

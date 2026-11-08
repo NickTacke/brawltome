@@ -1,14 +1,8 @@
 import type { Database } from '@brawltome/foundation'
 import { and, asc, eq } from 'drizzle-orm'
 import type { DeadLetterInspection } from '../model'
+import type { DeadLetterEffects, DeadLetterHooks } from './dead-letter-hooks'
 import { deadLetterListColumns, toDeadLetterListItem } from './dead-letter-list-item'
-import {
-  readInteractiveEffects,
-  readLeaderboardEffects,
-  readProofEffects,
-  readStatisticsEffects,
-  readStatisticsPublicationEffects,
-} from './read-effect-rows'
 import { readOnlySnapshot } from './read-only-snapshot'
 import { attempts, deadLetterActions, operations, scheduleOccurrences, schedules } from './tables'
 import type { Transaction } from './transaction'
@@ -82,6 +76,15 @@ async function readAuditActions(
   }))
 }
 
+// an inspection always has these fields; a kind with no describer leaves them empty
+const noEffects: DeadLetterEffects = {
+  proofEffects: [],
+  interactiveEffects: [],
+  leaderboardEffects: [],
+  statisticsEffects: [],
+  statisticsPublicationEffects: [],
+}
+
 async function readDeadLetterOperation(transaction: Transaction, operationId: string) {
   const [row] = await transaction
     .select({
@@ -100,28 +103,21 @@ async function readDeadLetterOperation(transaction: Transaction, operationId: st
 }
 
 /** A dead letter with its attempts, the effects it left behind, the schedule window it came from and its audit trail. */
-export async function inspectDeadLetter(database: Database, operationId: string): Promise<DeadLetterInspection | null> {
+export async function inspectDeadLetter(
+  database: Database,
+  operationId: string,
+  hooks: Pick<DeadLetterHooks, 'describeEffects'>,
+): Promise<DeadLetterInspection | null> {
   return database.db.transaction(async (transaction) => {
     const row = await readDeadLetterOperation(transaction, operationId)
 
     if (!row) return null
 
-    const [
-      attemptRows,
-      proofEffects,
-      interactiveEffects,
-      leaderboardEffects,
-      statisticsEffects,
-      statisticsPublicationEffects,
-      schedule,
-      auditActions,
-    ] = await Promise.all([
+    const describeEffects = hooks.describeEffects.get(row.kind)
+
+    const [attemptRows, describedEffects, schedule, auditActions] = await Promise.all([
       readAttempts(transaction, operationId),
-      readProofEffects(transaction, row.effectOperationId),
-      readInteractiveEffects(transaction, row.effectOperationId),
-      readLeaderboardEffects(transaction, row.effectOperationId),
-      readStatisticsEffects(transaction, row.effectOperationId),
-      readStatisticsPublicationEffects(transaction, row.effectOperationId),
+      describeEffects ? describeEffects(transaction, row.effectOperationId) : undefined,
       readOriginSchedule(transaction, operationId),
       readAuditActions(transaction, operationId),
     ])
@@ -135,11 +131,8 @@ export async function inspectDeadLetter(database: Database, operationId: string)
         replayedFromOperationId: row.replayedFromOperationId,
       },
       attempts: attemptRows,
-      proofEffects,
-      interactiveEffects,
-      leaderboardEffects,
-      statisticsEffects,
-      statisticsPublicationEffects,
+      ...noEffects,
+      ...describedEffects,
       schedule,
       auditActions,
     }

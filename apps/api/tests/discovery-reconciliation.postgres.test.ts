@@ -8,7 +8,7 @@ import { playerModule } from '@brawltome/player'
 import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let connectionString = ''
 let database: TestDatabase
@@ -182,7 +182,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       await operations.fail(deadLease, { code: 'repairable', message: 'repairable', retryable: false }, 0)
       await clans.publishProfile(profile('Current Clan', '900719925474099312345'), new Date('2024-01-02'), provenance)
 
-      const replay = await operations.replayDeadLetter({
+      const replay = await createTestDeadLetters(database).replayDeadLetter({
         operationId: deadLetter.operationId,
         actorId: 'operator:discovery',
         reason: 'projection dependency repaired',

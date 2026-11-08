@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -14,6 +15,7 @@
     "@brawltome/refresh-operations": "workspace:*"
   },
   "devDependencies": {
+    "@brawltome/telemetry": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   }

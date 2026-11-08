@@ -1,23 +1,21 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type AdmissionConfig,
-  createPostgresDeadLetterOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   createPostgresStatistics,
+  createStatisticsReservations,
   type LaunchCohortAudit,
   launchCohortRegions,
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
+const reservations = () => createStatisticsReservations(database)
 let connectionString = ''
 
 const admission: AdmissionConfig = {
@@ -205,7 +203,6 @@ async function expectPostgresRejection(action: () => Promise<void>, message: str
 
 async function bindPublication(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createTestQueue>,
   generationId: string,
   product: 'ranked' | 'lifetime',
 ) {
@@ -215,7 +212,7 @@ async function bindPublication(
 
   if (!intent) throw new Error(`missing ${product} publication intent`)
 
-  const reserved = await operations.reserveStatisticsPublication({
+  const reserved = await reservations().reserveStatisticsPublication({
     kind: intent.kind,
     dedupeKey: intent.operationKey,
     operationKey: intent.operationKey,
@@ -226,14 +223,13 @@ async function bindPublication(
   })
 
   expect(await statistics.recordPublicationOperation(intent, reserved.operationId)).toBe('recorded')
-  expect(await operations.activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
+  expect(await reservations().activateStatisticsPublication(reserved.operationId)).toBe('transitioned')
 
   return reserved.operationId
 }
 
 async function bindLegendMetaPublication(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createTestQueue>,
   generationId: string,
   maxAttempts = 3,
 ) {
@@ -243,7 +239,7 @@ async function bindLegendMetaPublication(
 
   if (!intent) throw new Error('missing Legend Meta publication intent')
 
-  const reserved = await operations.reserveStatisticsLegendMetaPublication({
+  const reserved = await reservations().reserveStatisticsLegendMetaPublication({
     kind: intent.kind,
     dedupeKey: intent.operationKey,
     operationKey: intent.operationKey,
@@ -254,19 +250,15 @@ async function bindLegendMetaPublication(
   })
 
   await statistics.recordLegendMetaPublicationOperation(intent, reserved.operationId)
-  expect(await operations.activateStatisticsLegendMetaPublication(reserved.operationId)).toBe('transitioned')
+  expect(await reservations().activateStatisticsLegendMetaPublication(reserved.operationId)).toBe('transitioned')
 
   return reserved.operationId
 }
 
-async function bindPublicationFixture(
-  operations: ReturnType<typeof createTestQueue>,
-  generationId: string,
-  product: 'ranked' | 'lifetime',
-) {
+async function bindPublicationFixture(generationId: string, product: 'ranked' | 'lifetime') {
   const operationKey = `statistics:${generationId}:publication:${product}`
 
-  const reserved = await operations.reserveStatisticsPublication({
+  const reserved = await reservations().reserveStatisticsPublication({
     kind: 'statistics-publication',
     dedupeKey: operationKey,
     operationKey,
@@ -457,7 +449,7 @@ describe('Statistics full launch cohort publication', () => {
     expect(await statistics.collectionIntents()).toEqual([])
 
     const replayControl = postgres(connectionString, { max: 1 })
-    const replayOperations = createPostgresDeadLetterOperations(database)
+    const replayOperations = createTestDeadLetters(database)
 
     try {
       const bindings = await replayControl<
@@ -528,7 +520,7 @@ describe('Statistics full launch cohort publication', () => {
 
       if (!rankedIntent) throw new Error('ranked publication intent missing')
 
-      const reserved = await operations.reserveStatisticsPublication({
+      const reserved = await reservations().reserveStatisticsPublication({
         kind: rankedIntent.kind,
         dedupeKey: rankedIntent.operationKey,
         operationKey: rankedIntent.operationKey,
@@ -567,8 +559,8 @@ describe('Statistics full launch cohort publication', () => {
       await replayControl.end()
     }
 
-    await bindPublication(statistics, operations, first.generationId, 'ranked')
-    await bindPublication(statistics, operations, first.generationId, 'lifetime')
+    await bindPublication(statistics, first.generationId, 'ranked')
+    await bindPublication(statistics, first.generationId, 'lifetime')
 
     const sealedControl = postgres(connectionString, { max: 1 })
 
@@ -599,7 +591,7 @@ describe('Statistics full launch cohort publication', () => {
     `
 
     await sealedControl.end()
-    const sealedDeadLetters = createPostgresDeadLetterOperations(database)
+    const sealedDeadLetters = createTestDeadLetters(database)
 
     await expect(
       sealedDeadLetters.replayDeadLetter({
@@ -680,7 +672,7 @@ describe('Statistics full launch cohort publication', () => {
       successes: 2_142,
     })
 
-    const legendMetaOperationId = await bindLegendMetaPublication(statistics, operations, first.generationId, 2)
+    const legendMetaOperationId = await bindLegendMetaPublication(statistics, first.generationId, 2)
 
     const expiredLegendMeta = await operations.claim(
       'expired-legend-meta',
@@ -924,16 +916,16 @@ describe('Statistics full launch cohort publication', () => {
     expect(second.generationId).not.toBe(first.generationId)
     await seedTerminalProduct(second, 'ranked', 118)
     await seedTerminalProduct(second, 'lifetime', 119)
-    const rejectedOperationId = await bindPublication(statistics, operations, second.generationId, 'ranked')
+    const rejectedOperationId = await bindPublication(statistics, second.generationId, 'ranked')
 
-    await bindPublication(statistics, operations, second.generationId, 'lifetime')
+    await bindPublication(statistics, second.generationId, 'lifetime')
 
     expect(
       await runOneRefreshOperation(operations, 'rejected-publication-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
@@ -942,7 +934,7 @@ describe('Statistics full launch cohort publication', () => {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 
@@ -967,7 +959,7 @@ describe('Statistics full launch cohort publication', () => {
     })
 
     const third = await statistics.reconcileLaunchCohort(snapshots(3))
-    const thirdRankedOperationId = await bindPublicationFixture(operations, third.generationId, 'ranked')
+    const thirdRankedOperationId = await bindPublicationFixture(third.generationId, 'ranked')
 
     await insertAcceptedPublicationFixture({
       generationId: third.generationId,
@@ -976,7 +968,7 @@ describe('Statistics full launch cohort publication', () => {
       templateGenerationId: first.generationId,
     })
 
-    const thirdLifetimeOperationId = await bindPublicationFixture(operations, third.generationId, 'lifetime')
+    const thirdLifetimeOperationId = await bindPublicationFixture(third.generationId, 'lifetime')
 
     await insertAcceptedPublicationFixture({
       generationId: third.generationId,
@@ -990,7 +982,7 @@ describe('Statistics full launch cohort publication', () => {
       templateGenerationId: first.generationId,
     })
 
-    await bindLegendMetaPublication(statistics, operations, third.generationId)
+    await bindLegendMetaPublication(statistics, third.generationId)
 
     const acceptedThirdLegendMeta = await operations.claim(
       'accepted-third-legend-meta',
@@ -1010,7 +1002,7 @@ describe('Statistics full launch cohort publication', () => {
 
     await operations.complete(acceptedThirdLegendMeta)
 
-    await bindLegendMetaPublication(statistics, operations, second.generationId)
+    await bindLegendMetaPublication(statistics, second.generationId)
 
     const rejectedLegendMeta = await operations.claim(
       'rejected-legend-meta',
@@ -1102,7 +1094,7 @@ describe('Statistics full launch cohort publication', () => {
     `
 
     await control.end()
-    const deadLetters = createPostgresDeadLetterOperations(database)
+    const deadLetters = createTestDeadLetters(database)
 
     const replay = await deadLetters.replayDeadLetter({
       operationId: rejectedOperationId,
@@ -1117,7 +1109,7 @@ describe('Statistics full launch cohort publication', () => {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        statistics,
+        movedJobs: createStatisticsTestJobs(statistics),
       }),
     ).toBe(true)
 

@@ -7,9 +7,8 @@ import { operations } from './tables'
 import type { Transaction } from './transaction'
 import { notifyWakeup } from './wakeup'
 
-// leaves the kind out of the match when the caller does not narrow it
-function ofKinds(kinds: readonly OperationKind[] | undefined): SQL | undefined {
-  return kinds ? inArray(operations.kind, kinds) : undefined
+function ofKinds(kinds: readonly OperationKind[]): SQL {
+  return inArray(operations.kind, kinds)
 }
 
 async function makePending(transaction: Transaction, operationId: string, conditions: (SQL | undefined)[]) {
@@ -112,13 +111,13 @@ export async function rejectExpired(database: Database, input: RejectExpiredInpu
 
 const boundStatuses = ['pending', 'leased', 'succeeded']
 
-export type ActivateBoundOptions = { kinds?: readonly OperationKind[] }
+export type ActivateBoundOptions = { kinds: readonly OperationKind[] }
 
 /** Queues an awaiting_binding operation; one already queued, running or done counts as activated. */
 export function activateBound(
   database: Database,
   operationId: string,
-  options: ActivateBoundOptions = {},
+  options: ActivateBoundOptions,
 ): Promise<TransitionResult> {
   return database.db.transaction(async (transaction) => {
     const kindMatches = ofKinds(options.kinds)

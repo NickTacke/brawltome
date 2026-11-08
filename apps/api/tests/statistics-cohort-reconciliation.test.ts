@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { RankingQueries } from '@brawltome/ranking'
-import type { StatisticsOperations } from '@brawltome/refresh-operations'
-import { launchCohortRegions, type StatisticsTracer } from '@brawltome/statistics'
+import { launchCohortRegions, type StatisticsReservations, type StatisticsTracer } from '@brawltome/statistics'
 import {
   loadFullLaunchCohortCandidates,
   loadLaunchCohortCandidates,
@@ -145,7 +144,7 @@ describe('Statistics immutable Ranking adapter', () => {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
-    } as unknown as StatisticsOperations
+    } as unknown as StatisticsReservations
 
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
@@ -192,7 +191,7 @@ describe('Statistics immutable Ranking adapter', () => {
       listAwaitingStatisticsCollections: async () => [],
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
-    } as unknown as StatisticsOperations
+    } as unknown as StatisticsReservations
 
     const ranking: LeaderboardQueries = {
       async getLeaderboard(input) {
@@ -245,7 +244,7 @@ describe('Statistics immutable Ranking adapter', () => {
         listAwaitingStatisticsCollections: async () => [],
         listAwaitingStatisticsPublications: async () => [],
         listAwaitingStatisticsLegendMetaPublications: async () => [],
-      } as unknown as StatisticsOperations
+      } as unknown as StatisticsReservations
 
       const ranking: LeaderboardQueries = {
         async getLeaderboard(input) {
@@ -338,7 +337,7 @@ describe('Statistics immutable Ranking adapter', () => {
         return 'transitioned' as const
       },
       listAwaitingStatisticsLegendMetaPublications: async () => [],
-    } as unknown as StatisticsOperations
+    } as unknown as StatisticsReservations
 
     const ranking: LeaderboardQueries = {
       async getLeaderboard() {
@@ -392,7 +391,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
         return 'transitioned' as const
       },
-    } as unknown as StatisticsOperations
+    } as unknown as StatisticsReservations
 
     const ranking: LeaderboardQueries = {
       async getLeaderboard() {

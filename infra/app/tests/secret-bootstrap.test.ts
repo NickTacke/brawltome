@@ -112,10 +112,11 @@ describe('application secret bootstrap', () => {
     })
 
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain('args=run packages/modules/refresh-operations/cli.ts list --limit 25')
+    expect(result.stdout).toContain('args=run apps/api/src/dead-letter-cli.ts list --limit 25')
     expect(result.stdout).toContain(`dead-letter-database=${values.dead_letter_database_url}`)
     expect(result.stdout).toContain(`dead-letter-tokens=${values.dead_letter_operator_tokens}`)
-    expect(result.stdout.split('\n')[0]).not.toContain('dead-letter')
+    expect(result.stdout.split('\n')[0]).not.toContain(values.dead_letter_database_url)
+    expect(result.stdout.split('\n')[0]).not.toContain(values.dead_letter_operator_tokens)
   })
 
   test('fails closed without printing a missing secret value', () => {

@@ -271,6 +271,7 @@ async function executeAttempt(
   const tools: JobTools = {
     queue,
     leaseMs: options.leaseMs,
+    retryDelayMs: options.retryDelayMs,
     signal: renewal.leaseLost,
     createSourceAdmitter: (section) => createSourceAdmitter(claimed, section, options.sourceAdmission),
     watchLease: renewal.watchLease,

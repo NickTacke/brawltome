@@ -71,6 +71,7 @@ export type SourceAdmissionPort = {
 export type JobTools = {
   queue: LeaseOperations
   leaseMs: number
+  retryDelayMs: number
   // aborts when the lease is lost
   signal: AbortSignal
   createSourceAdmitter(section: string): SourceAdmitter

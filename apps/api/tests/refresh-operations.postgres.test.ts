@@ -11,6 +11,7 @@ import {
   refreshOperationsModule,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
+import { createStatisticsReservations } from '@brawltome/statistics'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { apiModules } from '../src/modules'
@@ -18,12 +19,13 @@ import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { createProofJob, createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
 
 const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
+const statisticsReservations = () => createStatisticsReservations(database)
 
 const testAdmission = {
   totalConcurrency: 8,
@@ -195,7 +197,7 @@ describe('durable Refresh Operations', () => {
       expect(snapshot.deadLetters.length).toBeLessThanOrEqual(128)
 
       expect(
-        await operations.discardDeadLetter({
+        await createTestDeadLetters(database).discardDeadLetter({
           operationId: dead.operationId,
           actorId: 'operator:telemetry-test',
           reason: 'verify resolved dead letters leave the active gauge',
@@ -1059,7 +1061,7 @@ describe('durable Refresh Operations', () => {
 
       expect(second.occurrences.filter(({ scheduleId }) => scheduleId === schedule.scheduleId)).toHaveLength(1)
 
-      expect(await operations.inspectDeadLetter(firstOperationId)).toMatchObject({
+      expect(await createTestDeadLetters(database).inspectDeadLetter(firstOperationId)).toMatchObject({
         operation: {
           operationId: firstOperationId,
           lastError: { code: 'superseded_scheduled_operation', retryable: false },
@@ -1877,13 +1879,10 @@ async function acceptReconciliation(operations: Operations): Promise<string> {
   return accepted.operationId
 }
 
-async function reserveStatisticsOperation(
-  operations: Operations,
-  kind: 'statistics-ranked-collection',
-): Promise<string> {
+async function reserveStatisticsOperation(kind: 'statistics-ranked-collection'): Promise<string> {
   const operationKey = uniqueKey('claim-statistics')
 
-  const reserved = await operations.reserveStatisticsCollection({
+  const reserved = await statisticsReservations().reserveStatisticsCollection({
     kind,
     dedupeKey: operationKey,
     operationKey,
@@ -1892,15 +1891,15 @@ async function reserveStatisticsOperation(
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsCollection(reserved.operationId)
+  await statisticsReservations().activateStatisticsCollection(reserved.operationId)
 
   return reserved.operationId
 }
 
-async function reserveStatisticsPublication(operations: Operations): Promise<string> {
+async function reserveStatisticsPublication(): Promise<string> {
   const operationKey = uniqueKey('claim-publication')
 
-  const reserved = await operations.reserveStatisticsPublication({
+  const reserved = await statisticsReservations().reserveStatisticsPublication({
     kind: 'statistics-publication',
     dedupeKey: operationKey,
     operationKey,
@@ -1909,15 +1908,15 @@ async function reserveStatisticsPublication(operations: Operations): Promise<str
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsPublication(reserved.operationId)
+  await statisticsReservations().activateStatisticsPublication(reserved.operationId)
 
   return reserved.operationId
 }
 
-async function reserveLegendMetaPublication(operations: Operations): Promise<string> {
+async function reserveLegendMetaPublication(): Promise<string> {
   const operationKey = uniqueKey('claim-legend-meta')
 
-  const reserved = await operations.reserveStatisticsLegendMetaPublication({
+  const reserved = await statisticsReservations().reserveStatisticsLegendMetaPublication({
     kind: 'statistics-legend-meta-publication',
     dedupeKey: operationKey,
     operationKey,
@@ -1926,7 +1925,7 @@ async function reserveLegendMetaPublication(operations: Operations): Promise<str
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsLegendMetaPublication(reserved.operationId)
+  await statisticsReservations().activateStatisticsLegendMetaPublication(reserved.operationId)
 
   return reserved.operationId
 }
@@ -2018,7 +2017,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     },
   },
   'statistics-ranked-collection': {
-    create: (operations) => reserveStatisticsOperation(operations, 'statistics-ranked-collection'),
+    create: () => reserveStatisticsOperation('statistics-ranked-collection'),
     recordEffect: async (control, lease) => {
       await control`
         INSERT INTO refresh_operations.statistics_collection_effects (operation_key, operation_id, kind, lease_token)

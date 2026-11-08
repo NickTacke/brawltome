@@ -1,19 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type AdmissionConfig,
-  createPostgresDeadLetterOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
-import { createPostgresStatistics, statisticsModule } from '@brawltome/statistics'
+import { createPostgresStatistics, createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from '../src/statistics-collection-source'
-import { createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
+const reservations = () => createStatisticsReservations(database)
 let connectionString = ''
 
 const admission: AdmissionConfig = {
@@ -170,7 +167,7 @@ describe('Statistics durable production worker', () => {
     if (!rankedIntent || !lifetimeIntent) throw new Error('Statistics collection intents missing')
 
     const reserve = (intent: typeof rankedIntent) =>
-      operations.reserveStatisticsCollection({
+      reservations().reserveStatisticsCollection({
         kind: intent.kind,
         dedupeKey: intent.operationKey,
         operationKey: intent.operationKey,
@@ -188,7 +185,7 @@ describe('Statistics durable production worker', () => {
 
     await restart()
 
-    await reconcileStatisticsCohort(statistics, operations, {
+    await reconcileStatisticsCohort(statistics, reservations(), {
       getLeaderboard: async (input) => ({
         status: 'unavailable',
         reason: 'not_yet_published',
@@ -203,9 +200,10 @@ describe('Statistics durable production worker', () => {
       retryDelayMs: 0,
       admission,
       sourceAdmission,
-      statistics,
-      executeStatisticsCollection: (lease: Parameters<typeof collectStatisticsEvidence>[1]) =>
-        collectStatisticsEvidence(source, lease),
+      movedJobs: createStatisticsTestJobs(statistics, {
+        sourceAdmission,
+        collectEvidence: (lease) => collectStatisticsEvidence(source, lease),
+      }),
     })
 
     expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
@@ -255,7 +253,7 @@ describe('Statistics durable production worker', () => {
         RETURNING id
       `
 
-      const deadLetters = createPostgresDeadLetterOperations(database)
+      const deadLetters = createTestDeadLetters(database)
 
       const replay = await deadLetters.replayDeadLetter({
         operationId: rankedOperation.id,
@@ -270,10 +268,13 @@ describe('Statistics durable production worker', () => {
       expect(
         await runOneRefreshOperation(operations, 'replay-worker', {
           ...options(),
-          executeStatisticsCollection: async () => {
-            replaySourceCalls++
-            throw new Error('source drift must not be read for an already-applied observation')
-          },
+          movedJobs: createStatisticsTestJobs(statistics, {
+            sourceAdmission,
+            collectEvidence: async () => {
+              replaySourceCalls++
+              throw new Error('source drift must not be read for an already-applied observation')
+            },
+          }),
         }),
       ).toBe(true)
 
