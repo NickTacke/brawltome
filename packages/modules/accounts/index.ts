@@ -10,6 +10,7 @@ import { consolidatePinnedPlayers } from './migrations/0008-consolidate-pinned-p
 import { addAccountTheme } from './migrations/0009-add-account-theme'
 import { dropV2AuthState } from './migrations/0010-drop-v2-auth-state'
 import { moveProofEffects } from './migrations/0011-move-proof-effects'
+import { dropProofEffectsView } from './migrations/0012-drop-proof-effects-view'
 import { createAccounts } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
@@ -66,6 +67,7 @@ const migrations = [
   addAccountTheme,
   dropV2AuthState,
   moveProofEffects,
+  dropProofEffectsView,
 ] as const
 
 export const accountsModule = {
