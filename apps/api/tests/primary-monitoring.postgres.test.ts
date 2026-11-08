@@ -6,6 +6,7 @@ import {
   createPostgresCareerPlayers,
   createPostgresRankedPlayers,
   playerModule,
+  reconcilePrimaryMonitoring,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
@@ -121,7 +122,7 @@ describe('Primary Player monitoring', () => {
 
     const reconciled = await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
-        (index % 2 ? operationsA : operationsB).reconcilePrimaryMonitoring(snapshot),
+        reconcilePrimaryMonitoring(index % 2 ? replicaClients[0] : replicaClients[1], snapshot),
       ),
     )
 
@@ -228,7 +229,7 @@ describe('Primary Player monitoring', () => {
     const afterRemoval = await accounts.primaryMonitoring.readSnapshot()
 
     expect(afterRemoval.targets).toEqual([])
-    expect(await operationsA.reconcilePrimaryMonitoring(afterRemoval)).toEqual({ created: 0, retired: 1 })
+    expect(await reconcilePrimaryMonitoring(replicaClients[0], afterRemoval)).toEqual({ created: 0, retired: 1 })
 
     const replacementAttempt = await accounts.accounts.beginPrimaryPlayerVerification({
       accountId: signedIn.account.id,
@@ -248,10 +249,12 @@ describe('Primary Player monitoring', () => {
     const afterReassignment = await accounts.primaryMonitoring.readSnapshot()
 
     expect(afterReassignment.targets.map(({ brawlhallaId: id }) => id)).toEqual([brawlhallaId + 1])
-    expect(await operationsB.reconcilePrimaryMonitoring(afterReassignment)).toEqual({ created: 1, retired: 0 })
+    expect(await reconcilePrimaryMonitoring(replicaClients[1], afterReassignment)).toEqual({ created: 1, retired: 0 })
     await control`DELETE FROM accounts.primary_players WHERE account_id = ${signedIn.account.id}`
 
-    expect(await operationsA.reconcilePrimaryMonitoring(await accounts.primaryMonitoring.readSnapshot())).toEqual({
+    expect(
+      await reconcilePrimaryMonitoring(replicaClients[0], await accounts.primaryMonitoring.readSnapshot()),
+    ).toEqual({
       created: 0,
       retired: 1,
     })

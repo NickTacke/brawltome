@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { acceptOperation } from './db/accept-operation'
 import { activateAdmitted, activateBound } from './db/activate-operation'
@@ -24,10 +23,6 @@ import { completeOperation, deferOperation, failOperation, retryAppliedEffect } 
 import { wakeupChannel } from './db/wakeup'
 import { admissionConfigHash, validateAdmissionConfig } from './domain/admission'
 import { isDiscoveryProjectionKind, isLeaderboardKind } from './domain/operation-kinds'
-import {
-  type PrimaryMonitoringScheduleDefinition,
-  validatePrimaryMonitoringSchedule,
-} from './domain/schedule-definition'
 import type { Lease } from './jobs/job-definition'
 import {
   type AcceptOperation,
@@ -43,11 +38,8 @@ import {
   type OperationFailure,
   type OperationLease,
   type PlayerRefreshSettled,
-  type PrimaryMonitoringSnapshot,
   parsePlayerRefreshSettled,
   playerRefreshSettledChannel,
-  primaryMonitoringIntervalMs,
-  type ReconcilePrimaryMonitoringResult,
   type ReserveStatisticsCollection,
   type ReserveStatisticsLegendMetaPublication,
   type ReserveStatisticsPublication,
@@ -268,125 +260,6 @@ export function createPostgresRefreshOperations(
         payload: input.payload,
         provenance: input.provenance,
         maxAttempts: input.maxAttempts,
-      })
-    },
-
-    async reconcilePrimaryMonitoring(snapshot: PrimaryMonitoringSnapshot): Promise<ReconcilePrimaryMonitoringResult> {
-      if (!(snapshot.observedAt instanceof Date) || Number.isNaN(snapshot.observedAt.getTime())) {
-        throw new Error('Primary monitoring snapshot requires a valid observedAt')
-      }
-
-      const definitions = snapshot.targets.map((target) => {
-        const definition: PrimaryMonitoringScheduleDefinition = {
-          kind: 'interactive-player-refresh' as const,
-          scheduleKey: `primary-player:${target.brawlhallaId}:${target.assignmentId}`,
-          operationKeyPrefix: `primary-player:${target.brawlhallaId}`,
-          resourceKey: `player:${target.brawlhallaId}`,
-          workClass: 'primary-monitoring' as const,
-          intervalMs: primaryMonitoringIntervalMs,
-          firstDueAt: new Date(target.verifiedAt.getTime() + primaryMonitoringIntervalMs).toISOString(),
-          payload: {
-            assignmentId: target.assignmentId,
-            brawlhallaId: target.brawlhallaId,
-            staleSections: ['ranked', 'stats'] as ['ranked', 'stats'],
-          },
-          provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
-          maxAttempts: 3,
-        }
-
-        validatePrimaryMonitoringSchedule(definition)
-
-        return definition
-      })
-
-      if (new Set(definitions.map(({ resourceKey }) => resourceKey)).size !== definitions.length) {
-        throw new Error('Primary monitoring snapshot contains duplicate players')
-      }
-
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        await sql`SELECT pg_advisory_xact_lock(${208_192})`
-
-        const [previous] = await sql<{ observed_at: Date }[]>`
-          SELECT observed_at
-          FROM refresh_operations.primary_monitoring_reconciliation
-          WHERE singleton
-          FOR UPDATE
-        `
-
-        if (previous && previous.observed_at.getTime() >= snapshot.observedAt.getTime()) {
-          return { created: 0, retired: 0 }
-        }
-
-        const existing = await sql<
-          {
-            id: string
-            schedule_key: string
-            resource_key: string | null
-            first_due_at: Date
-            payload: { assignmentId?: string; brawlhallaId?: number }
-          }[]
-        >`
-          SELECT id, schedule_key, resource_key, first_due_at, payload
-          FROM refresh_operations.schedules
-          WHERE provenance ->> 'source' = 'primary-player-monitoring' AND enabled
-          FOR UPDATE
-        `
-
-        const desiredByResource = new Map(definitions.map((definition) => [definition.resourceKey, definition]))
-        let retired = 0
-
-        for (const schedule of existing) {
-          const desired = schedule.resource_key ? desiredByResource.get(schedule.resource_key) : undefined
-
-          const matches =
-            desired &&
-            schedule.schedule_key === desired.scheduleKey &&
-            schedule.first_due_at.getTime() === new Date(desired.firstDueAt).getTime() &&
-            schedule.payload.assignmentId === desired.payload.assignmentId &&
-            schedule.payload.brawlhallaId === desired.payload.brawlhallaId
-
-          if (matches) {
-            desiredByResource.delete(desired.resourceKey)
-            continue
-          }
-
-          await sql`
-            UPDATE refresh_operations.schedules
-            SET enabled = false,
-                schedule_key = schedule_key || ':retired:' || id::text,
-                updated_at = clock_timestamp()
-            WHERE id = ${schedule.id}
-          `
-
-          retired++
-        }
-
-        let created = 0
-
-        for (const definition of desiredByResource.values()) {
-          await sql`
-            INSERT INTO refresh_operations.schedules
-              (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
-               operation_key_prefix, payload, provenance, max_attempts)
-            VALUES
-              (${randomUUID()}, ${definition.scheduleKey}, ${definition.kind}, ${definition.resourceKey},
-               ${definition.workClass}, ${definition.intervalMs}, ${definition.firstDueAt}, ${definition.firstDueAt},
-               ${definition.operationKeyPrefix}, ${sql.json(definition.payload)},
-               ${sql.json(definition.provenance)}, ${definition.maxAttempts})
-          `
-
-          created++
-        }
-
-        await sql`
-          INSERT INTO refresh_operations.primary_monitoring_reconciliation (singleton, observed_at)
-          VALUES (true, ${snapshot.observedAt})
-          ON CONFLICT (singleton) DO UPDATE SET observed_at = EXCLUDED.observed_at
-        `
-
-        return { created, retired }
       })
     },
 

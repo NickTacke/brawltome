@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { createClanRefreshReservations, reserveClanRefresh } from '@brawltome/clan'
 import type { Database, Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPlayerRefreshReservations } from '@brawltome/player'
+import { createPlayerRefreshReservations, reconcilePrimaryMonitoring } from '@brawltome/player'
 import {
   acceptOperation,
   type OperationLease,
@@ -1195,7 +1195,7 @@ describe('durable Refresh Operations', () => {
 
     const reconciliations = await Promise.all(
       Array.from({ length: 20 }, (_, index) =>
-        replicas[index % replicas.length].reconcilePrimaryMonitoring({ observedAt, targets: [target] }),
+        reconcilePrimaryMonitoring(replicaClients[index % replicaClients.length], { observedAt, targets: [target] }),
       ),
     )
 
@@ -1261,7 +1261,10 @@ describe('durable Refresh Operations', () => {
     expect(Number(history.occurrences[0].lateness_ms)).toBeGreaterThanOrEqual(10_000)
 
     expect(
-      await restarted.reconcilePrimaryMonitoring({ observedAt: new Date(observedAt.getTime() + 1), targets: [] }),
+      await reconcilePrimaryMonitoring(restartedClient, {
+        observedAt: new Date(observedAt.getTime() + 1),
+        targets: [],
+      }),
     ).toEqual({ created: 0, retired: 1 })
 
     const [retired] = await control`
@@ -1270,7 +1273,7 @@ describe('durable Refresh Operations', () => {
 
     expect(retired.enabled).toBe(false)
 
-    expect(await restarted.reconcilePrimaryMonitoring({ observedAt, targets: [target] })).toEqual({
+    expect(await reconcilePrimaryMonitoring(restartedClient, { observedAt, targets: [target] })).toEqual({
       created: 0,
       retired: 0,
     })
@@ -1282,8 +1285,8 @@ describe('durable Refresh Operations', () => {
       targets: [{ assignmentId: randomUUID(), brawlhallaId: 4343, verifiedAt: reassignedAt }],
     }
 
-    expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 1, retired: 0 })
-    expect(await restarted.reconcilePrimaryMonitoring(reassignedSnapshot)).toEqual({ created: 0, retired: 0 })
+    expect(await reconcilePrimaryMonitoring(restartedClient, reassignedSnapshot)).toEqual({ created: 1, retired: 0 })
+    expect(await reconcilePrimaryMonitoring(restartedClient, reassignedSnapshot)).toEqual({ created: 0, retired: 0 })
 
     const interactiveFirst = await playerRefreshes(restartedClient).reserveInteractivePlayerRefresh({
       dedupeKey: `interactive-first:${randomUUID()}`,
@@ -1333,7 +1336,7 @@ describe('durable Refresh Operations', () => {
     const partialTarget = { assignmentId: randomUUID(), brawlhallaId: 4444, verifiedAt: reassignedAt }
 
     expect(
-      await restarted.reconcilePrimaryMonitoring({
+      await reconcilePrimaryMonitoring(restartedClient, {
         observedAt: new Date(observedAt.getTime() + 3),
         targets: [...reassignedSnapshot.targets, partialTarget],
       }),
@@ -1395,7 +1398,7 @@ describe('durable Refresh Operations', () => {
 
     const splitTarget = { assignmentId: randomUUID(), brawlhallaId: 4646, verifiedAt: new Date() }
 
-    await operations.reconcilePrimaryMonitoring({ observedAt: new Date(), targets: [expiredTarget, splitTarget] })
+    await reconcilePrimaryMonitoring(database, { observedAt: new Date(), targets: [expiredTarget, splitTarget] })
 
     const abandoned = await playerRefreshes().reserveInteractivePlayerRefresh({
       dedupeKey: `abandoned:${randomUUID()}`,

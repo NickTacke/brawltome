@@ -53,6 +53,11 @@ export {
   type PlayerRefreshReservations,
 } from './jobs/player-refresh-reservation'
 export {
+  type PrimaryMonitoringSnapshot,
+  type PrimaryMonitoringTarget,
+  reconcilePrimaryMonitoring,
+} from './jobs/primary-monitoring-schedules'
+export {
   createRecentlyViewedRefreshes,
   type FreshnessAttempt,
   type RefreshRequestDemand,

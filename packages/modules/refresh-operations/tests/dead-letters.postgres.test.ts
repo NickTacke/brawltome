@@ -9,6 +9,7 @@ import {
   createPostgresRefreshOperations,
   interactiveRefreshMaxAttempts,
   type OperationLease,
+  reconcileResourceSchedules,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
@@ -507,7 +508,29 @@ describe('dead-letter operations', () => {
       verifiedAt: new Date(Date.now() - 24 * 60 * 60 * 1_000 - 1_000),
     }
 
-    await operations.reconcilePrimaryMonitoring({ observedAt: new Date(), targets: [monitoringTarget] })
+    await reconcileResourceSchedules(database, {
+      provenanceSource: 'primary-player-monitoring',
+      observedAt: new Date(),
+      identityPayloadFields: ['assignmentId', 'brawlhallaId'],
+      schedules: [
+        {
+          kind: 'interactive-player-refresh',
+          scheduleKey: `primary-player:${monitoringTarget.brawlhallaId}:${monitoringTarget.assignmentId}`,
+          operationKeyPrefix: `primary-player:${monitoringTarget.brawlhallaId}`,
+          resourceKey: `player:${monitoringTarget.brawlhallaId}`,
+          workClass: 'primary-monitoring',
+          intervalMs: 24 * 60 * 60 * 1_000,
+          firstDueAt: new Date(monitoringTarget.verifiedAt.getTime() + 24 * 60 * 60 * 1_000).toISOString(),
+          payload: {
+            assignmentId: monitoringTarget.assignmentId,
+            brawlhallaId: monitoringTarget.brawlhallaId,
+            staleSections: ['ranked', 'stats'],
+          },
+          provenance: { source: 'primary-player-monitoring', requestedBy: 'issue-208' },
+          maxAttempts: 3,
+        },
+      ],
+    })
     await operations.materializeDueSchedules()
 
     const monitoringLease = requireLease(

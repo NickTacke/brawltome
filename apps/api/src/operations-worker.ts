@@ -22,6 +22,7 @@ import {
   createPostgresRankedPlayers,
   createRecentlyViewedRefreshes,
   createSteamPlayerEvidenceResolver,
+  reconcilePrimaryMonitoring,
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
@@ -351,7 +352,8 @@ try {
     reconcile: async () => {
       const interactiveAdmissions = await reconcileInteractiveAdmissions(operations, requestAdmission)
 
-      const primaryMonitoring = await operations.reconcilePrimaryMonitoring(
+      const primaryMonitoring = await reconcilePrimaryMonitoring(
+        databases.main,
         await accounts.primaryMonitoring.readSnapshot(),
       )
 
