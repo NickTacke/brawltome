@@ -26,6 +26,7 @@ import {
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
 import {
+  createLeaderboardDeepCrawlProgress,
   createPostgresRanking,
   disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
@@ -516,10 +517,7 @@ try {
         leaderboardRanked,
         deepCrawlPageDelayMs: workerConfig.deepCrawl.pageDelayMs,
         leaderboardTeamModes: leaderboardRanked,
-        leaderboardDeepCrawlProgress: {
-          read: operations.readLeaderboardDeepCrawlProgress,
-          save: operations.saveLeaderboardDeepCrawlProgress,
-        },
+        leaderboardDeepCrawlProgress: createLeaderboardDeepCrawlProgress(databases.main),
         leaderboardSource: {
           fetchPage: (input) =>
             fetchLeaderboardPage(input, {

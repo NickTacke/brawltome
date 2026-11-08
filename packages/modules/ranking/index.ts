@@ -12,6 +12,7 @@ import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete
 import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 
+export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
   disableLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardDeepCrawlSchedule,
