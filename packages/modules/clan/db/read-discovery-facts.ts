@@ -3,9 +3,6 @@ import type { ClanDiscoveryFact } from '../domain/discovery-facts'
 import { discoveryState, members, profiles } from './tables'
 import type { Transaction } from './transaction'
 
-// one snapshot for every read, so the facts match the source version and the events read with them
-export const discoveryReadTransaction = { isolationLevel: 'repeatable read', accessMode: 'read only' } as const
-
 /** The facts discovery indexes for each stored clan, or for the given clans only, ordered by clan id. */
 export async function readDiscoveryFacts(transaction: Transaction, clanIds?: number[]): Promise<ClanDiscoveryFact[]> {
   if (clanIds && clanIds.length === 0) return []

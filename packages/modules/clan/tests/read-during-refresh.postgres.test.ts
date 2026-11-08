@@ -5,6 +5,7 @@ import postgres from 'postgres'
 import { clanModule, createPostgresClans } from '../index'
 
 const clanId = 990090
+const snapshotClanId = 990091
 const oldRosterAt = new Date('2026-08-10T10:00:00.000Z')
 const newRosterAt = new Date('2026-08-10T11:00:00.000Z')
 const rosterProvenance = { source: 'v1-guild-members', outcome: 'success' } as const
@@ -77,6 +78,41 @@ async function lockMember(brawlhallaId: number): Promise<{ release(): Promise<vo
       releasing ??= release()
 
       return releasing
+    },
+  }
+}
+
+type MembersTableLock = { commitWith(write: (sql: postgres.TransactionSql) => Promise<unknown>): Promise<void> }
+
+// locks clans.members against reads too, so a read that reaches the members table waits until the lock holder
+// commits its writes
+async function lockMembersTable(): Promise<MembersTableLock> {
+  const lockHolder = postgres(database.connectionString, { max: 1 })
+  const acquired = Promise.withResolvers<void>()
+  const writes = Promise.withResolvers<(sql: postgres.TransactionSql) => Promise<unknown>>()
+
+  const transaction = lockHolder.begin(async (sql) => {
+    await sql`LOCK TABLE clans.members IN ACCESS EXCLUSIVE MODE`
+    acquired.resolve()
+    const write = await writes.promise
+
+    await write(sql)
+  })
+
+  await Promise.race([acquired.promise, transaction])
+  let committing: Promise<void> | undefined
+
+  const commit = async () => {
+    await transaction
+    await lockHolder.end()
+  }
+
+  return {
+    commitWith(write) {
+      writes.resolve(write)
+      committing ??= commit()
+
+      return committing
     },
   }
 }
@@ -154,6 +190,51 @@ describe('reading a clan while its roster refresh is in flight', () => {
       expect(after?.roster?.lastSuccessAt).toEqual(newRosterAt)
     } finally {
       await lock.release()
+    }
+  })
+
+  test('reads the profile, roster state and members from one snapshot', async () => {
+    const clans = createPostgresClans(database)
+    const oldRoster = [member(11, '5'), member(12, '4')]
+
+    await clans.publishProfile({ ...profile, clanId: snapshotClanId }, oldRosterAt, {
+      source: 'v1-guild-stats',
+      outcome: 'success',
+    })
+
+    await clans.publishRoster(snapshotClanId, oldRoster, oldRosterAt, rosterProvenance)
+    const lock = await lockMembersTable()
+
+    try {
+      // the read gets the profile and the roster state, then waits on the lock to read the members; the roster
+      // change commits while it waits
+      const read = clans.getById(snapshotClanId)
+
+      await waitForLockWait()
+
+      await lock.commitWith(async (sql) => {
+        await sql`
+          UPDATE clans.roster_state SET checked_at = ${newRosterAt}, last_success_at = ${newRosterAt}
+          WHERE clan_id = ${snapshotClanId}
+        `
+
+        await sql`DELETE FROM clans.members WHERE clan_id = ${snapshotClanId} AND brawlhalla_id = 12`
+      })
+
+      const during = await read
+      const after = await clans.getById(snapshotClanId)
+
+      expect(during?.roster?.lastSuccessAt).toEqual(oldRosterAt)
+
+      expect(rosterOf(during)).toEqual([
+        { brawlhallaId: 11, xp: '5' },
+        { brawlhallaId: 12, xp: '4' },
+      ])
+
+      expect(after?.roster?.lastSuccessAt).toEqual(newRosterAt)
+      expect(rosterOf(after)).toEqual([{ brawlhallaId: 11, xp: '5' }])
+    } finally {
+      await lock.commitWith(async () => undefined)
     }
   })
 })

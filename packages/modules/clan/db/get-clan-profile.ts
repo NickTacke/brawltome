@@ -1,7 +1,9 @@
 import type { Database } from '@brawltome/foundation'
 import { desc, eq } from 'drizzle-orm'
 import type { ClanMember, ClanProfile, ClanSectionState } from '../domain/clan-profile'
+import { readOnlySnapshot } from './read-only-snapshot'
 import { members, profileState, profiles, rosterState } from './tables'
+import type { Transaction } from './transaction'
 
 const rosterStateColumns = {
   checkedAt: rosterState.checkedAt,
@@ -10,15 +12,15 @@ const rosterStateColumns = {
   lastSuccessProvenance: rosterState.lastSuccessProvenance,
 }
 
-async function readRosterState(database: Database, clanId: number): Promise<ClanSectionState | null> {
-  const [state] = await database.db.select(rosterStateColumns).from(rosterState).where(eq(rosterState.clanId, clanId))
+async function readRosterState(transaction: Transaction, clanId: number): Promise<ClanSectionState | null> {
+  const [state] = await transaction.select(rosterStateColumns).from(rosterState).where(eq(rosterState.clanId, clanId))
 
   return state ?? null
 }
 
 // highest xp first, ties by player id
-async function readMembers(database: Database, clanId: number): Promise<ClanMember[]> {
-  return database.db
+async function readMembers(transaction: Transaction, clanId: number): Promise<ClanMember[]> {
+  return transaction
     .select({
       brawlhallaId: members.brawlhallaId,
       name: members.name,
@@ -32,9 +34,8 @@ async function readMembers(database: Database, clanId: number): Promise<ClanMemb
     .orderBy(desc(members.xp), members.brawlhallaId)
 }
 
-/** The stored clan with its section states and members, or null when its profile was never fetched. */
-export async function getClanProfile(database: Database, clanId: number): Promise<ClanProfile | null> {
-  const [profile] = await database.db
+async function readProfile(transaction: Transaction, clanId: number) {
+  const [profile] = await transaction
     .select({
       clanId: profiles.clanId,
       clanName: profiles.clanName,
@@ -57,10 +58,22 @@ export async function getClanProfile(database: Database, clanId: number): Promis
     .innerJoin(profileState, eq(profileState.clanId, profiles.clanId))
     .where(eq(profiles.clanId, clanId))
 
-  if (!profile) return null
+  return profile
+}
 
-  const roster = await readRosterState(database, clanId)
-  const clanMembers = await readMembers(database, clanId)
+/**
+ * The stored clan with its section states and members, or null when its profile was never fetched. All three reads
+ * share one snapshot, so a refresh that commits meanwhile shows up whole or not at all.
+ */
+export async function getClanProfile(database: Database, clanId: number): Promise<ClanProfile | null> {
+  return database.db.transaction(async (transaction) => {
+    const profile = await readProfile(transaction, clanId)
 
-  return { ...profile, roster, members: clanMembers }
+    if (!profile) return null
+
+    const roster = await readRosterState(transaction, clanId)
+    const clanMembers = await readMembers(transaction, clanId)
+
+    return { ...profile, roster, members: clanMembers }
+  }, readOnlySnapshot)
 }

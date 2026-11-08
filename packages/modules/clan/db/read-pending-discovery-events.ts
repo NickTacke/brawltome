@@ -1,7 +1,8 @@
 import type { Database } from '@brawltome/foundation'
 import { isNull } from 'drizzle-orm'
 import type { ClanDiscoveryEvent } from '../domain/discovery-facts'
-import { discoveryReadTransaction, readDiscoveryFacts, readDiscoverySourceVersion } from './read-discovery-facts'
+import { readDiscoveryFacts, readDiscoverySourceVersion } from './read-discovery-facts'
+import { readOnlySnapshot } from './read-only-snapshot'
 import { discoveryOutbox } from './tables'
 
 const maximumEventLimit = 1_000
@@ -29,5 +30,5 @@ export async function readPendingDiscoveryEvents(database: Database, limit: numb
     const sourceVersion = await readDiscoverySourceVersion(transaction)
 
     return events.map((event) => ({ ...event, sourceVersion, fact: factsByClanId.get(event.clanId) ?? null }))
-  }, discoveryReadTransaction)
+  }, readOnlySnapshot)
 }

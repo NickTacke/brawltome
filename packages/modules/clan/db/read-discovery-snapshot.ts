@@ -1,7 +1,8 @@
 import type { Database } from '@brawltome/foundation'
 import { count, isNull, min } from 'drizzle-orm'
 import type { ClanDiscoverySnapshot } from '../domain/discovery-facts'
-import { discoveryReadTransaction, readDiscoveryFacts, readDiscoverySourceVersion } from './read-discovery-facts'
+import { readDiscoveryFacts, readDiscoverySourceVersion } from './read-discovery-facts'
+import { readOnlySnapshot } from './read-only-snapshot'
 import { discoveryOutbox } from './tables'
 
 /** Every clan's facts at one source version, with the backlog of events not yet delivered. */
@@ -21,5 +22,5 @@ export async function readDiscoverySnapshot(database: Database): Promise<ClanDis
       pendingEventCount: pending?.pendingEventCount ?? 0,
       oldestPendingAt: pending?.oldestPendingAt ?? null,
     }
-  }, discoveryReadTransaction)
+  }, readOnlySnapshot)
 }
