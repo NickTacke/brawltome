@@ -66,7 +66,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/refresh-operations': ['./testing'],
   },
   capabilityDependencies: {
-    '@brawltome/accounts': [],
+    '@brawltome/accounts': ['@brawltome/refresh-operations'],
     '@brawltome/clan': ['@brawltome/refresh-operations'],
     '@brawltome/discovery': ['@brawltome/refresh-operations'],
     '@brawltome/player': ['@brawltome/refresh-operations'],

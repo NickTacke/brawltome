@@ -1,3 +1,4 @@
+import { createPrimaryPlayerVerificationJob, type PrimaryPlayerVerificationJobDependencies } from '@brawltome/accounts'
 import type { BhApiClientOptions } from '@brawltome/bhapi'
 import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
 import {
@@ -9,7 +10,15 @@ import {
   type PostgresDiscovery,
 } from '@brawltome/discovery'
 import { createRankingRetentionJob, type RankingRetentionStore } from '@brawltome/ranking'
-import type { JobDefinition, Lease } from '@brawltome/refresh-operations'
+import {
+  completeWithProofEffect,
+  defineJob,
+  type JobDefinition,
+  type Lease,
+  type ProofEffectPayload,
+  proofEffectState,
+  workClasses,
+} from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
 
 export type WorkerDiscoveryDependencies = {
@@ -28,12 +37,15 @@ export type WorkerClanDependencies = {
   createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
 }
 
+export type WorkerAccountsDependencies = PrimaryPlayerVerificationJobDependencies
+
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
   isRankingRetentionEnabled: boolean
   telemetry: Telemetry
   discovery: WorkerDiscoveryDependencies
   clan: WorkerClanDependencies
+  accounts: WorkerAccountsDependencies
 }
 
 function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
@@ -74,6 +86,25 @@ function createClanJobs({ clans, createBrawlhallaClient }: WorkerClanDependencie
   return [clanRefresh]
 }
 
+// a proof row with a primary-player key is a verification written before the kind existed, or a replay of one
+function createProofJob(
+  primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
+): JobDefinition<ProofEffectPayload> {
+  return defineJob<ProofEffectPayload>({
+    kind: 'proof',
+    workClasses,
+    failureCode: 'proof_execution_failed',
+    // claim already shapes this payload
+    parsePayload: (value) => value as ProofEffectPayload,
+    effectState: proofEffectState,
+    run(lease, tools) {
+      if (lease.operationKey.startsWith('primary-player:')) return primaryPlayerVerification.run(lease, tools)
+
+      return completeWithProofEffect(lease, tools)
+    },
+  })
+}
+
 // the jobs that live in their owning module; the rest are still wrapped in refresh-operations-worker.ts
 export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefinition<unknown>[] {
   const rankingRetention = createRankingRetentionJob({
@@ -82,5 +113,13 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     telemetry: dependencies.telemetry,
   })
 
-  return [rankingRetention, ...createDiscoveryJobs(dependencies.discovery), ...createClanJobs(dependencies.clan)]
+  const primaryPlayerVerification = createPrimaryPlayerVerificationJob(dependencies.accounts)
+
+  return [
+    rankingRetention,
+    ...createDiscoveryJobs(dependencies.discovery),
+    ...createClanJobs(dependencies.clan),
+    primaryPlayerVerification,
+    createProofJob(primaryPlayerVerification),
+  ]
 }

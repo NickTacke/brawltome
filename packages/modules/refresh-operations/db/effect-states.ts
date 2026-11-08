@@ -14,7 +14,7 @@ export type EffectStates = Readonly<Partial<Record<OperationLease['kind'], Effec
 
 type EffectLease = Pick<Lease<unknown>, 'operationId' | 'effectOperationId' | 'payload'>
 
-async function proofEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
+export async function proofEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
     SELECT operation_id FROM refresh_operations.proof_effects
     WHERE operation_id = ${lease.effectOperationId}
@@ -86,13 +86,17 @@ function entriesForKinds<Kind extends string>(
 }
 
 // these jobs live in their owning module and bring their effect checks with them
-type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation' | 'clan-refresh'
+type JobOwnedEffectKind =
+  | DiscoveryProjectionKind
+  | 'discovery-reconciliation'
+  | 'clan-refresh'
+  | 'proof'
+  | 'primary-player-verification'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect
 export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): EffectStates {
   const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
-    proof: { effectState: proofEffectState },
     'interactive-player-refresh': { effectState: staleSectionsCommitted },
     'ranked-player-pulse': { effectState: rankedSectionCommitted },
     'player-name-verification': { effectState: rankedSectionCommitted },

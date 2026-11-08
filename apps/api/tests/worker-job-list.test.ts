@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import type { JobDefinition, Lease } from '@brawltome/refresh-operations'
+import { type JobDefinition, type Lease, proofEffectState, workClasses } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
-import { createWorkerJobs, type WorkerClanDependencies, type WorkerDiscoveryDependencies } from '../src/worker/job-list'
+import {
+  createWorkerJobs,
+  type WorkerAccountsDependencies,
+  type WorkerClanDependencies,
+  type WorkerDiscoveryDependencies,
+} from '../src/worker/job-list'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
 const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
@@ -11,7 +16,17 @@ const idleClanDependencies: WorkerClanDependencies = {
   createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
 }
 
-function createRecordingJobs(clan: WorkerClanDependencies = idleClanDependencies) {
+const evidenceResolver = { resolve: async () => null }
+
+const idleAccountsDependencies: WorkerAccountsDependencies = {
+  accounts: { resolvePrimaryPlayerVerification: async () => ({}) as never },
+  createEvidenceResolver: () => evidenceResolver,
+}
+
+function createRecordingJobs(
+  clan: WorkerClanDependencies = idleClanDependencies,
+  accounts: WorkerAccountsDependencies = idleAccountsDependencies,
+) {
   const calls: unknown[][] = []
 
   const record =
@@ -50,6 +65,7 @@ function createRecordingJobs(clan: WorkerClanDependencies = idleClanDependencies
       leaseActive: async () => true,
     },
     clan,
+    accounts,
   })
 
   return { calls, jobs }
@@ -83,6 +99,29 @@ function leaseWithPayload(kind: string, payload: unknown): Lease<unknown> {
 
 async function runJob(job: JobDefinition<unknown>, lease: Lease<unknown>): Promise<void> {
   await job.run(lease, { queue: { complete: async () => 'transitioned' } } as never)
+}
+
+function proofLease(operationKey: string): Lease<unknown> {
+  return { ...leaseWithPayload('proof', { value: 'attempt' }), operationKey, workClass: 'interactive' }
+}
+
+function createProofQueueSpy() {
+  const steps: string[] = []
+
+  const queue = {
+    commitProofEffect: async () => {
+      steps.push('commit effect')
+
+      return 'applied'
+    },
+    complete: async () => {
+      steps.push('complete')
+
+      return 'transitioned'
+    },
+  }
+
+  return { queue, steps }
 }
 
 describe('worker job list', () => {
@@ -167,5 +206,96 @@ describe('worker job list', () => {
     )
 
     expect(admittedDomains).toEqual(['brawlhalla-v1'])
+  })
+
+  test('a plain proof commits its effect without verifying a primary player', async () => {
+    const verifiedAttempts: string[] = []
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, {
+      ...idleAccountsDependencies,
+      accounts: {
+        resolvePrimaryPlayerVerification: async (attemptId) => {
+          verifiedAttempts.push(attemptId)
+
+          return {} as never
+        },
+      },
+    })
+
+    const { queue, steps } = createProofQueueSpy()
+
+    expect(await jobOfKind(jobs, 'proof').run(proofLease('proof:plain'), { queue } as never)).toBe('succeeded')
+    expect(verifiedAttempts).toEqual([])
+    expect(steps).toEqual(['commit effect', 'complete'])
+  })
+
+  test('a proof with a primary-player key verifies the attempt before committing its effect', async () => {
+    const { queue, steps } = createProofQueueSpy()
+    const resolvedWith: unknown[] = []
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, {
+      ...idleAccountsDependencies,
+      accounts: {
+        resolvePrimaryPlayerVerification: async (attemptId, resolver) => {
+          steps.push(`verify ${attemptId}`)
+          resolvedWith.push(resolver)
+
+          return {} as never
+        },
+      },
+    })
+
+    const outcome = await jobOfKind(jobs, 'proof').run(proofLease('primary-player:attempt'), { queue } as never)
+
+    expect(outcome).toBe('succeeded')
+    expect(steps).toEqual(['verify attempt', 'commit effect', 'complete'])
+    expect(resolvedWith).toEqual([evidenceResolver])
+  })
+
+  test('both kinds run the Steam verification', async () => {
+    const leasesWithResolvers: Array<[string, unknown]> = []
+
+    const accounts: WorkerAccountsDependencies = {
+      accounts: {
+        resolvePrimaryPlayerVerification: async (attemptId, resolver) => {
+          leasesWithResolvers.push([attemptId, resolver])
+
+          return {} as never
+        },
+      },
+      createEvidenceResolver: () => evidenceResolver,
+    }
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, accounts)
+
+    const proofKey = proofLease('primary-player:attempt')
+    const verificationLease = { ...proofKey, kind: 'primary-player-verification' }
+
+    const proofQueue = createProofQueueSpy()
+    const verificationQueue = createProofQueueSpy()
+
+    await jobOfKind(jobs, 'proof').run(proofKey, { queue: proofQueue.queue } as never)
+
+    await jobOfKind(jobs, 'primary-player-verification').run(verificationLease, {
+      queue: verificationQueue.queue,
+    } as never)
+
+    expect(leasesWithResolvers).toEqual([
+      ['attempt', evidenceResolver],
+      ['attempt', evidenceResolver],
+    ])
+
+    expect(proofQueue.steps).toEqual(['commit effect', 'complete'])
+    expect(verificationQueue.steps).toEqual(['commit effect', 'complete'])
+  })
+
+  test('the proof job reads the proof effect table on an expired lease', async () => {
+    const { jobs } = createRecordingJobs()
+    const proof = jobOfKind(jobs, 'proof')
+
+    expect(proof.workClasses).toEqual(workClasses)
+    expect(proof.failureCode).toBe('proof_execution_failed')
+    expect(proof.effectState).toBe(proofEffectState)
+    expect(jobOfKind(jobs, 'primary-player-verification').effectState).toBe(proofEffectState)
   })
 })

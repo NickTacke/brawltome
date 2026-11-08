@@ -19,6 +19,7 @@ export type TelemetryReadings = {
 
 const allOperationKinds: OperationKind[] = [
   'proof',
+  'primary-player-verification',
   'interactive-player-refresh',
   'clan-refresh',
   'player-discovery-projection',

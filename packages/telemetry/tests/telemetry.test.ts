@@ -577,6 +577,7 @@ describe('telemetry foundation', () => {
 
     const durableKinds = [
       ['proof', 'maintenance'],
+      ['primary-player-verification', 'interactive'],
       ['interactive-player-refresh', 'interactive'],
       ['clan-refresh', 'interactive'],
       ['player-discovery-projection', 'projection'],

@@ -33,7 +33,7 @@ describe('module lists', () => {
 
   test('leaving out a module others depend on names a dependant', () => {
     expect(() => checkModuleList(without(apiModules, refreshOperationsModule))).toThrow(
-      'module player depends on refresh-operations, which is not loaded',
+      'module accounts depends on refresh-operations, which is not loaded',
     )
 
     expect(() => checkModuleList(without(apiModules, accountsModule))).toThrow(

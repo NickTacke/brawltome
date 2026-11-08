@@ -17,7 +17,6 @@ import {
   createJobRegistry,
   defineJob,
   type FailureDecision,
-  type FencedResult,
   failureDetails,
   type JobDefinition,
   type JobTools,
@@ -34,13 +33,11 @@ import {
   statisticsCollectionKinds,
   type WorkClass,
   waitForRenewal,
-  workClasses,
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
 import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
 import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 
-type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
@@ -65,7 +62,6 @@ type RunOneRefreshOperationOptions = {
   sourceAdmission?: SourceAdmission
   waitForSourceAdmission?: (retryAfterMs: number, signal: AbortSignal) => Promise<void>
   waitForSourceRetry?: (delayMs: number, signal: AbortSignal) => Promise<void>
-  executeEffect?: (lease: ProofLease) => Promise<FencedResult>
   executeSection?(
     lease: PlayerLease,
     section: 'ranked' | 'stats',
@@ -187,28 +183,6 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
   }
 
   return null
-}
-
-async function executeProof(
-  operations: LeaseOperations,
-  lease: ProofLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  const effect = options.executeEffect ? await options.executeEffect(lease) : await operations.commitProofEffect(lease)
-
-  if (effect === 'lease-lost') return 'lease_lost'
-
-  if (effect === 'effect-conflict') {
-    const transition = await operations.fail(
-      lease,
-      { code: 'effect_conflict', message: 'Operation key belongs to a different effect', retryable: false },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 type AccountPrimaryLease = Extract<PlayerLease, { workClass: 'primary-monitoring'; payload: { assignmentId: string } }>
@@ -1066,17 +1040,6 @@ function wrapJob<WrappedLease extends OperationLease>(job: WrappedJob<WrappedLea
   })
 }
 
-function proofJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [
-    wrapJob<ProofLease>({
-      kind: 'proof',
-      workClasses,
-      failureCode: 'proof_execution_failed',
-      run: (lease, tools) => executeProof(tools.queue, lease, options),
-    }),
-  ]
-}
-
 function interactiveJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
   return [
     wrapJob<PlayerLease>({
@@ -1159,7 +1122,6 @@ function leaderboardJobs(options: RunOneRefreshOperationOptions): JobDefinition<
 
 export function createJobsFromOptions(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
   return [
-    ...proofJobs(options),
     ...interactiveJobs(options),
     ...playerBackgroundJobs(options),
     ...statisticsJobs(options),

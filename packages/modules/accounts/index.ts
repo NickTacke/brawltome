@@ -13,6 +13,10 @@ import { createAccounts } from './src/accounts'
 import { createPostgresAccountsStore } from './src/postgres-store'
 
 export {
+  createPrimaryPlayerVerificationJob,
+  type PrimaryPlayerVerificationJobDependencies,
+} from './jobs/primary-player-verification-job'
+export {
   ACCOUNT_THEMES,
   type Account,
   type AccountAuthentication,
@@ -62,6 +66,6 @@ const migrations = [
 
 export const accountsModule = {
   name: 'accounts',
-  dependsOn: [],
+  dependsOn: ['refresh-operations'],
   migrations,
 } satisfies BrawltomeModule

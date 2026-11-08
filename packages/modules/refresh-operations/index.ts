@@ -25,6 +25,8 @@ import { validateLeaderboardDeepCrawl } from './migrations/0023-validate-leaderb
 import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
+import { addPrimaryPlayerVerificationKind } from './migrations/0027-add-primary-player-verification-kind'
+import { validatePrimaryPlayerVerificationKind } from './migrations/0028-validate-primary-player-verification-kind'
 
 export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 export {
@@ -40,7 +42,7 @@ export {
   rejectReserved,
 } from './db/activate-operation'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
-export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
+export { createEffectStates, type EffectStateEntry, type EffectStates, proofEffectState } from './db/effect-states'
 export {
   type ActiveOperation,
   type FindActiveOperationInput,
@@ -80,6 +82,7 @@ export {
   type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
+export { completeWithProofEffect, type ProofEffectPayload } from './jobs/complete-with-proof-effect'
 export {
   type AttemptOutcome,
   defineJob,
@@ -143,6 +146,8 @@ const migrations = [
   addDeepCrawlModes,
   validateDeepCrawlModes,
   notifyPlayerRefreshSettled,
+  addPrimaryPlayerVerificationKind,
+  validatePrimaryPlayerVerificationKind,
 ] as const
 
 export const refreshOperationsModule = {

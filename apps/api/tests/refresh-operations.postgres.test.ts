@@ -4,6 +4,7 @@ import { reserveClanRefresh } from '@brawltome/clan'
 import type { Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  acceptOperation,
   type OperationLease,
   type PlayerRefreshSettled,
   refreshOperationsModule,
@@ -16,7 +17,7 @@ import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
-import { createTestQueue } from './fixtures/queue'
+import { createProofJob, createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -323,11 +324,13 @@ describe('durable Refresh Operations', () => {
       renewEveryMs: 100,
       retryDelayMs: 1,
       admission: testAdmission,
-      executeEffect: async (lease) => {
-        await Bun.sleep(1_200)
+      movedJobs: [
+        createProofJob(async (lease) => {
+          await Bun.sleep(1_200)
 
-        return operations.commitProofEffect(lease)
-      },
+          return operations.commitProofEffect(lease)
+        }),
+      ],
     })
 
     const state = await operations.inspect(accepted.operationId)
@@ -391,6 +394,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
   })
@@ -430,6 +434,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -900,6 +905,7 @@ describe('durable Refresh Operations', () => {
         leaseMs: 1_000,
         retryDelayMs: 1,
         admission: testAdmission,
+        movedJobs: [createProofJob()],
       }),
     ).toBe(true)
 
@@ -922,7 +928,7 @@ describe('durable Refresh Operations', () => {
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
-      executeEffect: failEffect,
+      movedJobs: [createProofJob(failEffect)],
     }
 
     expect(await runOneRefreshOperation(worker, 'worker-a', options)).toBe(true)
@@ -967,9 +973,11 @@ describe('durable Refresh Operations', () => {
           leaseMs: 1_000,
           retryDelayMs: 1,
           admission: testAdmission,
-          executeEffect: async () => {
-            throw new SourceAdmissionLimitedError(37)
-          },
+          movedJobs: [
+            createProofJob(async () => {
+              throw new SourceAdmissionLimitedError(37)
+            }),
+          ],
         }),
       ).toBe(true)
 
@@ -1733,6 +1741,7 @@ type EffectFixture = {
 
 const allKindsWithEffects = [
   'proof',
+  'primary-player-verification',
   'leaderboard-1v1',
   'statistics-ranked-collection',
   'statistics-publication',
@@ -1944,16 +1953,35 @@ async function recordInteractiveSection(
 
 async function recordNothing(): Promise<void> {}
 
+async function recordProofEffect(control: ControlClient, lease: OperationLease): Promise<void> {
+  await control`
+    INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+    VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
+            ${control.json({ value: 'proof' })})
+  `
+}
+
+async function acceptPrimaryPlayerVerification(): Promise<string> {
+  const accepted = await acceptOperation(database, {
+    kind: 'primary-player-verification',
+    dedupeKey: uniqueKey('claim-verification'),
+    operationKey: uniqueKey('claim-verification-effect'),
+    workClass: 'interactive',
+    payload: { value: 'attempt' },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
 const effectFixtures: Record<KindWithEffects, EffectFixture> = {
   proof: {
     create: (operations) => acceptProof(operations),
-    recordEffect: async (control, lease) => {
-      await control`
-        INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
-        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
-                ${control.json({ value: 'proof' })})
-      `
-    },
+    recordEffect: recordProofEffect,
+  },
+  'primary-player-verification': {
+    create: acceptPrimaryPlayerVerification,
+    recordEffect: recordProofEffect,
   },
   'leaderboard-1v1': {
     create: acceptLeaderboard,

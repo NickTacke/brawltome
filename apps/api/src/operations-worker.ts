@@ -133,6 +133,7 @@ const workerJobs = createWorkerJobs({
     leaseActive: discoveryLeaseActive,
   },
   clan: { clans, createBrawlhallaClient: createWorkerBhApiClient },
+  accounts: { accounts: accounts.accounts, createEvidenceResolver: createPrimaryPlayerEvidenceResolver },
 })
 
 const operations = createPostgresRefreshOperations(
@@ -152,6 +153,22 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
 })
 
 const bhapiQueue = createBhApiRequestQueue()
+
+// not tools.createSourceAdmitter: verification spends background budget under a key of its own, whatever its work class
+function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {
+  const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
+    const admission = await requestAdmission.admitSource({
+      domain,
+      reservationKey: `${lease.operationId}:primary-player:${lease.attemptNumber}`,
+      units: 1,
+      caller: 'background',
+    })
+
+    if (admission.outcome === 'rate-limited') throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
+  })
+
+  return createSteamPlayerEvidenceResolver(admittedBhapi)
+}
 
 function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeRequest']): BhApiClient {
   return new BhApiClient({
@@ -454,29 +471,6 @@ try {
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
         movedJobs: workerJobs,
-        executeEffect: async (lease) => {
-          if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
-
-          const admittedBhapi = createWorkerBhApiClient(async ({ domain }) => {
-            const admission = await requestAdmission.admitSource({
-              domain,
-              reservationKey: `${lease.operationId}:primary-player:${lease.attemptNumber}`,
-              units: 1,
-              caller: 'background',
-            })
-
-            if (admission.outcome === 'rate-limited') {
-              throw new SourceAdmissionLimitedError(admission.retryAfterSeconds)
-            }
-          })
-
-          await accounts.accounts.resolvePrimaryPlayerVerification(
-            lease.payload.value,
-            createSteamPlayerEvidenceResolver(admittedBhapi),
-          )
-
-          return operations.commitProofEffect(lease)
-        },
         ranking,
         leaderboardPlayerNames,
         leaderboardRanked,

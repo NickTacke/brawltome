@@ -474,6 +474,7 @@ export type FreshnessAttempt = { brawlhallaId: number; lastPlannedAt: Date | nul
 
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
+  | (LeaseFields & { kind: 'primary-player-verification'; workClass: 'interactive'; payload: { value: string } })
   | (LeaseFields & {
       kind: 'interactive-player-refresh'
       workClass: 'interactive'
@@ -707,7 +708,7 @@ export interface RefreshOperationWorker {
     lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
     section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
-  commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
+  commitProofEffect(lease: Lease<{ value: string }>): Promise<FencedResult>
   discoveryLeaseActive(lease: Lease<unknown>): Promise<boolean>
   retryAppliedEffect(lease: Lease<unknown>, retryDelayMs: number): Promise<TransitionResult>
   defer(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
