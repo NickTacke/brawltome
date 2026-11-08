@@ -1,10 +1,13 @@
 import type { Migration } from './migration'
+import type { ModuleRuntime } from './module-runtime'
 
-/** What a process needs to know about a domain module to load it and migrate its schema. */
+/** What a process needs to know about a domain module to load it, migrate its schema and serve its procedures. */
 export type BrawltomeModule = {
   name: string
   dependsOn: readonly string[]
   migrations: readonly Migration[]
+  // runs once at startup; the API serves the procedures it returns under the module's name
+  routes?: (runtime: ModuleRuntime) => Record<string, unknown>
 }
 
 export function checkModuleList(modules: readonly BrawltomeModule[]): void {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   createPostgresRefreshOperations,
@@ -91,7 +92,7 @@ async function expire(operationId: string) {
 
 describe('durable Refresh Operations', () => {
   test('loads every migration that the loaded migrations build on', () => {
-    const migrations = apiModules.flatMap((module) => module.migrations)
+    const migrations = apiModules.flatMap((module): readonly Migration[] => module.migrations)
     const identities = new Set(migrations.map(({ identity }): string => identity))
 
     const dependencies = migrations.flatMap(({ predecessor, requires }) => {

@@ -75,6 +75,12 @@ describe('dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('missing-workspace-role')
   })
 
+  it('allows capabilities to serve their procedures with the shared contract schemas', () => {
+    const fixture = withImport('@fixture/players', '@fixture/contracts', { dependency: '@fixture/contracts' })
+
+    expect(checkArchitecture(fixture, policy).violations).toEqual([])
+  })
+
   it('allows contracts to depend only on configured foundation packages', () => {
     const fixture = withImport('@fixture/contracts', '@fixture/players', { dependency: '@fixture/players' })
 

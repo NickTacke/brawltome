@@ -1,6 +1,5 @@
-import type { ClanQueries } from '@brawltome/clan'
+import { readClanProfile, readPlayerClanMembership } from '@brawltome/clan'
 import {
-  type ClanProfileContract,
   type ClanRefreshInputContract,
   type ClanRefreshResponseContract,
   clanByIdInputSchema,
@@ -24,55 +23,6 @@ function recordTelemetry(record: () => void): void {
   } catch {
     return
   }
-}
-
-function iso(value: Date | null): string | null {
-  return value?.toISOString() ?? null
-}
-
-function publicProvenance(
-  value: ClanProfileContract['profile']['checkProvenance'],
-): ClanProfileContract['profile']['checkProvenance'] {
-  return {
-    source: value.source,
-    outcome: value.outcome,
-    ...(value.legacyTimestamp ? { legacyTimestamp: value.legacyTimestamp } : {}),
-  }
-}
-
-export async function mapClan(clans: ClanQueries, clanId: number): Promise<ClanProfileContract | null> {
-  const clan = await clans.getById(clanId)
-
-  if (!clan) return null
-
-  return clanProfileSchema.parse({
-    ...clan,
-    clanCreateDate: clan.clanCreateDate.toISOString(),
-    profile: {
-      ...clan.profile,
-      checkedAt: iso(clan.profile.checkedAt),
-      checkProvenance: publicProvenance(clan.profile.checkProvenance),
-      lastSuccessAt: iso(clan.profile.lastSuccessAt),
-      lastSuccessProvenance: clan.profile.lastSuccessProvenance
-        ? publicProvenance(clan.profile.lastSuccessProvenance)
-        : null,
-    },
-    roster: clan.roster
-      ? {
-          ...clan.roster,
-          checkedAt: iso(clan.roster.checkedAt),
-          checkProvenance: publicProvenance(clan.roster.checkProvenance),
-          lastSuccessAt: iso(clan.roster.lastSuccessAt),
-          lastSuccessProvenance: clan.roster.lastSuccessProvenance
-            ? publicProvenance(clan.roster.lastSuccessProvenance)
-            : null,
-        }
-      : null,
-    members: clan.members.map((member) => ({
-      ...member,
-      joinDate: member.joinDate?.toISOString() ?? null,
-    })),
-  })
 }
 
 function timestamp(value: Date | null | undefined): number {
@@ -109,7 +59,7 @@ async function resolveClanRefresh(
   now: number,
 ): Promise<ClanRefreshResponseContract> {
   const stored = await ctx.clanRepo.getById(input.id)
-  const clan = await mapClan(ctx.clanRepo, input.id)
+  const clan = await readClanProfile(ctx.clanRepo, input.id)
 
   const staleSections = [
     stale(stored?.profile.lastSuccessAt, now) ? ('profile' as const) : null,
@@ -247,15 +197,11 @@ export function createClanRouter(
     byId: procedure
       .input(clanByIdInputSchema)
       .output(clanProfileSchema.nullable())
-      .query(({ ctx, input }) => mapClan(ctx.clanRepo, input.id)),
+      .query(({ ctx, input }) => readClanProfile(ctx.clanRepo, input.id)),
     membershipByPlayerId: procedure
       .input(playerReferenceByIdInputSchema)
       .output(playerClanMembershipSchema.nullable())
-      .query(async ({ ctx, input }) => {
-        const membership = await ctx.clanRepo.getPlayerMembership(input.id)
-
-        return membership ? { clanId: membership.clanId, clanName: membership.clanName } : null
-      }),
+      .query(({ ctx, input }) => readPlayerClanMembership(ctx.clanRepo, input.id)),
     refresh: procedure
       .input(clanRefreshInputSchema)
       .output(clanRefreshResponseSchema)

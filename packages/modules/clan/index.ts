@@ -1,9 +1,12 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
+import { createClanProcedures } from './api/procedures'
 import { initializeClans } from './migrations/0001-initialize-clans'
 import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
 import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
 import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
 
+export { readClanProfile } from './api/read-clan-profile'
+export { type PublicClanMembership, readPlayerClanMembership } from './api/read-player-clan-membership'
 export { getClanProfile } from './db/get-clan-profile'
 export { getPlayerMembership } from './db/get-player-membership'
 export {
@@ -30,7 +33,9 @@ export {
 const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 
 export const clanModule = {
-  name: 'clan',
+  // a literal, so the API router can serve the procedures under this name with their types
+  name: 'clan' as const,
   dependsOn: [],
   migrations,
+  routes: createClanProcedures,
 } satisfies BrawltomeModule

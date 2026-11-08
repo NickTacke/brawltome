@@ -2,7 +2,7 @@ import { createPostgresAccounts } from '@brawltome/accounts'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
-import { checkModuleList } from '@brawltome/foundation'
+import { checkModuleList, type Migration, type ModuleRuntime } from '@brawltome/foundation'
 import {
   createPostgresCareerPlayers,
   createPostgresLeaderboardRanked,
@@ -34,6 +34,7 @@ import { createApiDatabase } from './database-pools'
 import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
 import { createOrpcRoutes } from './orpc/mount'
+import { createOrpcRouter } from './orpc/router'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
@@ -100,10 +101,12 @@ const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
+const moduleRuntime: ModuleRuntime = { database, env: process.env }
+const orpcRouter = createOrpcRouter(apiModules, moduleRuntime)
 
 const postgresReadiness = createPostgresReadiness(
   database.sql,
-  apiModules.flatMap((module) => module.migrations),
+  apiModules.flatMap((module): readonly Migration[] => module.migrations),
 )
 
 const server = { current: undefined as ReturnType<typeof Bun.serve> | undefined }
@@ -248,8 +251,8 @@ app.use(
   }),
 )
 
-// oRPC is served next to tRPC while the modules move over one by one: /rpc/* and /openapi.json
-app.route('/', createOrpcRoutes({ telemetry }))
+// oRPC is served next to tRPC while the modules move over one by one: /rpc/*, /v1/* and /openapi.json
+app.route('/', createOrpcRoutes({ telemetry, internalSecret: process.env.INTERNAL_API_SECRET, router: orpcRouter }))
 
 app.route('/health', createHealthRoutes(lifecycle))
 
