@@ -429,8 +429,8 @@ beforeAll(async () => {
   admin = postgres(urlForDatabase('postgres'), { max: 1 })
   await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
   await admin.unsafe(`CREATE ROLE "${runtimeRole}" NOLOGIN NOSUPERUSER`)
-  await admin.unsafe(`DROP ROLE IF EXISTS ${deadLetterRole}`)
-  await admin.unsafe(`CREATE ROLE ${deadLetterRole} NOLOGIN NOSUPERUSER`)
+  await admin.unsafe(`DROP ROLE IF EXISTS ${deadLetterRole}`).catch(() => undefined)
+  await admin.unsafe(`CREATE ROLE ${deadLetterRole} NOLOGIN NOSUPERUSER`).catch(() => undefined)
 
   databaseUrl = urlForDatabase(databaseName)
   owner = postgres(databaseUrl, { max: 1 })
@@ -611,6 +611,64 @@ describeWithDatabase('moving queue effect tables to their owners', () => {
       }),
     ).rejects.toMatchObject({ code: '42501' })
   })
+
+  // the function bodies resolve operations%ROWTYPE, which takes ACCESS SHARE; workers never hold anything that blocks it
+  test('the moves only need access share on the operations table', async () => {
+    const lockDatabaseName = `effect_move_ops_${process.pid}_${randomUUID().replaceAll('-', '')}`.slice(0, 63)
+
+    await admin.unsafe(`CREATE DATABASE "${lockDatabaseName}"`)
+
+    const lockUrl = urlForDatabase(lockDatabaseName)
+
+    await migratePostgres(
+      lockUrl,
+      orderedMigrations.filter(({ identity }) => !movingIdentities.has(identity)),
+    )
+
+    const holder = postgres(lockUrl, { max: 1 })
+
+    try {
+      let release: () => void = () => undefined
+
+      const released = new Promise<void>((resolve) => {
+        release = resolve
+      })
+
+      const holding = holder.begin(async (transaction) => {
+        await transaction`LOCK TABLE refresh_operations.operations IN EXCLUSIVE MODE`
+        await released
+      })
+
+      // waits for the holder to get the lock, so the moves below really run while it is held
+      await waitUntil(async () => {
+        const verifier = postgres(lockUrl, { max: 1 })
+
+        try {
+          const [row] = await verifier<{ held: boolean }[]>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_locks l JOIN pg_class c ON c.oid = l.relation
+              WHERE l.granted AND l.mode = 'ExclusiveLock' AND c.relname = 'operations'
+            ) AS held
+          `
+
+          return row.held
+        } finally {
+          await verifier.end()
+        }
+      })
+
+      try {
+        await migratePostgres(lockUrl, orderedMigrations)
+      } finally {
+        release()
+      }
+
+      await holding
+    } finally {
+      await holder.end()
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${lockDatabaseName}" WITH (FORCE)`)
+    }
+  }, 60_000)
 
   test('a worker part way through a publication record can finish while the migration waits behind it', async () => {
     const lockDatabaseName = `effect_move_locks_${process.pid}_${randomUUID().replaceAll('-', '')}`.slice(0, 63)

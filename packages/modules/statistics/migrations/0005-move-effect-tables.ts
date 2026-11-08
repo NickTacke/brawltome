@@ -1,9 +1,9 @@
 // statistics effects and collection seals move to their owner; the release still serving and a rollback to it keep the
 // old names through views and wrapper functions until a later release drops them. the tables lock access exclusive,
 // publication effects before collection seals, because the publication record function reads them in that order and
-// a worker part way through it must be able to finish while the migration waits. nothing here locks
-// refresh_operations.operations, and the record and seal functions are recreated because plpgsql stores the old schema
-// as text
+// a worker part way through it must be able to finish while the migration waits. the function bodies resolve
+// refresh_operations.operations%ROWTYPE, which takes access share on it: that conflicts only with access exclusive,
+// which no worker holds. the record and seal functions are recreated because plpgsql stores the old schema as text
 const sql = `SET LOCAL lock_timeout = '5s';
 
 LOCK TABLE
