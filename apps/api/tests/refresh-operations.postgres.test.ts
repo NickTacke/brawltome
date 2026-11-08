@@ -1718,3 +1718,456 @@ describe('durable Refresh Operations', () => {
     }
   })
 })
+
+type Operations = ReturnType<typeof createPostgresRefreshOperations>
+type ControlClient = ReturnType<typeof postgres>
+
+type EffectFixture = {
+  // an activated operation of this kind, claimable by kind
+  create: (operations: Operations) => Promise<string>
+  // the durable row the executor leaves behind when its effect lands
+  recordEffect: (control: ControlClient, lease: OperationLease) => Promise<void>
+}
+
+const allKindsWithEffects = [
+  'proof',
+  'leaderboard-1v1',
+  'statistics-ranked-collection',
+  'statistics-publication',
+  'statistics-legend-meta-publication',
+  'interactive-player-refresh',
+  'clan-refresh',
+  'ranked-player-pulse',
+  'player-name-verification',
+  'player-discovery-projection',
+  'discovery-reconciliation',
+] as const satisfies readonly OperationLease['kind'][]
+
+type KindWithEffects = (typeof allKindsWithEffects)[number]
+
+// discovery answers for the projection and reconciliation kinds, whose effects live outside this module
+const landedDiscoveryEffects = {
+  projectionEffectState: async () => 'acknowledged' as const,
+  reconciliationEffectApplied: async () => true,
+}
+
+const appliedProjectionEffects = {
+  projectionEffectState: async () => 'applied' as const,
+  reconciliationEffectApplied: async () => false,
+}
+
+const claimTestProvenance = { source: 'integration-test' }
+
+function uniqueKey(prefix: string): string {
+  return `${prefix}:${randomUUID()}`
+}
+
+async function acceptProof(operations: Operations, maxAttempts?: number): Promise<string> {
+  const accepted = await operations.accept({
+    dedupeKey: uniqueKey('claim-proof'),
+    operationKey: uniqueKey('claim-proof-effect'),
+    workClass: 'maintenance',
+    payload: { value: 'proof' },
+    provenance: claimTestProvenance,
+    maxAttempts,
+  })
+
+  return accepted.operationId
+}
+
+async function acceptLeaderboard(operations: Operations): Promise<string> {
+  const accepted = await operations.accept({
+    kind: 'leaderboard-1v1',
+    dedupeKey: uniqueKey('claim-leaderboard'),
+    operationKey: uniqueKey('claim-leaderboard-effect'),
+    workClass: 'leaderboard',
+    payload: { pageDepth: 1, intervalMs: 60_000 },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
+async function acceptRankedPulse(operations: Operations): Promise<string> {
+  const accepted = await operations.accept({
+    kind: 'ranked-player-pulse',
+    dedupeKey: uniqueKey('claim-pulse'),
+    operationKey: uniqueKey('claim-pulse-effect'),
+    workClass: 'primary-monitoring',
+    payload: { brawlhallaId: 987_003 },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
+async function acceptNameVerification(operations: Operations): Promise<string> {
+  const accepted = await operations.accept({
+    kind: 'player-name-verification',
+    dedupeKey: uniqueKey('claim-name'),
+    operationKey: uniqueKey('claim-name-effect'),
+    workClass: 'maintenance',
+    payload: { brawlhallaId: 987_004, playerName: 'Claim Test' },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
+async function acceptPlayerProjection(operations: Operations, maxAttempts?: number): Promise<string> {
+  const accepted = await operations.accept({
+    kind: 'player-discovery-projection',
+    dedupeKey: uniqueKey('claim-projection'),
+    operationKey: uniqueKey('claim-projection-effect'),
+    workClass: 'projection',
+    payload: { batchSize: 100 },
+    provenance: claimTestProvenance,
+    maxAttempts,
+  })
+
+  return accepted.operationId
+}
+
+async function acceptReconciliation(operations: Operations): Promise<string> {
+  const accepted = await operations.accept({
+    kind: 'discovery-reconciliation',
+    dedupeKey: uniqueKey('claim-reconciliation'),
+    operationKey: uniqueKey('claim-reconciliation-effect'),
+    workClass: 'projection',
+    payload: { owner: 'player' },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
+async function reserveStatisticsOperation(
+  operations: Operations,
+  kind: 'statistics-ranked-collection',
+): Promise<string> {
+  const operationKey = uniqueKey('claim-statistics')
+
+  const reserved = await operations.reserveStatisticsCollection({
+    kind,
+    dedupeKey: operationKey,
+    operationKey,
+    workClass: 'global-statistics',
+    payload: { cohortId: randomUUID(), brawlhallaId: 987_005 },
+    provenance: claimTestProvenance,
+  })
+
+  await operations.activateStatisticsCollection(reserved.operationId)
+
+  return reserved.operationId
+}
+
+async function reserveStatisticsPublication(operations: Operations): Promise<string> {
+  const operationKey = uniqueKey('claim-publication')
+
+  const reserved = await operations.reserveStatisticsPublication({
+    kind: 'statistics-publication',
+    dedupeKey: operationKey,
+    operationKey,
+    workClass: 'global-statistics',
+    payload: { generationId: randomUUID(), product: 'ranked' },
+    provenance: claimTestProvenance,
+  })
+
+  await operations.activateStatisticsPublication(reserved.operationId)
+
+  return reserved.operationId
+}
+
+async function reserveLegendMetaPublication(operations: Operations): Promise<string> {
+  const operationKey = uniqueKey('claim-legend-meta')
+
+  const reserved = await operations.reserveStatisticsLegendMetaPublication({
+    kind: 'statistics-legend-meta-publication',
+    dedupeKey: operationKey,
+    operationKey,
+    workClass: 'global-statistics',
+    payload: { generationId: randomUUID() },
+    provenance: claimTestProvenance,
+  })
+
+  await operations.activateStatisticsLegendMetaPublication(reserved.operationId)
+
+  return reserved.operationId
+}
+
+async function reserveInteractivePlayer(operations: Operations): Promise<string> {
+  const reserved = await operations.reserveInteractivePlayerRefresh({
+    dedupeKey: uniqueKey('claim-player'),
+    operationKey: uniqueKey('claim-player-effect'),
+    brawlhallaId: 987_001,
+    staleSections: ['ranked'],
+    provenance: claimTestProvenance,
+    reservationTtlSeconds: 30,
+  })
+
+  if (reserved.outcome !== 'reserved') throw new Error('Expected a player reservation')
+
+  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
+  return reserved.operationId
+}
+
+async function reserveInteractiveClan(operations: Operations): Promise<string> {
+  const reserved = await operations.reserveInteractiveClanRefresh({
+    dedupeKey: uniqueKey('claim-clan'),
+    operationKey: uniqueKey('claim-clan-effect'),
+    clanId: 987_002,
+    staleSections: ['profile'],
+    provenance: claimTestProvenance,
+    reservationTtlSeconds: 30,
+  })
+
+  if (reserved.outcome !== 'reserved') throw new Error('Expected a clan reservation')
+
+  await operations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)
+
+  return reserved.operationId
+}
+
+async function recordInteractiveSection(
+  control: ControlClient,
+  lease: OperationLease,
+  section: 'ranked' | 'profile',
+): Promise<void> {
+  await control`
+    INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
+    VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
+  `
+}
+
+async function recordNothing(): Promise<void> {}
+
+const effectFixtures: Record<KindWithEffects, EffectFixture> = {
+  proof: {
+    create: (operations) => acceptProof(operations),
+    recordEffect: async (control, lease) => {
+      await control`
+        INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
+                ${control.json({ value: 'proof' })})
+      `
+    },
+  },
+  'leaderboard-1v1': {
+    create: acceptLeaderboard,
+    recordEffect: async (control, lease) => {
+      await control`
+        INSERT INTO refresh_operations.leaderboard_effects (operation_key, operation_id, lease_token, operation_kind)
+        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken}, ${lease.kind})
+      `
+    },
+  },
+  'statistics-ranked-collection': {
+    create: (operations) => reserveStatisticsOperation(operations, 'statistics-ranked-collection'),
+    recordEffect: async (control, lease) => {
+      await control`
+        INSERT INTO refresh_operations.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
+        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.kind}, ${lease.leaseToken})
+      `
+    },
+  },
+  'statistics-publication': {
+    create: reserveStatisticsPublication,
+    recordEffect: async (control, lease) => {
+      await control`
+        INSERT INTO refresh_operations.statistics_publication_effects (operation_key, operation_id, lease_token)
+        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
+      `
+    },
+  },
+  'statistics-legend-meta-publication': {
+    create: reserveLegendMetaPublication,
+    recordEffect: async (control, lease) => {
+      await control`
+        INSERT INTO refresh_operations.statistics_legend_meta_publication_effects
+          (operation_key, operation_id, lease_token)
+        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
+      `
+    },
+  },
+  'interactive-player-refresh': {
+    create: reserveInteractivePlayer,
+    recordEffect: (control, lease) => recordInteractiveSection(control, lease, 'ranked'),
+  },
+  'clan-refresh': {
+    create: reserveInteractiveClan,
+    recordEffect: (control, lease) => recordInteractiveSection(control, lease, 'profile'),
+  },
+  'ranked-player-pulse': {
+    create: acceptRankedPulse,
+    recordEffect: (control, lease) => recordInteractiveSection(control, lease, 'ranked'),
+  },
+  'player-name-verification': {
+    create: acceptNameVerification,
+    recordEffect: (control, lease) => recordInteractiveSection(control, lease, 'ranked'),
+  },
+  // discovery owns these effects, the fake discovery checks answer for them
+  'player-discovery-projection': {
+    create: (operations) => acceptPlayerProjection(operations),
+    recordEffect: recordNothing,
+  },
+  'discovery-reconciliation': { create: acceptReconciliation, recordEffect: recordNothing },
+}
+
+async function insertProofRow(
+  control: ControlClient,
+  row: { key: string; id: string; availableAt: Date; createdAt: Date },
+): Promise<void> {
+  await control`
+    INSERT INTO refresh_operations.operations
+      (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts,
+       available_at, created_at)
+    VALUES
+      (${row.id}, ${row.id}, 'proof', ${row.key}, ${row.key}, 'projection',
+       ${control.json({ value: row.key })}, ${control.json(claimTestProvenance)}, 3,
+       ${row.availableAt}, ${row.createdAt})
+  `
+}
+
+async function drainClaimableOperations(): Promise<void> {
+  const operations = createPostgresRefreshOperations({ database })
+
+  await operations.configureAdmission(testAdmission)
+
+  for (;;) {
+    const lease = await operations.claim('claim-drain', 10_000, testAdmission)
+
+    if (!lease) return
+
+    await operations.complete(lease)
+  }
+}
+
+describe('claiming durable operations', () => {
+  // earlier tests leave their own admission policy and due work behind
+  beforeAll(drainClaimableOperations)
+
+  test('claim orders by available_at, then created_at, then id', async () => {
+    const operations = createPostgresRefreshOperations({ database })
+    const control = postgres(connectionString, { max: 1 })
+    const base = Date.now() - 60 * 60 * 1_000
+    const at = (offsetMinutes: number) => new Date(base + offsetMinutes * 60 * 1_000)
+    const prefix = randomUUID()
+
+    // inserted out of order so that neither insertion order nor a lucky id can produce the expected claim order
+    const rows = [
+      { key: 'idTieSecond', id: '00000000-0000-4000-8000-000000000002', availableAt: at(2), createdAt: at(2) },
+      { key: 'createdSecond', id: '00000000-0000-4000-8000-000000000003', availableAt: at(1), createdAt: at(1) },
+      { key: 'availableFirst', id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', availableAt: at(0), createdAt: at(10) },
+      { key: 'idTieFirst', id: '00000000-0000-4000-8000-000000000001', availableAt: at(2), createdAt: at(2) },
+      { key: 'createdFirst', id: 'ffffffff-ffff-4fff-8fff-fffffffffffe', availableAt: at(1), createdAt: at(0) },
+    ]
+
+    try {
+      for (const row of rows) await insertProofRow(control, { ...row, key: `${prefix}:${row.key}` })
+
+      const claimed: string[] = []
+
+      for (let claimNumber = 0; claimNumber < rows.length; claimNumber += 1) {
+        const lease = requireLease(await operations.claim('order-worker', 10_000, testAdmission, 'proof'))
+
+        claimed.push(lease.operationKey.replace(`${prefix}:`, ''))
+        expect(await operations.complete(lease)).toBe('transitioned')
+      }
+
+      expect(claimed).toEqual(['availableFirst', 'createdFirst', 'createdSecond', 'idTieFirst', 'idTieSecond'])
+    } finally {
+      await control.end()
+    }
+  })
+
+  test('lease token rises by one on every claim of the same operation', async () => {
+    const operations = createPostgresRefreshOperations({ database })
+    const operationId = await acceptProof(operations, 4)
+    const tokens: number[] = []
+
+    for (let claimNumber = 0; claimNumber < 3; claimNumber += 1) {
+      const lease = requireLease(await operations.claim('token-worker', 1_000, testAdmission, 'proof'))
+
+      tokens.push(lease.leaseToken)
+      await expire(operationId)
+    }
+
+    expect(tokens).toEqual([1, 2, 3])
+
+    const final = requireLease(await operations.claim('token-worker', 1_000, testAdmission, 'proof'))
+
+    expect(final.leaseToken).toBe(4)
+    expect(await operations.complete(final)).toBe('transitioned')
+  })
+
+  test.each(allKindsWithEffects)('an expired lease finishes when its effect landed: %s', async (kind) => {
+    const operations = createPostgresRefreshOperations({ database }, { discoveryEffects: landedDiscoveryEffects })
+    const control = postgres(connectionString, { max: 1 })
+    const fixture = effectFixtures[kind]
+
+    try {
+      const operationId = await fixture.create(operations)
+      const lease = requireLease(await operations.claim('effect-worker', 1_000, testAdmission, kind))
+
+      await fixture.recordEffect(control, lease)
+      await expire(operationId)
+
+      expect(await operations.claim('effect-reaper', 1_000, testAdmission, kind)).toBeNull()
+
+      const state = await operations.inspect(operationId)
+
+      // postgres returns bigint columns as strings
+      expect(state.operation).toMatchObject({
+        status: 'succeeded',
+        attempt_count: 1,
+        lease_token: String(lease.leaseToken),
+      })
+
+      expect(state.attempts).toHaveLength(1)
+      expect(state.attempts[0]).toMatchObject({ attempt_number: 1, outcome: 'succeeded' })
+    } finally {
+      await control.end()
+    }
+  })
+
+  test('an expired lease on an applied discovery effect is retried past max attempts', async () => {
+    const operations = createPostgresRefreshOperations({ database }, { discoveryEffects: appliedProjectionEffects })
+    const operationId = await acceptPlayerProjection(operations, 1)
+
+    const first = requireLease(
+      await operations.claim('projection-a', 1_000, testAdmission, 'player-discovery-projection'),
+    )
+
+    await expire(operationId)
+
+    const retry = requireLease(
+      await operations.claim('projection-b', 1_000, testAdmission, 'player-discovery-projection'),
+    )
+
+    expect(retry.operationId).toBe(first.operationId)
+    expect(retry.attemptNumber).toBe(2)
+    expect(retry.maxAttempts).toBe(1)
+
+    const state = await operations.inspect(operationId)
+
+    expect(state.operation.status).toBe('leased')
+    expect(state.attempts.map(({ outcome }) => outcome)).toEqual(['lease_expired', null])
+    expect(await operations.complete(retry)).toBe('transitioned')
+  })
+
+  test('an expired final attempt with no effect goes to dead letter', async () => {
+    const operations = createPostgresRefreshOperations({ database })
+    const operationId = await acceptProof(operations, 1)
+
+    requireLease(await operations.claim('final-a', 1_000, testAdmission, 'proof'))
+    await expire(operationId)
+
+    expect(await operations.claim('final-b', 1_000, testAdmission, 'proof')).toBeNull()
+
+    const state = await operations.inspect(operationId)
+
+    expect(state.operation).toMatchObject({ status: 'dead_letter', last_error: { code: 'lease_expired' } })
+    expect(state.attempts.map(({ outcome }) => outcome)).toEqual(['lease_expired'])
+  })
+})
