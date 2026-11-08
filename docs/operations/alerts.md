@@ -265,6 +265,10 @@ outage that outlasted the retry budget.
 your `DEAD_LETTER_OPERATOR_TOKEN`; in production it runs as the operator-profile `dead-letter-cli` service of
 `infra/app/compose.yml`, which supplies the first two from secrets.
 
+After an image rollback, run these commands with the newest release tag, not the rolled-back one: the role script in
+an older image can name tables that have since moved, and it stops partway if it does. If that script was forced with
+`--no-deps`, run the current one again to restore the grants.
+
 ```sh
 bun run operations:dead-letters list --limit 20
 bun run operations:dead-letters inspect <operation-id>
