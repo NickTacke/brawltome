@@ -34,6 +34,17 @@ export type FailureDecision =
 
 const minimumSourceWaitMs = 60_000
 
+export function retryDelayForAttempt(
+  attemptNumber: number,
+  policy: { baseDelayMs: number; multiplier: number; maxDelayMs: number; jitterRatio: number; random: () => number },
+): number {
+  const exponent = Math.max(0, attemptNumber - 1)
+  const nominal = policy.baseDelayMs * policy.multiplier ** exponent
+  const jitter = 1 + policy.jitterRatio * (2 * policy.random() - 1)
+
+  return Math.max(0, Math.min(policy.maxDelayMs, Math.floor(nominal * jitter)))
+}
+
 export function sourceWaitMs(retry: RetryTimings): number {
   return Math.max(minimumSourceWaitMs, retry.sourceUnavailableRetryMs, retry.retryDelayMs)
 }

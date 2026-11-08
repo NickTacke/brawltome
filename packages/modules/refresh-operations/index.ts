@@ -33,14 +33,33 @@ export {
   decideSourceFailure,
   type FailureDecision,
   type RetryTimings,
+  retryDelayForAttempt,
   sourceWaitMs,
 } from './domain/failure-decision'
 export {
   failureDetails,
   JobLeaseLostError,
   SourceAdmissionLimitedError,
+  type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
+export {
+  type AttemptOutcome,
+  defineJob,
+  type EffectState,
+  type JobDefinition,
+  type JobTools,
+  type Lease,
+  type LeaseOperations,
+  type LeaseWatcher,
+  type QueueWorker,
+  type SourceAdmissionPort,
+  type SourceAdmitter,
+} from './jobs/job-definition'
+export { createJobRegistry, type JobRegistry } from './jobs/job-registry'
+export { waitForRenewal } from './jobs/lease-renewal'
+export { type RetryBackoff, type RunOneJobOptions, runOneJob } from './jobs/run-one-job'
+export { type RunSectionsOptions, runSections, type SectionRun } from './jobs/run-sections'
 export {
   acquireActiveLease,
   commitInteractiveSection,
