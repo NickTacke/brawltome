@@ -49,6 +49,11 @@ export function sourceWaitMs(retry: RetryTimings): number {
   return Math.max(minimumSourceWaitMs, retry.sourceUnavailableRetryMs, retry.retryDelayMs)
 }
 
+// for a job whose own failure branch has to wait until the source checks have had their say
+export function isSourceFailure(error: unknown): boolean {
+  return error instanceof SourceAdmissionLimitedError || unavailableSourceDomain(error) !== null
+}
+
 export function decideSourceFailure(error: unknown, retry: RetryTimings): FailureDecision | null {
   if (error instanceof SourceAdmissionLimitedError) {
     return {

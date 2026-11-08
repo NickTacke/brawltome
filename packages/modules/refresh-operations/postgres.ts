@@ -36,6 +36,7 @@ import {
   type PrimaryMonitoringScheduleDefinition,
   validatePrimaryMonitoringSchedule,
 } from './domain/schedule-definition'
+import type { Lease } from './jobs/job-definition'
 import {
   type AcceptOperation,
   type AcceptOperationResult,
@@ -708,7 +709,7 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean> {
+    async discoveryLeaseActive(lease: Lease<unknown>): Promise<boolean> {
       const [result] = await client<{ active: boolean }[]>`
         SELECT EXISTS (
           SELECT 1 FROM refresh_operations.operations
@@ -721,10 +722,8 @@ export function createPostgresRefreshOperations(
       return result.active
     },
 
-    retryAppliedDiscoveryProjection: (
-      lease: Extract<OperationLease, { payload: { batchSize: number } }>,
-      retryDelayMs: number,
-    ) => retryAppliedEffect(database, lease, retryDelayMs),
+    retryAppliedEffect: (lease: Lease<unknown>, retryDelayMs: number) =>
+      retryAppliedEffect(database, lease, retryDelayMs),
 
     defer: (lease: OperationLease, failure: OperationFailure, retryDelayMs: number) =>
       deferOperation(database, lease, failure, retryDelayMs),

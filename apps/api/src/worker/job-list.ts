@@ -1,11 +1,59 @@
+import {
+  type ClanProjectionSource,
+  createClanDiscoveryProjectionJob,
+  createDiscoveryReconciliationJob,
+  createPlayerDiscoveryProjectionJob,
+  type PlayerProjectionSource,
+  type PostgresDiscovery,
+} from '@brawltome/discovery'
 import { createRankingRetentionJob, type RankingRetentionStore } from '@brawltome/ranking'
-import type { JobDefinition } from '@brawltome/refresh-operations'
+import type { JobDefinition, Lease } from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
+
+export type WorkerDiscoveryDependencies = {
+  // projection and reconciliation work, on the discovery client
+  work: Pick<PostgresDiscovery, 'deliverPendingPlayers' | 'deliverPendingClans' | 'reconcilePlayers' | 'reconcileClans'>
+  // the quick checks claim makes, on the main client so they never queue behind a reconciliation
+  checks: Pick<PostgresDiscovery, 'projectionEffectState' | 'reconciliationEffectApplied'>
+  playerSource: PlayerProjectionSource
+  clanSource: ClanProjectionSource
+  leaseActive(lease: Lease<unknown>): Promise<boolean>
+}
 
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
   isRankingRetentionEnabled: boolean
   telemetry: Telemetry
+  discovery: WorkerDiscoveryDependencies
+}
+
+function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
+  const { work, checks, playerSource, clanSource, leaseActive } = discovery
+
+  const playerProjection = createPlayerDiscoveryProjectionJob({
+    deliverPending: (batchSize, effectOperationId, isLeaseActive) =>
+      work.deliverPendingPlayers(playerSource, batchSize, effectOperationId, isLeaseActive),
+    projectionEffectState: (effectOperationId) => checks.projectionEffectState('player', effectOperationId),
+    leaseActive,
+  })
+
+  const clanProjection = createClanDiscoveryProjectionJob({
+    deliverPending: (batchSize, effectOperationId, isLeaseActive) =>
+      work.deliverPendingClans(clanSource, batchSize, effectOperationId, isLeaseActive),
+    projectionEffectState: (effectOperationId) => checks.projectionEffectState('clan', effectOperationId),
+    leaseActive,
+  })
+
+  const reconciliation = createDiscoveryReconciliationJob({
+    reconcile: (owner, effectOperationId, isLeaseActive) =>
+      owner === 'player'
+        ? work.reconcilePlayers(playerSource, effectOperationId, isLeaseActive)
+        : work.reconcileClans(clanSource, effectOperationId, isLeaseActive),
+    reconciliationEffectApplied: (effectOperationId) => checks.reconciliationEffectApplied(effectOperationId),
+    leaseActive,
+  })
+
+  return [playerProjection, clanProjection, reconciliation]
 }
 
 // the jobs that live in their owning module; the rest are still wrapped in refresh-operations-worker.ts
@@ -16,5 +64,5 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     telemetry: dependencies.telemetry,
   })
 
-  return [rankingRetention]
+  return [rankingRetention, ...createDiscoveryJobs(dependencies.discovery)]
 }

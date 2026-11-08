@@ -2,22 +2,43 @@ import {
   type AdmissionConfig,
   createEffectStates,
   createPostgresRefreshOperations,
-  type DiscoveryEffectChecks,
   type JobDefinition,
   type RefreshOperationsDatabases,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createJobsFromOptions } from '../../src/refresh-operations-worker'
-import { createWorkerJobs } from '../../src/worker/job-list'
+import { createWorkerJobs, type WorkerDiscoveryDependencies } from '../../src/worker/job-list'
+
+type DiscoveryEffectChecks = WorkerDiscoveryDependencies['checks']
 
 const noDiscoveryEffects: DiscoveryEffectChecks = {
   projectionEffectState: async () => 'none',
   reconciliationEffectApplied: async () => false,
 }
 
+const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
+// the job list only runs these when a job executes, and these tests are about what the jobs tell claim
+function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefinition<unknown>[] {
+  return createWorkerJobs({
+    ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
+    isRankingRetentionEnabled: true,
+    telemetry: idleTelemetry,
+    discovery: {
+      work: {} as WorkerDiscoveryDependencies['work'],
+      checks: discoveryChecks,
+      playerSource: {} as WorkerDiscoveryDependencies['playerSource'],
+      clanSource: {} as WorkerDiscoveryDependencies['clanSource'],
+      leaseActive: async () => true,
+    },
+  })
+}
+
 // built the way the worker builds it, so expired leases read the same effect tables
 export function createTestQueue(databases: RefreshOperationsDatabases, discovery = noDiscoveryEffects) {
-  return createPostgresRefreshOperations(databases, { effectStates: createEffectStates({ discovery }) })
+  return createPostgresRefreshOperations(databases, {
+    effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
+  })
 }
 
 const jobListAdmission: AdmissionConfig = {
@@ -42,16 +63,10 @@ const jobListAdmission: AdmissionConfig = {
 
 // the worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do
 export function createTestJobs(): JobDefinition<unknown>[] {
-  const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-
   return createJobsFromOptions({
     leaseMs: 30_000,
     retryDelayMs: 1_000,
     admission: jobListAdmission,
-    movedJobs: createWorkerJobs({
-      ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
-      isRankingRetentionEnabled: true,
-      telemetry,
-    }),
+    movedJobs: createIdleWorkerJobs(noDiscoveryEffects),
   })
 }

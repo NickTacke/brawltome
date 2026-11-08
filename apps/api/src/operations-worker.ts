@@ -34,6 +34,7 @@ import {
 import {
   createEffectStates,
   createPostgresRefreshOperations,
+  type Lease,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
@@ -111,9 +112,30 @@ const accounts = createPostgresAccounts(databases.main)
 const discovery = createPostgresDiscovery(databases.discovery)
 const discoveryChecks = createPostgresDiscovery(databases.main)
 
+const ranking = createPostgresRanking(databases.main)
+
+const playerDiscoverySource = createPostgresPlayerDiscoverySource(databases.discovery)
+const clanDiscoverySource = createPostgresClanDiscoverySource(databases.discovery)
+
+// the queue needs these jobs' effect checks to be built, so the jobs can only reach the queue once they run
+const discoveryLeaseActive = (lease: Lease<unknown>): Promise<boolean> => operations.discoveryLeaseActive(lease)
+
+const workerJobs = createWorkerJobs({
+  ranking,
+  isRankingRetentionEnabled: workerConfig.rankingRetention.enabled,
+  telemetry,
+  discovery: {
+    work: discovery,
+    checks: discoveryChecks,
+    playerSource: playerDiscoverySource,
+    clanSource: clanDiscoverySource,
+    leaseActive: discoveryLeaseActive,
+  },
+})
+
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { effectStates: createEffectStates({ discovery: discoveryChecks }) },
+  { effectStates: createEffectStates(workerJobs) },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {
@@ -140,7 +162,6 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
   })
 }
 
-const ranking = createPostgresRanking(databases.main)
 const statistics = createPostgresStatistics(databases.main)
 const careerPlayers = createPostgresCareerPlayers(databases.main)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
@@ -154,8 +175,6 @@ const rankedPlayers = createPostgresRankedPlayers(databases.main, {
 })
 
 const clans = createPostgresClans(databases.main)
-const playerDiscoverySource = createPostgresPlayerDiscoverySource(databases.discovery)
-const clanDiscoverySource = createPostgresClanDiscoverySource(databases.discovery)
 const playerDiscoveryChecks = createPostgresPlayerDiscoverySource(databases.main)
 const clanDiscoveryChecks = createPostgresClanDiscoverySource(databases.main)
 
@@ -433,11 +452,7 @@ try {
         ...common,
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
-        movedJobs: createWorkerJobs({
-          ranking,
-          isRankingRetentionEnabled: workerConfig.rankingRetention.enabled,
-          telemetry,
-        }),
+        movedJobs: workerJobs,
         executeEffect: async (lease) => {
           if (!lease.operationKey.startsWith('primary-player:')) return operations.commitProofEffect(lease)
 
@@ -478,37 +493,6 @@ try {
         },
         statistics,
         executeStatisticsCollection: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
-        executePlayerProjection: async (lease) => {
-          await discovery.deliverPendingPlayers(
-            playerDiscoverySource,
-            lease.payload.batchSize,
-            lease.effectOperationId,
-            () => operations.discoveryLeaseActive(lease),
-          )
-        },
-        executeClanProjection: async (lease) => {
-          await discovery.deliverPendingClans(
-            clanDiscoverySource,
-            lease.payload.batchSize,
-            lease.effectOperationId,
-            () => operations.discoveryLeaseActive(lease),
-          )
-        },
-        executeDiscoveryReconciliation: async (lease) => {
-          if (lease.payload.owner === 'player') {
-            await discovery.reconcilePlayers(playerDiscoverySource, lease.effectOperationId, () =>
-              operations.discoveryLeaseActive(lease),
-            )
-          } else {
-            await discovery.reconcileClans(clanDiscoverySource, lease.effectOperationId, () =>
-              operations.discoveryLeaseActive(lease),
-            )
-          }
-        },
-        projectionEffectState: (kind, effectOperationId) =>
-          kind === 'player-discovery-projection'
-            ? discoveryChecks.playerProjectionEffectState(effectOperationId)
-            : discoveryChecks.clanProjectionEffectState(effectOperationId),
         isPrimaryMonitoringTarget: async (lease) => {
           const snapshot = await accounts.primaryMonitoring.readSnapshot()
 

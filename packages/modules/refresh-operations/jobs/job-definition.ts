@@ -39,12 +39,12 @@ export type LeaseWatcher = {
 }
 
 // jobs hold a Lease of their own payload; the queue only reads the lease's identity and fence
-export type LeaseOperations = Pick<RefreshOperationWorker, 'commitProofEffect' | 'discoveryLeaseActive'> & {
+export type LeaseOperations = Pick<RefreshOperationWorker, 'commitProofEffect'> & {
   renew(lease: Lease<unknown>, leaseMs: number): Promise<RenewResult>
   renewWithAuthority(lease: Lease<unknown>, leaseMs: number): Promise<LeaseAuthorityResult>
   beginInteractiveSection(lease: Lease<unknown>, section: string): Promise<SectionCheckpointResult>
   commitInteractiveSection(lease: Lease<unknown>, section: string): Promise<TransitionResult>
-  retryAppliedDiscoveryProjection(lease: Lease<unknown>, retryDelayMs: number): Promise<TransitionResult>
+  retryAppliedEffect(lease: Lease<unknown>, retryDelayMs: number): Promise<TransitionResult>
   defer(lease: Lease<unknown>, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
   complete(lease: Lease<unknown>): Promise<TransitionResult>
   fail(lease: Lease<unknown>, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>

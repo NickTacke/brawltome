@@ -201,6 +201,22 @@ describe('runOneJob', () => {
     expect((await readOperation(operationId)).status).toBe('pending')
   })
 
+  test('runOneJob retries an applied effect for whichever kind asks, without spending the attempt', async () => {
+    const { operations, operationId } = await acceptProofOperation()
+
+    const job = testJob({
+      run: async () => {
+        throw new Error('owner acknowledgment failed')
+      },
+      decideFailure: async (): Promise<FailureDecision> => ({ action: 'retry-applied-effect' }),
+    })
+
+    // a long delay parks the row so later tests in this file don't claim it
+    await runOneJob(operations, 'worker-applied-effect', createJobRegistry([job]), runOptions({ retryDelayMs: 60_000 }))
+
+    expect(await readOperation(operationId)).toEqual({ status: 'pending', attempt_count: 1 })
+  })
+
   test('runOneJob calls watcher.lost and aborts the signal when renewal reports lease-lost', async () => {
     const { operations, operationId } = await acceptProofOperation()
     let lostCalls = 0

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
-import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
+import { createClanDiscoveryProjectionJob, createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
@@ -103,17 +103,22 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
     let operations = createTestQueue({ database: operationsClient }, discovery)
 
+    const projectionJobDependencies = {
+      projectionEffectState: discovery.clanProjectionEffectState,
+      leaseActive: async () => true,
+    }
+
     const projectionOptions = {
       leaseMs: 10_000,
       retryDelayMs: 0,
       admission,
-      executeClanProjection: async (lease: { payload: { batchSize: number }; effectOperationId: string }) => {
-        await discovery.deliverPendingClans(source, lease.payload.batchSize, lease.effectOperationId)
-      },
-      projectionEffectState: (kind: 'player-discovery-projection' | 'clan-discovery-projection', effectId: string) =>
-        kind === 'player-discovery-projection'
-          ? discovery.playerProjectionEffectState(effectId)
-          : discovery.clanProjectionEffectState(effectId),
+      movedJobs: [
+        createClanDiscoveryProjectionJob({
+          ...projectionJobDependencies,
+          deliverPending: (batchSize, effectOperationId) =>
+            discovery.deliverPendingClans(source, batchSize, effectOperationId),
+        }),
+      ],
     }
 
     try {
@@ -131,20 +136,24 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       await runOneRefreshOperation(operations, 'failed-ack-worker', {
         ...projectionOptions,
-        executeClanProjection: async (lease) => {
-          await discovery.deliverPendingClans(
-            {
-              pendingEvents: source.pendingEvents,
-              acknowledgeEvents: async () => {
-                throw new Error('simulated clan owner acknowledgement failure')
-              },
-              snapshot: source.snapshot,
-              lag: source.lag,
-            },
-            lease.payload.batchSize,
-            lease.effectOperationId,
-          )
-        },
+        movedJobs: [
+          createClanDiscoveryProjectionJob({
+            ...projectionJobDependencies,
+            deliverPending: (batchSize, effectOperationId) =>
+              discovery.deliverPendingClans(
+                {
+                  pendingEvents: source.pendingEvents,
+                  acknowledgeEvents: async () => {
+                    throw new Error('simulated clan owner acknowledgement failure')
+                  },
+                  snapshot: source.snapshot,
+                  lag: source.lag,
+                },
+                batchSize,
+                effectOperationId,
+              ),
+          }),
+        ],
       })
 
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('pending')
