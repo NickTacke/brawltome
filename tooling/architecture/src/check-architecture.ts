@@ -23,7 +23,7 @@ const nodeBuiltins = new Set(
 
 const allowedRoleDependencies: Record<WorkspaceRole, WorkspaceRole[]> = {
   application: ['adapter', 'capability', 'contracts', 'foundation'],
-  capability: ['capability', 'foundation'],
+  capability: ['capability', 'contracts', 'foundation'],
   foundation: ['foundation'],
   contracts: ['foundation'],
   adapter: ['capability', 'contracts', 'foundation'],

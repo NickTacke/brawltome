@@ -118,6 +118,7 @@ Migrations still have to be backward compatible with the release that serves dur
 - `@brawltome/foundation/testing` is test-only.
 - A module may import only the modules the policy lists for it (`capabilityDependencies` in
   `tooling/architecture/src/current-policy.ts`).
+- A module may import `@brawltome/contracts` for the schemas of its procedures. Contracts may not import a module.
 - A module's non-test source can't hold SQL that names another module's schema. One exception exists today:
   statistics reads `refresh_operations` tables, tracked in issue #388. Modules that fence a write with a queue lease
   call the fence functions `@brawltome/refresh-operations` exports, which take the caller's transaction. Deployed
