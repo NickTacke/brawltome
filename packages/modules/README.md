@@ -28,7 +28,17 @@ Not every module needs every folder. Leave out the ones it has no use for.
 - Tests go in `tests/` or in `*.test.ts` files. They are the only place that may import
   `@brawltome/foundation/testing`.
 
+## Worked example
+
+[`clan`](clan/README.md) is the first module on this layout. Copy its structure and its README when you rebuild
+another one:
+
+- `domain/` holds the rules, `db/` has the Drizzle tables and one file per use case, and `api/` has the oRPC procedures.
+- `db/tables.ts` describes only the columns the code uses. The migrations own the rest.
+- `index.ts` is the only public surface. It also gives the module its `routes`.
+
 ## Modules that aren't rebuilt yet
 
 A module that hasn't been rebuilt keeps its old layout. They all have `index.ts` and
-`migrations/` already, and most have `tests/`; the rest of each folder is still arranged the way it grew.
+`migrations/` already, and most have `tests/`; the rest of each folder is still arranged the way it grew. Only `clan`
+is rebuilt so far.
