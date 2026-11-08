@@ -159,6 +159,56 @@ describe('primary player verification on the real queue', () => {
     })
   })
 
+  test('a proof row and a new-kind row for one attempt write the account once', async () => {
+    const attemptId = randomUUID()
+    const operationKey = `primary-player:${attemptId}`
+    const resolved = new Set<string>()
+    let accountWrites = 0
+
+    // like the accounts module, which leaves an attempt that is no longer pending alone
+    const jobFor = createVerificationJobs(async (attempt) => {
+      if (resolved.has(attempt)) return
+
+      resolved.add(attempt)
+      accountWrites += 1
+    })
+
+    const accept = (kind: 'proof' | 'primary-player-verification') =>
+      queue.accept({
+        kind,
+        dedupeKey: operationKey,
+        operationKey,
+        workClass: 'interactive',
+        payload: { value: attemptId },
+        provenance: { source: 'steam-openid', requestedBy: 'integration-test' },
+        maxAttempts: 3,
+      })
+
+    // a deploy can leave the old row queued while the new route accepts the same attempt again
+    const proofRow = await accept('proof')
+    const newKindRow = await accept('primary-player-verification')
+
+    expect(newKindRow.outcome).toBe('accepted')
+
+    expect(await runJobOnce(queue, jobFor('proof'))).toBe('succeeded')
+    expect(await runJobOnce(queue, jobFor('primary-player-verification'))).toBe('dead_letter')
+
+    const first = await queue.inspect(proofRow.operationId)
+    const second = await queue.inspect(newKindRow.operationId)
+
+    expect(first.operation).toMatchObject({ kind: 'proof', status: 'succeeded' })
+    expect(first.effects).toHaveLength(1)
+
+    expect(second.operation).toMatchObject({
+      kind: 'primary-player-verification',
+      status: 'dead_letter',
+      last_error: { code: 'effect_conflict' },
+    })
+
+    expect(second.effects).toHaveLength(0)
+    expect(accountWrites).toBe(1)
+  })
+
   test('the queue checks accept the new kind only on the interactive work class with a string value', async () => {
     const insertRow = async (workClass: string, payload: Record<string, unknown>) => {
       const operationId = randomUUID()

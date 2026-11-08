@@ -269,7 +269,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
 
     if (attempt.status === 'pending') {
       const operation = await verificationOperations.accept({
-        kind: 'proof',
+        kind: 'primary-player-verification',
         dedupeKey: `primary-player:${attempt.id}`,
         operationKey: `primary-player:${attempt.id}`,
         workClass: 'interactive',

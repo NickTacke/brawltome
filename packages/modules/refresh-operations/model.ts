@@ -167,7 +167,7 @@ export function validateRankingRetentionPayload(payload: RankingRetentionPayload
 }
 
 export type AcceptProofOperation = {
-  kind?: 'proof'
+  kind?: 'proof' | 'primary-player-verification'
   dedupeKey: string
   operationKey: string
   workClass: WorkClass
