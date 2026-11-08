@@ -1,6 +1,10 @@
-import type { AdmissionConfig, PostgresRefreshOperations, RetryBackoff } from '@brawltome/refresh-operations'
+import type {
+  AdmissionConfig,
+  PostgresRefreshOperations,
+  RetryBackoff,
+  RunOneJobOptions,
+} from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
-import { runOneRefreshOperation } from './refresh-operations-worker'
 import type { RuntimeLifecycle } from './runtime-lifecycle'
 
 type WorkerConfig = {
@@ -23,7 +27,7 @@ type OperationsWorkerDependencies = {
   logger?: WorkerLogger
   ensureListener?: (onWakeup: () => void) => Promise<void>
   reconcile?: () => Promise<number>
-  runOne?: typeof runOneRefreshOperation
+  runOne: (operations: PostgresRefreshOperations, workerId: string, options: RunOneJobOptions) => Promise<boolean>
   telemetry?: Telemetry
   telemetryIntervalMs?: number
   telemetryTimeoutMs?: number
@@ -138,7 +142,7 @@ export async function runOperationsWorker({
   logger = console,
   ensureListener,
   reconcile,
-  runOne = runOneRefreshOperation,
+  runOne,
   telemetry,
   telemetryIntervalMs = 5_000,
   telemetryTimeoutMs = 250,

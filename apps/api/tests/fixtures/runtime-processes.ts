@@ -1,5 +1,5 @@
 import type { Database } from '@brawltome/foundation'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations'
+import { reconcileLeaderboardDeepCrawlSchedule, reconcileLeaderboardSchedule } from '@brawltome/ranking'
 import {
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
@@ -134,15 +134,14 @@ export async function migrateDatabase(connectionString: string): Promise<void> {
 
 // the worker reconciles these at startup; deferring them keeps it from crawling the real V1 leaderboard
 export async function deferLeaderboardSchedules(database: Database): Promise<void> {
-  const operations = createPostgresRefreshOperations({ database })
   const config = readOperationsWorkerConfig({})
 
   for (const definition of leaderboardScheduleDefinitions(config.leaderboard)) {
-    await operations.reconcileLeaderboardSchedule(definition)
+    await reconcileLeaderboardSchedule(database, definition)
   }
 
   for (const definition of leaderboardDeepCrawlScheduleDefinitions(config.deepCrawl)) {
-    await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
+    await reconcileLeaderboardDeepCrawlSchedule(database, definition)
   }
 
   await database.sql`UPDATE refresh_operations.schedules SET next_due_at = '2100-01-01T00:00:00Z'`

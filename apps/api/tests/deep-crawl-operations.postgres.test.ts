@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import {
+  createLeaderboardDeepCrawlProgress,
+  disableLeaderboardDeepCrawlSchedule,
+  reconcileLeaderboardDeepCrawlSchedule,
+} from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { leaderboardDeepCrawlScheduleDefinitions } from '../src/operations-worker-config'
@@ -51,11 +56,11 @@ describe('Leaderboard deep crawl operations', () => {
     })
 
     for (const definition of definitions) {
-      expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('created')
-      expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('already-exists')
+      expect((await reconcileLeaderboardDeepCrawlSchedule(database, definition)).outcome).toBe('created')
+      expect((await reconcileLeaderboardDeepCrawlSchedule(database, definition)).outcome).toBe('already-exists')
     }
 
-    expect(await operations.disableLeaderboardDeepCrawlSchedule(definitions[8].scheduleKey)).toEqual({
+    expect(await disableLeaderboardDeepCrawlSchedule(database, definitions[8].scheduleKey)).toEqual({
       outcome: 'disabled',
     })
 
@@ -126,12 +131,12 @@ describe('Leaderboard deep crawl operations', () => {
   })
 
   test('saves and replaces crawl progress per region', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const progress = createLeaderboardDeepCrawlProgress(database)
 
-    expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toBeNull()
+    expect(await progress.read('1v1', 'EU')).toBeNull()
     const windowAt = new Date('2026-10-07T16:00:00.000Z')
 
-    await operations.saveLeaderboardDeepCrawlProgress({
+    await progress.save({
       mode: '1v1',
       region: 'EU',
       windowAt,
@@ -139,7 +144,7 @@ describe('Leaderboard deep crawl operations', () => {
       totalPages: 1630,
     })
 
-    await operations.saveLeaderboardDeepCrawlProgress({
+    await progress.save({
       mode: '1v1',
       region: 'EU',
       windowAt,
@@ -147,7 +152,7 @@ describe('Leaderboard deep crawl operations', () => {
       totalPages: 1630,
     })
 
-    await operations.saveLeaderboardDeepCrawlProgress({
+    await progress.save({
       mode: '2v2',
       region: 'EU',
       windowAt,
@@ -155,10 +160,10 @@ describe('Leaderboard deep crawl operations', () => {
       totalPages: 900,
     })
 
-    expect(await operations.readLeaderboardDeepCrawlProgress('2v2', 'EU')).toMatchObject({ nextPage: 7 })
-    expect(await operations.readLeaderboardDeepCrawlProgress('solo2v2', 'EU')).toBeNull()
+    expect(await progress.read('2v2', 'EU')).toMatchObject({ nextPage: 7 })
+    expect(await progress.read('solo2v2', 'EU')).toBeNull()
 
-    expect(await operations.readLeaderboardDeepCrawlProgress('1v1', 'EU')).toEqual({
+    expect(await progress.read('1v1', 'EU')).toEqual({
       windowAt,
       nextPage: 141,
       totalPages: 1630,

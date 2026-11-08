@@ -7,8 +7,7 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import { playerModule } from '@brawltome/player'
 import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let connectionString = ''
 let database: TestDatabase
@@ -112,7 +111,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       leaseMs: 10_000,
       retryDelayMs: 0,
       admission,
-      movedJobs: [
+      jobs: [
         createClanDiscoveryProjectionJob({
           ...projectionJobDependencies,
           deliverPending: (batchSize, effectOperationId) =>
@@ -134,9 +133,9 @@ describe('Clan Discovery delivery and reconciliation', () => {
         maxAttempts: 1,
       })
 
-      await runOneRefreshOperation(operations, 'failed-ack-worker', {
+      await runOneWithJobs(operations, 'failed-ack-worker', {
         ...projectionOptions,
-        movedJobs: [
+        jobs: [
           createClanDiscoveryProjectionJob({
             ...projectionJobDependencies,
             deliverPending: (batchSize, effectOperationId) =>
@@ -161,7 +160,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       operations = createTestQueue({ database: await restartOperationsClient() }, discovery)
 
-      await runOneRefreshOperation(operations, 'restarted-worker', projectionOptions)
+      await runOneWithJobs(operations, 'restarted-worker', projectionOptions)
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('succeeded')
       expect(await source.lag()).toBe(0)
 
@@ -190,7 +189,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
 
       if (replay.outcome !== 'replayed') throw new Error('Expected dead-letter replay')
 
-      await runOneRefreshOperation(operations, 'replay-worker', projectionOptions)
+      await runOneWithJobs(operations, 'replay-worker', projectionOptions)
 
       expect(await discovery.search('current')).toEqual({
         players: [],

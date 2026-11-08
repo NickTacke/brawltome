@@ -1,27 +1,32 @@
 import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
+import { createLeaderboardCollectionJob, defaultDeepCrawlSlicePages } from '@brawltome/ranking'
 import {
-  type AdmissionConfig,
   createEffectStates,
+  createJobRegistry,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   defineJob,
   type JobDefinition,
   type JobTools,
+  type LeaderboardOperationKind,
   type Lease,
   type QueueWorker,
   type RefreshOperationsDatabases,
+  type RunOneJobOptions,
+  runOneJob,
   type SourceAdmitter,
+  waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
-import { createJobsFromOptions } from '../../src/refresh-operations-worker'
 import {
   createStatisticsJobs,
   createWorkerJobs,
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
+  type WorkerLeaderboardDependencies,
   type WorkerPlayerDependencies,
   type WorkerStatisticsDependencies,
 } from '../../src/worker/job-list'
@@ -57,6 +62,40 @@ export const idleStatisticsDependencies: WorkerStatisticsDependencies = {
   },
 }
 
+export const idleLeaderboardDependencies: WorkerLeaderboardDependencies = {
+  publication: {} as WorkerLeaderboardDependencies['publication'],
+  source: {
+    fetchPage: async () => {
+      throw new Error('this test never reads a leaderboard page')
+    },
+  },
+  sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
+  waitForSourceAdmission: waitForRenewal,
+  waitForSourceRetry: waitForRenewal,
+  playerNames: { applyLeaderboardNames: async () => ({ changed: 0 }) },
+  rankedStandings: { applyLeaderboardRanked: async () => ({ changed: 0 }) },
+  teamModes: {
+    applyLeaderboardSoloQueue: async () => ({ changed: 0 }),
+    applyLeaderboardTeams: async () => ({ changed: 0 }),
+  },
+  progress: { read: async () => null, save: async () => {} },
+  slicePages: defaultDeepCrawlSlicePages,
+  pageDelayMs: 0,
+  retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
+  telemetry: idleTelemetry,
+}
+
+// a real collection job over the given stores and source, for tests that run one against real tables
+export function createLeaderboardTestJob(
+  kind: LeaderboardOperationKind,
+  overrides: Partial<WorkerLeaderboardDependencies>,
+): JobDefinition<unknown> {
+  return createLeaderboardCollectionJob(kind, {
+    ...idleLeaderboardDependencies,
+    ...overrides,
+  }) as JobDefinition<unknown>
+}
+
 // the worker's four Statistics jobs, for tests that run one against real stores
 export function createStatisticsTestJobs(
   statistics: WorkerStatisticsDependencies['statistics'],
@@ -69,6 +108,7 @@ export function createStatisticsTestJobs(
 function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefinition<unknown>[] {
   return createWorkerJobs({
     ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
+    leaderboards: idleLeaderboardDependencies,
     isRankingRetentionEnabled: true,
     telemetry: idleTelemetry,
     discovery: {
@@ -113,34 +153,18 @@ export function createTestDeadLetters(database: Database) {
   return createPostgresDeadLetterOperations(database, createDeadLetterHooks())
 }
 
-const jobListAdmission: AdmissionConfig = {
-  totalConcurrency: 4,
-  interactiveReservation: 1,
-  classConcurrency: {
-    interactive: 2,
-    'primary-monitoring': 1,
-    leaderboard: 1,
-    'global-statistics': 1,
-    projection: 1,
-    maintenance: 1,
-  },
-  backgroundWeights: {
-    'primary-monitoring': 5,
-    leaderboard: 4,
-    'global-statistics': 3,
-    projection: 2,
-    maintenance: 1,
-  },
-}
-
 // the worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do
 export function createTestJobs(): JobDefinition<unknown>[] {
-  return createJobsFromOptions({
-    leaseMs: 30_000,
-    retryDelayMs: 1_000,
-    admission: jobListAdmission,
-    movedJobs: createIdleWorkerJobs(noDiscoveryEffects),
-  })
+  return createIdleWorkerJobs(noDiscoveryEffects)
+}
+
+// the worker's dispatch, claiming the next due operation and running the job of its kind from the given list
+export function runOneWithJobs(
+  queue: QueueWorker,
+  workerId: string,
+  { jobs, ...options }: RunOneJobOptions & { jobs: readonly JobDefinition<unknown>[] },
+): Promise<boolean> {
+  return runOneJob(queue, workerId, createJobRegistry(jobs), options)
 }
 
 function scriptedRankedSnapshot(brawlhallaId: number) {

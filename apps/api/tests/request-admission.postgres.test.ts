@@ -7,12 +7,14 @@ import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
-import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { reconcileInteractiveAdmissions } from '../src/worker/interactive-admissions'
 import {
+  createLeaderboardTestJob,
   createProofJob,
   createScriptedPlayerRefreshJob,
   createTestDeadLetters,
   createTestQueue,
+  runOneWithJobs,
 } from './fixtures/queue'
 
 const testAdmission = {
@@ -534,12 +536,12 @@ describe('PostgreSQL interactive refresh admission', () => {
     await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
     expect(
-      await runOneRefreshOperation(operations, 'multi-call-worker', {
+      await runOneWithJobs(operations, 'multi-call-worker', {
         leaseMs: 1_000,
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        movedJobs: [
+        jobs: [
           createScriptedPlayerRefreshJob(async (_lease, _section, admitSourceCall) => {
             await admitSourceCall('brawlhalla-v1')
             await admitSourceCall('brawlhalla-v1')
@@ -591,48 +593,54 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const options = {
-      movedJobs: [createProofJob(), createScriptedPlayerRefreshJob()],
+      jobs: [
+        createProofJob(),
+        createScriptedPlayerRefreshJob(),
+        createLeaderboardTestJob('leaderboard-1v1', {
+          sourceAdmission: admission,
+          source: {
+            async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
+              if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
+
+              return {
+                rankings: [
+                  {
+                    identity: {
+                      type: 'one-vs-one-player' as const,
+                      player: { id: 1, username: `${region} Player` },
+                    },
+                    rating: 2_000,
+                    best_rating: 2_100,
+                    rank: 1,
+                    wins: 20,
+                    losses: 10,
+                    region,
+                    tier: 'Diamond',
+                  },
+                ],
+                totalPages: 1,
+              }
+            },
+          },
+          publication: {
+            async publishGeneration() {
+              return 'published' as const
+            },
+            async recordCollectionFailure() {
+              return 'recorded' as const
+            },
+          },
+        }),
+      ],
       leaseMs: 1_000,
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      leaderboardSource: {
-        async fetchPage({ mode, region }: Parameters<LeaderboardPageSource['fetchPage']>[0]) {
-          if (mode !== '1v1') throw new Error('Expected 1v1 dispatch')
-
-          return {
-            rankings: [
-              {
-                identity: {
-                  type: 'one-vs-one-player' as const,
-                  player: { id: 1, username: `${region} Player` },
-                },
-                rating: 2_000,
-                best_rating: 2_100,
-                rank: 1,
-                wins: 20,
-                losses: 10,
-                region,
-                tier: 'Diamond',
-              },
-            ],
-            totalPages: 1,
-          }
-        },
-      },
-      ranking: {
-        async publishGeneration() {
-          return 'published' as const
-        },
-        async recordCollectionFailure() {
-          return 'recorded' as const
-        },
-      },
     }
 
-    expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
-    expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
-    expect(await runOneRefreshOperation(operations, 'dispatch-worker', options)).toBe(true)
+    expect(await runOneWithJobs(operations, 'dispatch-worker', options)).toBe(true)
+    expect(await runOneWithJobs(operations, 'dispatch-worker', options)).toBe(true)
+    expect(await runOneWithJobs(operations, 'dispatch-worker', options)).toBe(true)
     expect((await operations.inspect(proof.operationId)).operation.status).toBe('succeeded')
     expect((await operations.inspect(reserved.operationId)).operation.status).toBe('succeeded')
     expect((await operations.inspect(leaderboard.operationId)).operation.status).toBe('succeeded')
@@ -665,7 +673,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       sectionStarted = resolve
     })
 
-    const executing = runOneRefreshOperation(operations, 'renew-interactive-worker', {
+    const executing = runOneWithJobs(operations, 'renew-interactive-worker', {
       // Wide margins: a 40 ms renewal cadence on a 200 ms lease missed renewals on loaded CI runners, so the lease
       // expired mid-section and completion was rejected. The section still outlives the initial lease.
       leaseMs: 1_000,
@@ -673,7 +681,7 @@ describe('PostgreSQL interactive refresh admission', () => {
       retryDelayMs: 0,
       admission: testAdmission,
       sourceAdmission: admission,
-      movedJobs: [
+      jobs: [
         createScriptedPlayerRefreshJob(async () => {
           sectionStarted?.()
           await Bun.sleep(1_750)
@@ -804,12 +812,12 @@ describe('PostgreSQL interactive refresh admission', () => {
     if (replay.outcome !== 'replayed') throw new Error('Expected replay')
 
     expect(
-      await runOneRefreshOperation(operations, 'source-replay-successor', {
+      await runOneWithJobs(operations, 'source-replay-successor', {
         leaseMs: 1_000,
         retryDelayMs: 0,
         admission: testAdmission,
         sourceAdmission: admission,
-        movedJobs: [
+        jobs: [
           createScriptedPlayerRefreshJob(async (lease, _section, admitSourceCall) => {
             expect(lease.effectOperationId).toBe(original.effectOperationId)
             expect(lease.operationId).toBe(replay.replayOperationId)

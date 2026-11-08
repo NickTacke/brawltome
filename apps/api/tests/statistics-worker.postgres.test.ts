@@ -4,10 +4,9 @@ import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refres
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from '../src/statistics-collection-source'
-import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -200,17 +199,17 @@ describe('Statistics durable production worker', () => {
       retryDelayMs: 0,
       admission,
       sourceAdmission,
-      movedJobs: createStatisticsTestJobs(statistics, {
+      jobs: createStatisticsTestJobs(statistics, {
         sourceAdmission,
         collectEvidence: (lease) => collectStatisticsEvidence(source, lease),
       }),
     })
 
-    expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
-    expect(await runOneRefreshOperation(operations, 'worker-before-restart', options())).toBe(true)
+    expect(await runOneWithJobs(operations, 'worker-before-restart', options())).toBe(true)
+    expect(await runOneWithJobs(operations, 'worker-before-restart', options())).toBe(true)
 
     await restart()
-    expect(await runOneRefreshOperation(operations, 'worker-after-restart', options())).toBe(true)
+    expect(await runOneWithJobs(operations, 'worker-after-restart', options())).toBe(true)
 
     const audit = await statistics.getCohort()
 
@@ -266,9 +265,9 @@ describe('Statistics durable production worker', () => {
       let replaySourceCalls = 0
 
       expect(
-        await runOneRefreshOperation(operations, 'replay-worker', {
+        await runOneWithJobs(operations, 'replay-worker', {
           ...options(),
-          movedJobs: createStatisticsTestJobs(statistics, {
+          jobs: createStatisticsTestJobs(statistics, {
             sourceAdmission,
             collectEvidence: async () => {
               replaySourceCalls++

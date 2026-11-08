@@ -12,6 +12,7 @@ import {
   type RankingPublicationAuthorization,
   type RegionalLeaderboardScope,
   rankingModule,
+  reconcileLeaderboardSchedule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
@@ -21,8 +22,7 @@ import {
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestDeadLetters, createTestQueue } from './fixtures/queue'
+import { createLeaderboardTestJob, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
 let admin: ReturnType<typeof postgres>
@@ -1554,8 +1554,6 @@ describe('durable multi-mode collection operations', () => {
     // two replicas, then a restart: each process gets a client of its own
     const firstClient = openTestClient(database.connectionString)
     const secondClient = openTestClient(database.connectionString)
-    const first = createTestQueue({ database: firstClient })
-    const second = createTestQueue({ database: secondClient })
     const base = Date.now() - intervalMs
 
     const definitions = leaderboardModes.map((mode, index) => ({
@@ -1571,8 +1569,8 @@ describe('durable multi-mode collection operations', () => {
 
     for (const definition of definitions) {
       const results = await Promise.all([
-        first.reconcileLeaderboardSchedule(definition),
-        second.reconcileLeaderboardSchedule(definition),
+        reconcileLeaderboardSchedule(firstClient, definition),
+        reconcileLeaderboardSchedule(secondClient, definition),
       ])
 
       expect(results.map(({ outcome }) => outcome).sort()).toEqual(['already-exists', 'created'])
@@ -1591,10 +1589,9 @@ describe('durable multi-mode collection operations', () => {
     await Promise.all([firstClient.close(), secondClient.close()])
 
     const restartedClient = openTestClient(database.connectionString)
-    const restarted = createTestQueue({ database: restartedClient })
 
     for (const definition of definitions) {
-      expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
+      expect((await reconcileLeaderboardSchedule(restartedClient, definition)).outcome).toBe('already-exists')
     }
 
     await Promise.all([control.end(), restartedClient.close()])
@@ -1659,19 +1656,23 @@ describe('durable multi-mode collection operations', () => {
     const sourceCalls: string[] = []
 
     expect(
-      await runOneRefreshOperation(operations, 'source-admission-worker', {
+      await runOneWithJobs(operations, 'source-admission-worker', {
         leaseMs: 10_000,
         retryDelayMs: 0,
         admission,
-        sourceAdmission,
-        ranking,
-        leaderboardSource: {
-          async fetchPage(input) {
-            sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
+        jobs: [
+          createLeaderboardTestJob('leaderboard-solo-2v2', {
+            publication: ranking,
+            sourceAdmission,
+            source: {
+              async fetchPage(input) {
+                sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
 
-            return validSource('solo2v2').fetchPage(input)
-          },
-        },
+                return validSource('solo2v2').fetchPage(input)
+              },
+            },
+          }),
+        ],
       }),
     ).toBe(true)
 
@@ -1720,47 +1721,50 @@ describe('durable multi-mode collection operations', () => {
     const sourceCalls: string[] = []
 
     expect(
-      await runOneRefreshOperation(operations, 'expiring-leaderboard-worker', {
+      await runOneWithJobs(operations, 'expiring-leaderboard-worker', {
         leaseMs: 10_000,
         renewEveryMs: 60_000,
         retryDelayMs: 0,
         admission,
-        sourceAdmission: {
-          async admitSource(input) {
-            admissionCalls++
-            const result = await sourceAdmission.admitSource(input)
+        jobs: [
+          createLeaderboardTestJob('leaderboard-1v1', {
+            publication: ranking,
+            sourceAdmission: {
+              async admitSource(input) {
+                admissionCalls++
+                const result = await sourceAdmission.admitSource(input)
 
-            if (admissionCalls === 2) {
-              await control`
+                if (admissionCalls === 2) {
+                  await control`
                 UPDATE refresh_operations.operations
                 SET lease_expires_at = clock_timestamp() - interval '1 second'
                 WHERE id = ${accepted.operationId}
               `
 
-              replacementLease = await replacementOperations.claim(
-                'replacement-leaderboard-worker',
-                10_000,
-                admission,
-                'leaderboard-1v1',
-              )
+                  replacementLease = await replacementOperations.claim(
+                    'replacement-leaderboard-worker',
+                    10_000,
+                    admission,
+                    'leaderboard-1v1',
+                  )
 
-              if (!replacementLease || replacementLease.operationId !== accepted.operationId) {
-                throw new Error('Expected replacement leaderboard lease')
-              }
-            }
+                  if (!replacementLease || replacementLease.operationId !== accepted.operationId) {
+                    throw new Error('Expected replacement leaderboard lease')
+                  }
+                }
 
-            return result
-          },
-          pauseSource: (domain, retryAfterSeconds) => sourceAdmission.pauseSource(domain, retryAfterSeconds),
-        },
-        ranking,
-        leaderboardSource: {
-          async fetchPage(input) {
-            sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
+                return result
+              },
+            },
+            source: {
+              async fetchPage(input) {
+                sourceCalls.push(`${input.mode}:${input.region}:${input.page}`)
 
-            return validSource('1v1').fetchPage(input)
-          },
-        },
+                return validSource('1v1').fetchPage(input)
+              },
+            },
+          }),
+        ],
       }),
     ).toBe(true)
 

@@ -16,8 +16,7 @@ import {
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
-import { createTestQueue } from './fixtures/queue'
+import { createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -465,7 +464,7 @@ describe('Players-owned canonical ranked state', () => {
     })
 
     expect(
-      await runOneRefreshOperation(operations, 'ranked-pulse-worker', {
+      await runOneWithJobs(operations, 'ranked-pulse-worker', {
         leaseMs: 10_000,
         retryDelayMs: 1,
         admission,
@@ -473,7 +472,7 @@ describe('Players-owned canonical ranked state', () => {
           admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
           pauseSource: async () => {},
         },
-        movedJobs: [
+        jobs: [
           createRankedPlayerPulseJob({
             rankedPlayers: players,
             createAdmittedPulseSource: () => pulseSource({ brawlhalla_id: brawlhallaId, rating: 1750, games: 14 }),

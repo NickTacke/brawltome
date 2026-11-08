@@ -26,16 +26,24 @@ import {
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
 import {
+  createLeaderboardDeepCrawlProgress,
   createPostgresRanking,
+  defaultDeepCrawlSlicePages,
+  disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
   fetchLeaderboardPage,
+  reconcileLeaderboardDeepCrawlSchedule,
+  reconcileLeaderboardSchedule,
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
 import {
   createEffectStates,
+  createJobRegistry,
   createPostgresRefreshOperations,
   type Lease,
+  runOneJob,
   SourceAdmissionLimitedError,
+  waitForRenewal,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations } from '@brawltome/statistics'
@@ -62,12 +70,12 @@ import {
   readPlayerNameVerificationConfig,
 } from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
-import { reconcileInteractiveAdmissions, runOneRefreshOperation } from './refresh-operations-worker'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
 import { collectStatisticsEvidence } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
+import { reconcileInteractiveAdmissions } from './worker/interactive-admissions'
 import { createWorkerJobs } from './worker/job-list'
 import { workerModules } from './worker-modules'
 
@@ -162,8 +170,34 @@ const executePlayerNameVerification = createPlayerNameVerificationExecutor({
 // the queue needs these jobs' effect checks to be built, so the jobs can only reach the queue once they run
 const discoveryLeaseActive = (lease: Lease<unknown>): Promise<boolean> => operations.discoveryLeaseActive(lease)
 
+const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
+const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
+
 const workerJobs = createWorkerJobs({
   ranking,
+  leaderboards: {
+    publication: ranking,
+    source: {
+      fetchPage: (input) =>
+        fetchLeaderboardPage(input, {
+          onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
+        }),
+    },
+    sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
+    waitForSourceAdmission: waitForRenewal,
+    waitForSourceRetry: waitForRenewal,
+    playerNames: leaderboardPlayerNames,
+    rankedStandings: leaderboardRanked,
+    teamModes: leaderboardRanked,
+    progress: createLeaderboardDeepCrawlProgress(databases.main),
+    slicePages: defaultDeepCrawlSlicePages,
+    pageDelayMs: workerConfig.deepCrawl.pageDelayMs,
+    retryTimings: {
+      retryDelayMs: workerConfig.retryDelayMs,
+      sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
+    },
+    telemetry,
+  },
   isRankingRetentionEnabled: workerConfig.rankingRetention.enabled,
   telemetry,
   discovery: {
@@ -192,6 +226,8 @@ const workerJobs = createWorkerJobs({
     collectEvidence: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
   },
 })
+
+const jobRegistry = createJobRegistry(workerJobs)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
@@ -238,8 +274,6 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
   })
 }
 
-const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
-const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
 const playerFreshness = createPostgresPlayerFreshness(databases.main)
 const profileViews = createPostgresProfileViews(databases.main)
 
@@ -457,7 +491,7 @@ try {
       let reconciledSchedules = 0
 
       for (const definition of leaderboardSchedules) {
-        const schedule = await operations.reconcileLeaderboardSchedule(definition)
+        const schedule = await reconcileLeaderboardSchedule(databases.main, definition)
 
         if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
@@ -477,8 +511,8 @@ try {
 
       for (const definition of deepCrawlSchedules) {
         const crawl = workerConfig.deepCrawl.enabled
-          ? await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
-          : await operations.disableLeaderboardDeepCrawlSchedule(definition.scheduleKey)
+          ? await reconcileLeaderboardDeepCrawlSchedule(databases.main, definition)
+          : await disableLeaderboardDeepCrawlSchedule(databases.main, definition.scheduleKey)
 
         if (crawl.outcome !== 'already-exists' && crawl.outcome !== 'already-disabled') reconciledSchedules++
       }
@@ -503,26 +537,10 @@ try {
       listener ??= await operations.listen(onWakeup)
     },
     runOne: (repository, slotWorkerId, common) =>
-      runOneRefreshOperation(repository, slotWorkerId, {
+      runOneJob(repository, slotWorkerId, jobRegistry, {
         ...common,
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
         sourceAdmission: requestAdmission,
-        movedJobs: workerJobs,
-        ranking,
-        leaderboardPlayerNames,
-        leaderboardRanked,
-        deepCrawlPageDelayMs: workerConfig.deepCrawl.pageDelayMs,
-        leaderboardTeamModes: leaderboardRanked,
-        leaderboardDeepCrawlProgress: {
-          read: operations.readLeaderboardDeepCrawlProgress,
-          save: operations.saveLeaderboardDeepCrawlProgress,
-        },
-        leaderboardSource: {
-          fetchPage: (input) =>
-            fetchLeaderboardPage(input, {
-              onRateLimited: (retryAfterSeconds) => requestAdmission.pauseSource('brawlhalla-v1', retryAfterSeconds),
-            }),
-        },
       }),
   })
 } catch (error) {

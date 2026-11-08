@@ -10,7 +10,7 @@ import {
   type WorkerPlayerDependencies,
   type WorkerStatisticsDependencies,
 } from '../src/worker/job-list'
-import { idleStatisticsDependencies } from './fixtures/queue'
+import { idleLeaderboardDependencies, idleStatisticsDependencies } from './fixtures/queue'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
 const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
@@ -53,6 +53,7 @@ function createRecordingJobs(
 
   const jobs = createWorkerJobs({
     ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
+    leaderboards: idleLeaderboardDependencies,
     isRankingRetentionEnabled: true,
     telemetry: createTelemetry({ service: 'worker', drainIntervalMs: 0 }),
     discovery: {

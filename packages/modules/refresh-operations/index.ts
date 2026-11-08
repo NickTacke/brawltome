@@ -49,11 +49,18 @@ export type {
   ReplayGuard,
   ReplayGuardTarget,
 } from './db/dead-letter-hooks'
+export {
+  type DeepCrawlProgressRow,
+  readDeepCrawlProgress,
+  type SaveDeepCrawlProgressInput,
+  saveDeepCrawlProgress,
+} from './db/deep-crawl-progress'
 export { type DisableFixedScheduleInput, disableFixedSchedule } from './db/disable-fixed-schedule'
 export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
+  leaderboardEffectState,
   legendMetaPublicationEffectState,
   proofEffectState,
   statisticsCollectionEffectState,

@@ -12,7 +12,7 @@ import {
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -184,12 +184,12 @@ describe('Primary Player monitoring', () => {
     })
 
     const run = (operations: typeof operationsA, workerId: string) =>
-      runOneRefreshOperation(operations, workerId, {
+      runOneWithJobs(operations, workerId, {
         leaseMs: 10_000,
         retryDelayMs: 1,
         admission,
         sourceAdmission,
-        movedJobs: [refreshJob],
+        jobs: [refreshJob],
       })
 
     const executions = await Promise.all([run(operationsA, 'replica-a'), run(operationsB, 'replica-b')])
