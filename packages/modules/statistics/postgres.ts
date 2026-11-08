@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Database, JsonValue } from '@brawltome/foundation'
+import type { Database, JsonValue, Sql } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import {
   acquireActiveLease,
@@ -195,20 +195,58 @@ type UnpublishedGenerationRow = {
   product: CollectionProduct
   is_insufficient_evidence: boolean
   is_missing_collection: boolean
-  collection_operation_ids: string[]
 }
 
 // an insufficient generation has nothing more to wait for; otherwise every member's collection must have finished
-function isReadyToPublish(row: UnpublishedGenerationRow, lineage: ReadonlyMap<string, EffectLineage>): boolean {
+const collectionLineagePageSize = 500
+
+function isCollectionFinished(effect: EffectLineage | undefined): boolean {
+  return effect?.hasFinished === true && !effect.hasUnfinished
+}
+
+async function readCollectionOperationPage(
+  client: Sql,
+  row: UnpublishedGenerationRow,
+  afterOperationId: string | null,
+): Promise<string[]> {
+  const page = await client<{ operation_id: string }[]>`
+    SELECT collection.operation_id
+    FROM statistics.cohorts cohort
+    JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
+    JOIN statistics.collection_operations collection
+      ON collection.cohort_id = member.cohort_id
+     AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = ${row.product}
+    WHERE cohort.generation_id = ${row.generation_id}
+      AND (${afterOperationId}::uuid IS NULL OR collection.operation_id > ${afterOperationId}::uuid)
+    ORDER BY collection.operation_id
+    LIMIT ${collectionLineagePageSize}
+  `
+
+  return page.map(({ operation_id }) => operation_id)
+}
+
+// stops at the first unfinished collection, so a generation that is still collecting costs one page per check
+async function hasFinishedEveryCollection(client: Sql, row: UnpublishedGenerationRow): Promise<boolean> {
+  let afterOperationId: string | null = null
+
+  for (;;) {
+    const operationIds: string[] = await readCollectionOperationPage(client, row, afterOperationId)
+    const lineage = await readEffectLineage(client, operationIds)
+
+    if (!operationIds.every((operationId) => isCollectionFinished(lineage.get(operationId)))) return false
+
+    if (operationIds.length < collectionLineagePageSize) return true
+
+    afterOperationId = operationIds[operationIds.length - 1]
+  }
+}
+
+async function isReadyToPublish(client: Sql, row: UnpublishedGenerationRow): Promise<boolean> {
   if (row.is_insufficient_evidence) return true
 
   if (row.is_missing_collection) return false
 
-  return row.collection_operation_ids.every((operationId) => {
-    const effect = lineage.get(operationId)
-
-    return effect?.hasFinished === true && !effect.hasUnfinished
-  })
+  return hasFinishedEveryCollection(client, row)
 }
 
 function productFromKind(kind: CollectionAuthorization['kind']): CollectionProduct {
@@ -1176,16 +1214,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
                    ON collection.cohort_id = member.cohort_id
                   AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
                  WHERE cohort.generation_id = generation.id AND collection.operation_id IS NULL
-               ) AS is_missing_collection,
-               ARRAY(
-                 SELECT collection.operation_id
-                 FROM statistics.cohorts cohort
-                 JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
-                 JOIN statistics.collection_operations collection
-                   ON collection.cohort_id = member.cohort_id
-                  AND collection.brawlhalla_id = member.brawlhalla_id AND collection.product = product.product
-                 WHERE cohort.generation_id = generation.id
-               ) AS collection_operation_ids
+               ) AS is_missing_collection
         FROM statistics.cohort_generations generation
         CROSS JOIN (VALUES ('ranked'::text), ('lifetime'::text)) product(product)
         LEFT JOIN statistics.publication_operations publication
@@ -1194,19 +1223,20 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         ORDER BY generation.created_at, product.product DESC
       `
 
-      const lineage = await readEffectLineage(
-        client,
-        rows.flatMap((row) => row.collection_operation_ids),
-      )
+      const intents: PublicationIntent[] = []
 
-      return rows
-        .filter((row) => isReadyToPublish(row, lineage))
-        .map(({ generation_id, product }) => ({
-          generationId: generation_id,
-          product,
+      for (const row of rows) {
+        if (!(await isReadyToPublish(client, row))) continue
+
+        intents.push({
+          generationId: row.generation_id,
+          product: row.product,
           kind: 'statistics-publication',
-          operationKey: publicationOperationKey(generation_id, product),
-        }))
+          operationKey: publicationOperationKey(row.generation_id, row.product),
+        })
+      }
+
+      return intents
     },
 
     async boundPublicationOperationIds(operationIds): Promise<string[]> {
