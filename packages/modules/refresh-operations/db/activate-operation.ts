@@ -25,7 +25,7 @@ async function makePending(transaction: Transaction, operationId: string, condit
 export type ActivateReservedInput = {
   operationId: string
   reservationToken: string
-  kinds?: readonly OperationKind[]
+  kinds: readonly OperationKind[]
 }
 
 /** Queues a reservation the caller still holds: the token matches and it has not expired. */
@@ -46,7 +46,7 @@ export function activateReserved(database: Database, input: ActivateReservedInpu
   })
 }
 
-export type ActivateAdmittedInput = { operationId: string; kinds?: readonly OperationKind[] }
+export type ActivateAdmittedInput = { operationId: string; kinds: readonly OperationKind[] }
 
 /** Queues an awaiting_admission operation without checking its token, for a caller that admitted it itself. */
 export function activateAdmitted(database: Database, input: ActivateAdmittedInput): Promise<TransitionResult> {
@@ -69,7 +69,7 @@ export type RejectReservedInput = {
   reservationToken: string
   reason: string
   message: string
-  kinds?: readonly OperationKind[]
+  kinds: readonly OperationKind[]
 }
 
 /** Sends a reservation the caller holds to dead letter, with the reason as its error code. */
@@ -90,7 +90,7 @@ export async function rejectReserved(database: Database, input: RejectReservedIn
   return rejected ? 'transitioned' : 'lease-lost'
 }
 
-export type RejectExpiredInput = { operationId: string; kinds?: readonly OperationKind[] }
+export type RejectExpiredInput = { operationId: string; kinds: readonly OperationKind[] }
 
 /** Sends a reservation whose time ran out to dead letter. */
 export async function rejectExpired(database: Database, input: RejectExpiredInput): Promise<TransitionResult> {
