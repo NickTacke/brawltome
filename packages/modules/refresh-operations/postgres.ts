@@ -26,6 +26,7 @@ import { readOperationStatus } from './db/read-operation-status'
 import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { reserveForAdmission, reserveForBinding } from './db/reserve-operation'
+import { beginSection, commitSection } from './db/section-checkpoints'
 import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
 import type { Transaction } from './db/transaction'
 import { wakeupChannel } from './db/wakeup'
@@ -659,52 +660,15 @@ export function createPostgresRefreshOperations(
 
     renewWithAuthority: (lease: OperationLease, leaseMs: number) => renewLeaseWithAuthority(renewals, lease, leaseMs),
 
-    async beginInteractiveSection(
+    beginInteractiveSection: (
       lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
       section: 'ranked' | 'stats' | 'profile' | 'roster',
-    ) {
-      const [owned] = await client<{ completed: boolean }[]>`
-        SELECT EXISTS (
-          SELECT 1 FROM refresh_operations.interactive_refresh_effects
-          WHERE operation_id = ${lease.effectOperationId} AND section = ${section}
-        ) AS completed
-        FROM refresh_operations.operations
-        WHERE id = ${lease.operationId} AND status = 'leased'
-          AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-          AND lease_expires_at > clock_timestamp()
-      `
+    ) => beginSection(database, lease, section),
 
-      if (!owned) return 'lease-lost' as const
-
-      return owned.completed ? ('already-applied' as const) : ('execute' as const)
-    },
-
-    async commitInteractiveSection(
+    commitInteractiveSection: (
       lease: Extract<OperationLease, { kind: 'interactive-player-refresh' | 'clan-refresh' }>,
       section: 'ranked' | 'stats' | 'profile' | 'roster',
-    ): Promise<TransitionResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [owned] = await sql<{ id: string }[]>`
-          SELECT id FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND status = 'leased'
-            AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
-            AND lease_expires_at > clock_timestamp()
-          FOR UPDATE
-        `
-
-        if (!owned) return 'lease-lost' as const
-
-        await sql`
-          INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
-          VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
-          ON CONFLICT (operation_id, section) DO NOTHING
-        `
-
-        return 'transitioned' as const
-      })
-    },
+    ) => commitSection(database, lease, section),
 
     async commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult> {
       if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
