@@ -1,5 +1,10 @@
+import type { ContractRouter, Meta, Router } from '@orpc/server'
 import type { Migration } from './migration'
 import type { ModuleRuntime } from './module-runtime'
+import type { RequestContext } from './procedures'
+
+/** Any oRPC router whose procedures run on the request context the API builds for modules. */
+export type ModuleRouter = Router<ContractRouter<Meta>, RequestContext>
 
 /** What a process needs to know about a domain module to load it, migrate its schema and serve its procedures. */
 export type BrawltomeModule = {
@@ -7,7 +12,7 @@ export type BrawltomeModule = {
   dependsOn: readonly string[]
   migrations: readonly Migration[]
   // runs once at startup; the API serves the procedures it returns under the module's name
-  routes?: (runtime: ModuleRuntime) => Record<string, unknown>
+  routes?: (runtime: ModuleRuntime) => ModuleRouter
 }
 
 export function checkModuleList(modules: readonly BrawltomeModule[]): void {
