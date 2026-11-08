@@ -1,5 +1,5 @@
 import type { Database } from '@brawltome/foundation'
-import { desc, eq, sql } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import type { ClanMember, ClanProfile, ClanSectionState } from '../domain/clan-profile'
 import { members, profileState, profiles, rosterState } from './tables'
 
@@ -16,7 +16,7 @@ async function readRosterState(database: Database, clanId: number): Promise<Clan
   return state ?? null
 }
 
-// highest xp first, ties by player id; xp sorts as text, as it always has, so '99' comes before '100'
+// highest xp first, ties by player id
 async function readMembers(database: Database, clanId: number): Promise<ClanMember[]> {
   return database.db
     .select({
@@ -29,7 +29,7 @@ async function readMembers(database: Database, clanId: number): Promise<ClanMemb
     })
     .from(members)
     .where(eq(members.clanId, clanId))
-    .orderBy(desc(sql`${members.xp}::text`), members.brawlhallaId)
+    .orderBy(desc(members.xp), members.brawlhallaId)
 }
 
 /** The stored clan with its section states and members, or null when its profile was never fetched. */

@@ -176,15 +176,14 @@ export const completeClan: ClanScenario = {
         legacyTimestamp: '2026-08-01T00:00:00.000Z',
       },
     },
-    // today's order, not the intended one: the query selects xp::text, so ORDER BY xp sorts the text output column
-    // and 99 comes before 9007... and before every 100; ties break by player id
+    // highest xp first as a number, so 99 comes after every 100; ties break by player id
     members: [
-      expectedMember(15, 'Delta', '99'),
       expectedMember(7, 'Alpha', '900719925474099312345'),
       expectedMember(20, 'Zulu', '100'),
       expectedMember(30, 'Bravo', '100'),
       expectedMember(900, 'Charlie', '100'),
       expectedMember(5000, 'Echo', '100'),
+      expectedMember(15, 'Delta', '99'),
     ],
   },
 }

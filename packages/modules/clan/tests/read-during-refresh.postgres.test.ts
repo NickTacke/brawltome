@@ -34,7 +34,6 @@ const profile = {
   isRecruiting: false,
 }
 
-// one digit of xp each, so the order is the same whether xp sorts as text or as a number
 function member(brawlhallaId: number, xp: string) {
   return {
     brawlhallaId,
