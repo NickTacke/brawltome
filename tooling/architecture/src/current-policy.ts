@@ -50,7 +50,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/telemetry': ['.', './analytics-labels', './node', './propagation'],
     '@brawltome/architecture': [],
     '@brawltome/analytics-review': [],
-    '@brawltome/accounts': ['.', './dead-letter-hooks'],
+    '@brawltome/accounts': ['.', './dead-letter-hooks', './testing'],
     '@brawltome/clan': ['.', './dead-letter-hooks'],
     '@brawltome/contracts': ['.'],
     '@brawltome/discovery': ['.'],
@@ -62,6 +62,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/statistics': ['.', './dead-letter-hooks'],
   },
   testOnlyExports: {
+    '@brawltome/accounts': ['./testing'],
     '@brawltome/foundation': ['./testing'],
     '@brawltome/refresh-operations': ['./testing'],
   },

@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts"
+    "./dead-letter-hooks": "./jobs/dead-letter-hooks.ts",
+    "./testing": "./testing.ts"
   },
   "scripts": {
     "test": "bun test",
