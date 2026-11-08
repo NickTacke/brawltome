@@ -2155,6 +2155,9 @@ describe('refresh operations worker source retry', () => {
 
 type WorkerOptions = Parameters<typeof runOneRefreshOperation>[2]
 
+// kinds whose jobs live in their owning module are tested there
+type WrappedKind = Exclude<OperationLease['kind'], 'ranking-retention'>
+
 // every kind and the code its worker reports when the executor throws a plain error
 const failureCodes = [
   ['proof', 'proof_execution_failed'],
@@ -2165,7 +2168,6 @@ const failureCodes = [
   ['discovery-reconciliation', 'discovery_reconciliation_failed'],
   ['ranked-player-pulse', 'ranked_player_pulse_failed'],
   ['player-name-verification', 'player_name_verification_failed'],
-  ['ranking-retention', 'ranking_retention_failed'],
   ['leaderboard-deep-crawl', 'leaderboard_deep_crawl_failed'],
   ['statistics-ranked-collection', 'statistics_collection_failed'],
   ['statistics-lifetime-collection', 'statistics_collection_failed'],
@@ -2175,12 +2177,12 @@ const failureCodes = [
   ['leaderboard-2v2', 'leaderboard_collection_failed'],
   ['leaderboard-solo-2v2', 'leaderboard_collection_failed'],
   ['leaderboard-3v3', 'leaderboard_collection_failed'],
-] as const satisfies readonly (readonly [OperationLease['kind'], string])[]
+] as const satisfies readonly (readonly [WrappedKind, string])[]
 
 const generationId = '10000000-0000-4000-8000-000000000001'
 const leaderboardPayload = { pageDepth: 1, intervalMs: 900_000 }
 
-const leaseShapes: Record<OperationLease['kind'], { workClass: string; payload: object }> = {
+const leaseShapes: Record<WrappedKind, { workClass: string; payload: object }> = {
   proof: { workClass: 'interactive', payload: { value: 'proof' } },
   'interactive-player-refresh': {
     workClass: 'interactive',
@@ -2192,7 +2194,6 @@ const leaseShapes: Record<OperationLease['kind'], { workClass: string; payload: 
   'discovery-reconciliation': { workClass: 'projection', payload: { owner: 'player' } },
   'ranked-player-pulse': { workClass: 'primary-monitoring', payload: { brawlhallaId: 42 } },
   'player-name-verification': { workClass: 'maintenance', payload: { brawlhallaId: 42, playerName: 'Name' } },
-  'ranking-retention': { workClass: 'maintenance', payload: { retentionHours: 48, maxGenerations: 10 } },
   'leaderboard-deep-crawl': { workClass: 'leaderboard', payload: { region: 'AUS', intervalMs: 3_600_000 } },
   'statistics-ranked-collection': {
     workClass: 'global-statistics',
@@ -2226,7 +2227,7 @@ const idleRanking = {
 
 // the dependencies each kind needs to reach its executor, with the first call into the outside world throwing;
 // interactive, projection and reconciliation work throws on its own when its dependencies are missing
-const failingOptions: Record<OperationLease['kind'], Partial<WorkerOptions>> = {
+const failingOptions: Record<WrappedKind, Partial<WorkerOptions>> = {
   proof: { executeEffect: explode },
   'interactive-player-refresh': {},
   'clan-refresh': {},
@@ -2235,7 +2236,6 @@ const failingOptions: Record<OperationLease['kind'], Partial<WorkerOptions>> = {
   'discovery-reconciliation': {},
   'ranked-player-pulse': { sourceAdmission: admittingSource, executeRankedPulse: explode },
   'player-name-verification': { sourceAdmission: admittingSource, executePlayerNameVerification: explode },
-  'ranking-retention': { rankingRetention: { expireGenerations: explode } as never },
   'leaderboard-deep-crawl': {
     sourceAdmission: admittingSource,
     leaderboardSource: { fetchPage: explode },
@@ -2276,7 +2276,7 @@ const failingOptions: Record<OperationLease['kind'], Partial<WorkerOptions>> = {
   },
 }
 
-function leaseOfKind(kind: OperationLease['kind']): OperationLease {
+function leaseOfKind(kind: WrappedKind): OperationLease {
   return {
     operationId: crypto.randomUUID(),
     effectOperationId: crypto.randomUUID(),

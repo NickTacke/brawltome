@@ -1,13 +1,21 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRanking, type LeaderboardMode, type LeaderboardScope, rankingModule } from '@brawltome/ranking'
+import {
+  createPostgresRanking,
+  createRankingRetentionJob,
+  disableRankingRetentionSchedule,
+  type LeaderboardMode,
+  type LeaderboardScope,
+  rankingModule,
+  reconcileRankingRetentionSchedule,
+} from '@brawltome/ranking'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { runJobOnce } from '@brawltome/refresh-operations/testing'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { rankingRetentionScheduleDefinition, readOperationsWorkerConfig } from '../src/operations-worker-config'
-import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { createTestQueue } from './fixtures/queue'
 
 const baseUrl = process.env.DATABASE_URL
@@ -1088,12 +1096,12 @@ describe('Ranking snapshot retention', () => {
       await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
 
       const config = readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '2' }).rankingRetention
-      const schedule = await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))
+      const schedule = await reconcileRankingRetentionSchedule(database, rankingRetentionScheduleDefinition(config))
 
       expect(schedule.outcome).toBe('created')
 
       expect(
-        (await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))).outcome,
+        (await reconcileRankingRetentionSchedule(database, rankingRetentionScheduleDefinition(config))).outcome,
       ).toBe('already-exists')
 
       const materialized = await operations.materializeDueSchedules()
@@ -1141,14 +1149,11 @@ describe('Ranking snapshot retention', () => {
       `
 
       expect(
-        await runOneRefreshOperation(operations, 'retention-worker', {
-          leaseMs: 30_000,
-          retryDelayMs: 1_000,
+        await runJobOnce(operations, createRankingRetentionJob({ store: ranking, isEnabled: true, telemetry }), {
           admission,
-          rankingRetention: ranking,
           telemetry,
         }),
-      ).toBe(true)
+      ).toBe('succeeded')
 
       const remaining = await storedGenerationIds(sql)
 
@@ -1203,16 +1208,16 @@ describe('Ranking snapshot retention', () => {
       await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
       const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)
 
-      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({ outcome: 'absent' })
-      const schedule = await operations.reconcileRankingRetentionSchedule(definition)
+      expect(await disableRankingRetentionSchedule(database, definition.scheduleKey)).toEqual({ outcome: 'absent' })
+      const schedule = await reconcileRankingRetentionSchedule(database, definition)
 
       expect((await operations.materializeDueSchedules()).occurrences).toHaveLength(1)
 
-      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({
+      expect(await disableRankingRetentionSchedule(database, definition.scheduleKey)).toEqual({
         outcome: 'disabled',
       })
 
-      expect(await operations.disableRankingRetentionSchedule(definition.scheduleKey)).toEqual({
+      expect(await disableRankingRetentionSchedule(database, definition.scheduleKey)).toEqual({
         outcome: 'already-disabled',
       })
 
@@ -1231,15 +1236,11 @@ describe('Ranking snapshot retention', () => {
       }
 
       expect(
-        await runOneRefreshOperation(operations, 'retention-worker', {
-          leaseMs: 30_000,
-          retryDelayMs: 1_000,
+        await runJobOnce(operations, createRankingRetentionJob({ store: untouchable, isEnabled: false, telemetry }), {
           admission,
-          rankingRetention: untouchable,
-          rankingRetentionEnabled: false,
           telemetry,
         }),
-      ).toBe(true)
+      ).toBe('succeeded')
 
       const [operation] = await sql<{ id: string; status: string }[]>`
         SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
@@ -1256,7 +1257,7 @@ describe('Ranking snapshot retention', () => {
       })
 
       // Turning retention back on re-enables the same schedule.
-      expect((await operations.reconcileRankingRetentionSchedule(definition)).outcome).toBe('reconciled')
+      expect((await reconcileRankingRetentionSchedule(database, definition)).outcome).toBe('reconciled')
 
       const [enabled] = await sql<{ enabled: boolean }[]>`
         SELECT enabled FROM refresh_operations.schedules WHERE id = ${schedule.scheduleId}
@@ -1288,7 +1289,7 @@ describe('Ranking snapshot retention', () => {
       await insertGeneration(sql, { mode: '1v1', windowAt: new Date(now.getTime() - 15 * minute) })
       const config = readOperationsWorkerConfig({ RANKING_RETENTION_BATCH: '2' }).rankingRetention
 
-      await operations.reconcileRankingRetentionSchedule(rankingRetentionScheduleDefinition(config))
+      await reconcileRankingRetentionSchedule(database, rankingRetentionScheduleDefinition(config))
       await operations.materializeDueSchedules()
 
       // A reader holding SHARE on snapshot_rows stalls the delete for longer than the 300ms lease.
@@ -1313,17 +1314,17 @@ describe('Ranking snapshot retention', () => {
 
       await tableLocked
 
-      const run = runOneRefreshOperation(operations, 'retention-worker', {
+      const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
+      const run = runJobOnce(operations, createRankingRetentionJob({ store: ranking, isEnabled: true, telemetry }), {
         leaseMs,
-        retryDelayMs: 1_000,
         admission,
-        rankingRetention: ranking,
       })
 
       await Bun.sleep(4 * leaseMs)
       release()
       await blocker
-      expect(await run).toBe(true)
+      expect(await run).toBe('succeeded')
 
       const [operation] = await sql<{ id: string; status: string }[]>`
         SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
@@ -1427,14 +1428,14 @@ describe('Ranking snapshot retention', () => {
       const definition = rankingRetentionScheduleDefinition(readOperationsWorkerConfig({}).rankingRetention)
 
       await expect(
-        operations.reconcileRankingRetentionSchedule({
+        reconcileRankingRetentionSchedule(database, {
           ...definition,
           payload: { retentionHours: 23, maxGenerations: 20 },
         }),
       ).rejects.toThrow('ranking retention retentionHours must be an integer between 24 and 8760')
 
       await expect(
-        operations.reconcileRankingRetentionSchedule({
+        reconcileRankingRetentionSchedule(database, {
           ...definition,
           payload: { retentionHours: 24, maxGenerations: 201 },
         }),

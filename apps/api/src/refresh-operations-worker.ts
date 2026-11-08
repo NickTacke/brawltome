@@ -10,7 +10,6 @@ import {
   leaderboardDeepCrawlTeams,
   leaderboardModeFromOperationKind,
   type RankingPublicationStore,
-  type RankingRetentionStore,
 } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
@@ -47,7 +46,6 @@ type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' 
 type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
-type RankingRetentionLease = Extract<OperationLease, { kind: 'ranking-retention' }>
 type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
 type LeaderboardLease = Exclude<Extract<OperationLease, { workClass: 'leaderboard' }>, LeaderboardDeepCrawlLease>
 type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
@@ -94,9 +92,6 @@ type RunOneRefreshOperationOptions = {
   syncClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster', leaseExpiresAt: Date): Promise<void>
   revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
-  rankingRetention?: RankingRetentionStore
-  // Explicitly false pauses retention: runs already materialized complete without deleting anything.
-  rankingRetentionEnabled?: boolean
   leaderboardPlayerNames?: {
     applyLeaderboardNames(input: {
       observedAt: Date
@@ -172,6 +167,8 @@ type RunOneRefreshOperationOptions = {
   ): Promise<'none' | 'applied' | 'acknowledged'>
   playerProjectionEffectState?(effectOperationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   telemetry?: Telemetry
+  // jobs that live in their owning module, added to the wrapped ones
+  movedJobs?: readonly JobDefinition<unknown>[]
 }
 
 export async function reconcileInteractiveAdmissions(
@@ -441,84 +438,6 @@ async function executeNameVerification(
   await options.executePlayerNameVerification(lease, tools.createSourceAdmitter('name-verification'))
 
   return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-// Expires one bounded batch of old leaderboard generations. The lease check, the delete and the operation's
-// completion commit in one transaction, so a batch that outlives its lease is still recorded as succeeded.
-async function executeRankingRetention(
-  operations: LeaseOperations,
-  lease: RankingRetentionLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (options.rankingRetentionEnabled === false) {
-    const transition = await operations.complete(lease)
-
-    if (transition === 'lease-lost') return 'lease_lost'
-
-    try {
-      options.telemetry?.logger.info('ranking.retention.skipped', {
-        operationId: lease.operationId,
-        reason: 'disabled',
-        deletedGenerations: 0,
-      })
-    } catch {
-      // Telemetry never decides the outcome of committed work.
-    }
-
-    return 'succeeded'
-  }
-
-  if (!options.rankingRetention) {
-    const transition = await operations.fail(
-      lease,
-      {
-        code: 'ranking_retention_executor_unavailable',
-        message: 'Ranking retention executor is not configured',
-        retryable: false,
-      },
-      0,
-    )
-
-    return transition === 'lease-lost' ? 'lease_lost' : 'dead_letter'
-  }
-
-  if ((await operations.renew(lease, options.leaseMs)) === 'lease-lost') return 'lease_lost'
-
-  const started = performance.now()
-
-  const result = await options.rankingRetention.expireGenerations(
-    { operationId: lease.operationId, leaseOwner: lease.leaseOwner, leaseToken: lease.leaseToken },
-    lease.payload,
-  )
-
-  if (result.outcome === 'lease-lost') return 'lease_lost'
-
-  const telemetry = options.telemetry
-
-  if (telemetry) {
-    try {
-      const durationMs = Math.round(performance.now() - started)
-
-      telemetry.metrics.add('ranking_retention_deleted_generations_total', result.deletedGenerations, {})
-      telemetry.metrics.set('ranking_retention_expirable_generations', result.expirableGenerations, {})
-      telemetry.metrics.observe('ranking_retention_duration_ms', durationMs, {})
-
-      telemetry.logger.info('ranking.retention.completed', {
-        operationId: lease.operationId,
-        deletedGenerations: result.deletedGenerations,
-        retentionHours: lease.payload.retentionHours,
-        maxGenerations: lease.payload.maxGenerations,
-        // A full batch means more expired generations are waiting for the next run.
-        batchFull: result.deletedGenerations >= lease.payload.maxGenerations,
-        expirableGenerations: result.expirableGenerations,
-        durationMs,
-      })
-    } catch {
-      // Telemetry never decides the outcome of committed work.
-    }
-  }
-
-  return 'succeeded'
 }
 
 async function executeStatisticsCollection(
@@ -1405,12 +1324,7 @@ export function createJobsFromOptions(options: RunOneRefreshOperationOptions): J
     ...playerBackgroundJobs(options),
     ...statisticsJobs(options),
     ...leaderboardJobs(options),
-    wrapJob<RankingRetentionLease>({
-      kind: 'ranking-retention',
-      workClasses: ['maintenance'],
-      failureCode: 'ranking_retention_failed',
-      run: (lease, tools) => executeRankingRetention(tools.queue, lease, options),
-    }),
+    ...(options.movedJobs ?? []),
   ]
 }
 

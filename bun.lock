@@ -222,6 +222,7 @@
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
+        "@brawltome/telemetry": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.7.0",
