@@ -20,7 +20,7 @@ The migrations in `migrations/` own the defaults, checks, indexes and triggers. 
 describe the columns the code uses.
 
 The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_ledger`, `legacy_import_rejections` and
-`import_conflicts` behind. They still exist but aren't modelled. A later migration will drop them.
+`import_conflicts` behind. They still exist but aren't modelled. They can be dropped in a later migration.
 
 ## Layout
 
@@ -66,6 +66,7 @@ module then.
 1. The API sees a stale section, reserves a refresh operation and admits the caller.
 2. The operations worker leases the operation. `prepareRefreshEffect` records the lease in `refresh_effects`.
 3. `processRefreshClanSection` calls the source and publishes the section. If the lease was lost, the publish is
-   fenced and writes nothing. If the fetch fails, the stored section stays and only the check is recorded.
+   fenced and writes nothing. If the fetch fails, the stored section stays and only the check is recorded. A
+   retryable failure is also thrown back to the worker, which retries it.
 4. Triggers write the change to `discovery_outbox`, and the worker delivers it through
    `createPostgresClanDiscoverySource`.
