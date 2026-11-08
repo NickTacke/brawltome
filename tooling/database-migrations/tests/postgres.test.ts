@@ -949,7 +949,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
         const [statisticsEffectFence] = await client<{ function_name: string | null }[]>`
           SELECT to_regprocedure(
-            'refresh_operations.record_statistics_collection_effect(uuid,text,text,text,bigint)'
+            'statistics.record_statistics_collection_effect(uuid,text,text,text,bigint)'
           )::text AS function_name
         `
 
