@@ -78,7 +78,7 @@ async function resolveClanRefresh(
   ].join(':')
 
   try {
-    const active = await ctx.refreshOperations.findActiveInteractiveClanRefresh(dedupeKey)
+    const active = await ctx.clanRefreshReservations.findActiveClanRefresh(dedupeKey)
 
     if (
       active &&
@@ -118,7 +118,7 @@ async function resolveClanRefresh(
       actor = { kind: 'verified-anonymous', ip: ctx.clientIp }
     }
 
-    const reserved = await ctx.refreshOperations.reserveInteractiveClanRefresh({
+    const reserved = await ctx.clanRefreshReservations.reserveClanRefresh({
       dedupeKey,
       operationKey: dedupeKey,
       clanId: input.id,
@@ -144,7 +144,7 @@ async function resolveClanRefresh(
     const admission = await ctx.requestAdmission.admitActor(actor, reserved.operationId)
 
     if (admission.outcome === 'rate-limited') {
-      await ctx.refreshOperations.rejectInteractiveRefresh(
+      await ctx.clanRefreshReservations.rejectClanRefresh(
         reserved.operationId,
         reserved.reservationToken,
         'actor_rate_limited',
@@ -157,7 +157,7 @@ async function resolveClanRefresh(
     }
 
     if (
-      (await ctx.refreshOperations.activateInteractiveRefresh(reserved.operationId, reserved.reservationToken)) ===
+      (await ctx.clanRefreshReservations.activateClanRefresh(reserved.operationId, reserved.reservationToken)) ===
       'lease-lost'
     ) {
       return { clan, refresh: unavailable }

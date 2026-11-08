@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { clanModule, createPostgresClans } from '@brawltome/clan'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createClanRouter } from '../src/router/clan.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/trpc'
@@ -34,7 +35,7 @@ const profileStaleClan = plainClan(204, 'Profile Stale', justStaleAt, boundaryAt
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_router', modules: [clanModule] })
+  database = await createTestDatabase({ label: 'clan_router', modules: [refreshOperationsModule, clanModule] })
 
   const scenarios = [
     completeClan,
@@ -65,15 +66,15 @@ function createCaller() {
     user: null,
     database,
     clanRepo: createPostgresClans(database),
-    refreshOperations: {
-      findActiveInteractiveClanRefresh: async () => null,
-      reserveInteractiveClanRefresh: async (input: { dedupeKey: string; clanId: number; staleSections: string[] }) => {
+    clanRefreshReservations: {
+      findActiveClanRefresh: async () => null,
+      reserveClanRefresh: async (input: { dedupeKey: string; clanId: number; staleSections: string[] }) => {
         reservations.push({ dedupeKey: input.dedupeKey, clanId: input.clanId, staleSections: input.staleSections })
 
         return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() } as const
       },
-      activateInteractiveRefresh: async () => 'transitioned' as const,
-      rejectInteractiveRefresh: async () => 'transitioned' as const,
+      activateClanRefresh: async () => 'transitioned' as const,
+      rejectClanRefresh: async () => 'transitioned' as const,
     },
     requestAdmission: {
       admitActor: async () => ({ outcome: 'admitted' }) as const,

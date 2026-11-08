@@ -49,7 +49,6 @@ import {
   type FencedResult,
   type FreshnessAttempt,
   freshnessPlannerSource,
-  type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
   interactiveRefreshMaxAttempts,
   type ListDeadLettersInput,
@@ -135,10 +134,6 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    findActiveInteractiveClanRefresh(dedupeKey: string) {
-      return findActiveOperation(database, { kind: 'clan-refresh', dedupeKey })
-    },
-
     reserveInteractivePlayerRefresh(
       input: InteractivePlayerRefreshReservation,
     ): Promise<ReserveInteractiveRefreshResult> {
@@ -168,19 +163,6 @@ export function createPostgresRefreshOperations(
         })
 
       return reserveForAdmission(database, reservation, { beforeInsert: promoteRecentlyViewed })
-    },
-
-    reserveInteractiveClanRefresh(input: InteractiveClanRefreshReservation): Promise<ReserveInteractiveRefreshResult> {
-      return reserveForAdmission(database, {
-        kind: 'clan-refresh',
-        dedupeKey: input.dedupeKey,
-        operationKey: input.operationKey,
-        workClass: 'interactive',
-        payload: { clanId: input.clanId, staleSections: input.staleSections },
-        provenance: input.provenance,
-        maxAttempts: interactiveRefreshMaxAttempts,
-        reservationTtlSeconds: input.reservationTtlSeconds,
-      })
     },
 
     activateInteractiveRefresh(operationId: string, reservationToken: string): Promise<TransitionResult> {

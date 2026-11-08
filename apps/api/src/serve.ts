@@ -1,6 +1,6 @@
 import { createPostgresAccounts } from '@brawltome/accounts'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
-import { createPostgresClans } from '@brawltome/clan'
+import { createClanRefreshReservations, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList, type Migration, type ModuleRuntime } from '@brawltome/foundation'
 import {
@@ -101,6 +101,7 @@ const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
+const clanRefreshReservations = createClanRefreshReservations(database)
 const moduleRuntime: ModuleRuntime = { database }
 const orpcRouter = createOrpcRouter(apiModules, moduleRuntime)
 
@@ -145,6 +146,7 @@ const sharedCtx = {
   rankingQueries: ranking.queries,
   statisticsQueries: statistics,
   clanRepo,
+  clanRefreshReservations,
   accounts,
   profileViews,
   leaderboardStandings,

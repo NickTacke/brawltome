@@ -51,18 +51,12 @@ function harness(
           }
         : null
     },
-    findActiveInteractiveClanRefresh: async () => null,
     reserveInteractivePlayerRefresh: async (input) => {
       calls.reserve++
       reserveInput = input
 
       return { outcome: 'reserved', operationId, reservationToken: crypto.randomUUID() }
     },
-    reserveInteractiveClanRefresh: async () => ({
-      outcome: 'reserved',
-      operationId,
-      reservationToken: crypto.randomUUID(),
-    }),
     activateInteractiveRefresh: async () => {
       calls.activate++
 

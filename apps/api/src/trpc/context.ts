@@ -1,5 +1,5 @@
 import type { Account, Accounts } from '@brawltome/accounts'
-import type { ClanQueries } from '@brawltome/clan'
+import type { ClanQueries, ClanRefreshReservations } from '@brawltome/clan'
 import type { DiscoveryQueries } from '@brawltome/discovery'
 import type { Database } from '@brawltome/foundation'
 import type {
@@ -29,6 +29,7 @@ export interface Context {
   statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries & StatisticsHistoryQueries
   // the clan refresh still reads through the old closure until the refresh queue is replaced
   clanRepo: ClanQueries
+  clanRefreshReservations: ClanRefreshReservations
   accounts: Accounts
   clientIp: string
   isBot: boolean
