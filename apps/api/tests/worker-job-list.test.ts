@@ -252,6 +252,43 @@ describe('worker job list', () => {
     expect(resolvedWith).toEqual([evidenceResolver])
   })
 
+  test('both kinds run the Steam verification', async () => {
+    const leasesWithResolvers: Array<[string, unknown]> = []
+
+    const accounts: WorkerAccountsDependencies = {
+      accounts: {
+        resolvePrimaryPlayerVerification: async (attemptId, resolver) => {
+          leasesWithResolvers.push([attemptId, resolver])
+
+          return {} as never
+        },
+      },
+      createEvidenceResolver: () => evidenceResolver,
+    }
+
+    const { jobs } = createRecordingJobs(idleClanDependencies, accounts)
+
+    const proofKey = proofLease('primary-player:attempt')
+    const verificationLease = { ...proofKey, kind: 'primary-player-verification' }
+
+    const proofQueue = createProofQueueSpy()
+    const verificationQueue = createProofQueueSpy()
+
+    await jobOfKind(jobs, 'proof').run(proofKey, { queue: proofQueue.queue } as never)
+
+    await jobOfKind(jobs, 'primary-player-verification').run(verificationLease, {
+      queue: verificationQueue.queue,
+    } as never)
+
+    expect(leasesWithResolvers).toEqual([
+      ['attempt', evidenceResolver],
+      ['attempt', evidenceResolver],
+    ])
+
+    expect(proofQueue.steps).toEqual(['commit effect', 'complete'])
+    expect(verificationQueue.steps).toEqual(['commit effect', 'complete'])
+  })
+
   test('the proof job reads the proof effect table on an expired lease', async () => {
     const { jobs } = createRecordingJobs()
     const proof = jobOfKind(jobs, 'proof')
@@ -259,5 +296,6 @@ describe('worker job list', () => {
     expect(proof.workClasses).toEqual(workClasses)
     expect(proof.failureCode).toBe('proof_execution_failed')
     expect(proof.effectState).toBe(proofEffectState)
+    expect(jobOfKind(jobs, 'primary-player-verification').effectState).toBe(proofEffectState)
   })
 })

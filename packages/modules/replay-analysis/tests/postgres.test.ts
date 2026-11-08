@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { accountsModule } from '@brawltome/accounts'
+import type { BrawltomeModule } from '@brawltome/foundation'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import postgres from 'postgres'
 import { ActiveReplayJobError, type ReplayAnalysisJobs, replayAnalysisModule } from '../index'
@@ -12,8 +13,16 @@ let database: TestDatabase | undefined
 let control: ReturnType<typeof postgres>
 let jobs: ReplayAnalysisJobs
 
+// accounts depends on the queue because of its job, but nothing here touches a queue table, and this package may not
+// import the queue module to migrate it
+const queueModuleWithoutTables: BrawltomeModule = { name: 'refresh-operations', dependsOn: [], migrations: [] }
+
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'replay_analysis', modules: [accountsModule, replayAnalysisModule] })
+  database = await createTestDatabase({
+    label: 'replay_analysis',
+    modules: [queueModuleWithoutTables, accountsModule, replayAnalysisModule],
+  })
+
   control = postgres(database.connectionString, { max: 1 })
   await control`INSERT INTO accounts.users (id) VALUES (${accountId})`
   jobs = createPostgresReplayAnalysisJobs(database)

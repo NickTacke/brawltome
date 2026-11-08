@@ -4,6 +4,7 @@ import { reserveClanRefresh } from '@brawltome/clan'
 import type { Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import {
+  acceptOperation,
   type OperationLease,
   type PlayerRefreshSettled,
   refreshOperationsModule,
@@ -1740,6 +1741,7 @@ type EffectFixture = {
 
 const allKindsWithEffects = [
   'proof',
+  'primary-player-verification',
   'leaderboard-1v1',
   'statistics-ranked-collection',
   'statistics-publication',
@@ -1951,16 +1953,35 @@ async function recordInteractiveSection(
 
 async function recordNothing(): Promise<void> {}
 
+async function recordProofEffect(control: ControlClient, lease: OperationLease): Promise<void> {
+  await control`
+    INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+    VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
+            ${control.json({ value: 'proof' })})
+  `
+}
+
+async function acceptPrimaryPlayerVerification(): Promise<string> {
+  const accepted = await acceptOperation(database, {
+    kind: 'primary-player-verification',
+    dedupeKey: uniqueKey('claim-verification'),
+    operationKey: uniqueKey('claim-verification-effect'),
+    workClass: 'interactive',
+    payload: { value: 'attempt' },
+    provenance: claimTestProvenance,
+  })
+
+  return accepted.operationId
+}
+
 const effectFixtures: Record<KindWithEffects, EffectFixture> = {
   proof: {
     create: (operations) => acceptProof(operations),
-    recordEffect: async (control, lease) => {
-      await control`
-        INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
-        VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken},
-                ${control.json({ value: 'proof' })})
-      `
-    },
+    recordEffect: recordProofEffect,
+  },
+  'primary-player-verification': {
+    create: acceptPrimaryPlayerVerification,
+    recordEffect: recordProofEffect,
   },
   'leaderboard-1v1': {
     create: acceptLeaderboard,

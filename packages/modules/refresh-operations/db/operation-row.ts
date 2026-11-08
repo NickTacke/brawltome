@@ -144,6 +144,14 @@ export function toLease(row: OperationRow): OperationLease {
     return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
   }
 
+  if (row.kind === 'primary-player-verification') {
+    if (row.work_class !== 'interactive' || !('value' in row.payload)) {
+      throw new Error('invalid durable primary player verification operation')
+    }
+
+    return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
+  }
+
   if (row.kind !== 'proof' || !('value' in row.payload)) throw new Error('invalid durable proof operation')
 
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }

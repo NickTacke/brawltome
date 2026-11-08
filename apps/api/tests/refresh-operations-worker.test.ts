@@ -1805,6 +1805,7 @@ type WrappedKind = Exclude<
   | 'clan-discovery-projection'
   | 'discovery-reconciliation'
   | 'clan-refresh'
+  | 'primary-player-verification'
 >
 
 // every kind and the code its worker reports when the executor throws a plain error

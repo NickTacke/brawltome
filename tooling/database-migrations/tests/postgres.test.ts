@@ -741,6 +741,17 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             VALUES (${index + 1}, ${row.identity}, ${row.predecessor}, ${row.checksum})
           `
         }
+
+        // the history above is faked, so the one table a pending migration alters has to exist by hand
+        await client`CREATE SCHEMA refresh_operations`
+
+        await client`
+          CREATE TABLE refresh_operations.operations (
+            kind text NOT NULL CONSTRAINT operations_kind_check CHECK (true),
+            work_class text NOT NULL,
+            payload jsonb NOT NULL CONSTRAINT operations_payload_by_kind CHECK (true)
+          )
+        `
       } finally {
         await client.end()
       }

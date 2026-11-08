@@ -86,7 +86,12 @@ function entriesForKinds<Kind extends string>(
 }
 
 // these jobs live in their owning module and bring their effect checks with them
-type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation' | 'clan-refresh' | 'proof'
+type JobOwnedEffectKind =
+  | DiscoveryProjectionKind
+  | 'discovery-reconciliation'
+  | 'clan-refresh'
+  | 'proof'
+  | 'primary-player-verification'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect

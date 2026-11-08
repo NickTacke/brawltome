@@ -1,4 +1,4 @@
-import type { Accounts } from '@brawltome/accounts'
+import { createPrimaryPlayerVerificationJob, type PrimaryPlayerVerificationJobDependencies } from '@brawltome/accounts'
 import type { BhApiClientOptions } from '@brawltome/bhapi'
 import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
 import {
@@ -37,13 +37,7 @@ export type WorkerClanDependencies = {
   createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
 }
 
-type PrimaryPlayerEvidenceResolver = Parameters<Accounts['resolvePrimaryPlayerVerification']>[1]
-
-export type WorkerAccountsDependencies = {
-  accounts: Pick<Accounts, 'resolvePrimaryPlayerVerification'>
-  // the worker's Steam resolver, with every Brawlhalla call admitted under this lease
-  createEvidenceResolver(lease: Lease<ProofEffectPayload>): PrimaryPlayerEvidenceResolver
-}
+export type WorkerAccountsDependencies = PrimaryPlayerVerificationJobDependencies
 
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
@@ -92,10 +86,10 @@ function createClanJobs({ clans, createBrawlhallaClient }: WorkerClanDependencie
   return [clanRefresh]
 }
 
-function createProofJob({
-  accounts,
-  createEvidenceResolver,
-}: WorkerAccountsDependencies): JobDefinition<ProofEffectPayload> {
+// a proof row with a primary-player key is a verification written before the kind existed, or a replay of one
+function createProofJob(
+  primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
+): JobDefinition<ProofEffectPayload> {
   return defineJob<ProofEffectPayload>({
     kind: 'proof',
     workClasses,
@@ -103,10 +97,8 @@ function createProofJob({
     // claim already shapes this payload
     parsePayload: (value) => value as ProofEffectPayload,
     effectState: proofEffectState,
-    async run(lease, tools) {
-      if (lease.operationKey.startsWith('primary-player:')) {
-        await accounts.resolvePrimaryPlayerVerification(lease.payload.value, createEvidenceResolver(lease))
-      }
+    run(lease, tools) {
+      if (lease.operationKey.startsWith('primary-player:')) return primaryPlayerVerification.run(lease, tools)
 
       return completeWithProofEffect(lease, tools)
     },
@@ -121,10 +113,13 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     telemetry: dependencies.telemetry,
   })
 
+  const primaryPlayerVerification = createPrimaryPlayerVerificationJob(dependencies.accounts)
+
   return [
     rankingRetention,
     ...createDiscoveryJobs(dependencies.discovery),
     ...createClanJobs(dependencies.clan),
-    createProofJob(dependencies.accounts),
+    primaryPlayerVerification,
+    createProofJob(primaryPlayerVerification),
   ]
 }

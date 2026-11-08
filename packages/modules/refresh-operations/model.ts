@@ -474,6 +474,7 @@ export type FreshnessAttempt = { brawlhallaId: number; lastPlannedAt: Date | nul
 
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
+  | (LeaseFields & { kind: 'primary-player-verification'; workClass: 'interactive'; payload: { value: string } })
   | (LeaseFields & {
       kind: 'interactive-player-refresh'
       workClass: 'interactive'

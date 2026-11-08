@@ -647,7 +647,9 @@ export function createPostgresRefreshOperations(
     ) => commitSection(database, lease, section),
 
     async commitProofEffect(lease: Lease<{ value: string }>): Promise<FencedResult> {
-      if (lease.kind !== 'proof') throw new Error('commitProofEffect requires a proof operation')
+      if (lease.kind !== 'proof' && lease.kind !== 'primary-player-verification') {
+        throw new Error('commitProofEffect requires a proof operation')
+      }
 
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as typeof client
@@ -661,7 +663,7 @@ export function createPostgresRefreshOperations(
           }[]
         >`
           SELECT id, effect_operation_id, operation_key, payload FROM refresh_operations.operations
-          WHERE id = ${lease.operationId} AND kind = 'proof' AND status = 'leased'
+          WHERE id = ${lease.operationId} AND kind = ${lease.kind} AND status = 'leased'
             AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
             AND lease_expires_at > clock_timestamp()
           FOR UPDATE

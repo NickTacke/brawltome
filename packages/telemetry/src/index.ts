@@ -175,6 +175,7 @@ const deepCrawlRegion = [...rankedRegions, 'other'] as const
 
 const operationKind = [
   'proof',
+  'primary-player-verification',
   'interactive-player-refresh',
   'clan-refresh',
   'ranked-player-pulse',
