@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NameVerificationPreparation } from '@brawltome/player'
+import { SourceAdmissionLimitedError } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createPlayerNameVerificationPlanner,
@@ -7,7 +8,6 @@ import {
   readPlayerNameVerificationConfig,
   sourceBudgetOpen,
 } from '../src/player-name-verification'
-import { SourceAdmissionLimitedError } from '../src/refresh-operations-worker'
 
 const config = readPlayerNameVerificationConfig({})
 const candidate = { brawlhallaId: 7, playerName: 'New', v0Name: 'Old' }

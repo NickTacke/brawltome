@@ -26,6 +26,21 @@ import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
+export { validateAdmissionConfig } from './domain/admission'
+export {
+  type DeferCategory,
+  decideExecutionFailure,
+  decideSourceFailure,
+  type FailureDecision,
+  type RetryTimings,
+  sourceWaitMs,
+} from './domain/failure-decision'
+export {
+  failureDetails,
+  JobLeaseLostError,
+  SourceAdmissionLimitedError,
+  sourceRetryAfterMs,
+} from './domain/job-errors'
 export {
   acquireActiveLease,
   commitInteractiveSection,

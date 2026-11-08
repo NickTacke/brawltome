@@ -12,11 +12,21 @@ import {
   type RankingPublicationStore,
   type RankingRetentionStore,
 } from '@brawltome/ranking'
-import type {
-  AdmissionConfig,
-  FencedResult,
-  OperationLease,
-  RefreshOperationWorker,
+import {
+  type AdmissionConfig,
+  decideExecutionFailure,
+  decideSourceFailure,
+  type FailureDecision,
+  type FencedResult,
+  failureDetails,
+  type OperationFailure,
+  type OperationLease,
+  type RefreshOperationWorker,
+  type RetryTimings,
+  SourceAdmissionLimitedError,
+  sourceRetryAfterMs,
+  sourceWaitMs,
+  type TransitionResult,
 } from '@brawltome/refresh-operations'
 import type { ActorAdmission, SourceAdmission, SourceDomain } from '@brawltome/request-admission'
 import type { LifetimeEvidence, RankedEvidence, StatisticsTracer } from '@brawltome/statistics'
@@ -163,48 +173,6 @@ type RunOneRefreshOperationOptions = {
 
 type ActiveClanAuthority = { lease: ClanLease; section: 'profile' | 'roster' } | null
 
-export class SourceAdmissionLimitedError extends Error {
-  constructor(readonly retryAfterSeconds: number) {
-    super('Source admission is rate limited')
-  }
-}
-
-// Brawlhalla answers 502/503/504 during maintenance and outages. Find such an error anywhere in the cause chain so
-// the attempt can wait for the source instead of spending retries in seconds and dead-lettering.
-function unavailableSourceDomain(error: unknown): SourceDomain | null {
-  for (let current = error, depth = 0; current && depth < 5; depth++) {
-    if (
-      typeof current === 'object' &&
-      'status' in current &&
-      (current.status === 502 || current.status === 503 || current.status === 504) &&
-      'domain' in current &&
-      (current.domain === 'brawlhalla-v0' || current.domain === 'brawlhalla-v1')
-    ) {
-      return current.domain
-    }
-
-    current = typeof current === 'object' && 'cause' in current ? current.cause : undefined
-  }
-
-  return null
-}
-
-function sourceRetryAfterMs(error: unknown): number | null {
-  if (error instanceof SourceAdmissionLimitedError) return error.retryAfterSeconds * 1_000
-
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'retryAfterMs' in error &&
-    typeof error.retryAfterMs === 'number' &&
-    Number.isFinite(error.retryAfterMs)
-  ) {
-    return Math.max(0, error.retryAfterMs)
-  }
-
-  return null
-}
-
 export function retryDelayForAttempt(
   attemptNumber: number,
   policy: { baseDelayMs: number; multiplier: number; maxDelayMs: number; jitterRatio: number; random: () => number },
@@ -312,19 +280,194 @@ export async function reconcileInteractiveAdmissions(
 
 const safeFailureCode = /^[a-z0-9_.-]{1,64}$/i
 
-function failureDetails(error: unknown, fallbackCode: string) {
-  if (error && typeof error === 'object') {
+type AttemptExecutionOutcome = 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost'
+
+type FailureCategory =
+  | 'admission_deferred'
+  | 'source_rate_limited'
+  | 'source_unavailable'
+  | 'execution'
+  | 'lease_lost'
+  | 'unknown'
+
+type FailureSettlement = { outcome: AttemptExecutionOutcome; category: FailureCategory }
+
+// a new lease kind fails typecheck here until it names its failure code
+const failureCodeByKind: Record<OperationLease['kind'], string> = {
+  proof: 'proof_execution_failed',
+  'interactive-player-refresh': 'interactive_player_refresh_failed',
+  'clan-refresh': 'clan_refresh_failed',
+  'player-discovery-projection': 'player_discovery_projection_failed',
+  'clan-discovery-projection': 'clan_discovery_projection_failed',
+  'discovery-reconciliation': 'discovery_reconciliation_failed',
+  'ranked-player-pulse': 'ranked_player_pulse_failed',
+  'player-name-verification': 'player_name_verification_failed',
+  'ranking-retention': 'ranking_retention_failed',
+  'leaderboard-deep-crawl': 'leaderboard_deep_crawl_failed',
+  'statistics-ranked-collection': 'statistics_collection_failed',
+  'statistics-lifetime-collection': 'statistics_collection_failed',
+  'statistics-publication': 'statistics_publication_failed',
+  'statistics-legend-meta-publication': 'statistics_legend_meta_publication_failed',
+  'leaderboard-1v1': 'leaderboard_collection_failed',
+  'leaderboard-2v2': 'leaderboard_collection_failed',
+  'leaderboard-solo-2v2': 'leaderboard_collection_failed',
+  'leaderboard-3v3': 'leaderboard_collection_failed',
+}
+
+const leaseLostSettlement: FailureSettlement = { outcome: 'lease_lost', category: 'lease_lost' }
+
+function recordTelemetry(telemetry: Telemetry | undefined, recording: (active: Telemetry) => void): void {
+  if (!telemetry) return
+
+  try {
+    recording(telemetry)
+  } catch {
+    return
+  }
+}
+
+function isProjectionLease(lease: OperationLease): lease is ProjectionLease {
+  return lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection'
+}
+
+function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecision | null {
+  if (error instanceof LeaderboardLeaseLostError) return { action: 'lease-lost' }
+
+  if (error instanceof LeaderboardDeepCrawlYield) {
     return {
-      code: 'code' in error && typeof error.code === 'string' ? error.code : fallbackCode,
-      message: 'message' in error && typeof error.message === 'string' ? error.message : 'Unknown operation failure',
-      retryable: !('retryable' in error) || error.retryable !== false,
+      action: 'defer',
+      failure: { code: 'deep_crawl_yield', message: error.message, retryable: true },
+      delayMs: 0,
+      category: 'admission_deferred',
     }
   }
 
-  return { code: fallbackCode, message: 'Unknown operation failure', retryable: true }
+  if (error instanceof LeaderboardSourceError && error.retryable) {
+    return {
+      action: 'defer',
+      failure: failureDetails(error, error.code),
+      delayMs: sourceWaitMs(retry),
+      category: error.code === 'source_rate_limited' ? 'source_rate_limited' : 'source_unavailable',
+    }
+  }
+
+  return null
 }
 
-type AttemptExecutionOutcome = 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost'
+async function decideProjectionEffectFailure(
+  lease: OperationLease,
+  options: RunOneRefreshOperationOptions,
+): Promise<FailureDecision | null> {
+  if (!isProjectionLease(lease)) return null
+
+  let effectState: 'none' | 'applied' | 'acknowledged' = 'none'
+
+  try {
+    if (options.projectionEffectState) {
+      effectState = await options.projectionEffectState(lease.kind, lease.effectOperationId)
+    } else if (lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState) {
+      effectState = await options.playerProjectionEffectState(lease.effectOperationId)
+    }
+  } catch {
+    return { action: 'retry-applied-effect' }
+  }
+
+  if (effectState === 'acknowledged') return { action: 'complete' }
+
+  if (effectState === 'applied') return { action: 'retry-applied-effect' }
+
+  return null
+}
+
+// order matters: a source outage on a projection whose effect landed must still wait for the source
+async function decideJobFailure(
+  lease: OperationLease,
+  error: unknown,
+  options: RunOneRefreshOperationOptions,
+): Promise<FailureDecision> {
+  const retry = {
+    retryDelayMs: options.retryDelayMs,
+    sourceUnavailableRetryMs: options.sourceUnavailableRetryMs ?? 60_000,
+  }
+
+  const rankingDecision = decideRankingFailure(error, retry)
+
+  if (rankingDecision) return rankingDecision
+
+  const sourceDecision = decideSourceFailure(error, retry)
+
+  if (sourceDecision) return sourceDecision
+
+  const effectDecision = await decideProjectionEffectFailure(lease, options)
+
+  if (effectDecision) return effectDecision
+
+  return decideExecutionFailure(error, failureCodeByKind[lease.kind], executionRetryDelayMs(lease, options))
+}
+
+function settledUnlessLeaseLost(transition: TransitionResult, settled: FailureSettlement): FailureSettlement {
+  return transition === 'lease-lost' ? leaseLostSettlement : settled
+}
+
+// Pausing the source holds every other caller too, instead of each discovering the outage on its own.
+async function pauseSource(
+  options: RunOneRefreshOperationOptions,
+  pause: { domain: SourceDomain; seconds: number },
+): Promise<void> {
+  try {
+    await options.sourceAdmission?.pauseSource(pause.domain, pause.seconds)
+  } catch (pauseError) {
+    recordTelemetry(options.telemetry, (active) =>
+      active.logger.error('source.backoff.persist_failed', pauseError, { domain: pause.domain }),
+    )
+  }
+}
+
+function failedAttemptOutcome(lease: OperationLease, failure: OperationFailure): AttemptExecutionOutcome {
+  const hasAttemptsLeft = failure.retryable && lease.attemptNumber < lease.maxAttempts
+
+  return hasAttemptsLeft ? 'retry' : 'dead_letter'
+}
+
+async function settleFailure(
+  operations: RefreshOperationWorker,
+  lease: OperationLease,
+  options: RunOneRefreshOperationOptions,
+  decision: FailureDecision,
+): Promise<FailureSettlement> {
+  if (decision.action === 'lease-lost') return leaseLostSettlement
+
+  if (decision.action === 'complete') {
+    const transition = await operations.complete(lease)
+
+    return settledUnlessLeaseLost(transition, { outcome: 'succeeded', category: 'unknown' })
+  }
+
+  if (decision.action === 'retry-applied-effect') {
+    if (!isProjectionLease(lease)) {
+      throw new Error(`settle failure for operation ${lease.operationId}: ${lease.kind} has no applied effect to retry`)
+    }
+
+    const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
+
+    return settledUnlessLeaseLost(transition, { outcome: 'retry', category: 'execution' })
+  }
+
+  if (decision.action === 'defer') {
+    if (decision.pauseSource) await pauseSource(options, decision.pauseSource)
+
+    const transition = await operations.defer(lease, decision.failure, decision.delayMs)
+
+    return settledUnlessLeaseLost(transition, { outcome: 'retry', category: decision.category })
+  }
+
+  const transition = await operations.fail(lease, decision.failure, decision.delayMs)
+
+  return settledUnlessLeaseLost(transition, {
+    outcome: failedAttemptOutcome(lease, decision.failure),
+    category: decision.category,
+  })
+}
 
 async function executeProof(
   operations: RefreshOperationWorker,
@@ -1370,13 +1513,7 @@ export async function runOneRefreshOperation(
   const telemetry = options.telemetry
 
   function record(recording: (active: Telemetry) => void): void {
-    if (!telemetry) return
-
-    try {
-      recording(telemetry)
-    } catch {
-      return
-    }
+    recordTelemetry(telemetry, recording)
   }
 
   const claimStarted = performance.now()
@@ -1392,15 +1529,8 @@ export async function runOneRefreshOperation(
   const lease: OperationLease = claimed
 
   const started = performance.now()
-  let attemptOutcome: 'succeeded' | 'retry' | 'dead_letter' | 'lease_lost' = 'succeeded'
-
-  let failureCategory:
-    | 'admission_deferred'
-    | 'source_rate_limited'
-    | 'source_unavailable'
-    | 'execution'
-    | 'lease_lost'
-    | 'unknown' = 'unknown'
+  let attemptOutcome: AttemptExecutionOutcome = 'succeeded'
+  let failureCategory: FailureCategory = 'unknown'
 
   async function executeClaimed(): Promise<boolean> {
     record((active) =>
@@ -1457,174 +1587,37 @@ export async function runOneRefreshOperation(
 
       if (attemptOutcome === 'lease_lost') failureCategory = 'lease_lost'
     } catch (error) {
-      if (error instanceof LeaderboardLeaseLostError) {
-        attemptOutcome = 'lease_lost'
-        failureCategory = 'lease_lost'
+      const decision = await decideJobFailure(lease, error, options)
 
-        return true
+      // set before the write so a rejected write still counts as a failed attempt
+      if (decision.action === 'fail') {
+        attemptOutcome = failedAttemptOutcome(lease, decision.failure)
+        failureCategory = decision.category
       }
 
-      if (error instanceof LeaderboardDeepCrawlYield) {
-        const transition = await operations.defer(
-          lease,
-          { code: 'deep_crawl_yield', message: error.message, retryable: true },
-          0,
+      const settlement = await settleFailure(operations, lease, options, decision)
+
+      attemptOutcome = settlement.outcome
+      failureCategory = settlement.category
+
+      if (decision.action === 'fail') {
+        const failure = decision.failure
+
+        record((active) =>
+          active.logger.error('operation.attempt.failed', error, {
+            operationId: lease.operationId,
+            effectOperationId: lease.effectOperationId,
+            attemptNumber: lease.attemptNumber,
+            kind: lease.kind,
+            workClass: lease.workClass,
+            outcome: attemptOutcome,
+            failureCategory,
+            ...(safeFailureCode.test(failure.code) ? { failureCode: failure.code } : {}),
+          }),
         )
-
-        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
-
-        return true
       }
 
-      if (error instanceof SourceAdmissionLimitedError) {
-        const transition = await operations.defer(
-          lease,
-          failureDetails(error, 'source_rate_limited'),
-          error.retryAfterSeconds * 1_000,
-        )
-
-        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'admission_deferred'
-
-        return true
-      }
-
-      if (error instanceof LeaderboardSourceError && error.retryable) {
-        const transition = await operations.defer(
-          lease,
-          failureDetails(error, error.code),
-          Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs),
-        )
-
-        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-
-        failureCategory =
-          transition === 'lease-lost'
-            ? 'lease_lost'
-            : error.code === 'source_rate_limited'
-              ? 'source_rate_limited'
-              : 'source_unavailable'
-
-        return true
-      }
-
-      const unavailableDomain = unavailableSourceDomain(error)
-
-      if (unavailableDomain) {
-        const retryMs = Math.max(60_000, options.sourceUnavailableRetryMs ?? 60_000, options.retryDelayMs)
-
-        // Pausing the source holds every other caller too, instead of each discovering the outage on its own.
-        try {
-          await options.sourceAdmission?.pauseSource(unavailableDomain, Math.ceil(retryMs / 1_000))
-        } catch (pauseError) {
-          record((active) =>
-            active.logger.error('source.backoff.persist_failed', pauseError, { domain: unavailableDomain }),
-          )
-        }
-
-        const transition = await operations.defer(lease, failureDetails(error, 'source_unavailable'), retryMs)
-
-        attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-        failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'source_unavailable'
-
-        return true
-      }
-
-      if (lease.kind === 'player-discovery-projection' || lease.kind === 'clan-discovery-projection') {
-        let effectState: 'none' | 'applied' | 'acknowledged'
-
-        try {
-          effectState = options.projectionEffectState
-            ? await options.projectionEffectState(lease.kind, lease.effectOperationId)
-            : lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState
-              ? await options.playerProjectionEffectState(lease.effectOperationId)
-              : 'none'
-        } catch {
-          const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
-
-          attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-          failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
-
-          return true
-        }
-
-        if (effectState === 'acknowledged') {
-          const transition = await operations.complete(lease)
-
-          attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'succeeded'
-          failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'unknown'
-
-          return true
-        }
-
-        if (effectState === 'applied') {
-          const transition = await operations.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
-
-          attemptOutcome = transition === 'lease-lost' ? 'lease_lost' : 'retry'
-          failureCategory = transition === 'lease-lost' ? 'lease_lost' : 'execution'
-
-          return true
-        }
-      }
-
-      const sourceRetryMs = sourceRetryAfterMs(error)
-
-      const fallbackCode =
-        sourceRetryMs !== null
-          ? 'source_rate_limited'
-          : lease.kind === 'proof'
-            ? 'proof_execution_failed'
-            : lease.kind === 'interactive-player-refresh'
-              ? 'interactive_player_refresh_failed'
-              : lease.kind === 'clan-refresh'
-                ? 'clan_refresh_failed'
-                : lease.kind === 'player-discovery-projection'
-                  ? 'player_discovery_projection_failed'
-                  : lease.kind === 'clan-discovery-projection'
-                    ? 'clan_discovery_projection_failed'
-                    : lease.kind === 'discovery-reconciliation'
-                      ? 'discovery_reconciliation_failed'
-                      : lease.kind === 'ranked-player-pulse'
-                        ? 'ranked_player_pulse_failed'
-                        : lease.kind === 'player-name-verification'
-                          ? 'player_name_verification_failed'
-                          : lease.kind === 'ranking-retention'
-                            ? 'ranking_retention_failed'
-                            : lease.kind === 'leaderboard-deep-crawl'
-                              ? 'leaderboard_deep_crawl_failed'
-                              : lease.kind === 'statistics-ranked-collection' ||
-                                  lease.kind === 'statistics-lifetime-collection'
-                                ? 'statistics_collection_failed'
-                                : lease.kind === 'statistics-publication'
-                                  ? 'statistics_publication_failed'
-                                  : lease.kind === 'statistics-legend-meta-publication'
-                                    ? 'statistics_legend_meta_publication_failed'
-                                    : 'leaderboard_collection_failed'
-
-      const failure = failureDetails(error, fallbackCode)
-
-      attemptOutcome = failure.retryable && lease.attemptNumber < lease.maxAttempts ? 'retry' : 'dead_letter'
-      failureCategory = sourceRetryMs !== null ? 'source_rate_limited' : 'execution'
-      if (
-        (await operations.fail(lease, failure, sourceRetryMs ?? executionRetryDelayMs(lease, options))) === 'lease-lost'
-      ) {
-        attemptOutcome = 'lease_lost'
-        failureCategory = 'lease_lost'
-      }
-
-      record((active) =>
-        active.logger.error('operation.attempt.failed', error, {
-          operationId: lease.operationId,
-          effectOperationId: lease.effectOperationId,
-          attemptNumber: lease.attemptNumber,
-          kind: lease.kind,
-          workClass: lease.workClass,
-          outcome: attemptOutcome,
-          failureCategory,
-          ...(safeFailureCode.test(failure.code) ? { failureCode: failure.code } : {}),
-        }),
-      )
+      return true
     } finally {
       renewal.abort()
       await renewalLoop
