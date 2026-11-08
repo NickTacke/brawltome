@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
+import { createSchedule } from './db/create-schedule'
+import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStateEntry, EffectStates } from './db/effect-states'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
@@ -7,7 +9,9 @@ import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
 import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
+import { materializeDueSchedules } from './db/materialize-due-schedules'
 import { readOperationStatus } from './db/read-operation-status'
+import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
 import { wakeupChannel } from './db/wakeup'
 import {
   type AdmissionCreditRow,
@@ -16,6 +20,10 @@ import {
   validateAdmissionConfig,
 } from './domain/admission'
 import { isDiscoveryProjectionKind, isLeaderboardKind, isStatisticsCollectionKind } from './domain/operation-kinds'
+import {
+  type PrimaryMonitoringScheduleDefinition,
+  validatePrimaryMonitoringSchedule,
+} from './domain/schedule-definition'
 import type { EffectState } from './jobs/job-definition'
 import {
   type AcceptOperation,
@@ -27,7 +35,6 @@ import {
   type CreateLeaderboardSchedule,
   type CreateRankingRetentionSchedule,
   type CreateSchedule,
-  type CreateScheduleResult,
   type DeadLetterDispositionInput,
   type DeadLetterOperations,
   type FencedResult,
@@ -36,10 +43,7 @@ import {
   type InteractiveClanRefreshReservation,
   type InteractivePlayerRefreshReservation,
   interactiveRefreshMaxAttempts,
-  type LeaderboardDeepCrawlPayload,
-  type LeaderboardOperationKind,
   type ListDeadLettersInput,
-  type MaterializeSchedulesResult,
   type OperationFailure,
   type OperationLease,
   type PlayerRefreshSettled,
@@ -55,14 +59,11 @@ import {
   type ReserveStatisticsPublication,
   recentlyViewedCohort,
   type TransitionResult,
-  validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
-  validateRankingRetentionPayload,
   type WorkClass,
 } from './model'
 
 const admissionLockId = 1_920_192
-const utcDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
 
 type OperationRow = {
   id: string
@@ -79,51 +80,6 @@ type OperationRow = {
   max_attempts: number
   status: string
   scheduled_window_at: Date | null
-}
-
-type ScheduleRow = {
-  id: string
-  schedule_key: string
-  kind:
-    | 'proof'
-    | 'interactive-player-refresh'
-    | LeaderboardOperationKind
-    | 'ranking-retention'
-    | 'leaderboard-deep-crawl'
-  work_class: WorkClass
-  interval_ms: string | number
-  first_due_at: Date
-  next_window_number: string | number
-  next_due_at: Date
-  operation_key_prefix: string
-  resource_key: string | null
-  payload:
-    | { value: string }
-    | { pageDepth: number; intervalMs: number }
-    | { retentionHours: number; maxGenerations: number }
-    | { mode?: string; region: string; intervalMs: number }
-    | { assignmentId: string; brawlhallaId: number; staleSections: ['ranked', 'stats'] }
-  provenance: { source: string; requestedBy?: string }
-  max_attempts: number
-  materialized_at: Date
-  due_window_count: string | number
-}
-
-type PrimaryMonitoringScheduleDefinition = {
-  kind: 'interactive-player-refresh'
-  scheduleKey: string
-  operationKeyPrefix: string
-  resourceKey: string
-  workClass: 'primary-monitoring'
-  intervalMs: typeof primaryMonitoringIntervalMs
-  firstDueAt: string
-  payload: {
-    assignmentId: string
-    brawlhallaId: number
-    staleSections: ['ranked', 'stats']
-  }
-  provenance: { source: string; requestedBy: string }
-  maxAttempts: number
 }
 
 function toLease(row: OperationRow): OperationLease {
@@ -257,23 +213,6 @@ function toLease(row: OperationRow): OperationLease {
   return { ...common, kind: row.kind, workClass: row.work_class, payload: row.payload }
 }
 
-function parseFirstDueAt(value: string): Date {
-  if (!utcDateTime.test(value)) throw new Error('firstDueAt must be an ISO-8601 UTC timestamp ending in Z')
-
-  const parsed = new Date(value)
-
-  const normalized = value.replace(
-    /(?:\.(\d{1,3}))?Z$/,
-    (_, fraction: string | undefined) => `.${(fraction ?? '').padEnd(3, '0')}Z`,
-  )
-
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== normalized) {
-    throw new Error('firstDueAt must be a valid timestamp')
-  }
-
-  return parsed
-}
-
 function readEffectState(
   effects: EffectStateEntry | undefined,
   sql: Database['sql'],
@@ -288,77 +227,6 @@ function readEffectState(
   })
 }
 
-function validateScheduleIdentity(input: {
-  scheduleKey: string
-  operationKeyPrefix: string
-  intervalMs: number
-  firstDueAt: string
-}): Date {
-  if (!input.scheduleKey || input.scheduleKey.length > 200) {
-    throw new Error('scheduleKey must contain between 1 and 200 characters')
-  }
-
-  if (!input.operationKeyPrefix || input.operationKeyPrefix.length > 200) {
-    throw new Error('operationKeyPrefix must contain between 1 and 200 characters')
-  }
-
-  if (!Number.isSafeInteger(input.intervalMs) || input.intervalMs <= 0) {
-    throw new Error('intervalMs must be a positive safe integer')
-  }
-
-  return parseFirstDueAt(input.firstDueAt)
-}
-
-function validateSchedule(input: CreateSchedule): Date {
-  const firstDueAt = validateScheduleIdentity(input)
-  const kind = input.kind ?? 'proof'
-
-  if (isLeaderboardKind(kind)) {
-    const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
-
-    if (payload.intervalMs !== input.intervalMs) {
-      throw new Error('leaderboard payload intervalMs must match the schedule intervalMs')
-    }
-  }
-
-  if (kind === 'ranking-retention') {
-    if (input.workClass !== 'maintenance') throw new Error('ranking retention requires maintenance work class')
-
-    validateRankingRetentionPayload(input.payload as { retentionHours: number; maxGenerations: number })
-  }
-
-  if (kind === 'leaderboard-deep-crawl') {
-    if (input.workClass !== 'leaderboard') throw new Error('leaderboard deep crawl requires leaderboard work class')
-
-    const payload = validateLeaderboardDeepCrawlPayload(input.payload as LeaderboardDeepCrawlPayload)
-
-    if (payload.intervalMs !== input.intervalMs) {
-      throw new Error('leaderboard deep crawl payload intervalMs must match the schedule intervalMs')
-    }
-  }
-
-  return firstDueAt
-}
-
-function validatePrimaryMonitoringSchedule(input: PrimaryMonitoringScheduleDefinition): Date {
-  const firstDueAt = validateScheduleIdentity(input)
-  const { payload } = input
-
-  if (input.resourceKey !== `player:${payload.brawlhallaId}`) {
-    throw new Error('Primary monitoring requires a canonical player resource key')
-  }
-
-  if (!Number.isSafeInteger(payload.brawlhallaId) || payload.brawlhallaId <= 0) {
-    throw new Error('Primary monitoring requires a positive safe Brawlhalla ID')
-  }
-
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.assignmentId)) {
-    throw new Error('Primary monitoring requires a UUID assignmentId')
-  }
-
-  return firstDueAt
-}
-
 export type RefreshOperationsDatabases = {
   database: Database
   // lease renewals run here so a busy main pool can never let a running lease expire; defaults to database
@@ -371,99 +239,6 @@ export function createPostgresRefreshOperations(
 ) {
   const client = database.sql
   const renewalClient = renewals.sql
-
-  // Fixed schedules are owned by worker configuration: a changed definition retires the old schedule and starts
-  // a new one under the same key instead of rewriting history.
-  async function disableFixedSchedule(
-    scheduleKey: string,
-    kind: 'ranking-retention' | 'leaderboard-deep-crawl',
-  ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
-    return client.begin(async (transaction) => {
-      const sql = transaction as unknown as typeof client
-
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${scheduleKey}))`
-
-      const [existing] = await sql<{ id: string; enabled: boolean }[]>`
-        SELECT id, enabled FROM refresh_operations.schedules
-        WHERE schedule_key = ${scheduleKey} AND kind = ${kind}
-        FOR UPDATE
-      `
-
-      if (!existing) return { outcome: 'absent' as const }
-
-      if (!existing.enabled) return { outcome: 'already-disabled' as const }
-
-      await sql`
-        UPDATE refresh_operations.schedules SET enabled = false, updated_at = clock_timestamp()
-        WHERE id = ${existing.id}
-      `
-
-      return { outcome: 'disabled' as const }
-    })
-  }
-
-  async function reconcileFixedSchedule(
-    input: CreateLeaderboardSchedule | CreateRankingRetentionSchedule | CreateLeaderboardDeepCrawlSchedule,
-    options: { reenable?: boolean } = {},
-  ): Promise<CreateScheduleResult> {
-    const firstDueAt = validateSchedule(input)
-
-    return client.begin(async (transaction) => {
-      const sql = transaction as unknown as typeof client
-
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${input.scheduleKey}))`
-
-      const [existing] = await sql<{ id: string; enabled: boolean; matches: boolean }[]>`
-        SELECT id, enabled,
-          kind = ${input.kind}
-          AND work_class = ${input.workClass}
-          AND interval_ms = ${input.intervalMs}
-          AND first_due_at = ${firstDueAt}
-          AND operation_key_prefix = ${input.operationKeyPrefix}
-          AND payload = ${sql.json(input.payload)}::jsonb
-          AND provenance = ${sql.json(input.provenance)}::jsonb
-          AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-        FROM refresh_operations.schedules
-        WHERE schedule_key = ${input.scheduleKey}
-        FOR UPDATE
-      `
-
-      if (existing?.matches && options.reenable && !existing.enabled) {
-        await sql`
-          UPDATE refresh_operations.schedules SET enabled = true, updated_at = clock_timestamp()
-          WHERE id = ${existing.id}
-        `
-
-        return { outcome: 'reconciled' as const, scheduleId: existing.id }
-      }
-
-      if (existing?.matches) return { outcome: 'already-exists' as const, scheduleId: existing.id }
-
-      if (existing) {
-        await sql`
-          UPDATE refresh_operations.schedules
-          SET enabled = false,
-              schedule_key = schedule_key || ':retired:' || id::text,
-              updated_at = clock_timestamp()
-          WHERE id = ${existing.id}
-        `
-      }
-
-      const scheduleId = randomUUID()
-
-      await sql`
-        INSERT INTO refresh_operations.schedules
-          (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at,
-           operation_key_prefix, payload, provenance, max_attempts)
-        VALUES
-          (${scheduleId}, ${input.scheduleKey}, ${input.kind}, ${input.workClass}, ${input.intervalMs},
-           ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix}, ${sql.json(input.payload)},
-           ${sql.json(input.provenance)}, ${input.maxAttempts ?? 3})
-      `
-
-      return { outcome: existing ? ('reconciled' as const) : ('created' as const), scheduleId }
-    })
-  }
 
   return {
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
@@ -1293,54 +1068,13 @@ export function createPostgresRefreshOperations(
       })
     },
 
-    async createSchedule(input: CreateSchedule): Promise<CreateScheduleResult> {
-      const firstDueAt = validateSchedule(input)
-      const kind = input.kind ?? 'proof'
-      const scheduleId = randomUUID()
+    createSchedule: (input: CreateSchedule) => createSchedule(database, input),
 
-      const [created] = await client<{ id: string }[]>`
-        INSERT INTO refresh_operations.schedules
-          (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
-           operation_key_prefix, payload, provenance, max_attempts)
-        VALUES
-          (${scheduleId}, ${input.scheduleKey}, ${kind}, NULL,
-           ${input.workClass}, ${input.intervalMs}, ${firstDueAt}, ${firstDueAt}, ${input.operationKeyPrefix},
-           ${client.json(input.payload)},
-           ${client.json(input.provenance)}, ${input.maxAttempts ?? 3})
-        ON CONFLICT (schedule_key) DO NOTHING
-        RETURNING id
-      `
+    reconcileLeaderboardSchedule: (input: CreateLeaderboardSchedule) =>
+      reconcileFixedSchedule(database, { schedule: input }),
 
-      if (created) return { outcome: 'created', scheduleId: created.id }
-
-      const [existing] = await client<{ id: string; matches: boolean }[]>`
-        SELECT id,
-          kind = ${kind}
-          AND resource_key IS NULL
-          AND work_class = ${input.workClass}
-          AND interval_ms = ${input.intervalMs}
-          AND first_due_at = ${firstDueAt}
-          AND operation_key_prefix = ${input.operationKeyPrefix}
-          AND payload = ${client.json(input.payload)}::jsonb
-          AND provenance = ${client.json(input.provenance)}::jsonb
-          AND max_attempts = ${input.maxAttempts ?? 3} AS matches
-        FROM refresh_operations.schedules
-        WHERE schedule_key = ${input.scheduleKey}
-      `
-
-      if (!existing?.matches) throw new Error(`scheduleKey ${input.scheduleKey} already has a different definition`)
-
-      return { outcome: 'already-exists', scheduleId: existing.id }
-    },
-
-    async reconcileLeaderboardSchedule(input: CreateLeaderboardSchedule): Promise<CreateScheduleResult> {
-      return reconcileFixedSchedule(input)
-    },
-
-    // Worker configuration owns this schedule's enabled flag: reconciling turns a paused schedule back on.
-    async reconcileRankingRetentionSchedule(input: CreateRankingRetentionSchedule): Promise<CreateScheduleResult> {
-      return reconcileFixedSchedule(input, { reenable: true })
-    },
+    reconcileRankingRetentionSchedule: (input: CreateRankingRetentionSchedule) =>
+      reconcileFixedSchedule(database, { schedule: input, reenable: true }),
 
     // 1v1 progress stays in the original per-region table; the other modes use the per-mode table.
     async readLeaderboardDeepCrawlProgress(
@@ -1390,213 +1124,16 @@ export function createPostgresRefreshOperations(
       `
     },
 
-    async reconcileLeaderboardDeepCrawlSchedule(
-      input: CreateLeaderboardDeepCrawlSchedule,
-    ): Promise<CreateScheduleResult> {
-      return reconcileFixedSchedule(input, { reenable: true })
-    },
+    reconcileLeaderboardDeepCrawlSchedule: (input: CreateLeaderboardDeepCrawlSchedule) =>
+      reconcileFixedSchedule(database, { schedule: input, reenable: true }),
 
-    async disableLeaderboardDeepCrawlSchedule(
-      scheduleKey: string,
-    ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
-      return disableFixedSchedule(scheduleKey, 'leaderboard-deep-crawl')
-    },
+    disableLeaderboardDeepCrawlSchedule: (scheduleKey: string) =>
+      disableFixedSchedule(database, { scheduleKey, kind: 'leaderboard-deep-crawl' }),
 
-    async disableRankingRetentionSchedule(
-      scheduleKey: string,
-    ): Promise<{ outcome: 'disabled' | 'already-disabled' | 'absent' }> {
-      return disableFixedSchedule(scheduleKey, 'ranking-retention')
-    },
+    disableRankingRetentionSchedule: (scheduleKey: string) =>
+      disableFixedSchedule(database, { scheduleKey, kind: 'ranking-retention' }),
 
-    async materializeDueSchedules(limit = 100): Promise<MaterializeSchedulesResult> {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
-        throw new Error('schedule materialization limit must be an integer between 1 and 1000')
-      }
-
-      const result = await client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        const [clock] = await sql<{ materialized_at: Date }[]>`
-          SELECT clock_timestamp() AS materialized_at
-        `
-
-        const schedules = await sql<ScheduleRow[]>`
-          SELECT id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_window_number,
-                 next_due_at, operation_key_prefix, payload, provenance, max_attempts,
-                 ${clock.materialized_at}::timestamptz AS materialized_at,
-                 floor(
-                   extract(epoch FROM (${clock.materialized_at}::timestamptz - next_due_at)) * 1000 / interval_ms
-                 )::bigint + 1 AS due_window_count
-          FROM refresh_operations.schedules
-          WHERE enabled AND next_due_at <= ${clock.materialized_at}
-          ORDER BY next_due_at, id
-          FOR UPDATE SKIP LOCKED
-          LIMIT ${limit}
-        `
-
-        const occurrences: MaterializeSchedulesResult['occurrences'] = []
-
-        for (const schedule of schedules) {
-          const dueWindowCount = Number(schedule.due_window_count)
-          const missedWindowCount = dueWindowCount - 1
-          const firstWindowNumber = Number(schedule.next_window_number)
-          const nextWindowNumber = firstWindowNumber + dueWindowCount
-          const operationId = randomUUID()
-          const occurrenceId = randomUUID()
-          const windowDueAt = schedule.next_due_at
-          const materializedAt = schedule.materialized_at
-          const latenessMs = Math.max(0, materializedAt.getTime() - windowDueAt.getTime())
-          const windowIdentity = `${schedule.id}:${firstWindowNumber}`
-
-          if (schedule.resource_key) {
-            await sql`
-              UPDATE refresh_operations.operations
-              SET status = 'dead_letter', reservation_token = NULL, reservation_expires_at = NULL,
-                  completed_at = ${materializedAt}, updated_at = ${materializedAt},
-                  last_error = ${sql.json({
-                    code: 'admission_reservation_expired',
-                    message: 'Admission reservation expired',
-                    retryable: false,
-                  })}
-              WHERE resource_key = ${schedule.resource_key}
-                AND status = 'awaiting_admission'
-                AND reservation_expires_at <= ${materializedAt}
-            `
-          }
-
-          if (isLeaderboardKind(schedule.kind)) {
-            const supersededFailure = {
-              code: 'superseded_scheduled_operation',
-              message: 'A newer scheduled leaderboard window is available',
-              retryable: false,
-            }
-
-            await sql`
-              WITH targets AS MATERIALIZED (
-                SELECT operation.id, operation.attempt_count
-                FROM refresh_operations.operations operation
-                JOIN refresh_operations.schedule_occurrences occurrence
-                  ON occurrence.id = operation.origin_schedule_occurrence_id
-                WHERE occurrence.schedule_id = ${schedule.id}
-                  AND operation.status IN ('pending', 'leased')
-                  AND NOT EXISTS (
-                    SELECT 1 FROM refresh_operations.leaderboard_effects effect
-                    WHERE effect.operation_id = operation.effect_operation_id
-                  )
-                FOR UPDATE OF operation
-              ), finished_attempts AS (
-                UPDATE refresh_operations.attempts attempt
-                SET finished_at = ${materializedAt}, outcome = 'dead_letter', error = ${sql.json(supersededFailure)}
-                FROM targets
-                WHERE attempt.operation_id = targets.id
-                  AND attempt.attempt_number = targets.attempt_count
-                  AND attempt.finished_at IS NULL
-              ), superseded AS (
-                UPDATE refresh_operations.operations operation
-                SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
-                    completed_at = ${materializedAt}, updated_at = ${materializedAt},
-                    last_error = ${sql.json(supersededFailure)}
-                FROM targets
-                WHERE operation.id = targets.id
-                RETURNING operation.id
-              )
-              INSERT INTO refresh_operations.dead_letter_actions
-                (id, target_operation_id, disposition, actor_id, reason)
-              SELECT gen_random_uuid(), id, 'discarded', 'schedule-materializer',
-                     'Superseded by a newer scheduled leaderboard window'
-              FROM superseded
-              ON CONFLICT (target_operation_id) DO NOTHING
-            `
-          }
-
-          const [completedFullRefresh] =
-            schedule.kind === 'interactive-player-refresh' && schedule.resource_key
-              ? await sql<{ id: string }[]>`
-                  SELECT operation.id
-                  FROM refresh_operations.operations operation
-                  JOIN refresh_operations.interactive_refresh_effects effect
-                    ON effect.operation_id = operation.effect_operation_id
-                  WHERE operation.resource_key = ${schedule.resource_key}
-                    AND operation.status = 'succeeded'
-                    AND operation.completed_at >= ${windowDueAt}
-                  GROUP BY operation.id, operation.completed_at
-                  HAVING bool_or(effect.section = 'ranked' AND effect.completed_at >= ${windowDueAt})
-                     AND bool_or(effect.section = 'stats' AND effect.completed_at >= ${windowDueAt})
-                  ORDER BY operation.completed_at DESC, operation.id
-                  LIMIT 1
-                `
-              : []
-
-          const [inserted] = completedFullRefresh
-            ? []
-            : await sql<{ id: string }[]>`
-                INSERT INTO refresh_operations.operations
-                  (id, effect_operation_id, kind, dedupe_key, operation_key, resource_key, work_class, payload,
-                   provenance, max_attempts, available_at)
-                VALUES
-                  (${operationId}, ${operationId}, ${schedule.kind}, ${
-                    // One active crawl per region: a window arriving mid-crawl waits instead of stacking another.
-                    schedule.kind === 'leaderboard-deep-crawl'
-                      ? `schedule:${schedule.id}:deep-crawl`
-                      : `schedule:${windowIdentity}`
-                  },
-                   ${`${schedule.operation_key_prefix}:${schedule.id}:${firstWindowNumber}`}, ${schedule.resource_key},
-                   ${schedule.work_class}, ${sql.json(schedule.payload)}, ${sql.json(schedule.provenance)},
-                   ${schedule.max_attempts}, ${materializedAt})
-                ON CONFLICT DO NOTHING
-                RETURNING id
-              `
-
-          if (!inserted && !completedFullRefresh) continue
-
-          const deduplicatedOperationId = completedFullRefresh?.id ?? null
-
-          await sql`
-            INSERT INTO refresh_operations.schedule_occurrences
-              (id, schedule_id, operation_id, deduplicated_to_operation_id, disposition,
-               first_window_number, last_window_number, window_due_at, materialized_at, lateness_ms,
-               missed_window_count, catch_up)
-            VALUES
-              (${occurrenceId}, ${schedule.id}, ${inserted ? operationId : null}, ${deduplicatedOperationId},
-               ${inserted ? 'materialized' : 'deduplicated'}, ${firstWindowNumber}, ${nextWindowNumber - 1},
-               ${windowDueAt}, ${materializedAt}, ${latenessMs}, ${missedWindowCount},
-               ${missedWindowCount > 0})
-          `
-
-          if (inserted) {
-            await sql`
-              UPDATE refresh_operations.operations
-              SET origin_schedule_occurrence_id = ${occurrenceId}
-              WHERE id = ${operationId}
-            `
-          }
-
-          await sql`
-            UPDATE refresh_operations.schedules
-            SET next_window_number = ${nextWindowNumber},
-                next_due_at = first_due_at + (${nextWindowNumber} * interval_ms * interval '1 millisecond'),
-                updated_at = ${materializedAt}
-            WHERE id = ${schedule.id}
-          `
-
-          if (inserted) await sql`SELECT pg_notify(${wakeupChannel}, ${operationId})`
-
-          occurrences.push({
-            scheduleId: schedule.id,
-            occurrenceId,
-            operationId: inserted ? operationId : completedFullRefresh.id,
-            kind: schedule.kind,
-            workClass: schedule.work_class,
-            latenessMs,
-            missedWindowCount,
-          })
-        }
-
-        return { occurrencesCreated: occurrences.length, occurrences }
-      })
-
-      return result
-    },
+    materializeDueSchedules: (limit = 100) => materializeDueSchedules(database, { limit }),
 
     async claim(
       workerId: string,
