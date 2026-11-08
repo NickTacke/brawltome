@@ -4,7 +4,8 @@ import { os } from '@orpc/server'
 import { internalSecretValid } from '../auth/internal-secret'
 import { readClientIp } from '../client-ip'
 
-// the fields every procedure may read; later modules add theirs when their first procedure needs them
+// module procedures only see foundation's RequestContext, so a field a module needs goes there; these extra fields
+// are for the API's own procedures
 export interface OrpcContext extends RequestContext {
   telemetry: Telemetry
   clientIp: string

@@ -47,8 +47,5 @@ export function createPostgresClans(database: Database) {
 }
 
 export type PostgresClans = ReturnType<typeof createPostgresClans>
-export type ClanQueries = Pick<PostgresClans, 'getById' | 'getPlayerMembership'>
-
-export function getClan(clans: ClanQueries, clanId: number) {
-  return clans.getById(clanId)
-}
+// what the tRPC clan refresh reads through until the refresh queue is replaced
+export type ClanQueries = Pick<PostgresClans, 'getById'>

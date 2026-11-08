@@ -63,6 +63,7 @@ function createCaller() {
     discordInternalSecret: discordSecret,
     clientIp: '203.0.113.1',
     user: null,
+    database,
     clanRepo: createPostgresClans(database),
     refreshOperations: {
       findActiveInteractiveClanRefresh: async () => null,

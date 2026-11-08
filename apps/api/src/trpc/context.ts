@@ -1,6 +1,7 @@
 import type { Account, Accounts } from '@brawltome/accounts'
 import type { ClanQueries } from '@brawltome/clan'
 import type { DiscoveryQueries } from '@brawltome/discovery'
+import type { Database } from '@brawltome/foundation'
 import type {
   CareerPlayerQueries,
   PlayerReferenceQueries,
@@ -15,6 +16,7 @@ import type { Telemetry } from '@brawltome/telemetry'
 
 export interface Context {
   telemetry: Telemetry
+  database: Database
   playerReferenceQueries: PlayerReferenceQueries
   discoveryQueries: DiscoveryQueries
   rankedPlayerQueries: RankedPlayerQueries
@@ -25,6 +27,7 @@ export interface Context {
   verifyRefreshChallenge(token: string, remoteIp: string): Promise<'valid' | 'invalid' | 'unavailable'>
   rankingQueries: RankingQueries & PlayerValhallanQueries
   statisticsQueries: StatisticsQueries & CareerWeaponUsageQueries & StatisticsHistoryQueries
+  // the clan refresh still reads through the old closure until the refresh queue is replaced
   clanRepo: ClanQueries
   accounts: Accounts
   clientIp: string

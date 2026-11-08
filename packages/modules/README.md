@@ -34,7 +34,11 @@ Not every module needs every folder. Leave out the ones it has no use for.
 another one:
 
 - `domain/` holds the rules, `db/` has the Drizzle tables and one file per use case, and `api/` has the oRPC procedures.
-- `db/tables.ts` describes only the columns the code uses. The migrations own the rest.
+- `db/tables.ts` has every column of each table the code uses. Defaults, checks, indexes and triggers stay in the
+  migrations. A table the code never touches can be left out.
+- `tests/tables.test.ts` runs the drift check and the table-coverage check. `expectTablesMatchDatabase` compares
+  each modelled table's columns, types and nullability with the migrated database, and the coverage check fails when
+  a table in the schema is neither modelled nor on the test's list of unmodelled tables.
 - `index.ts` is the only public surface. It also gives the module its `routes`.
 
 ## Modules that aren't rebuilt yet

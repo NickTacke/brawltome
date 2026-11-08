@@ -101,7 +101,7 @@ const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
 const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
-const moduleRuntime: ModuleRuntime = { database, env: process.env }
+const moduleRuntime: ModuleRuntime = { database }
 const orpcRouter = createOrpcRouter(apiModules, moduleRuntime)
 
 const postgresReadiness = createPostgresReadiness(
@@ -133,6 +133,7 @@ const lifecycle = createRuntimeLifecycle({
 
 const sharedCtx = {
   telemetry,
+  database,
   playerReferenceQueries,
   discoveryQueries: discovery,
   rankedPlayerQueries,

@@ -16,5 +16,3 @@ export function createPostgresClanDiscoverySource(database: Database): ClanDisco
     lag: () => countPendingDiscoveryEvents(database),
   }
 }
-
-export type PostgresClanDiscoverySource = ReturnType<typeof createPostgresClanDiscoverySource>

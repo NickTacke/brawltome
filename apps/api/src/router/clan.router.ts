@@ -1,4 +1,4 @@
-import { readClanProfile, readPlayerClanMembership } from '@brawltome/clan'
+import { readClanProfile, readPlayerClanMembership, toClanProfileContract } from '@brawltome/clan'
 import {
   type ClanRefreshInputContract,
   type ClanRefreshResponseContract,
@@ -58,8 +58,9 @@ async function resolveClanRefresh(
   discordUserId: string | undefined,
   now: number,
 ): Promise<ClanRefreshResponseContract> {
+  // one read, so the staleness check and the returned clan come from the same commit
   const stored = await ctx.clanRepo.getById(input.id)
-  const clan = await readClanProfile(ctx.clanRepo, input.id)
+  const clan = stored ? toClanProfileContract(stored) : null
 
   const staleSections = [
     stale(stored?.profile.lastSuccessAt, now) ? ('profile' as const) : null,
@@ -197,11 +198,11 @@ export function createClanRouter(
     byId: procedure
       .input(clanByIdInputSchema)
       .output(clanProfileSchema.nullable())
-      .query(({ ctx, input }) => readClanProfile(ctx.clanRepo, input.id)),
+      .query(({ ctx, input }) => readClanProfile(ctx.database, input.id)),
     membershipByPlayerId: procedure
       .input(playerReferenceByIdInputSchema)
       .output(playerClanMembershipSchema.nullable())
-      .query(({ ctx, input }) => readPlayerClanMembership(ctx.clanRepo, input.id)),
+      .query(({ ctx, input }) => readPlayerClanMembership(ctx.database, input.id)),
     refresh: procedure
       .input(clanRefreshInputSchema)
       .output(clanRefreshResponseSchema)

@@ -16,8 +16,8 @@ The `clans` schema. The tables are described in `db/tables.ts`:
 - `discovery_state`: one row with the source version
 - `discovery_outbox`: one event per changed clan, for the discovery projection
 
-The migrations in `migrations/` own the defaults, checks, indexes and triggers. The tables in `db/tables.ts` only
-describe the columns the code uses.
+`db/tables.ts` has every column of each table the code uses, because `tests/tables.test.ts` compares each column
+with the database. The migrations in `migrations/` own the defaults, checks, indexes and triggers.
 
 The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_ledger`, `legacy_import_rejections` and
 `import_conflicts` behind. They still exist but aren't modelled. They can be dropped in a later migration.
@@ -28,20 +28,21 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 - `db/`: `tables.ts` and one file per use case, for example `get-clan-profile.ts` and `publish-roster.ts`.
   `postgres-clans.ts` binds them to a database.
 - `api/`: `procedures.ts` holds the oRPC procedures. `read-clan-profile.ts` and `read-player-clan-membership.ts`
-  turn stored data into the public shape.
+  call the `db/` use cases with the database and turn the result into the public shape. `clan-profile-contract.ts`
+  does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
 ## Public surface
 
-Everything other packages may import is exported from `index.ts`:
+Everything other packages may import is exported from `index.ts`, and only what something outside the module uses:
 
 - `clanModule`: the module object (name, migrations and the oRPC procedures)
-- reads: `readClanProfile`, `readPlayerClanMembership`, `getClanProfile`, `getPlayerMembership`, `getClan`
-- `createPostgresClans`, with the `ClanQueries` and `PostgresClans` types
-- `createPostgresClanDiscoverySource`, with its type
-- refresh: `processRefreshClan`, `processRefreshClanSection`, with the `ClanSource` and `ClanRefreshResult` types
-- the domain types, for example `ClanProfile`, `ClanMember` and `ClanRefreshEffect`
+- `readClanProfile` and `readPlayerClanMembership`: the reads the tRPC adapters share with the oRPC procedures
+- `toClanProfileContract`: turns a stored clan into its public shape, for the tRPC refresh
+- `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
+- `createPostgresClanDiscoverySource` and `processRefreshClanSection`, for the operations worker
+- the `ClanProvenance` type, for the API's test fixtures
 
 ## oRPC procedures
 

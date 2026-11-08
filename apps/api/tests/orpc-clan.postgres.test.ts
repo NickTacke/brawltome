@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { clanModule, createPostgresClans } from '@brawltome/clan'
+import { clanModule } from '@brawltome/clan'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createORPCClient } from '@orpc/client'
@@ -48,7 +48,7 @@ beforeAll(async () => {
 
   for (const scenario of scenarios) await seedClan(database, scenario.clan)
 
-  const router = createOrpcRouter([clanModule], { database, env: {} })
+  const router = createOrpcRouter([clanModule], { database })
   const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
 
   app = new Hono()
@@ -63,7 +63,7 @@ function createTrpcCaller() {
   const context = {
     internalSecret: secret,
     discordInternalSecret: discordSecret,
-    clanRepo: createPostgresClans(database),
+    database,
   } as unknown as Context
 
   const router = createClanRouter(createInternalProcedure(secret), createDiscordBotProcedure(secret, discordSecret))
