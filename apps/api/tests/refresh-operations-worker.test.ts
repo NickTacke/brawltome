@@ -4,7 +4,11 @@ import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
 import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
-import { retryDelayForAttempt, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import {
+  LeaderboardDeepCrawlYield,
+  retryDelayForAttempt,
+  runOneRefreshOperation,
+} from '../src/refresh-operations-worker'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -2099,5 +2103,230 @@ describe('refresh operations worker source retry', () => {
         throw new Error('players database unavailable')
       }),
     ).toBe(true)
+  })
+})
+
+type WorkerOptions = Parameters<typeof runOneRefreshOperation>[2]
+
+// every kind and the code its worker reports when the executor throws a plain error
+const failureCodes = [
+  ['proof', 'proof_execution_failed'],
+  ['interactive-player-refresh', 'interactive_player_refresh_failed'],
+  ['clan-refresh', 'clan_refresh_failed'],
+  ['player-discovery-projection', 'player_discovery_projection_failed'],
+  ['clan-discovery-projection', 'clan_discovery_projection_failed'],
+  ['discovery-reconciliation', 'discovery_reconciliation_failed'],
+  ['ranked-player-pulse', 'ranked_player_pulse_failed'],
+  ['player-name-verification', 'player_name_verification_failed'],
+  ['ranking-retention', 'ranking_retention_failed'],
+  ['leaderboard-deep-crawl', 'leaderboard_deep_crawl_failed'],
+  ['statistics-ranked-collection', 'statistics_collection_failed'],
+  ['statistics-lifetime-collection', 'statistics_collection_failed'],
+  ['statistics-publication', 'statistics_publication_failed'],
+  ['statistics-legend-meta-publication', 'statistics_legend_meta_publication_failed'],
+  ['leaderboard-1v1', 'leaderboard_collection_failed'],
+  ['leaderboard-2v2', 'leaderboard_collection_failed'],
+  ['leaderboard-solo-2v2', 'leaderboard_collection_failed'],
+  ['leaderboard-3v3', 'leaderboard_collection_failed'],
+] as const satisfies readonly (readonly [OperationLease['kind'], string])[]
+
+const generationId = '10000000-0000-4000-8000-000000000001'
+const leaderboardPayload = { pageDepth: 1, intervalMs: 900_000 }
+
+const leaseShapes: Record<OperationLease['kind'], { workClass: string; payload: object }> = {
+  proof: { workClass: 'interactive', payload: { value: 'proof' } },
+  'interactive-player-refresh': {
+    workClass: 'interactive',
+    payload: { brawlhallaId: 42, staleSections: ['ranked'] },
+  },
+  'clan-refresh': { workClass: 'interactive', payload: { clanId: 77, staleSections: ['profile'] } },
+  'player-discovery-projection': { workClass: 'projection', payload: { batchSize: 100 } },
+  'clan-discovery-projection': { workClass: 'projection', payload: { batchSize: 100 } },
+  'discovery-reconciliation': { workClass: 'projection', payload: { owner: 'player' } },
+  'ranked-player-pulse': { workClass: 'primary-monitoring', payload: { brawlhallaId: 42 } },
+  'player-name-verification': { workClass: 'maintenance', payload: { brawlhallaId: 42, playerName: 'Name' } },
+  'ranking-retention': { workClass: 'maintenance', payload: { retentionHours: 48, maxGenerations: 10 } },
+  'leaderboard-deep-crawl': { workClass: 'leaderboard', payload: { region: 'AUS', intervalMs: 3_600_000 } },
+  'statistics-ranked-collection': {
+    workClass: 'global-statistics',
+    payload: { cohortId: generationId, brawlhallaId: 42 },
+  },
+  'statistics-lifetime-collection': {
+    workClass: 'global-statistics',
+    payload: { cohortId: generationId, brawlhallaId: 42 },
+  },
+  'statistics-publication': { workClass: 'global-statistics', payload: { generationId, product: 'ranked' } },
+  'statistics-legend-meta-publication': { workClass: 'global-statistics', payload: { generationId } },
+  'leaderboard-1v1': { workClass: 'leaderboard', payload: leaderboardPayload },
+  'leaderboard-2v2': { workClass: 'leaderboard', payload: leaderboardPayload },
+  'leaderboard-solo-2v2': { workClass: 'leaderboard', payload: leaderboardPayload },
+  'leaderboard-3v3': { workClass: 'leaderboard', payload: leaderboardPayload },
+}
+
+async function explode(): Promise<never> {
+  throw new Error('execution failed')
+}
+
+const admittingSource = {
+  admitSource: async () => ({ outcome: 'admitted', deduplicated: false }) as const,
+  pauseSource: async () => {},
+}
+
+const idleRanking = {
+  publishGeneration: async () => 'published' as const,
+  recordCollectionFailure: async () => 'recorded' as const,
+}
+
+// the dependencies each kind needs to reach its executor, with the first call into the outside world throwing;
+// interactive, projection and reconciliation work throws on its own when its dependencies are missing
+const failingOptions: Record<OperationLease['kind'], Partial<WorkerOptions>> = {
+  proof: { executeEffect: explode },
+  'interactive-player-refresh': {},
+  'clan-refresh': {},
+  'player-discovery-projection': {},
+  'clan-discovery-projection': {},
+  'discovery-reconciliation': {},
+  'ranked-player-pulse': { sourceAdmission: admittingSource, executeRankedPulse: explode },
+  'player-name-verification': { sourceAdmission: admittingSource, executePlayerNameVerification: explode },
+  'ranking-retention': { rankingRetention: { expireGenerations: explode } as never },
+  'leaderboard-deep-crawl': {
+    sourceAdmission: admittingSource,
+    leaderboardSource: { fetchPage: explode },
+    leaderboardPlayerNames: { applyLeaderboardNames: async () => ({ changed: 0 }) },
+    leaderboardRanked: { applyLeaderboardRanked: async () => ({ changed: 0 }) },
+  },
+  'statistics-ranked-collection': {
+    sourceAdmission: admittingSource,
+    executeStatisticsCollection: explode,
+    statistics: { preflightCollection: explode } as never,
+  },
+  'statistics-lifetime-collection': {
+    sourceAdmission: admittingSource,
+    executeStatisticsCollection: explode,
+    statistics: { preflightCollection: explode } as never,
+  },
+  'statistics-publication': { statistics: { preflightPublication: explode } as never },
+  'statistics-legend-meta-publication': { statistics: { preflightLegendMetaPublication: explode } as never },
+  'leaderboard-1v1': {
+    sourceAdmission: admittingSource,
+    ranking: idleRanking,
+    leaderboardSource: { fetchPage: explode },
+  },
+  'leaderboard-2v2': {
+    sourceAdmission: admittingSource,
+    ranking: idleRanking,
+    leaderboardSource: { fetchPage: explode },
+  },
+  'leaderboard-solo-2v2': {
+    sourceAdmission: admittingSource,
+    ranking: idleRanking,
+    leaderboardSource: { fetchPage: explode },
+  },
+  'leaderboard-3v3': {
+    sourceAdmission: admittingSource,
+    ranking: idleRanking,
+    leaderboardSource: { fetchPage: explode },
+  },
+}
+
+function leaseOfKind(kind: OperationLease['kind']): OperationLease {
+  return {
+    operationId: crypto.randomUUID(),
+    effectOperationId: crypto.randomUUID(),
+    effectCreatedAt: new Date().toISOString(),
+    operationKey: `${kind}:failure-code`,
+    kind,
+    ...leaseShapes[kind],
+    provenance: { source: 'test' },
+    leaseOwner: 'worker',
+    leaseToken: 1,
+    attemptNumber: 1,
+    maxAttempts: 3,
+    scheduleWindowAt: null,
+  } as OperationLease
+}
+
+describe('refresh operations worker failure handling', () => {
+  test.each(failureCodes)('%s fails with %s', async (kind, expectedCode) => {
+    const lease = leaseOfKind(kind)
+    const failures: OperationFailure[] = []
+
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      fail: async (_lease: OperationLease, failure: OperationFailure) => {
+        failures.push(failure)
+
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      ...failingOptions[kind],
+    })
+
+    expect(failures.map(({ code }) => code)).toEqual([expectedCode])
+  })
+
+  test('a deep-crawl yield defers with code deep_crawl_yield and no delay', async () => {
+    const lease = leaseOfKind('proof')
+    const deferrals: Array<{ code: string; retryDelayMs: number }> = []
+    let failed = false
+
+    const operations = {
+      claim: async () => lease,
+      renew: async () => 'renewed' as const,
+      defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
+        deferrals.push({ code: failure.code, retryDelayMs })
+
+        return 'transitioned' as const
+      },
+      fail: async () => {
+        failed = true
+
+        return 'transitioned' as const
+      },
+    }
+
+    await runOneRefreshOperation(operations as never, 'worker', {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      admission,
+      executeEffect: async () => {
+        throw new LeaderboardDeepCrawlYield()
+      },
+    })
+
+    expect(deferrals).toEqual([{ code: 'deep_crawl_yield', retryDelayMs: 0 }])
+    expect(failed).toBe(false)
+  })
+})
+
+describe('refresh operations worker claim latency', () => {
+  test('records how long a claim took, labelled by whether it found work', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const claims = [leaseOfKind('proof'), null]
+
+    const operations = {
+      claim: async () => claims.shift() ?? null,
+      renew: async () => 'renewed' as const,
+      commitProofEffect: async () => 'applied' as const,
+      complete: async () => 'transitioned' as const,
+    }
+
+    const options = { leaseMs: 1_000, retryDelayMs: 10, admission, telemetry }
+
+    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(true)
+    expect(await runOneRefreshOperation(operations as never, 'worker', options)).toBe(false)
+
+    const claimLatency = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_claim_duration_ms')
+    const series = claimLatency?.series.map(({ labels, count }) => ({ labels, count }))
+
+    expect(series).toHaveLength(2)
+    expect(series).toContainEqual({ labels: { outcome: 'claimed' }, count: 1 })
+    expect(series).toContainEqual({ labels: { outcome: 'empty' }, count: 1 })
   })
 })
