@@ -26,7 +26,35 @@ import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
+export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
+export {
+  type ActivateAdmittedInput,
+  type ActivateBoundOptions,
+  type ActivateReservedInput,
+  activateAdmitted,
+  activateBound,
+  activateReserved,
+  type RejectExpiredInput,
+  type RejectReservedInput,
+  rejectExpired,
+  rejectReserved,
+} from './db/activate-operation'
 export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
+export {
+  type ActiveOperation,
+  type FindActiveOperationInput,
+  findActiveOperation,
+  type ListAwaitingInput,
+  listAwaiting,
+} from './db/find-operations'
+export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
+export {
+  type ReserveForAdmissionInput,
+  type ReserveForAdmissionOptions,
+  type ReserveForBindingInput,
+  reserveForAdmission,
+  reserveForBinding,
+} from './db/reserve-operation'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,
