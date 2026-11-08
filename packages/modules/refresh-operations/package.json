@@ -14,6 +14,7 @@
     "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
+    "drizzle-orm": "0.45.4",
     "postgres": "^3.4.0"
   },
   "devDependencies": {
