@@ -227,36 +227,6 @@ export type AcceptDiscoveryReconciliation = {
   maxAttempts?: number
 }
 
-export type ReserveStatisticsCollection = {
-  kind: StatisticsCollectionKind
-  dedupeKey: string
-  operationKey: string
-  workClass: 'global-statistics'
-  payload: StatisticsCollectionPayload
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type ReserveStatisticsPublication = {
-  kind: StatisticsPublicationKind
-  dedupeKey: string
-  operationKey: string
-  workClass: 'global-statistics'
-  payload: StatisticsPublicationPayload
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type ReserveStatisticsLegendMetaPublication = {
-  kind: StatisticsLegendMetaPublicationKind
-  dedupeKey: string
-  operationKey: string
-  workClass: 'global-statistics'
-  payload: StatisticsLegendMetaPublicationPayload
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
 export type AcceptOperation =
   | AcceptProofOperation
   | AcceptRankedPlayerPulseOperation
@@ -392,20 +362,6 @@ export function parsePlayerRefreshSettled(payload: string): PlayerRefreshSettled
 export type ReserveInteractiveRefreshResult =
   | { outcome: 'reserved'; operationId: string; reservationToken: string }
   | { outcome: 'already-active'; operationId: string }
-
-export interface StatisticsOperations {
-  reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
-  listAwaitingStatisticsCollections(): Promise<string[]>
-  activateStatisticsCollection(operationId: string): Promise<TransitionResult>
-  reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult>
-  listAwaitingStatisticsPublications(): Promise<string[]>
-  activateStatisticsPublication(operationId: string): Promise<TransitionResult>
-  reserveStatisticsLegendMetaPublication(input: ReserveStatisticsLegendMetaPublication): Promise<AcceptOperationResult>
-  listAwaitingStatisticsLegendMetaPublications(): Promise<string[]>
-  activateStatisticsLegendMetaPublication(operationId: string): Promise<TransitionResult>
-}
-
-export type StatisticsCollectionOperations = StatisticsOperations
 
 type LeaseFields = {
   operationId: string

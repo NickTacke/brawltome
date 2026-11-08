@@ -24,6 +24,12 @@ import { addLegendMetaPublications } from './migrations/0003-add-legend-meta-pub
 import { addCareerWeaponUsage } from './migrations/0004-add-career-weapon-usage'
 import type { CellCollectionProgress, PublicationDecisionEvidence, PublicationProduct } from './publication'
 import type { LifetimeEvidence, RankedEvidence } from './source'
+
+export {
+  createStatisticsReservations,
+  type StatisticsReservations,
+} from './jobs/statistics-reservations'
+
 import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregate } from './weapon-usage'
 
 export {

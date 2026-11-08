@@ -1,9 +1,9 @@
 import type { RankingQueries } from '@brawltome/ranking'
-import type { StatisticsOperations } from '@brawltome/refresh-operations'
 import {
   type CohortCandidateSnapshot,
   type LaunchCohortRegion,
   launchCohortRegions,
+  type StatisticsReservations,
   type StatisticsTracer,
 } from '@brawltome/statistics'
 
@@ -91,7 +91,7 @@ async function launchSourceMayHaveChanged(
 
 export async function reconcileStatisticsCohort(
   statistics: StatisticsTracer,
-  operations: StatisticsOperations,
+  reservations: StatisticsReservations,
   ranking: Pick<RankingQueries, 'getLeaderboard'>,
 ): Promise<number> {
   let reconciled = 0
@@ -138,17 +138,17 @@ export async function reconcileStatisticsCohort(
     }
   }
 
-  const awaitingCollections = await operations.listAwaitingStatisticsCollections()
+  const awaitingCollections = await reservations.listAwaitingStatisticsCollections()
   const boundCollectionOperationIds = new Set(await statistics.boundCollectionOperationIds(awaitingCollections))
 
   for (const operationId of awaitingCollections) {
-    if (boundCollectionOperationIds.has(operationId)) await operations.activateStatisticsCollection(operationId)
+    if (boundCollectionOperationIds.has(operationId)) await reservations.activateStatisticsCollection(operationId)
   }
 
   const launchCohortIds = new Set(launchState?.cohortIds ?? [])
 
   for (const intent of await statistics.collectionIntents()) {
-    const accepted = await operations.reserveStatisticsCollection({
+    const accepted = await reservations.reserveStatisticsCollection({
       kind: intent.kind,
       dedupeKey: intent.operationKey,
       operationKey: intent.operationKey,
@@ -162,22 +162,22 @@ export async function reconcileStatisticsCohort(
     })
 
     await statistics.recordCollectionOperation(intent, accepted.operationId)
-    if ((await operations.activateStatisticsCollection(accepted.operationId)) !== 'transitioned') {
+    if ((await reservations.activateStatisticsCollection(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Statistics collection could not be activated after owner binding')
     }
 
     if (accepted.outcome === 'accepted') reconciled++
   }
 
-  const awaitingPublications = await operations.listAwaitingStatisticsPublications()
+  const awaitingPublications = await reservations.listAwaitingStatisticsPublications()
   const boundPublicationOperationIds = new Set(await statistics.boundPublicationOperationIds(awaitingPublications))
 
   for (const operationId of awaitingPublications) {
-    if (boundPublicationOperationIds.has(operationId)) await operations.activateStatisticsPublication(operationId)
+    if (boundPublicationOperationIds.has(operationId)) await reservations.activateStatisticsPublication(operationId)
   }
 
   for (const intent of await statistics.publicationIntents()) {
-    const accepted = await operations.reserveStatisticsPublication({
+    const accepted = await reservations.reserveStatisticsPublication({
       kind: intent.kind,
       dedupeKey: intent.operationKey,
       operationKey: intent.operationKey,
@@ -189,22 +189,22 @@ export async function reconcileStatisticsCohort(
 
     if ((await statistics.recordPublicationOperation(intent, accepted.operationId)) === 'collection-active') continue
 
-    if ((await operations.activateStatisticsPublication(accepted.operationId)) !== 'transitioned') {
+    if ((await reservations.activateStatisticsPublication(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Statistics publication could not be activated after owner binding')
     }
 
     if (accepted.outcome === 'accepted') reconciled++
   }
 
-  const awaitingLegendMeta = await operations.listAwaitingStatisticsLegendMetaPublications()
+  const awaitingLegendMeta = await reservations.listAwaitingStatisticsLegendMetaPublications()
   const boundLegendMeta = new Set(await statistics.boundLegendMetaPublicationOperationIds(awaitingLegendMeta))
 
   for (const operationId of awaitingLegendMeta) {
-    if (boundLegendMeta.has(operationId)) await operations.activateStatisticsLegendMetaPublication(operationId)
+    if (boundLegendMeta.has(operationId)) await reservations.activateStatisticsLegendMetaPublication(operationId)
   }
 
   for (const intent of await statistics.legendMetaPublicationIntents()) {
-    const accepted = await operations.reserveStatisticsLegendMetaPublication({
+    const accepted = await reservations.reserveStatisticsLegendMetaPublication({
       kind: intent.kind,
       dedupeKey: intent.operationKey,
       operationKey: intent.operationKey,
@@ -215,7 +215,7 @@ export async function reconcileStatisticsCohort(
     })
 
     await statistics.recordLegendMetaPublicationOperation(intent, accepted.operationId)
-    if ((await operations.activateStatisticsLegendMetaPublication(accepted.operationId)) !== 'transitioned') {
+    if ((await reservations.activateStatisticsLegendMetaPublication(accepted.operationId)) !== 'transitioned') {
       throw new Error('reserved Legend Meta publication could not be activated after owner binding')
     }
 

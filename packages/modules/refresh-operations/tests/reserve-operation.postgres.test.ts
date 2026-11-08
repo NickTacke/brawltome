@@ -284,13 +284,13 @@ describe('reserveForBinding', () => {
     expect(awaiting).toContain(first.operationId)
 
     const wakeups = await collectWakeups(async () => {
-      expect(await activateBound(database, first.operationId)).toBe('transitioned')
+      expect(await activateBound(database, first.operationId, { kinds: ['proof'] })).toBe('transitioned')
     })
 
     expect(wakeups).toEqual([first.operationId])
     expect((await readRow(first.operationId)).status).toBe('pending')
-    expect(await activateBound(database, first.operationId)).toBe('transitioned')
-    expect(await activateBound(database, randomUUID())).toBe('lease-lost')
+    expect(await activateBound(database, first.operationId, { kinds: ['proof'] })).toBe('transitioned')
+    expect(await activateBound(database, randomUUID(), { kinds: ['proof'] })).toBe('lease-lost')
   })
 
   test('throws when the operation key is reserved again with a changed payload', async () => {

@@ -38,7 +38,7 @@ import {
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
-import { createPostgresStatistics } from '@brawltome/statistics'
+import { createPostgresStatistics, createStatisticsReservations } from '@brawltome/statistics'
 import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
 import { serve } from 'bun'
 import { Hono } from 'hono'
@@ -231,6 +231,7 @@ function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeReque
 }
 
 const statistics = createPostgresStatistics(databases.main)
+const statisticsReservations = createStatisticsReservations(databases.main)
 const leaderboardPlayerNames = createPostgresLeaderboardPlayerNames(databases.main)
 const leaderboardRanked = createPostgresLeaderboardRanked(databases.main)
 const playerFreshness = createPostgresPlayerFreshness(databases.main)
@@ -433,7 +434,7 @@ try {
       }
 
       const reconciledStatistics =
-        (await reconcileStatisticsCohort(statistics, operations, ranking.queries)) +
+        (await reconcileStatisticsCohort(statistics, statisticsReservations, ranking.queries)) +
         (await nameVerificationPlanner.tick()) +
         (await freshnessPlanner.tick())
 

@@ -6,7 +6,7 @@ import {
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
-import { createPostgresStatistics, statisticsModule } from '@brawltome/statistics'
+import { createPostgresStatistics, createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
@@ -14,6 +14,7 @@ import { collectStatisticsEvidence } from '../src/statistics-collection-source'
 import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
+const reservations = () => createStatisticsReservations(database)
 let connectionString = ''
 
 const admission: AdmissionConfig = {
@@ -170,7 +171,7 @@ describe('Statistics durable production worker', () => {
     if (!rankedIntent || !lifetimeIntent) throw new Error('Statistics collection intents missing')
 
     const reserve = (intent: typeof rankedIntent) =>
-      operations.reserveStatisticsCollection({
+      reservations().reserveStatisticsCollection({
         kind: intent.kind,
         dedupeKey: intent.operationKey,
         operationKey: intent.operationKey,
@@ -188,7 +189,7 @@ describe('Statistics durable production worker', () => {
 
     await restart()
 
-    await reconcileStatisticsCohort(statistics, operations, {
+    await reconcileStatisticsCohort(statistics, reservations(), {
       getLeaderboard: async (input) => ({
         status: 'unavailable',
         reason: 'not_yet_published',

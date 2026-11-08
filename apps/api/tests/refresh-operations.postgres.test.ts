@@ -11,6 +11,7 @@ import {
   refreshOperationsModule,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
+import { createStatisticsReservations } from '@brawltome/statistics'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
 import { apiModules } from '../src/modules'
@@ -24,6 +25,7 @@ let database: TestDatabase
 let connectionString = ''
 
 const playerRefreshes = (client: Database = database) => createPlayerRefreshReservations(client)
+const statisticsReservations = () => createStatisticsReservations(database)
 
 const testAdmission = {
   totalConcurrency: 8,
@@ -1877,13 +1879,10 @@ async function acceptReconciliation(operations: Operations): Promise<string> {
   return accepted.operationId
 }
 
-async function reserveStatisticsOperation(
-  operations: Operations,
-  kind: 'statistics-ranked-collection',
-): Promise<string> {
+async function reserveStatisticsOperation(kind: 'statistics-ranked-collection'): Promise<string> {
   const operationKey = uniqueKey('claim-statistics')
 
-  const reserved = await operations.reserveStatisticsCollection({
+  const reserved = await statisticsReservations().reserveStatisticsCollection({
     kind,
     dedupeKey: operationKey,
     operationKey,
@@ -1892,15 +1891,15 @@ async function reserveStatisticsOperation(
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsCollection(reserved.operationId)
+  await statisticsReservations().activateStatisticsCollection(reserved.operationId)
 
   return reserved.operationId
 }
 
-async function reserveStatisticsPublication(operations: Operations): Promise<string> {
+async function reserveStatisticsPublication(): Promise<string> {
   const operationKey = uniqueKey('claim-publication')
 
-  const reserved = await operations.reserveStatisticsPublication({
+  const reserved = await statisticsReservations().reserveStatisticsPublication({
     kind: 'statistics-publication',
     dedupeKey: operationKey,
     operationKey,
@@ -1909,15 +1908,15 @@ async function reserveStatisticsPublication(operations: Operations): Promise<str
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsPublication(reserved.operationId)
+  await statisticsReservations().activateStatisticsPublication(reserved.operationId)
 
   return reserved.operationId
 }
 
-async function reserveLegendMetaPublication(operations: Operations): Promise<string> {
+async function reserveLegendMetaPublication(): Promise<string> {
   const operationKey = uniqueKey('claim-legend-meta')
 
-  const reserved = await operations.reserveStatisticsLegendMetaPublication({
+  const reserved = await statisticsReservations().reserveStatisticsLegendMetaPublication({
     kind: 'statistics-legend-meta-publication',
     dedupeKey: operationKey,
     operationKey,
@@ -1926,7 +1925,7 @@ async function reserveLegendMetaPublication(operations: Operations): Promise<str
     provenance: claimTestProvenance,
   })
 
-  await operations.activateStatisticsLegendMetaPublication(reserved.operationId)
+  await statisticsReservations().activateStatisticsLegendMetaPublication(reserved.operationId)
 
   return reserved.operationId
 }
@@ -2018,7 +2017,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     },
   },
   'statistics-ranked-collection': {
-    create: (operations) => reserveStatisticsOperation(operations, 'statistics-ranked-collection'),
+    create: () => reserveStatisticsOperation('statistics-ranked-collection'),
     recordEffect: async (control, lease) => {
       await control`
         INSERT INTO refresh_operations.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
