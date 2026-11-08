@@ -54,7 +54,7 @@ export type AcceptOperationInput = {
   maxAttempts?: number
 }
 
-/** Queues an operation as pending, or reports the pending or leased one that already holds this dedupe key. */
+/** Queues an operation as pending, or reports the active one that already holds this dedupe or resource key. */
 export async function acceptOperation(database: Database, input: AcceptOperationInput): Promise<AcceptOperationResult> {
   for (;;) {
     const result = await database.db.transaction(async (transaction) => {
