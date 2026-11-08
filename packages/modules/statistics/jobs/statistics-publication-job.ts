@@ -5,8 +5,8 @@ import {
   type JobTools,
   type Lease,
   type StatisticsPublicationPayload,
-  statisticsPublicationEffectState,
 } from '@brawltome/refresh-operations'
+import { statisticsPublicationEffectState } from '../db/effects'
 import type { PublicationAuthorization, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt, deferAttempt } from './job-outcomes'
 

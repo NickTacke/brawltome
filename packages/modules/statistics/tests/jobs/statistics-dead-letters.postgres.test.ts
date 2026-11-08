@@ -9,6 +9,7 @@ import {
   type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import { statisticsModule } from '../../index'
 import { statisticsDeadLetterHooks } from '../../jobs/dead-letter-hooks'
 import { createStatisticsReservations } from '../../jobs/statistics-reservations'
 
@@ -42,7 +43,11 @@ function requireLease(lease: OperationLease | null): OperationLease {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'statistics_dead_letters', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({
+    label: 'statistics_dead_letters',
+    modules: [refreshOperationsModule, statisticsModule],
+  })
+
   deadLetters = createPostgresDeadLetterOperations(database, statisticsDeadLetterHooks)
 })
 
@@ -74,7 +79,7 @@ async function createCollectionDeadLetter() {
   )
 
   const [effect] = await database.sql<{ result: string }[]>`
-    SELECT refresh_operations.record_statistics_collection_effect(
+    SELECT statistics.record_statistics_collection_effect(
       ${original.operationId}, ${original.operationKey}, ${original.kind},
       ${original.leaseOwner}, ${original.leaseToken}
     ) AS result
@@ -100,7 +105,7 @@ async function sealCollection(collectionOperationId: string): Promise<void> {
   })
 
   await database.sql`
-    INSERT INTO refresh_operations.statistics_collection_seals (collection_operation_id, publication_operation_id)
+    INSERT INTO statistics.statistics_collection_seals (collection_operation_id, publication_operation_id)
     VALUES (${collectionOperationId}, ${publication.operationId})
   `
 }
@@ -189,7 +194,7 @@ describe('statistics dead letters', () => {
     )
 
     await database.sql`
-      INSERT INTO refresh_operations.statistics_legend_meta_publication_effects
+      INSERT INTO statistics.statistics_legend_meta_publication_effects
         (operation_key, operation_id, lease_token)
       VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
     `

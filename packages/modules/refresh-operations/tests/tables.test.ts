@@ -12,6 +12,10 @@ const movedToOwnerModules = [
   'leaderboard_effects',
   'primary_monitoring_reconciliation',
   'proof_effects',
+  'statistics_collection_effects',
+  'statistics_collection_seals',
+  'statistics_legend_meta_publication_effects',
+  'statistics_publication_effects',
 ]
 
 const tables = Object.values(refreshOperationsTables).flatMap((value) => (is(value, PgTable) ? [value] : []))

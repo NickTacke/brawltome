@@ -41,7 +41,7 @@ export {
   rejectExpired,
   rejectReserved,
 } from './db/activate-operation'
-export { hasStatisticsCollectionSeal, lockEffectOperation } from './db/collection-seal'
+export { lockEffectOperation } from './db/collection-seal'
 export type {
   DeadLetterEffects,
   DeadLetterHooks,
@@ -60,9 +60,6 @@ export {
   createEffectStates,
   type EffectStateEntry,
   type EffectStates,
-  legendMetaPublicationEffectState,
-  statisticsCollectionEffectState,
-  statisticsPublicationEffectState,
 } from './db/effect-states'
 export {
   type ActiveOperation,
@@ -80,11 +77,7 @@ export {
   type ReadAttemptHistoryInput,
   readAttemptHistory,
 } from './db/read-attempt-history'
-export {
-  readInteractiveEffects,
-  readStatisticsEffects,
-  readStatisticsPublicationEffects,
-} from './db/read-effect-rows'
+export { readInteractiveEffects } from './db/read-effect-rows'
 export {
   type FixedSchedule,
   type ReconcileFixedScheduleInput,

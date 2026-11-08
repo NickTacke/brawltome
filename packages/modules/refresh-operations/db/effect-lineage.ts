@@ -13,10 +13,7 @@ type LineageRow = {
   last_finished_at: Date | null
 }
 
-/**
- * For each effect, what the operations that share it (the original and any replays) add up to. An effect with no
- * operations is absent from the map.
- */
+// what the operations sharing an effect (the original and any replays) add up to; an effect with none is absent
 export async function readEffectLineage(
   sql: Sql,
   effectOperationIds: readonly string[],

@@ -4,9 +4,9 @@ import {
   type JobDefinition,
   type JobTools,
   type Lease,
-  legendMetaPublicationEffectState,
   type StatisticsLegendMetaPublicationPayload,
 } from '@brawltome/refresh-operations'
+import { legendMetaPublicationEffectState } from '../db/effects'
 import type { LegendMetaPublicationAuthorization, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt, deferAttempt } from './job-outcomes'
 

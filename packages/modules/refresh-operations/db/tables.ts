@@ -1,14 +1,7 @@
 import { jsonb } from '@brawltome/foundation'
 import { sql } from 'drizzle-orm'
 import { bigint, boolean, integer, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import type {
-  AdmissionConfig,
-  OperationFailure,
-  OperationLease,
-  OperationProvenance,
-  StatisticsCollectionKind,
-  WorkClass,
-} from '../model'
+import type { AdmissionConfig, OperationFailure, OperationLease, OperationProvenance, WorkClass } from '../model'
 
 // every column of each table the code uses, since tests/tables.test.ts compares them all with the database;
 // defaults, checks, indexes and triggers stay in the migrations
@@ -135,36 +128,4 @@ export const interactiveRefreshEffects = refreshOperationsSchema.table(
     completedAt: timestamp('completed_at', { withTimezone: true }).notNull().default(clockTimestamp),
   },
   (table) => [primaryKey({ columns: [table.operationId, table.section] })],
-)
-
-export const statisticsCollectionEffects = refreshOperationsSchema.table('statistics_collection_effects', {
-  operationKey: text('operation_key').primaryKey(),
-  operationId: uuid('operation_id').notNull().unique(),
-  kind: text('kind').$type<StatisticsCollectionKind>().notNull(),
-  leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
-// a publication seals the collections it read, so a sealed collection can no longer be replayed
-export const statisticsCollectionSeals = refreshOperationsSchema.table('statistics_collection_seals', {
-  collectionOperationId: uuid('collection_operation_id').primaryKey(),
-  publicationOperationId: uuid('publication_operation_id').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
-export const statisticsPublicationEffects = refreshOperationsSchema.table('statistics_publication_effects', {
-  operationKey: text('operation_key').primaryKey(),
-  operationId: uuid('operation_id').notNull().unique(),
-  leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-})
-
-export const statisticsLegendMetaPublicationEffects = refreshOperationsSchema.table(
-  'statistics_legend_meta_publication_effects',
-  {
-    operationKey: text('operation_key').primaryKey(),
-    operationId: uuid('operation_id').notNull().unique(),
-    leaseToken: bigint('lease_token', { mode: 'number' }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(clockTimestamp),
-  },
 )

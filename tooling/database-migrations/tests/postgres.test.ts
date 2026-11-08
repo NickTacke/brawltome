@@ -14,6 +14,34 @@ import postgres from 'postgres'
 import { orderedMigrations } from '../src/inventories'
 import { deployedHistory } from './fixtures/deployed-history'
 
+// what statistics/0005 moves, so that migration has something to act on under a faked history
+const statisticsEffectTableStubs = [
+  `CREATE TABLE refresh_operations.statistics_publication_effects (
+     operation_key text PRIMARY KEY, operation_id uuid NOT NULL, lease_token bigint NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+   )`,
+  `CREATE TABLE refresh_operations.statistics_collection_seals (
+     collection_operation_id uuid PRIMARY KEY, publication_operation_id uuid NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+   )`,
+  `CREATE TABLE refresh_operations.statistics_legend_meta_publication_effects (
+     operation_key text PRIMARY KEY, operation_id uuid NOT NULL, lease_token bigint NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+   )`,
+  `CREATE TABLE refresh_operations.statistics_collection_effects (
+     operation_key text PRIMARY KEY, operation_id uuid NOT NULL, kind text NOT NULL, lease_token bigint NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+   )`,
+  `CREATE FUNCTION refresh_operations.record_statistics_collection_effect(uuid, text, text, text, bigint)
+   RETURNS text LANGUAGE sql AS $$ SELECT 'stub'::text $$`,
+  `CREATE FUNCTION refresh_operations.seal_statistics_collections_for_publication(uuid, uuid[])
+   RETURNS text LANGUAGE sql AS $$ SELECT 'stub'::text $$`,
+  `CREATE FUNCTION refresh_operations.record_statistics_publication_effect(uuid, text, text, bigint, uuid[])
+   RETURNS text LANGUAGE sql AS $$ SELECT 'stub'::text $$`,
+  `CREATE FUNCTION refresh_operations.record_statistics_legend_meta_publication_effect(uuid, text, text, bigint)
+   RETURNS text LANGUAGE sql AS $$ SELECT 'stub'::text $$`,
+]
+
 const connectionString = process.env.DATABASE_URL
 
 type PlanNode = { 'Node Type': string; 'Relation Name'?: string; 'Index Name'?: string; Plans?: PlanNode[] }
@@ -748,6 +776,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         await client`CREATE SCHEMA players`
         await client`CREATE SCHEMA accounts`
         await client`CREATE SCHEMA rankings`
+        await client`CREATE SCHEMA statistics`
 
         await client`
           CREATE TABLE refresh_operations.operations (
@@ -764,6 +793,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             observed_at timestamptz NOT NULL
           )
         `
+
+        for (const statement of statisticsEffectTableStubs) await client.unsafe(statement)
 
         await client`
           CREATE TABLE refresh_operations.leaderboard_effects (

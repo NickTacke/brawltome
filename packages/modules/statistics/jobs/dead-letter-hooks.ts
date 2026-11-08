@@ -1,13 +1,11 @@
 import {
   type DeadLetterHooks,
   type EffectDescriber,
-  hasStatisticsCollectionSeal,
   lockEffectOperation,
   type ReplayGuard,
-  readStatisticsEffects,
-  readStatisticsPublicationEffects,
   statisticsCollectionKinds,
 } from '@brawltome/refresh-operations'
+import { hasStatisticsCollectionSeal, readStatisticsEffects, readStatisticsPublicationEffects } from '../db/effects'
 
 // a publication that read the collection has sealed it, and replaying it would change what that publication read
 const requireCollectionUnsealed: ReplayGuard = async (transaction, target) => {

@@ -1070,7 +1070,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         LEFT JOIN statistics.observations observation
           ON observation.cohort_id = collection.cohort_id
          AND observation.brawlhalla_id = collection.brawlhalla_id AND observation.product = collection.product
-        LEFT JOIN refresh_operations.statistics_collection_effects effect
+        LEFT JOIN statistics.statistics_collection_effects effect
           ON effect.operation_id = ${authorization.effectOperationId}
           OR effect.operation_key = ${authorization.operationKey}
         WHERE collection.cohort_id = ${authorization.cohortId}
@@ -1120,7 +1120,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         if (bound?.operation_id !== authorization.effectOperationId) return 'effect-conflict'
 
         const [effect] = await sql<{ result: CollectionCommitResult }[]>`
-          SELECT refresh_operations.record_statistics_collection_effect(
+          SELECT statistics.record_statistics_collection_effect(
             ${authorization.operationId}, ${authorization.operationKey}, ${authorization.kind},
             ${authorization.leaseOwner}, ${authorization.leaseToken}
           ) AS result
@@ -1247,7 +1247,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         }
 
         const [seal] = await sql<{ result: 'sealed' | 'collection-active' | 'effect-conflict' }[]>`
-          SELECT refresh_operations.seal_statistics_collections_for_publication(
+          SELECT statistics.seal_statistics_collections_for_publication(
             ${operationId},
             ARRAY(
               SELECT collection.operation_id
@@ -1298,7 +1298,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         FROM statistics.publication_operations publication
         LEFT JOIN statistics.publication_decisions decision
           ON decision.generation_id = publication.generation_id AND decision.product = publication.product
-        LEFT JOIN refresh_operations.statistics_publication_effects effect
+        LEFT JOIN statistics.statistics_publication_effects effect
           ON effect.operation_id = ${authorization.effectOperationId}
           OR effect.operation_key = ${authorization.operationKey}
         WHERE publication.generation_id = ${authorization.generationId}
@@ -1333,7 +1333,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
           return { result: 'effect-conflict', decision: null }
 
         const [effect] = await sql<{ result: PublicationCommitResult }[]>`
-          SELECT refresh_operations.record_statistics_publication_effect(
+          SELECT statistics.record_statistics_publication_effect(
             ${authorization.operationId}, ${authorization.operationKey},
             ${authorization.leaseOwner}, ${authorization.leaseToken},
             ARRAY(
@@ -1506,7 +1506,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         FROM statistics.legend_meta_publication_operations publication
         LEFT JOIN statistics.legend_meta_publication_decisions decision
           ON decision.generation_id = publication.generation_id
-        LEFT JOIN refresh_operations.statistics_legend_meta_publication_effects effect
+        LEFT JOIN statistics.statistics_legend_meta_publication_effects effect
           ON effect.operation_id = ${authorization.effectOperationId}
           OR effect.operation_key = ${authorization.operationKey}
         WHERE publication.generation_id = ${authorization.generationId}
@@ -1541,7 +1541,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         }
 
         const [effect] = await sql<{ result: LegendMetaPublicationCommitResult }[]>`
-          SELECT refresh_operations.record_statistics_legend_meta_publication_effect(
+          SELECT statistics.record_statistics_legend_meta_publication_effect(
             ${authorization.operationId}, ${authorization.operationKey},
             ${authorization.leaseOwner}, ${authorization.leaseToken}
           ) AS result

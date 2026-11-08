@@ -2020,7 +2020,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: () => reserveStatisticsOperation('statistics-ranked-collection'),
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
+        INSERT INTO statistics.statistics_collection_effects (operation_key, operation_id, kind, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.kind}, ${lease.leaseToken})
       `
     },
@@ -2029,7 +2029,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: reserveStatisticsPublication,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_publication_effects (operation_key, operation_id, lease_token)
+        INSERT INTO statistics.statistics_publication_effects (operation_key, operation_id, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
       `
     },
@@ -2038,7 +2038,7 @@ const effectFixtures: Record<KindWithEffects, EffectFixture> = {
     create: reserveLegendMetaPublication,
     recordEffect: async (control, lease) => {
       await control`
-        INSERT INTO refresh_operations.statistics_legend_meta_publication_effects
+        INSERT INTO statistics.statistics_legend_meta_publication_effects
           (operation_key, operation_id, lease_token)
         VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken})
       `

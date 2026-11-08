@@ -85,17 +85,5 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/database-migrations': ['adapter', 'capability', 'foundation'],
   },
   deployedMigrations: deployedOrder,
-  exceptions: [
-    {
-      id: 'statistics-reads-refresh-operations',
-      rule: 'cross-module-sql',
-      importer: '@brawltome/statistics',
-      dependency: '@brawltome/refresh-operations',
-      files: ['packages/modules/statistics/postgres.ts'],
-      importPath: 'refresh_operations',
-      reason: 'Collection and publication read operations and its effect tables, and call its effect functions.',
-      issue: '#388',
-      expiresWhen: 'the module is rebuilt',
-    },
-  ],
+  exceptions: [],
 }

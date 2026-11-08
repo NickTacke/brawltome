@@ -276,6 +276,7 @@
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
         "@brawltome/refresh-operations": "workspace:*",
+        "drizzle-orm": "0.45.4",
       },
       "devDependencies": {
         "@brawltome/telemetry": "workspace:*",

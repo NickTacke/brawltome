@@ -222,14 +222,13 @@ describe('dependency architecture', () => {
     expect(readScripts('apps/api/package.json')?.['dead-letters']).toBe('bun src/dead-letter-cli.ts')
   })
 
-  it('passes the current repository with only cross-module-sql exceptions', () => {
+  it('passes the current repository with no exceptions', () => {
     const repository = readArchitectureRepository(resolve(import.meta.dir, '../../..'))
     const result = checkArchitecture(repository, currentArchitecturePolicy)
 
     expect(result.violations).toEqual([])
     expect(result.staleExceptions).toEqual([])
-    expect(result.appliedExceptions.length).toBeGreaterThan(0)
-    expect(result.appliedExceptions.every((exception) => exception.rule === 'cross-module-sql')).toBe(true)
+    expect(result.appliedExceptions).toEqual([])
   })
 
   it('reports named temporary exceptions without allowing new import locations', () => {
