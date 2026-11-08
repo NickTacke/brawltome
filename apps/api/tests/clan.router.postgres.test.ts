@@ -96,7 +96,7 @@ function accepted(operationId: string) {
 }
 
 describe('clan.byId over the clan tables', () => {
-  test('returns every field of a fully fetched clan, members ordered by xp as text then player id', async () => {
+  test('returns every field of a fully fetched clan, members ordered by xp then player id', async () => {
     const { caller } = createCaller()
 
     await expect(caller.byId({ id: completeClan.clan.clanId })).resolves.toEqual(completeClan.expected)
