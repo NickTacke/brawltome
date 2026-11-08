@@ -5,6 +5,44 @@ import postgres from 'postgres'
 import { orderedMigrations } from '../src/inventories'
 
 const movingIdentities = new Set(['accounts/0011', 'players/0021', 'rankings/0013', 'statistics/0005'])
+const droppingIdentities = new Set(['accounts/0012', 'players/0022', 'rankings/0014', 'statistics/0006'])
+
+const compatibilityViews = [
+  'proof_effects',
+  'leaderboard_effects',
+  'leaderboard_deep_crawl_progress',
+  'leaderboard_deep_crawl_mode_progress',
+  'primary_monitoring_reconciliation',
+  'statistics_collection_effects',
+  'statistics_collection_seals',
+  'statistics_publication_effects',
+  'statistics_legend_meta_publication_effects',
+]
+
+const compatibilityFunctions = [
+  'record_leaderboard_effect(uuid,text,text,text,bigint)',
+  'record_statistics_collection_effect(uuid,text,text,text,bigint)',
+  'seal_statistics_collections_for_publication(uuid,uuid[])',
+  'record_statistics_publication_effect(uuid,text,text,bigint,uuid[])',
+  'record_statistics_legend_meta_publication_effect(uuid,text,text,bigint)',
+]
+
+const compatibilityObjects = [...compatibilityViews, ...compatibilityFunctions]
+
+const droppedNamePattern = `refresh_operations\\.(${compatibilityObjects.map((name) => name.split('(')[0]).join('|')})\\y`
+
+const tablesWorkersUse = [
+  'refresh_operations.operations',
+  'accounts.proof_effects',
+  'players.primary_monitoring_reconciliation',
+  'rankings.leaderboard_effects',
+  'rankings.leaderboard_deep_crawl_progress',
+  'rankings.leaderboard_deep_crawl_mode_progress',
+  'statistics.statistics_collection_effects',
+  'statistics.statistics_collection_seals',
+  'statistics.statistics_publication_effects',
+  'statistics.statistics_legend_meta_publication_effects',
+]
 
 const serverUrl = process.env.DATABASE_URL
 const describeWithDatabase = serverUrl ? describe : describe.skip
@@ -25,6 +63,7 @@ const deadLetterTables = [
 let databaseUrl: string
 let owner: postgres.Sql
 let admin: postgres.Sql
+let compatibilityObjectsBeforeTheDrop: string[]
 
 const watermark = new Date('2026-08-10T00:00:00.000Z')
 
@@ -103,6 +142,28 @@ async function grantDeadLetterAccessBeforeTheMove(): Promise<void> {
   for (const table of deadLetterTables) {
     await owner.unsafe(`GRANT SELECT ON refresh_operations.${table} TO ${deadLetterRole}`)
   }
+}
+
+async function findCompatibilityObjects(sql: postgres.Sql): Promise<string[]> {
+  const found: string[] = []
+
+  for (const view of compatibilityViews) {
+    const [{ name }] = await sql<{ name: string | null }[]>`
+      SELECT to_regclass(${`refresh_operations.${view}`})::text AS name
+    `
+
+    if (name) found.push(view)
+  }
+
+  for (const signature of compatibilityFunctions) {
+    const [{ name }] = await sql<{ name: string | null }[]>`
+      SELECT to_regprocedure(${`refresh_operations.${signature}`})::text AS name
+    `
+
+    if (name) found.push(signature)
+  }
+
+  return found
 }
 
 async function asRole(role: string, run: (transaction: postgres.Sql) => Promise<void>): Promise<void> {
@@ -225,6 +286,10 @@ beforeAll(async () => {
   await seedRowsBeforeTheMove()
   await grantDeadLetterAccessBeforeTheMove()
 
+  // the schema the release still serving during the drop runs against
+  await migratePostgres(databaseUrl, migrationsWithout(droppingIdentities))
+  compatibilityObjectsBeforeTheDrop = await findCompatibilityObjects(owner)
+
   await migratePostgres(databaseUrl, orderedMigrations)
 }, 60_000)
 
@@ -299,6 +364,87 @@ describeWithDatabase('queue effect tables at their owners', () => {
       }
     } finally {
       await admin.unsafe(`DROP DATABASE IF EXISTS "${freshName}" WITH (FORCE)`)
+    }
+  }, 60_000)
+
+  test('the views and wrappers existed until the drop and are gone after it', async () => {
+    expect(compatibilityObjectsBeforeTheDrop).toEqual(compatibilityObjects)
+    expect(await findCompatibilityObjects(owner)).toEqual([])
+  })
+
+  // plpgsql bodies are stored as text, so postgres would let these drops through and fail when the body next ran
+  test('no surviving view or function body names a dropped object', async () => {
+    const [control] = await owner<{ matches: boolean }[]>`
+      SELECT 'FROM refresh_operations.proof_effects WHERE' ~ ${droppedNamePattern} AS matches
+    `
+
+    expect(control.matches).toBe(true)
+
+    const references = await owner<{ name: string }[]>`
+      SELECT n.nspname || '.' || p.proname AS name
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND p.prosrc ~ ${droppedNamePattern}
+      UNION ALL
+      SELECT schemaname || '.' || viewname
+      FROM pg_views
+      WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND definition ~ ${droppedNamePattern}
+    `
+
+    expect([...references]).toEqual([])
+  })
+
+  test('every drop sets a short lock timeout', () => {
+    const drops = orderedMigrations.filter(({ identity }) => droppingIdentities.has(identity))
+
+    expect(drops.map(({ identity }) => identity).sort()).toEqual([...droppingIdentities].sort())
+
+    for (const migration of drops) {
+      expect(migration.sql.startsWith("SET LOCAL lock_timeout = '5s';")).toBe(true)
+    }
+  })
+
+  test('the drops finish while the tables workers use are locked access exclusive', async () => {
+    const lockDatabaseName = `effect_drop_locks_${process.pid}_${randomUUID().replaceAll('-', '')}`.slice(0, 63)
+
+    await admin.unsafe(`CREATE DATABASE "${lockDatabaseName}"`)
+
+    const lockUrl = urlForDatabase(lockDatabaseName)
+
+    await migratePostgres(lockUrl, migrationsWithout(droppingIdentities))
+
+    const holder = postgres(lockUrl, { max: 1 })
+
+    try {
+      let release: () => void = () => undefined
+      let markLocked: () => void = () => undefined
+
+      const released = new Promise<void>((resolve) => {
+        release = resolve
+      })
+
+      const locked = new Promise<void>((resolve) => {
+        markLocked = resolve
+      })
+
+      const holding = holder.begin(async (transaction) => {
+        await transaction.unsafe(`LOCK TABLE ${tablesWorkersUse.join(', ')} IN ACCESS EXCLUSIVE MODE`)
+        markLocked()
+        await released
+      })
+
+      await Promise.race([locked, holding])
+
+      try {
+        expect(await migratePostgres(lockUrl, orderedMigrations)).toBe(droppingIdentities.size)
+      } finally {
+        release()
+      }
+
+      await holding
+    } finally {
+      await holder.end()
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${lockDatabaseName}" WITH (FORCE)`)
     }
   }, 60_000)
 
