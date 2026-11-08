@@ -5,6 +5,9 @@ import type { ClanProvenance } from '../domain/provenance'
 
 // every column of each table the code uses, since tests/tables.test.ts compares them all with the database;
 // defaults, checks, indexes and triggers stay in the migrations
+//
+// the few .default() calls below mirror the migrations' defaults, so inserts may leave those columns out; nothing
+// checks them against the migrations
 
 export const clansSchema = pgSchema('clans')
 
