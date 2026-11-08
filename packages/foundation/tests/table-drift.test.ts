@@ -362,6 +362,7 @@ describeWithDatabase('expectTablesMatchDatabase', () => {
       expect(message).toContain(
         'drift.addresses: column address has the drizzle type inet, which the table check does not know',
       )
+
       expect(message).not.toContain('in the database but')
     })
 
@@ -373,6 +374,7 @@ describeWithDatabase('expectTablesMatchDatabase', () => {
       expect(message).toContain(
         'drift.addresses: column address has the drizzle type inet, which the table check does not know',
       )
+
       expect(message).toContain('drift.addresses: column address is not null in the database but nullable in drizzle')
     })
   })
