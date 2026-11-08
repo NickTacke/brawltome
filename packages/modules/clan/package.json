@@ -16,6 +16,7 @@
     "postgres": "^3.4.8"
   },
   "devDependencies": {
+    "@brawltome/telemetry": "workspace:*",
     "typescript": "^5.7.0"
   }
 }

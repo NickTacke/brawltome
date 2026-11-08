@@ -1,12 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { JobDefinition, Lease } from '@brawltome/refresh-operations'
 import { createTelemetry } from '@brawltome/telemetry'
-import { createWorkerJobs, type WorkerDiscoveryDependencies } from '../src/worker/job-list'
+import { createWorkerJobs, type WorkerClanDependencies, type WorkerDiscoveryDependencies } from '../src/worker/job-list'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
 const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
 
-function createRecordingJobs() {
+const idleClanDependencies: WorkerClanDependencies = {
+  clans: {} as WorkerClanDependencies['clans'],
+  createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
+}
+
+function createRecordingJobs(clan: WorkerClanDependencies = idleClanDependencies) {
   const calls: unknown[][] = []
 
   const record =
@@ -44,6 +49,7 @@ function createRecordingJobs() {
       clanSource,
       leaseActive: async () => true,
     },
+    clan,
   })
 
   return { calls, jobs }
@@ -121,5 +127,45 @@ describe('worker job list', () => {
       ['projectionEffectState', 'clan', 'effect'],
       ['reconciliationEffectApplied', 'effect'],
     ])
+  })
+
+  test('clan refresh builds its Brawlhalla client around the admission of the running section', async () => {
+    const admittedDomains: string[] = []
+
+    const { jobs } = createRecordingJobs({
+      clans: {
+        prepareRefreshEffect: async () => 'execute',
+        recordProfileCheck: async () => true,
+      } as unknown as WorkerClanDependencies['clans'],
+      createBrawlhallaClient: (beforeRequest) => ({
+        getGuildStatsV1: async () => {
+          await beforeRequest?.({ domain: 'brawlhalla-v1', path: '/guild' })
+
+          return null
+        },
+        getGuildMembersV1: async () => null,
+      }),
+    })
+
+    const tools = {
+      queue: {
+        renewWithAuthority: async () => ({ outcome: 'renewed', leaseExpiresAt: new Date(Date.now() + 60_000) }),
+        beginInteractiveSection: async () => 'execute',
+      },
+      leaseMs: 1_000,
+      signal: new AbortController().signal,
+      createSourceAdmitter: () => async (domain: string) => {
+        admittedDomains.push(domain)
+      },
+      watchLease: () => () => {},
+    }
+
+    const lease = leaseWithPayload('clan-refresh', { clanId: 77, staleSections: ['profile'] })
+
+    await expect(jobOfKind(jobs, 'clan-refresh').run(lease, tools as never)).rejects.toThrow(
+      'ambiguous guild stats 404',
+    )
+
+    expect(admittedDomains).toEqual(['brawlhalla-v1'])
   })
 })

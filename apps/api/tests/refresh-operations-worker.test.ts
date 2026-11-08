@@ -962,73 +962,6 @@ describe('refresh operations worker source retry', () => {
     expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
   })
 
-  test('defers clan source admission without consuming its execution attempt', async () => {
-    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'clan:77',
-      kind: 'clan-refresh',
-      workClass: 'interactive',
-      payload: { clanId: 77, staleSections: ['profile'] },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 3,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let deferred: { failure: OperationFailure; retryDelayMs: number } | undefined
-    let failed = false
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      renewWithAuthority: async () => ({ outcome: 'renewed', leaseExpiresAt: new Date(Date.now() + 60_000) }) as const,
-      beginInteractiveSection: async () => 'execute' as const,
-      commitInteractiveSection: async () => 'transitioned' as const,
-      complete: async () => 'transitioned' as const,
-      defer: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-        deferred = { failure, retryDelayMs }
-
-        return 'transitioned' as const
-      },
-      fail: async () => {
-        failed = true
-
-        return 'transitioned' as const
-      },
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      telemetry,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 37 }),
-        pauseSource: async () => {},
-      },
-      syncClanLeaseAuthority: async () => {},
-      executeClanSection: async (_lease, _section, admitSourceCall) => {
-        await admitSourceCall('brawlhalla-v1')
-      },
-    })
-
-    expect(deferred).toEqual({
-      failure: { code: 'source_rate_limited', message: 'Source admission is rate limited', retryable: true },
-      retryDelayMs: 37_000,
-    })
-
-    expect(failed).toBe(false)
-    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
-
-    expect(failures?.series[0]?.labels.failure_category).toBe('admission_deferred')
-  })
-
   test('waits out Brawlhalla maintenance instead of spending attempts and dead-lettering', async () => {
     const lease = (attemptNumber: number): OperationLease => ({
       operationId: crypto.randomUUID(),
@@ -1112,69 +1045,6 @@ describe('refresh operations worker source retry', () => {
 
     expect(broken.transitions[0]?.kind).toBe('fail')
     expect(broken.paused).toEqual([])
-  })
-
-  test('revokes active clan authority and skips publication completion after renewal loss', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'clan:renewal-loss',
-      kind: 'clan-refresh',
-      workClass: 'interactive',
-      payload: { clanId: 79, staleSections: ['profile'] },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 1,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let renewals = 0
-    let revoked = false
-    let committed = false
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      renewWithAuthority: async () => {
-        renewals++
-
-        return renewals === 1
-          ? ({ outcome: 'renewed', leaseExpiresAt: new Date(Date.now() + 60_000) } as const)
-          : ({ outcome: 'lease-lost' } as const)
-      },
-      beginInteractiveSection: async () => 'execute' as const,
-      commitInteractiveSection: async () => {
-        committed = true
-
-        return 'transitioned' as const
-      },
-      complete: async () => 'transitioned' as const,
-      fail: async () => 'transitioned' as const,
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      renewEveryMs: 1,
-      retryDelayMs: 10,
-      admission,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
-        pauseSource: async () => {},
-      },
-      syncClanLeaseAuthority: async () => {},
-      revokeClanLeaseAuthority: async () => {
-        revoked = true
-      },
-      executeClanSection: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 15))
-      },
-    })
-
-    expect(revoked).toBe(true)
-    expect(committed).toBe(false)
   })
 
   test('dispatches the fenced Legend Meta publication without treating it as source collection', async () => {
@@ -1282,69 +1152,6 @@ describe('refresh operations worker source retry', () => {
 
       expect(telemetry.stats().seriesDropped).toBe(0)
     }
-  })
-
-  test('preserves a genuine section failure when another section is source-limited', async () => {
-    const lease: OperationLease = {
-      operationId: crypto.randomUUID(),
-      effectOperationId: crypto.randomUUID(),
-      effectCreatedAt: new Date().toISOString(),
-      operationKey: 'clan:78',
-      kind: 'clan-refresh',
-      workClass: 'interactive',
-      payload: { clanId: 78, staleSections: ['profile', 'roster'] },
-      provenance: { source: 'test' },
-      leaseOwner: 'worker',
-      leaseToken: 1,
-      attemptNumber: 3,
-      maxAttempts: 3,
-      scheduleWindowAt: null,
-    }
-
-    let deferred = false
-    let failed: { failure: OperationFailure; retryDelayMs: number } | undefined
-
-    const operations = {
-      claim: async () => lease,
-      renew: async () => 'renewed' as const,
-      renewWithAuthority: async () => ({ outcome: 'renewed', leaseExpiresAt: new Date(Date.now() + 60_000) }) as const,
-      beginInteractiveSection: async () => 'execute' as const,
-      commitInteractiveSection: async () => 'transitioned' as const,
-      complete: async () => 'transitioned' as const,
-      defer: async () => {
-        deferred = true
-
-        return 'transitioned' as const
-      },
-      fail: async (_lease: OperationLease, failure: OperationFailure, retryDelayMs: number) => {
-        failed = { failure, retryDelayMs }
-
-        return 'transitioned' as const
-      },
-    }
-
-    await runOneRefreshOperation(operations as never, 'worker', {
-      leaseMs: 1_000,
-      retryDelayMs: 10,
-      admission,
-      sourceAdmission: {
-        admitSource: async () => ({ outcome: 'rate-limited', retryAfterSeconds: 41 }),
-        pauseSource: async () => {},
-      },
-      syncClanLeaseAuthority: async () => {},
-      executeClanSection: async (_lease, section, admitSourceCall) => {
-        if (section === 'profile') throw new Error('generic profile failure')
-
-        await admitSourceCall('brawlhalla-v1')
-      },
-    })
-
-    expect(failed).toEqual({
-      failure: { code: 'clan_refresh_failed', message: 'generic profile failure', retryable: true },
-      retryDelayMs: 10,
-    })
-
-    expect(deferred).toBe(false)
   })
 
   test('backs off retryable execution failures exponentially so a brief source hiccup is not dead-lettered', async () => {
@@ -1982,14 +1789,17 @@ type WorkerOptions = Parameters<typeof runOneRefreshOperation>[2]
 // kinds whose jobs live in their owning module are tested there
 type WrappedKind = Exclude<
   OperationLease['kind'],
-  'ranking-retention' | 'player-discovery-projection' | 'clan-discovery-projection' | 'discovery-reconciliation'
+  | 'ranking-retention'
+  | 'player-discovery-projection'
+  | 'clan-discovery-projection'
+  | 'discovery-reconciliation'
+  | 'clan-refresh'
 >
 
 // every kind and the code its worker reports when the executor throws a plain error
 const failureCodes = [
   ['proof', 'proof_execution_failed'],
   ['interactive-player-refresh', 'interactive_player_refresh_failed'],
-  ['clan-refresh', 'clan_refresh_failed'],
   ['ranked-player-pulse', 'ranked_player_pulse_failed'],
   ['player-name-verification', 'player_name_verification_failed'],
   ['leaderboard-deep-crawl', 'leaderboard_deep_crawl_failed'],
@@ -2012,7 +1822,6 @@ const leaseShapes: Record<WrappedKind, { workClass: string; payload: object }> =
     workClass: 'interactive',
     payload: { brawlhallaId: 42, staleSections: ['ranked'] },
   },
-  'clan-refresh': { workClass: 'interactive', payload: { clanId: 77, staleSections: ['profile'] } },
   'ranked-player-pulse': { workClass: 'primary-monitoring', payload: { brawlhallaId: 42 } },
   'player-name-verification': { workClass: 'maintenance', payload: { brawlhallaId: 42, playerName: 'Name' } },
   'leaderboard-deep-crawl': { workClass: 'leaderboard', payload: { region: 'AUS', intervalMs: 3_600_000 } },
@@ -2051,7 +1860,6 @@ const idleRanking = {
 const failingOptions: Record<WrappedKind, Partial<WorkerOptions>> = {
   proof: { executeEffect: explode },
   'interactive-player-refresh': {},
-  'clan-refresh': {},
   'ranked-player-pulse': { sourceAdmission: admittingSource, executeRankedPulse: explode },
   'player-name-verification': { sourceAdmission: admittingSource, executePlayerNameVerification: explode },
   'leaderboard-deep-crawl': {

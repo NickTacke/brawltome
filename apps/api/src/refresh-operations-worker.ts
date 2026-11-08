@@ -42,7 +42,6 @@ import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 
 type ProofLease = Extract<OperationLease, { kind: 'proof' }>
 type PlayerLease = Extract<OperationLease, { kind: 'interactive-player-refresh' }>
-type ClanLease = Extract<OperationLease, { kind: 'clan-refresh' }>
 type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
@@ -54,8 +53,7 @@ type StatisticsCollectionLease = Extract<
 >
 type StatisticsPublicationLease = Extract<StatisticsLease, { kind: 'statistics-publication' }>
 type StatisticsLegendMetaPublicationLease = Extract<StatisticsLease, { kind: 'statistics-legend-meta-publication' }>
-type InteractiveLease = PlayerLease | ClanLease
-type InteractiveSection = InteractiveLease['payload']['staleSections'][number]
+type InteractiveSection = PlayerLease['payload']['staleSections'][number]
 
 type RunOneRefreshOperationOptions = {
   leaseMs: number
@@ -80,14 +78,6 @@ type RunOneRefreshOperationOptions = {
     admitSourceCall: (domain: SourceDomain) => Promise<void>,
   ): Promise<unknown>
   isPrimaryMonitoringTarget?(lease: AccountPrimaryLease): Promise<boolean>
-  executeClanSection?(
-    lease: ClanLease,
-    section: 'profile' | 'roster',
-    admitSourceCall: (domain: SourceDomain) => Promise<void>,
-    leaseExpiresAt: Date,
-  ): Promise<void>
-  syncClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster', leaseExpiresAt: Date): Promise<void>
-  revokeClanLeaseAuthority?(lease: ClanLease, section: 'profile' | 'roster'): Promise<void>
   ranking?: RankingPublicationStore
   leaderboardPlayerNames?: {
     applyLeaderboardNames(input: {
@@ -223,7 +213,7 @@ async function executeProof(
 
 type AccountPrimaryLease = Extract<PlayerLease, { workClass: 'primary-monitoring'; payload: { assignmentId: string } }>
 
-function isAccountPrimaryLease(lease: InteractiveLease): lease is AccountPrimaryLease {
+function isAccountPrimaryLease(lease: PlayerLease): lease is AccountPrimaryLease {
   return (
     lease.kind === 'interactive-player-refresh' &&
     lease.workClass === 'primary-monitoring' &&
@@ -271,59 +261,6 @@ async function executePlayerRefresh(
     },
     { beforeSection: () => completeEndedAssignment(tools.queue, lease, options) },
   )
-}
-
-async function executeClanRefresh(
-  lease: ClanLease,
-  tools: JobTools,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.sourceAdmission) throw new Error('Interactive refresh dependencies are unavailable')
-
-  let activeSection: 'profile' | 'roster' | null = null
-
-  const stopWatching = tools.watchLease({
-    async renewed(leaseExpiresAt) {
-      if (activeSection && options.syncClanLeaseAuthority) {
-        await options.syncClanLeaseAuthority(lease, activeSection, leaseExpiresAt)
-      }
-    },
-    async lost() {
-      if (activeSection && options.revokeClanLeaseAuthority) {
-        await options.revokeClanLeaseAuthority(lease, activeSection)
-      }
-    },
-  })
-
-  try {
-    return await runSections(
-      lease,
-      lease.payload.staleSections as InteractiveSection[],
-      tools,
-      async (section, { admitSource, leaseExpiresAt }) => {
-        if (
-          !options.executeClanSection ||
-          !options.syncClanLeaseAuthority ||
-          leaseExpiresAt === undefined ||
-          (section !== 'profile' && section !== 'roster')
-        ) {
-          throw new Error('Clan refresh handler unavailable')
-        }
-
-        activeSection = section
-        await options.syncClanLeaseAuthority(lease, section, leaseExpiresAt)
-        await options.executeClanSection(lease, section, admitSource, leaseExpiresAt)
-      },
-      {
-        renewWithAuthority: true,
-        afterSection: () => {
-          activeSection = null
-        },
-      },
-    )
-  } finally {
-    stopWatching()
-  }
 }
 
 async function executeRankedPulse(
@@ -1147,12 +1084,6 @@ function interactiveJobs(options: RunOneRefreshOperationOptions): JobDefinition<
       workClasses: ['interactive', 'primary-monitoring'],
       failureCode: 'interactive_player_refresh_failed',
       run: (lease, tools) => executePlayerRefresh(lease, tools, options),
-    }),
-    wrapJob<ClanLease>({
-      kind: 'clan-refresh',
-      workClasses: ['interactive'],
-      failureCode: 'clan_refresh_failed',
-      run: (lease, tools) => executeClanRefresh(lease, tools, options),
     }),
   ]
 }

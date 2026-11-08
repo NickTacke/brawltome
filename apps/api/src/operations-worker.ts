@@ -7,7 +7,7 @@ import {
   brawlhallaV0RequestLimit,
   createBhApiRequestQueue,
 } from '@brawltome/bhapi'
-import { createPostgresClanDiscoverySource, createPostgresClans, processRefreshClanSection } from '@brawltome/clan'
+import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
@@ -113,6 +113,7 @@ const discovery = createPostgresDiscovery(databases.discovery)
 const discoveryChecks = createPostgresDiscovery(databases.main)
 
 const ranking = createPostgresRanking(databases.main)
+const clans = createPostgresClans(databases.main)
 
 const playerDiscoverySource = createPostgresPlayerDiscoverySource(databases.discovery)
 const clanDiscoverySource = createPostgresClanDiscoverySource(databases.discovery)
@@ -131,6 +132,7 @@ const workerJobs = createWorkerJobs({
     clanSource: clanDiscoverySource,
     leaseActive: discoveryLeaseActive,
   },
+  clan: { clans, createBrawlhallaClient: createWorkerBhApiClient },
 })
 
 const operations = createPostgresRefreshOperations(
@@ -174,7 +176,6 @@ const rankedPlayers = createPostgresRankedPlayers(databases.main, {
   resolveCareerMainLegend: (brawlhallaId) => careerPlayers.mainLegendById(brawlhallaId),
 })
 
-const clans = createPostgresClans(databases.main)
 const playerDiscoveryChecks = createPostgresPlayerDiscoverySource(databases.main)
 const clanDiscoveryChecks = createPostgresClanDiscoverySource(databases.main)
 
@@ -585,38 +586,6 @@ try {
               section: 'ranked',
             },
           )
-        },
-        syncClanLeaseAuthority: async (lease, section, leaseExpiresAt) => {
-          const prepared = await clans.prepareRefreshEffect({
-            operationId: lease.effectOperationId,
-            section,
-            leaseToken: lease.leaseToken,
-            leaseExpiresAt,
-          })
-
-          if (prepared === 'fenced') throw new Error(`${section} refresh lease was fenced`)
-        },
-        revokeClanLeaseAuthority: (lease, section) =>
-          clans.revokeRefreshEffect({
-            operationId: lease.effectOperationId,
-            section,
-            leaseToken: lease.leaseToken,
-            leaseExpiresAt: new Date(0),
-          }),
-        executeClanSection: async (lease, section, admitSourceCall, leaseExpiresAt) => {
-          const admittedBhapi = createWorkerBhApiClient(({ domain }) => admitSourceCall(domain))
-
-          const result = await processRefreshClanSection(
-            clans,
-            admittedBhapi,
-            lease.payload.clanId,
-            section,
-            'on-demand',
-            new Date(),
-            { operationId: lease.effectOperationId, section, leaseToken: lease.leaseToken, leaseExpiresAt },
-          )
-
-          if (result.outcome === 'preserved') throw new Error(result.error ?? `${section} refresh failed`)
         },
       }),
   })

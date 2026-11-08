@@ -86,7 +86,7 @@ function entriesForKinds<Kind extends string>(
 }
 
 // these jobs live in their owning module and bring their effect checks with them
-type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation'
+type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation' | 'clan-refresh'
 
 // a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
 // until it says how claim reads its effect
@@ -94,7 +94,6 @@ export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): Eff
   const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
     proof: { effectState: proofEffectState },
     'interactive-player-refresh': { effectState: staleSectionsCommitted },
-    'clan-refresh': { effectState: staleSectionsCommitted },
     'ranked-player-pulse': { effectState: rankedSectionCommitted },
     'player-name-verification': { effectState: rankedSectionCommitted },
     'ranking-retention': {},

@@ -12,6 +12,10 @@ export { createPostgresClanDiscoverySource } from './db/postgres-clan-discovery-
 export { type ClanQueries, createPostgresClans } from './db/postgres-clans'
 export type { ClanProvenance } from './domain/provenance'
 export {
+  type ClanRefreshJobDependencies,
+  createClanRefreshJob,
+} from './jobs/clan-refresh-job'
+export {
   activateClanRefresh,
   type ClanRefreshReservation,
   type ClanRefreshReservations,
@@ -20,7 +24,7 @@ export {
   rejectClanRefresh,
   reserveClanRefresh,
 } from './jobs/clan-refresh-reservation'
-export { processRefreshClanSection } from './jobs/refresh-clan'
+export { type ClanSource, processRefreshClanSection } from './jobs/refresh-clan'
 
 const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
 
