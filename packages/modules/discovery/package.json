@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
+    "@brawltome/refresh-operations": "workspace:*",
     "postgres": "^3.4.0"
   },
   "devDependencies": {
+    "@brawltome/telemetry": "workspace:*",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   }

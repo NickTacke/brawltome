@@ -6,7 +6,7 @@ import {
   retryDelayForAttempt,
 } from '../domain/failure-decision'
 import { SourceAdmissionLimitedError, type SourceDomain } from '../domain/job-errors'
-import { type AdmissionConfig, discoveryProjectionKinds, type OperationFailure, type TransitionResult } from '../model'
+import type { AdmissionConfig, OperationFailure, TransitionResult } from '../model'
 import type {
   AttemptOutcome,
   JobDefinition,
@@ -116,12 +116,6 @@ function failedAttemptOutcome(lease: Lease<unknown>, failure: OperationFailure):
   return hasAttemptsLeft ? 'retry' : 'dead_letter'
 }
 
-function isDiscoveryProjection(lease: Lease<unknown>): boolean {
-  const projectionKinds: readonly string[] = discoveryProjectionKinds
-
-  return projectionKinds.includes(lease.kind)
-}
-
 async function settleFailure(
   queue: LeaseOperations,
   lease: Lease<unknown>,
@@ -137,11 +131,7 @@ async function settleFailure(
   }
 
   if (decision.action === 'retry-applied-effect') {
-    if (!isDiscoveryProjection(lease)) {
-      throw new Error(`settle failure for operation ${lease.operationId}: ${lease.kind} has no applied effect to retry`)
-    }
-
-    const transition = await queue.retryAppliedDiscoveryProjection(lease, options.retryDelayMs)
+    const transition = await queue.retryAppliedEffect(lease, options.retryDelayMs)
 
     return settledUnlessLeaseLost(transition, { outcome: 'retry', category: 'execution' })
   }

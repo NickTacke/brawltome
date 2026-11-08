@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
+import { createPlayerDiscoveryProjectionJob, createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
@@ -200,9 +200,15 @@ describe('Players to Discovery projection delivery', () => {
           leaseMs: 10_000,
           retryDelayMs: 10,
           admission,
-          executePlayerProjection: async (lease) => {
-            firstDelivery = await discovery.deliverPendingPlayers(source, lease.payload.batchSize, lease.operationId)
-          },
+          movedJobs: [
+            createPlayerDiscoveryProjectionJob({
+              deliverPending: async (batchSize, effectOperationId) => {
+                firstDelivery = await discovery.deliverPendingPlayers(source, batchSize, effectOperationId)
+              },
+              projectionEffectState: discovery.playerProjectionEffectState,
+              leaseActive: async () => true,
+            }),
+          ],
         }),
       ).toBe(true)
 
@@ -310,21 +316,25 @@ describe('Players to Discovery projection delivery', () => {
           leaseMs: 10_000,
           retryDelayMs: 0,
           admission,
-          executePlayerProjection: async (claimed) => {
-            await discovery.deliverPendingPlayers(
-              {
-                pendingEvents: source.pendingEvents,
-                acknowledgeEvents: async () => {
-                  throw acknowledgmentFailure
-                },
-                snapshot: source.snapshot,
-                lag: source.lag,
-              },
-              claimed.payload.batchSize,
-              claimed.operationId,
-            )
-          },
-          playerProjectionEffectState: discovery.playerProjectionEffectState,
+          movedJobs: [
+            createPlayerDiscoveryProjectionJob({
+              deliverPending: (batchSize, effectOperationId) =>
+                discovery.deliverPendingPlayers(
+                  {
+                    pendingEvents: source.pendingEvents,
+                    acknowledgeEvents: async () => {
+                      throw acknowledgmentFailure
+                    },
+                    snapshot: source.snapshot,
+                    lag: source.lag,
+                  },
+                  batchSize,
+                  effectOperationId,
+                ),
+              projectionEffectState: discovery.playerProjectionEffectState,
+              leaseActive: async () => true,
+            }),
+          ],
         }),
       ).toBe(true)
 
@@ -341,10 +351,14 @@ describe('Players to Discovery projection delivery', () => {
           leaseMs: 10_000,
           retryDelayMs: 0,
           admission,
-          executePlayerProjection: async (claimed) => {
-            await discovery.deliverPendingPlayers(source, claimed.payload.batchSize, claimed.operationId)
-          },
-          playerProjectionEffectState: discovery.playerProjectionEffectState,
+          movedJobs: [
+            createPlayerDiscoveryProjectionJob({
+              deliverPending: (batchSize, effectOperationId) =>
+                discovery.deliverPendingPlayers(source, batchSize, effectOperationId),
+              projectionEffectState: discovery.playerProjectionEffectState,
+              leaseActive: async () => true,
+            }),
+          ],
         }),
       ).toBe(true)
 

@@ -1,0 +1,125 @@
+import { describe, expect, test } from 'bun:test'
+import type { JobDefinition, Lease } from '@brawltome/refresh-operations'
+import { createTelemetry } from '@brawltome/telemetry'
+import { createWorkerJobs, type WorkerDiscoveryDependencies } from '../src/worker/job-list'
+
+const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
+const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
+
+function createRecordingJobs() {
+  const calls: unknown[][] = []
+
+  const record =
+    (name: string) =>
+    async (...args: unknown[]) => {
+      calls.push([name, ...args])
+
+      return { appliedEvents: 0, eventIds: [] }
+    }
+
+  const jobs = createWorkerJobs({
+    ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
+    isRankingRetentionEnabled: true,
+    telemetry: createTelemetry({ service: 'worker', drainIntervalMs: 0 }),
+    discovery: {
+      work: {
+        deliverPendingPlayers: record('deliverPendingPlayers'),
+        deliverPendingClans: record('deliverPendingClans'),
+        reconcilePlayers: record('reconcilePlayers'),
+        reconcileClans: record('reconcileClans'),
+      } as unknown as WorkerDiscoveryDependencies['work'],
+      checks: {
+        projectionEffectState: async (owner, operationId) => {
+          calls.push(['projectionEffectState', owner, operationId])
+
+          return 'applied'
+        },
+        reconciliationEffectApplied: async (operationId) => {
+          calls.push(['reconciliationEffectApplied', operationId])
+
+          return false
+        },
+      },
+      playerSource,
+      clanSource,
+      leaseActive: async () => true,
+    },
+  })
+
+  return { calls, jobs }
+}
+
+function jobOfKind(jobs: JobDefinition<unknown>[], kind: string): JobDefinition<unknown> {
+  const job = jobs.find((candidate) => candidate.kind === kind)
+
+  if (!job) throw new Error(`job list has no job for ${kind}`)
+
+  return job
+}
+
+function leaseWithPayload(kind: string, payload: unknown): Lease<unknown> {
+  return {
+    operationId: 'operation',
+    effectOperationId: 'effect',
+    effectCreatedAt: new Date(0).toISOString(),
+    operationKey: `${kind}:test`,
+    kind,
+    workClass: 'projection',
+    payload,
+    provenance: { source: 'test' },
+    leaseOwner: 'worker',
+    leaseToken: 1,
+    attemptNumber: 1,
+    maxAttempts: 3,
+    scheduleWindowAt: null,
+  }
+}
+
+async function runJob(job: JobDefinition<unknown>, lease: Lease<unknown>): Promise<void> {
+  await job.run(lease, { queue: { complete: async () => 'transitioned' } } as never)
+}
+
+describe('worker job list', () => {
+  test('player and clan projections deliver from their own owner source', async () => {
+    const { calls, jobs } = createRecordingJobs()
+
+    await runJob(
+      jobOfKind(jobs, 'player-discovery-projection'),
+      leaseWithPayload('player-discovery-projection', { batchSize: 7 }),
+    )
+
+    await runJob(
+      jobOfKind(jobs, 'clan-discovery-projection'),
+      leaseWithPayload('clan-discovery-projection', { batchSize: 9 }),
+    )
+
+    expect(calls[0]).toEqual(['deliverPendingPlayers', playerSource, 7, 'effect', expect.any(Function)])
+    expect(calls[1]).toEqual(['deliverPendingClans', clanSource, 9, 'effect', expect.any(Function)])
+  })
+
+  test('reconciliation runs against the source of the owner on its lease', async () => {
+    const { calls, jobs } = createRecordingJobs()
+    const job = jobOfKind(jobs, 'discovery-reconciliation')
+
+    await runJob(job, leaseWithPayload('discovery-reconciliation', { owner: 'player' }))
+    await runJob(job, leaseWithPayload('discovery-reconciliation', { owner: 'clan' }))
+
+    expect(calls[0]).toEqual(['reconcilePlayers', playerSource, 'effect', expect.any(Function)])
+    expect(calls[1]).toEqual(['reconcileClans', clanSource, 'effect', expect.any(Function)])
+  })
+
+  test('projection effect checks ask discovery about their own owner', async () => {
+    const { calls, jobs } = createRecordingJobs()
+    const lease = { operationId: 'operation', effectOperationId: 'effect', payload: {} }
+
+    await jobOfKind(jobs, 'player-discovery-projection').effectState?.({} as never, lease)
+    await jobOfKind(jobs, 'clan-discovery-projection').effectState?.({} as never, lease)
+    await jobOfKind(jobs, 'discovery-reconciliation').effectState?.({} as never, lease)
+
+    expect(calls).toEqual([
+      ['projectionEffectState', 'player', 'effect'],
+      ['projectionEffectState', 'clan', 'effect'],
+      ['reconciliationEffectApplied', 'effect'],
+    ])
+  })
+})

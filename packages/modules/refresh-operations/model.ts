@@ -1,4 +1,5 @@
 import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
+import type { Lease } from './jobs/job-definition'
 
 export const workClasses = [
   'interactive',
@@ -52,12 +53,6 @@ export type LeaderboardOperationKind = (typeof leaderboardOperationKinds)[number
 export const discoveryProjectionKinds = ['player-discovery-projection', 'clan-discovery-projection'] as const
 export type DiscoveryProjectionKind = (typeof discoveryProjectionKinds)[number]
 export type DiscoveryOwner = 'player' | 'clan'
-
-// discovery answers these when a projection or reconciliation lease expired, to tell whether its effect already landed
-export type DiscoveryEffectChecks = {
-  projectionEffectState(owner: DiscoveryOwner, effectOperationId: string): Promise<'none' | 'applied' | 'acknowledged'>
-  reconciliationEffectApplied(effectOperationId: string): Promise<boolean>
-}
 
 export const statisticsCollectionKinds = ['statistics-ranked-collection', 'statistics-lifetime-collection'] as const
 export type StatisticsCollectionKind = (typeof statisticsCollectionKinds)[number]
@@ -724,11 +719,8 @@ export interface RefreshOperationWorker {
     section: 'ranked' | 'stats' | 'profile' | 'roster',
   ): Promise<TransitionResult>
   commitProofEffect(lease: Extract<OperationLease, { kind: 'proof' }>): Promise<FencedResult>
-  discoveryLeaseActive(lease: Extract<OperationLease, { workClass: 'projection' }>): Promise<boolean>
-  retryAppliedDiscoveryProjection(
-    lease: Extract<OperationLease, { payload: { batchSize: number } }>,
-    retryDelayMs: number,
-  ): Promise<TransitionResult>
+  discoveryLeaseActive(lease: Lease<unknown>): Promise<boolean>
+  retryAppliedEffect(lease: Lease<unknown>, retryDelayMs: number): Promise<TransitionResult>
   defer(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>
   complete(lease: OperationLease): Promise<TransitionResult>
   fail(lease: OperationLease, failure: OperationFailure, retryDelayMs: number): Promise<TransitionResult>

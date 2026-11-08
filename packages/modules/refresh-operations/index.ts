@@ -67,6 +67,7 @@ export {
   decideExecutionFailure,
   decideSourceFailure,
   type FailureDecision,
+  isSourceFailure,
   type RetryTimings,
   retryDelayForAttempt,
   sourceWaitMs,

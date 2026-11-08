@@ -15,7 +15,6 @@ import {
   type AdmissionConfig,
   type AttemptOutcome,
   createJobRegistry,
-  decideSourceFailure,
   defineJob,
   type FailureDecision,
   type FencedResult,
@@ -48,8 +47,6 @@ type RankedPulseLease = Extract<OperationLease, { kind: 'ranked-player-pulse' }>
 type NameVerificationLease = Extract<OperationLease, { kind: 'player-name-verification' }>
 type LeaderboardDeepCrawlLease = Extract<OperationLease, { kind: 'leaderboard-deep-crawl' }>
 type LeaderboardLease = Exclude<Extract<OperationLease, { workClass: 'leaderboard' }>, LeaderboardDeepCrawlLease>
-type ProjectionLease = Extract<OperationLease, { payload: { batchSize: number } }>
-type ReconciliationLease = Extract<OperationLease, { kind: 'discovery-reconciliation' }>
 type StatisticsLease = Extract<OperationLease, { workClass: 'global-statistics' }>
 type StatisticsCollectionLease = Extract<
   StatisticsLease,
@@ -158,14 +155,6 @@ type RunOneRefreshOperationOptions = {
     | 'buildAndPublishLegendMeta'
   >
   executeStatisticsCollection?(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
-  executePlayerProjection?(lease: ProjectionLease): Promise<void>
-  executeClanProjection?(lease: ProjectionLease): Promise<void>
-  executeDiscoveryReconciliation?(lease: ReconciliationLease): Promise<void>
-  projectionEffectState?(
-    kind: ProjectionLease['kind'],
-    effectOperationId: string,
-  ): Promise<'none' | 'applied' | 'acknowledged'>
-  playerProjectionEffectState?(effectOperationId: string): Promise<'none' | 'applied' | 'acknowledged'>
   telemetry?: Telemetry
   // jobs that live in their owning module, added to the wrapped ones
   movedJobs?: readonly JobDefinition<unknown>[]
@@ -206,29 +195,6 @@ function decideRankingFailure(error: unknown, retry: RetryTimings): FailureDecis
       category: error.code === 'source_rate_limited' ? 'source_rate_limited' : 'source_unavailable',
     }
   }
-
-  return null
-}
-
-async function decideProjectionEffectFailure(
-  lease: ProjectionLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<FailureDecision | null> {
-  let effectState: 'none' | 'applied' | 'acknowledged' = 'none'
-
-  try {
-    if (options.projectionEffectState) {
-      effectState = await options.projectionEffectState(lease.kind, lease.effectOperationId)
-    } else if (lease.kind === 'player-discovery-projection' && options.playerProjectionEffectState) {
-      effectState = await options.playerProjectionEffectState(lease.effectOperationId)
-    }
-  } catch {
-    return { action: 'retry-applied-effect' }
-  }
-
-  if (effectState === 'acknowledged') return { action: 'complete' }
-
-  if (effectState === 'applied') return { action: 'retry-applied-effect' }
 
   return null
 }
@@ -358,33 +324,6 @@ async function executeClanRefresh(
   } finally {
     stopWatching()
   }
-}
-
-async function executeDiscoveryProjection(
-  operations: LeaseOperations,
-  lease: ProjectionLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  const execute =
-    lease.kind === 'player-discovery-projection' ? options.executePlayerProjection : options.executeClanProjection
-
-  if (!execute) throw new Error('Discovery projection executor is unavailable')
-
-  await execute(lease)
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
-}
-
-async function executeDiscoveryReconciliation(
-  operations: LeaseOperations,
-  lease: ReconciliationLease,
-  options: RunOneRefreshOperationOptions,
-): Promise<AttemptOutcome> {
-  if (!options.executeDiscoveryReconciliation) throw new Error('Discovery reconciliation executor is unavailable')
-
-  await options.executeDiscoveryReconciliation(lease)
-
-  return (await operations.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
 async function executeRankedPulse(
@@ -1218,35 +1157,6 @@ function interactiveJobs(options: RunOneRefreshOperationOptions): JobDefinition<
   ]
 }
 
-function discoveryProjectionJob(
-  kind: ProjectionLease['kind'],
-  failureCode: string,
-  options: RunOneRefreshOperationOptions,
-): JobDefinition<unknown> {
-  return wrapJob<ProjectionLease>({
-    kind,
-    workClasses: ['projection'],
-    failureCode,
-    run: (lease, tools) => executeDiscoveryProjection(tools.queue, lease, options),
-    // order matters: a source outage on a projection whose effect landed must still wait for the source
-    decideFailure: async (error, lease) =>
-      decideSourceFailure(error, retryTimings(options)) ?? (await decideProjectionEffectFailure(lease, options)),
-  })
-}
-
-function discoveryJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
-  return [
-    discoveryProjectionJob('player-discovery-projection', 'player_discovery_projection_failed', options),
-    discoveryProjectionJob('clan-discovery-projection', 'clan_discovery_projection_failed', options),
-    wrapJob<ReconciliationLease>({
-      kind: 'discovery-reconciliation',
-      workClasses: ['projection'],
-      failureCode: 'discovery_reconciliation_failed',
-      run: (lease, tools) => executeDiscoveryReconciliation(tools.queue, lease, options),
-    }),
-  ]
-}
-
 function playerBackgroundJobs(options: RunOneRefreshOperationOptions): JobDefinition<unknown>[] {
   return [
     wrapJob<RankedPulseLease>({
@@ -1320,7 +1230,6 @@ export function createJobsFromOptions(options: RunOneRefreshOperationOptions): J
   return [
     ...proofJobs(options),
     ...interactiveJobs(options),
-    ...discoveryJobs(options),
     ...playerBackgroundJobs(options),
     ...statisticsJobs(options),
     ...leaderboardJobs(options),

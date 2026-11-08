@@ -1,8 +1,7 @@
 import type { Sql } from '@brawltome/foundation'
 import type { EffectState, JobDefinition, Lease } from '../jobs/job-definition'
 import {
-  type DiscoveryEffectChecks,
-  type DiscoveryOwner,
+  type DiscoveryProjectionKind,
   leaderboardOperationKinds,
   type OperationLease,
   statisticsCollectionKinds,
@@ -13,10 +12,6 @@ export type EffectStateEntry = Pick<JobDefinition<unknown>, 'effectState' | 'cla
 export type EffectStates = Readonly<Partial<Record<OperationLease['kind'], EffectStateEntry>>>
 
 type EffectLease = Pick<Lease<unknown>, 'operationId' | 'effectOperationId' | 'payload'>
-
-type EffectStateDependencies = {
-  discovery: DiscoveryEffectChecks
-}
 
 async function proofEffectState(sql: Sql, lease: EffectLease): Promise<EffectState> {
   const [effect] = await sql<{ operation_id: string }[]>`
@@ -94,29 +89,6 @@ async function rankedSectionCommitted(sql: Sql, lease: EffectLease): Promise<Eff
   return effect?.complete ? 'acknowledged' : 'none'
 }
 
-function discoveryClaimLockKey(effectOperationId: string): string {
-  return `discovery-effect:${effectOperationId}`
-}
-
-function projectionEntry(discovery: DiscoveryEffectChecks, owner: DiscoveryOwner): EffectStateEntry {
-  return {
-    claimLockKey: discoveryClaimLockKey,
-    effectState: (_sql, lease) => discovery.projectionEffectState(owner, lease.effectOperationId),
-  }
-}
-
-function reconciliationEntry(discovery: DiscoveryEffectChecks): EffectStateEntry {
-  return {
-    claimLockKey: discoveryClaimLockKey,
-    // reconciliation has no in-between: once its effect landed there is nothing left to retry
-    effectState: async (_sql, lease) => {
-      const isApplied = await discovery.reconciliationEffectApplied(lease.effectOperationId)
-
-      return isApplied ? 'acknowledged' : 'none'
-    },
-  }
-}
-
 function entriesForKinds<Kind extends string>(
   kinds: readonly Kind[],
   entry: EffectStateEntry,
@@ -124,17 +96,18 @@ function entriesForKinds<Kind extends string>(
   return Object.fromEntries(kinds.map((kind) => [kind, entry])) as Record<Kind, EffectStateEntry>
 }
 
-// a new kind fails typecheck here until it says how claim reads its effect
-export function createEffectStates({ discovery }: EffectStateDependencies): EffectStates {
-  const effectStatesByKind: Record<OperationLease['kind'], EffectStateEntry> = {
+// these jobs live in their owning module and bring their effect checks with them
+type JobOwnedEffectKind = DiscoveryProjectionKind | 'discovery-reconciliation'
+
+// a job in the list brings its own entry, the rest are still here until they move; a new kind fails typecheck here
+// until it says how claim reads its effect
+export function createEffectStates(jobs: readonly JobDefinition<unknown>[]): EffectStates {
+  const effectStatesByKind: Record<Exclude<OperationLease['kind'], JobOwnedEffectKind>, EffectStateEntry> = {
     proof: { effectState: proofEffectState },
     'interactive-player-refresh': { effectState: allSectionsCommitted },
     'clan-refresh': { effectState: allSectionsCommitted },
     'ranked-player-pulse': { effectState: rankedSectionCommitted },
     'player-name-verification': { effectState: rankedSectionCommitted },
-    'player-discovery-projection': projectionEntry(discovery, 'player'),
-    'clan-discovery-projection': projectionEntry(discovery, 'clan'),
-    'discovery-reconciliation': reconciliationEntry(discovery),
     'ranking-retention': {},
     'leaderboard-deep-crawl': {},
     'statistics-publication': { effectState: statisticsPublicationEffectState },
@@ -143,5 +116,5 @@ export function createEffectStates({ discovery }: EffectStateDependencies): Effe
     ...entriesForKinds(leaderboardOperationKinds, { effectState: leaderboardEffectState }),
   }
 
-  return effectStatesByKind
+  return { ...effectStatesByKind, ...Object.fromEntries(jobs.map((job) => [job.kind, job])) }
 }
