@@ -170,6 +170,10 @@ against `INTERNAL_API_SECRET`, so modules never see the secret. An internal proc
 access the tRPC procedure has; opening a read to the public is a separate decision. `status` is public, and the clan
 reads are internal.
 
+Don't pass `spec` to `.route()` on an internal procedure. oRPC merges route options shallowly, so a procedure's own
+`spec` replaces the one that adds the `internalSecret` marker. The `FORBIDDEN` check still runs, but `/openapi.json`
+would show the procedure as open.
+
 While the website still calls tRPC, a moved read is served twice. The tRPC procedure in `apps/api/src/router` becomes
 a thin adapter: it calls the same exported module function as the oRPC procedure, such as `readClanProfile`, so both
 answer with one implementation. The adapters go once the website has switched to oRPC.
