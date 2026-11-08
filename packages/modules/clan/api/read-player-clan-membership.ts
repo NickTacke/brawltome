@@ -1,16 +1,22 @@
-import type { ClanQueries } from '../db/postgres-clans'
+import type { Database } from '@brawltome/foundation'
+import { getPlayerMembership } from '../db/get-player-membership'
 import type { PlayerClanMembership } from '../domain/clan-profile'
 
 export type PublicClanMembership = Pick<PlayerClanMembership, 'clanId' | 'clanName'>
 
-/** The clan a player belongs to, without the xp figures, or null when they are in no stored clan. */
+// the xp figures stay internal
+function toPublicClanMembership(membership: PlayerClanMembership): PublicClanMembership {
+  return { clanId: membership.clanId, clanName: membership.clanName }
+}
+
+/** The clan a player belongs to, or null when they are in no stored clan. tRPC and oRPC both serve this. */
 export async function readPlayerClanMembership(
-  clans: Pick<ClanQueries, 'getPlayerMembership'>,
+  database: Database,
   brawlhallaId: number,
 ): Promise<PublicClanMembership | null> {
-  const membership = await clans.getPlayerMembership(brawlhallaId)
+  const membership = await getPlayerMembership(database, brawlhallaId)
 
   if (!membership) return null
 
-  return { clanId: membership.clanId, clanName: membership.clanName }
+  return toPublicClanMembership(membership)
 }

@@ -5,6 +5,7 @@ import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
 import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
 import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
 
+export { toClanProfileContract } from './api/clan-profile-contract'
 export { readClanProfile } from './api/read-clan-profile'
 export { type PublicClanMembership, readPlayerClanMembership } from './api/read-player-clan-membership'
 export { getClanProfile } from './db/get-clan-profile'

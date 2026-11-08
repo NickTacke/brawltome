@@ -133,6 +133,7 @@ const lifecycle = createRuntimeLifecycle({
 
 const sharedCtx = {
   telemetry,
+  database,
   playerReferenceQueries,
   discoveryQueries: discovery,
   rankedPlayerQueries,

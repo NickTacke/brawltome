@@ -39,7 +39,6 @@ function harness(
     actorLimited?: boolean
     active?: boolean
     stored?: typeof cached
-    membership?: { clanId: number; clanName: string } | null
     discordCredential?: boolean
     now?: () => number
     telemetry?: Telemetry
@@ -58,7 +57,6 @@ function harness(
     user: null,
     clanRepo: {
       getById: async () => options.stored ?? cached,
-      getPlayerMembership: async () => options.membership ?? null,
     },
     refreshOperations: {
       findActiveInteractiveClanRefresh: async (dedupeKey: string) => {
@@ -104,55 +102,6 @@ function harness(
 }
 
 describe('canonical clan router', () => {
-  test('maps exact strings and independent section state', async () => {
-    const { caller } = harness()
-
-    await expect(caller.byId({ id: 77 })).resolves.toMatchObject({
-      clanId: 77,
-      clanXp: '900719925474099312345',
-      profile: { lastSuccessAt: '1970-01-01T00:00:00.000Z' },
-      roster: { lastSuccessAt: '1970-01-01T00:00:00.000Z' },
-    })
-  })
-
-  test('publishes Clans-owned membership by Player identity', async () => {
-    const { caller } = harness({ membership: { clanId: 77, clanName: 'Current Clan' } })
-
-    await expect(caller.membershipByPlayerId({ id: 42 })).resolves.toEqual({
-      clanId: 77,
-      clanName: 'Current Clan',
-    })
-  })
-
-  test('keeps immutable migration evidence behind the public provenance boundary', async () => {
-    const stored = {
-      ...cached,
-      profile: {
-        ...cached.profile,
-        checkProvenance: {
-          ...cached.profile.checkProvenance,
-          sourceTable: 'clan',
-          sourceKey: '77',
-          archiveChecksum: 'a'.repeat(64),
-        },
-      },
-      roster: {
-        ...cached.roster,
-        checkProvenance: {
-          ...cached.roster.checkProvenance,
-          sourceTables: ['clan_member', 'player_clan'],
-          archiveChecksums: ['b'.repeat(64)],
-        },
-      },
-    } as typeof cached
-
-    const { caller } = harness({ stored })
-    const result = await caller.byId({ id: 77 })
-
-    expect(result?.profile.checkProvenance).toEqual({ source: 'v1-guild-stats', outcome: 'success' })
-    expect(result?.roster?.checkProvenance).toEqual({ source: 'v1-guild-members', outcome: 'success' })
-  })
-
   test('deduplicates before verification and preserves cached data in blocked outcomes', async () => {
     const active = harness({ active: true })
 

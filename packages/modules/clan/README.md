@@ -28,7 +28,8 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 - `db/`: `tables.ts` and one file per use case, for example `get-clan-profile.ts` and `publish-roster.ts`.
   `postgres-clans.ts` binds them to a database.
 - `api/`: `procedures.ts` holds the oRPC procedures. `read-clan-profile.ts` and `read-player-clan-membership.ts`
-  turn stored data into the public shape.
+  call the `db/` use cases with the database and turn the result into the public shape. `clan-profile-contract.ts`
+  does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
