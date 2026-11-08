@@ -26,6 +26,7 @@ import { addDeepCrawlModes } from './migrations/0024-add-deep-crawl-modes'
 import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-modes'
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 
+export { createEffectStates, type EffectStateEntry, type EffectStates } from './db/effect-states'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,
@@ -33,14 +34,33 @@ export {
   decideSourceFailure,
   type FailureDecision,
   type RetryTimings,
+  retryDelayForAttempt,
   sourceWaitMs,
 } from './domain/failure-decision'
 export {
   failureDetails,
   JobLeaseLostError,
   SourceAdmissionLimitedError,
+  type SourceDomain,
   sourceRetryAfterMs,
 } from './domain/job-errors'
+export {
+  type AttemptOutcome,
+  defineJob,
+  type EffectState,
+  type JobDefinition,
+  type JobTools,
+  type Lease,
+  type LeaseOperations,
+  type LeaseWatcher,
+  type QueueWorker,
+  type SourceAdmissionPort,
+  type SourceAdmitter,
+} from './jobs/job-definition'
+export { createJobRegistry, type JobRegistry } from './jobs/job-registry'
+export { waitForRenewal } from './jobs/lease-renewal'
+export { type RetryBackoff, type RunOneJobOptions, runOneJob } from './jobs/run-one-job'
+export { type RunSectionsOptions, runSections, type SectionRun } from './jobs/run-sections'
 export {
   acquireActiveLease,
   commitInteractiveSection,

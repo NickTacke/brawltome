@@ -57,12 +57,13 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/player': ['.'],
     '@brawltome/ranking': ['.'],
     '@brawltome/request-admission': ['.'],
-    '@brawltome/refresh-operations': ['.'],
+    '@brawltome/refresh-operations': ['.', './testing'],
     '@brawltome/replay-analysis': ['.'],
     '@brawltome/statistics': ['.'],
   },
   testOnlyExports: {
     '@brawltome/foundation': ['./testing'],
+    '@brawltome/refresh-operations': ['./testing'],
   },
   capabilityDependencies: {
     '@brawltome/accounts': [],

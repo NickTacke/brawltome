@@ -232,6 +232,7 @@
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
+        "@brawltome/telemetry": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {

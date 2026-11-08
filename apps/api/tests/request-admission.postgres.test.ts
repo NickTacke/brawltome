@@ -2,10 +2,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions, runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 const testAdmission = {
   totalConcurrency: 2,
@@ -78,7 +79,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('50 concurrent duplicates reserve one operation and consume actor/source once', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -206,7 +207,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('reconciles actor-admitted work after a crash before activation', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -464,7 +465,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('expires abandoned admission reservations before allowing replacement work', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
     const dedupeKey = `expired:${randomUUID()}`
 
     const first = await operations.reserveInteractivePlayerRefresh({
@@ -503,7 +504,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('admits every actual upstream call made inside one section', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -543,7 +544,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('dispatches proof, interactive, and leaderboard kinds through one fair claimant', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -629,8 +630,8 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('continuously renews an interactive section beyond its initial lease', async () => {
-    const operations = createPostgresRefreshOperations({ database })
-    const competing = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
+    const competing = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -681,7 +682,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('charges every repeated upstream attempt after lease loss', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
@@ -742,7 +743,7 @@ describe('PostgreSQL interactive refresh admission', () => {
   })
 
   test('charges replay source calls while preserving the original effect identity', async () => {
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,

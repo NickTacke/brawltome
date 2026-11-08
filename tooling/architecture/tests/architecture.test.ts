@@ -216,7 +216,7 @@ describe('dependency architecture', () => {
     ) as { scripts?: Record<string, string> }
 
     expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(true)
-    expect(refreshOperations?.exports).toEqual(['.'])
+    expect(refreshOperations?.exports).toEqual(['.', './testing'])
     expect(packageDocument.scripts?.['dead-letters']).toBe('bun cli.ts')
   })
 

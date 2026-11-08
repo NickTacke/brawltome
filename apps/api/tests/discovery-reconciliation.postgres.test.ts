@@ -5,13 +5,10 @@ import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
-import {
-  type AdmissionConfig,
-  createPostgresRefreshOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 let connectionString = ''
 let database: TestDatabase
@@ -104,7 +101,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       return operationsClient
     }
 
-    let operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
+    let operations = createTestQueue({ database: operationsClient }, discovery)
 
     const projectionOptions = {
       leaseMs: 10_000,
@@ -153,10 +150,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('pending')
       expect(await source.lag()).toBeGreaterThan(0)
 
-      operations = createPostgresRefreshOperations(
-        { database: await restartOperationsClient() },
-        { discoveryEffects: discovery },
-      )
+      operations = createTestQueue({ database: await restartOperationsClient() }, discovery)
 
       await runOneRefreshOperation(operations, 'restarted-worker', projectionOptions)
       expect((await operations.inspect(failedAck.operationId)).operation.status).toBe('succeeded')
@@ -255,19 +249,17 @@ describe('Clan Discovery delivery and reconciliation', () => {
         releaseRecovery = resolve
       })
 
-      operations = createPostgresRefreshOperations(
+      operations = createTestQueue(
         { database: await restartOperationsClient() },
         {
-          discoveryEffects: {
-            projectionEffectState: discovery.projectionEffectState,
-            reconciliationEffectApplied: async (effectOperationId) => {
-              const applied = await discovery.reconciliationEffectApplied(effectOperationId)
+          projectionEffectState: discovery.projectionEffectState,
+          reconciliationEffectApplied: async (effectOperationId) => {
+            const applied = await discovery.reconciliationEffectApplied(effectOperationId)
 
-              effectStateRead()
-              await recoveryMayContinue
+            effectStateRead()
+            await recoveryMayContinue
 
-              return applied
-            },
+            return applied
           },
         },
       )

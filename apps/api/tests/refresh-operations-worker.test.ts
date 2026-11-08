@@ -2,13 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { BhApiHttpError, RateLimitError } from '@brawltome/bhapi'
 import type { LeaderboardRankedObservation } from '@brawltome/player'
 import { LeaderboardSourceError } from '@brawltome/ranking'
-import type { AdmissionConfig, OperationFailure, OperationLease } from '@brawltome/refresh-operations'
-import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import {
-  LeaderboardDeepCrawlYield,
+  type AdmissionConfig,
+  type OperationFailure,
+  type OperationLease,
   retryDelayForAttempt,
-  runOneRefreshOperation,
-} from '../src/refresh-operations-worker'
+} from '@brawltome/refresh-operations'
+import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
+import { LeaderboardDeepCrawlYield, runOneRefreshOperation } from '../src/refresh-operations-worker'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 2,
@@ -2318,7 +2319,7 @@ describe('refresh operations worker failure handling', () => {
   })
 
   test('a deep-crawl yield defers with code deep_crawl_yield and no delay', async () => {
-    const lease = leaseOfKind('proof')
+    const lease = leaseOfKind('leaderboard-deep-crawl')
     const deferrals: Array<{ code: string; retryDelayMs: number }> = []
     let failed = false
 
@@ -2341,8 +2342,11 @@ describe('refresh operations worker failure handling', () => {
       leaseMs: 1_000,
       retryDelayMs: 10,
       admission,
-      executeEffect: async () => {
-        throw new LeaderboardDeepCrawlYield()
+      ...failingOptions['leaderboard-deep-crawl'],
+      leaderboardSource: {
+        fetchPage: async () => {
+          throw new LeaderboardDeepCrawlYield()
+        },
       },
     })
 

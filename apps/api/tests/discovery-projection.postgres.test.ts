@@ -4,13 +4,10 @@ import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
-import {
-  type AdmissionConfig,
-  createPostgresRefreshOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 let connectionString = ''
 let database: TestDatabase
@@ -95,7 +92,7 @@ describe('Players to Discovery projection delivery', () => {
     // the operations worker restarts below, so it gets a client of its own to close and reopen
     let operationsClient = openTestClient(connectionString)
 
-    let operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
+    let operations = createTestQueue({ database: operationsClient }, discovery)
 
     try {
       const archiveChecksum = 'a'.repeat(64)
@@ -337,7 +334,7 @@ describe('Players to Discovery projection delivery', () => {
       await operationsClient.close()
       operationsClient = openTestClient(connectionString)
 
-      operations = createPostgresRefreshOperations({ database: operationsClient }, { discoveryEffects: discovery })
+      operations = createTestQueue({ database: operationsClient }, discovery)
 
       expect(
         await runOneRefreshOperation(operations, 'restarted-projection-worker', {

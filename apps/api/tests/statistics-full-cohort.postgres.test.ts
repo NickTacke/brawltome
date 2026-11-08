@@ -4,7 +4,6 @@ import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltom
 import {
   type AdmissionConfig,
   createPostgresDeadLetterOperations,
-  createPostgresRefreshOperations,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import {
@@ -16,6 +15,7 @@ import {
 } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { runOneRefreshOperation } from '../src/refresh-operations-worker'
+import { createTestQueue } from './fixtures/queue'
 
 let database: TestDatabase
 let connectionString = ''
@@ -205,7 +205,7 @@ async function expectPostgresRejection(action: () => Promise<void>, message: str
 
 async function bindPublication(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   generationId: string,
   product: 'ranked' | 'lifetime',
 ) {
@@ -233,7 +233,7 @@ async function bindPublication(
 
 async function bindLegendMetaPublication(
   statistics: ReturnType<typeof createPostgresStatistics>,
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   generationId: string,
   maxAttempts = 3,
 ) {
@@ -260,7 +260,7 @@ async function bindLegendMetaPublication(
 }
 
 async function bindPublicationFixture(
-  operations: ReturnType<typeof createPostgresRefreshOperations>,
+  operations: ReturnType<typeof createTestQueue>,
   generationId: string,
   product: 'ranked' | 'lifetime',
 ) {
@@ -379,7 +379,7 @@ async function cloneCareerSnapshotFixture(input: { generationId: string; templat
 
 function legendMetaAuthorization(
   lease: Extract<
-    Awaited<ReturnType<ReturnType<typeof createPostgresRefreshOperations>['claim']>>,
+    Awaited<ReturnType<ReturnType<typeof createTestQueue>['claim']>>,
     { kind: 'statistics-legend-meta-publication' }
   >,
 ) {
@@ -395,10 +395,7 @@ function legendMetaAuthorization(
 }
 
 function publicationAuthorization(
-  lease: Extract<
-    Awaited<ReturnType<ReturnType<typeof createPostgresRefreshOperations>['claim']>>,
-    { kind: 'statistics-publication' }
-  >,
+  lease: Extract<Awaited<ReturnType<ReturnType<typeof createTestQueue>['claim']>>, { kind: 'statistics-publication' }>,
 ) {
   return {
     operationId: lease.operationId,
@@ -418,7 +415,7 @@ describe('Statistics full launch cohort publication', () => {
     let statisticsClient = openTestClient(database.connectionString)
     let statistics = createPostgresStatistics(statisticsClient)
     const concurrent = createPostgresStatistics(database)
-    const operations = createPostgresRefreshOperations({ database })
+    const operations = createTestQueue({ database })
 
     const [first, duplicate] = await Promise.all([
       statistics.reconcileLaunchCohort(snapshots(1)),

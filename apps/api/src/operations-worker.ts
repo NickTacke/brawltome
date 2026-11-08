@@ -26,7 +26,11 @@ import {
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
 import { createPostgresRanking, fetchLeaderboardPage } from '@brawltome/ranking'
-import { createPostgresRefreshOperations, SourceAdmissionLimitedError } from '@brawltome/refresh-operations'
+import {
+  createEffectStates,
+  createPostgresRefreshOperations,
+  SourceAdmissionLimitedError,
+} from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics } from '@brawltome/statistics'
 import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'
@@ -103,7 +107,7 @@ const discoveryChecks = createPostgresDiscovery(databases.main)
 
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
-  { discoveryEffects: discoveryChecks },
+  { effectStates: createEffectStates({ discovery: discoveryChecks }) },
 )
 
 const requestAdmission = createPostgresRequestAdmission(databases.main, {
