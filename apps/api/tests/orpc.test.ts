@@ -28,7 +28,7 @@ function createApp() {
   const router = createOrpcRouter([], { database: {} as Database, env: {} })
   const app = new Hono()
 
-  app.route('/', createOrpcRoutes({ telemetry, router }))
+  app.route('/', createOrpcRoutes({ telemetry, internalSecret, router }))
 
   app.use(
     '/trpc/*',

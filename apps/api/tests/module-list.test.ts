@@ -64,7 +64,7 @@ describe('oRPC router built from a module list', () => {
     const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
     const app = new Hono()
 
-    app.route('/', createOrpcRoutes({ telemetry, router }))
+    app.route('/', createOrpcRoutes({ telemetry, internalSecret: undefined, router }))
 
     const response = await app.fetch(new Request('http://api.test/v1/status'))
 

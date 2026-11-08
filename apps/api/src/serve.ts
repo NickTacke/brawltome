@@ -252,7 +252,7 @@ app.use(
 )
 
 // oRPC is served next to tRPC while the modules move over one by one: /rpc/*, /v1/* and /openapi.json
-app.route('/', createOrpcRoutes({ telemetry, router: orpcRouter }))
+app.route('/', createOrpcRoutes({ telemetry, internalSecret: process.env.INTERNAL_API_SECRET, router: orpcRouter }))
 
 app.route('/health', createHealthRoutes(lifecycle))
 

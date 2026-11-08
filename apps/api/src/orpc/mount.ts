@@ -1,4 +1,4 @@
-import type { Telemetry } from '@brawltome/telemetry'
+import { internalSecuritySchemeName } from '@brawltome/foundation'
 import type { AnyContractRouter } from '@orpc/contract'
 import { SmartCoercionPlugin } from '@orpc/json-schema'
 import { OpenAPIGenerator } from '@orpc/openapi'
@@ -7,7 +7,7 @@ import { ORPCError, onError, type Router } from '@orpc/server'
 import { RPCHandler } from '@orpc/server/fetch'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
 import { Hono } from 'hono'
-import { createOrpcContext, type OrpcContext } from './context'
+import { createOrpcContext, type OrpcContext, type OrpcContextOptions } from './context'
 
 const RPC_PREFIX = '/rpc' as const
 // plain HTTP routes of the same router; /v1 is free of the other mounts in serve.ts
@@ -29,6 +29,11 @@ function createOpenApiDocumentReader(router: MountableRouter): () => Promise<Ope
     openApiDocument ??= openApiGenerator
       .generate(router, {
         info: { title: 'BrawlTome API', version: '1.0.0' },
+        components: {
+          securitySchemes: {
+            [internalSecuritySchemeName]: { type: 'apiKey', in: 'header', name: 'x-internal-secret' },
+          },
+        },
         // operation paths are relative to where the REST handler is mounted
         servers: [{ url: REST_PREFIX }],
       })
@@ -52,12 +57,12 @@ function mountHandler(
   routes: Hono,
   prefix: '/rpc' | '/v1',
   handler: RPCHandler<OrpcContext> | OpenAPIHandler<OrpcContext>,
-  telemetry: Telemetry,
+  contextOptions: OrpcContextOptions,
 ): void {
   routes.use(`${prefix}/*`, async (c, next) => {
     const { matched, response } = await handler.handle(c.req.raw, {
       prefix,
-      context: createOrpcContext(c.req.raw, telemetry),
+      context: createOrpcContext(c.req.raw, contextOptions),
     })
 
     if (!matched) return next()
@@ -67,8 +72,8 @@ function mountHandler(
 }
 
 // the serve.ts wrapper already covers admission, telemetry and shutdown; this adds the routes behind it
-export function createOrpcRoutes(options: { telemetry: Telemetry; router: MountableRouter }): Hono {
-  const { telemetry, router } = options
+export function createOrpcRoutes(options: OrpcContextOptions & { router: MountableRouter }): Hono {
+  const { telemetry, internalSecret, router } = options
   const routes = new Hono()
   const readOpenApiDocument = createOpenApiDocumentReader(router)
 
@@ -87,8 +92,10 @@ export function createOrpcRoutes(options: { telemetry: Telemetry; router: Mounta
     plugins: [new SmartCoercionPlugin({ schemaConverters: [new ZodToJsonSchemaConverter()] })],
   })
 
-  mountHandler(routes, RPC_PREFIX, rpcHandler, telemetry)
-  mountHandler(routes, REST_PREFIX, restHandler, telemetry)
+  const contextOptions = { telemetry, internalSecret }
+
+  mountHandler(routes, RPC_PREFIX, rpcHandler, contextOptions)
+  mountHandler(routes, REST_PREFIX, restHandler, contextOptions)
 
   routes.get('/openapi.json', async (c) => c.json(await readOpenApiDocument()))
 

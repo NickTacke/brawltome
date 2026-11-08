@@ -52,6 +52,7 @@ Modules are rebuilt one at a time. Until then a module keeps its old layout; see
 - `parsePositiveInteger`, `parseBoundedInteger` and `requirePositiveInteger` for reading config
 - the `Migration` type and the migration runner
 - `BrawltomeModule`, `ModuleRuntime` and `checkModuleList`
+- `publicProcedure` and `internalProcedure`, the oRPC bases for a module's procedures
 - `@brawltome/foundation/testing`, which has `createTestDatabase`. Only test files may import it.
 
 Tables use `timestamptz`, never `timestamp`: postgres.js reads a `timestamp` in the process's local time zone. A
@@ -157,6 +158,14 @@ module's procedures under the module's name: clan's `byId` is `clan.byId` at `/r
 through the path in its `.route()`. A module left out of `apiModules` is not served at all. `apiModules` is a const
 tuple and the name is a literal (`'clan' as const`), so `OrpcRouter` (in `router.ts`) keeps every procedure's types
 for a typed client. Without the literal the router type would accept any key.
+
+A module builds each procedure on one of two bases from `@brawltome/foundation`: `publicProcedure` for what anyone
+may call, or `internalProcedure` for what only the site and the bot may call, like tRPC's `internalProcedure`. The
+API works out `isInternalCaller` once per request from the `x-internal-secret` header, compared in constant time
+against `INTERNAL_API_SECRET`, so modules never see the secret. An internal procedure answers anyone else with
+`FORBIDDEN` (403 over `/v1`), and `/openapi.json` marks it with the `internalSecret` header scheme. Pick the same
+access the tRPC procedure has; opening a read to the public is a separate decision. `status` is public, and the clan
+reads are internal.
 
 While the website still calls tRPC, a moved read is served twice. The tRPC procedure in `apps/api/src/router` becomes
 a thin adapter: it calls the same exported module function as the oRPC procedure, such as `readClanProfile`, so both

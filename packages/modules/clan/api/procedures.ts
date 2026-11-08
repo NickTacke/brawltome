@@ -4,23 +4,22 @@ import {
   playerClanMembershipSchema,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
-import type { ModuleRuntime } from '@brawltome/foundation'
-import { os } from '@orpc/server'
+import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
 import { createPostgresClans } from '../db/postgres-clans'
 import { readClanProfile } from './read-clan-profile'
 import { readPlayerClanMembership } from './read-player-clan-membership'
 
-/** The clan reads the API serves under clan, at /rpc/clan/* and /v1. Both are public, like the clan pages. */
+/** The clan reads the API serves under clan, at /rpc/clan/* and /v1. Like on tRPC, only internal callers get them. */
 export function createClanProcedures(runtime: ModuleRuntime) {
   const clans = createPostgresClans(runtime.database)
 
-  const byId = os
+  const byId = internalProcedure
     .route({ method: 'GET', path: '/clans/{id}', operationId: 'clan.byId', summary: 'Clan profile', tags: ['clan'] })
     .input(clanByIdInputSchema)
     .output(clanProfileSchema.nullable())
     .handler(({ input }) => readClanProfile(clans, input.id))
 
-  const membershipByPlayerId = os
+  const membershipByPlayerId = internalProcedure
     .route({
       method: 'GET',
       path: '/players/{id}/clan',
