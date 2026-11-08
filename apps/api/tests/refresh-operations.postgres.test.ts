@@ -4,6 +4,7 @@ import { createClanRefreshReservations, reserveClanRefresh } from '@brawltome/cl
 import type { Database, Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPlayerRefreshReservations, reconcilePrimaryMonitoring } from '@brawltome/player'
+import { reconcileLeaderboardSchedule } from '@brawltome/ranking'
 import {
   acceptOperation,
   type OperationLease,
@@ -1025,7 +1026,7 @@ describe('durable Refresh Operations', () => {
     const control = postgres(connectionString, { max: 1 })
     const intervalMs = 60_000
 
-    const schedule = await operations.reconcileLeaderboardSchedule({
+    const schedule = await reconcileLeaderboardSchedule(database, {
       scheduleKey: `superseded-leaderboard:${randomUUID()}`,
       operationKeyPrefix: `superseded-leaderboard:${randomUUID()}`,
       kind: 'leaderboard-1v1',

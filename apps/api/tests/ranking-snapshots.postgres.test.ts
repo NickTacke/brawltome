@@ -12,6 +12,7 @@ import {
   type RankingPublicationAuthorization,
   type RegionalLeaderboardScope,
   rankingModule,
+  reconcileLeaderboardSchedule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
 import {
@@ -1554,8 +1555,6 @@ describe('durable multi-mode collection operations', () => {
     // two replicas, then a restart: each process gets a client of its own
     const firstClient = openTestClient(database.connectionString)
     const secondClient = openTestClient(database.connectionString)
-    const first = createTestQueue({ database: firstClient })
-    const second = createTestQueue({ database: secondClient })
     const base = Date.now() - intervalMs
 
     const definitions = leaderboardModes.map((mode, index) => ({
@@ -1571,8 +1570,8 @@ describe('durable multi-mode collection operations', () => {
 
     for (const definition of definitions) {
       const results = await Promise.all([
-        first.reconcileLeaderboardSchedule(definition),
-        second.reconcileLeaderboardSchedule(definition),
+        reconcileLeaderboardSchedule(firstClient, definition),
+        reconcileLeaderboardSchedule(secondClient, definition),
       ])
 
       expect(results.map(({ outcome }) => outcome).sort()).toEqual(['already-exists', 'created'])
@@ -1591,10 +1590,9 @@ describe('durable multi-mode collection operations', () => {
     await Promise.all([firstClient.close(), secondClient.close()])
 
     const restartedClient = openTestClient(database.connectionString)
-    const restarted = createTestQueue({ database: restartedClient })
 
     for (const definition of definitions) {
-      expect((await restarted.reconcileLeaderboardSchedule(definition)).outcome).toBe('already-exists')
+      expect((await reconcileLeaderboardSchedule(restartedClient, definition)).outcome).toBe('already-exists')
     }
 
     await Promise.all([control.end(), restartedClient.close()])

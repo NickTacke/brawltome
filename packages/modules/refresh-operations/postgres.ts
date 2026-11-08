@@ -5,7 +5,6 @@ import { admissionLockId } from './db/admission-lock'
 import { claimOperation } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
 import type { DeadLetterHooks } from './db/dead-letter-hooks'
-import { disableFixedSchedule } from './db/disable-fixed-schedule'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
 import type { EffectStates } from './db/effect-states'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
@@ -15,7 +14,6 @@ import { inspectTelemetry } from './db/inspect-telemetry'
 import { listDeadLetters } from './db/list-dead-letters'
 import { materializeDueSchedules } from './db/materialize-due-schedules'
 import { readOperationStatus } from './db/read-operation-status'
-import { reconcileFixedSchedule } from './db/reconcile-fixed-schedule'
 import { renewLease, renewLeaseWithAuthority } from './db/renew-lease'
 import { beginSection, commitSection } from './db/section-checkpoints'
 import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
@@ -27,8 +25,6 @@ import {
   type AcceptOperation,
   type AcceptOperationResult,
   type AdmissionConfig,
-  type CreateLeaderboardDeepCrawlSchedule,
-  type CreateLeaderboardSchedule,
   type CreateSchedule,
   type DeadLetterOperations,
   type FencedResult,
@@ -155,9 +151,6 @@ export function createPostgresRefreshOperations(
 
     createSchedule: (input: CreateSchedule) => createSchedule(database, input),
 
-    reconcileLeaderboardSchedule: (input: CreateLeaderboardSchedule) =>
-      reconcileFixedSchedule(database, { schedule: input }),
-
     // 1v1 progress stays in the original per-region table; the other modes use the per-mode table.
     async readLeaderboardDeepCrawlProgress(
       mode: string,
@@ -205,12 +198,6 @@ export function createPostgresRefreshOperations(
           total_pages = EXCLUDED.total_pages, updated_at = clock_timestamp()
       `
     },
-
-    reconcileLeaderboardDeepCrawlSchedule: (input: CreateLeaderboardDeepCrawlSchedule) =>
-      reconcileFixedSchedule(database, { schedule: input, reenable: true }),
-
-    disableLeaderboardDeepCrawlSchedule: (scheduleKey: string) =>
-      disableFixedSchedule(database, { scheduleKey, kind: 'leaderboard-deep-crawl' }),
 
     materializeDueSchedules: (limit = 100) => materializeDueSchedules(database, { limit }),
 

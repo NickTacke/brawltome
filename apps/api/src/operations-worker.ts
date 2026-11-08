@@ -27,8 +27,11 @@ import {
 } from '@brawltome/player'
 import {
   createPostgresRanking,
+  disableLeaderboardDeepCrawlSchedule,
   disableRankingRetentionSchedule,
   fetchLeaderboardPage,
+  reconcileLeaderboardDeepCrawlSchedule,
+  reconcileLeaderboardSchedule,
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
 import {
@@ -457,7 +460,7 @@ try {
       let reconciledSchedules = 0
 
       for (const definition of leaderboardSchedules) {
-        const schedule = await operations.reconcileLeaderboardSchedule(definition)
+        const schedule = await reconcileLeaderboardSchedule(databases.main, definition)
 
         if (schedule.outcome !== 'already-exists') reconciledSchedules++
       }
@@ -477,8 +480,8 @@ try {
 
       for (const definition of deepCrawlSchedules) {
         const crawl = workerConfig.deepCrawl.enabled
-          ? await operations.reconcileLeaderboardDeepCrawlSchedule(definition)
-          : await operations.disableLeaderboardDeepCrawlSchedule(definition.scheduleKey)
+          ? await reconcileLeaderboardDeepCrawlSchedule(databases.main, definition)
+          : await disableLeaderboardDeepCrawlSchedule(databases.main, definition.scheduleKey)
 
         if (crawl.outcome !== 'already-exists' && crawl.outcome !== 'already-disabled') reconciledSchedules++
       }

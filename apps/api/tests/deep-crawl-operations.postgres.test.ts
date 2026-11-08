@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { disableLeaderboardDeepCrawlSchedule, reconcileLeaderboardDeepCrawlSchedule } from '@brawltome/ranking'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { leaderboardDeepCrawlScheduleDefinitions } from '../src/operations-worker-config'
@@ -51,11 +52,11 @@ describe('Leaderboard deep crawl operations', () => {
     })
 
     for (const definition of definitions) {
-      expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('created')
-      expect((await operations.reconcileLeaderboardDeepCrawlSchedule(definition)).outcome).toBe('already-exists')
+      expect((await reconcileLeaderboardDeepCrawlSchedule(database, definition)).outcome).toBe('created')
+      expect((await reconcileLeaderboardDeepCrawlSchedule(database, definition)).outcome).toBe('already-exists')
     }
 
-    expect(await operations.disableLeaderboardDeepCrawlSchedule(definitions[8].scheduleKey)).toEqual({
+    expect(await disableLeaderboardDeepCrawlSchedule(database, definitions[8].scheduleKey)).toEqual({
       outcome: 'disabled',
     })
 

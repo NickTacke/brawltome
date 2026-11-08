@@ -12,6 +12,11 @@ import { bitmapRetentionDelete } from './migrations/0010-bitmap-retention-delete
 import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delete-without-seqscan'
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 
+export {
+  disableLeaderboardDeepCrawlSchedule,
+  reconcileLeaderboardDeepCrawlSchedule,
+  reconcileLeaderboardSchedule,
+} from './jobs/leaderboard-schedules'
 export { createRankingRetentionJob, type RankingRetentionJobDependencies } from './jobs/ranking-retention-job'
 export { disableRankingRetentionSchedule, reconcileRankingRetentionSchedule } from './jobs/retention-schedule'
 export {
