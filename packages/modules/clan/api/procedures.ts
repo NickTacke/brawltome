@@ -4,11 +4,14 @@ import {
   clanStandingSchema,
   playerClanMembershipSchema,
   playerReferenceByIdInputSchema,
+  rankedClanListInputSchema,
+  rankedClanListSchema,
 } from '@brawltome/contracts'
 import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
 import { readClanStanding } from '../db/read-clan-standing'
 import { readClanProfile } from './read-clan-profile'
 import { readPlayerClanMembership } from './read-player-clan-membership'
+import { readRankedClans } from './read-ranked-clans'
 
 /** The clan reads the API serves under clan, at /rpc/clan/* and /v1. Like on tRPC, only internal callers get them. */
 export function createClanProcedures(runtime: ModuleRuntime) {
@@ -44,5 +47,17 @@ export function createClanProcedures(runtime: ModuleRuntime) {
     .output(clanStandingSchema.nullable())
     .handler(({ input }) => readClanStanding(database, input.id))
 
-  return { byId, membershipByPlayerId, standingById }
+  const rankedList = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/clans',
+      operationId: 'clan.rankedList',
+      summary: 'Guilds ranked by guild points',
+      tags: ['clan'],
+    })
+    .input(rankedClanListInputSchema)
+    .output(rankedClanListSchema)
+    .handler(({ input }) => readRankedClans(database, input.page))
+
+  return { byId, membershipByPlayerId, standingById, rankedList }
 }

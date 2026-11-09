@@ -69,6 +69,29 @@ export const clanStandingSchema = z
   })
   .strict()
 export const clanByIdInputSchema = z.object({ id: clanIdSchema }).strict()
+export const rankedClanListInputSchema = z.object({ page: z.int().min(1).max(100_000) }).strict()
+
+const rankedClanSchema = z
+  .object({
+    rank: clanRankSchema,
+    clanId: clanIdSchema,
+    clanName: z.string().min(1).max(256),
+    guildPoints: decimalXpSchema.nullable(),
+    lifetimeXp: decimalLifetimeXpSchema,
+    memberCount: z.int().min(0),
+  })
+  .strict()
+
+export const rankedClanListSchema = z
+  .object({
+    page: z.int().min(1),
+    pageSize: z.int().min(1),
+    hasMore: z.boolean(),
+    totalRows: z.int().min(0),
+    entries: z.array(rankedClanSchema),
+  })
+  .strict()
+  .meta({ id: 'RankedClanList' })
 export const clanRefreshInputSchema = z
   .object({
     id: clanIdSchema,
@@ -88,6 +111,7 @@ export const clanRefreshResponseSchema = z
 
 export type ClanProfileContract = z.infer<typeof clanProfileSchema>
 export type ClanStandingContract = z.infer<typeof clanStandingSchema>
+export type RankedClanListContract = z.infer<typeof rankedClanListSchema>
 export type ClanRefreshInputContract = z.infer<typeof clanRefreshInputSchema>
 export type DiscordClanRefreshInputContract = z.infer<typeof discordClanRefreshInputSchema>
 export type ClanRefreshResponseContract = z.infer<typeof clanRefreshResponseSchema>

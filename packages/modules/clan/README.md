@@ -29,9 +29,9 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 - `domain/`: types and rules (parsing the source, provenance, publication results). No database code.
 - `db/`: `tables.ts` and one file per use case, for example `get-clan-profile.ts` and `publish-roster.ts`.
   `postgres-clans.ts` binds them to a database.
-- `api/`: `procedures.ts` holds the oRPC procedures. `read-clan-profile.ts` and `read-player-clan-membership.ts`
-  call the `db/` use cases with the database and turn the result into the public shape. `clan-profile-contract.ts`
-  does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
+- `api/`: `procedures.ts` holds the oRPC procedures. `read-clan-profile.ts`, `read-player-clan-membership.ts` and
+  `read-ranked-clans.ts` call the `db/` use cases with the database and turn the result into the public shape.
+  `clan-profile-contract.ts` does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it. `clan-refresh-job.ts` is the queue
   job that runs it, section by section. `clan-refresh-reservation.ts` reserves and activates the queue operation.
   `clan-weekly-snapshot-job.ts` is the weekly snapshot job, and `clan-weekly-snapshot-schedule.ts` keeps its schedule.
@@ -61,9 +61,13 @@ Everything other packages may import is exported from `index.ts`, and only what 
 | `clan.byId`                 | `GET /v1/clans/{id}`          | the clan profile, or null if never fetched             |
 | `clan.membershipByPlayerId` | `GET /v1/players/{id}/clan`   | the player's clan id and name, or null                 |
 | `clan.standingById`         | `GET /v1/clans/{id}/standing` | the clan's guild points and lifetime xp ranks, or null |
+| `clan.rankedList`           | `GET /v1/clans?page=n`        | 30 stored clans per page, ranked by guild points       |
 
-All three are also served at `/rpc/clan/*`. All three use `internalProcedure` from `@brawltome/foundation`, so they
+All four are also served at `/rpc/clan/*`. All four use `internalProcedure` from `@brawltome/foundation`, so they
 need the internal secret.
+
+`clan.rankedList` takes its rank over every clan with a profile, and a clan with no guild points comes last with no
+rank. Its lifetime xp is the stored `clan_lifetime_xp`, which is the source's `xp` plus `legacy_xp`.
 
 `clan.standingById` has no tRPC version. It ranks on the stored `clan_lifetime_xp`, the number `clan.byId` shows.
 

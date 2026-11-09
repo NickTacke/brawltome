@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountsModule, proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { playerModule } from '@brawltome/player'
 import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
@@ -51,11 +52,11 @@ function requireLease(lease: OperationLease | null): OperationLease {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'dead_letter_cli',
-    modules: [queueModule, accountsModule, rankingModule, statisticsModule],
+    modules: [queueModule, accountsModule, playerModule, rankingModule, statisticsModule],
   })
 
   connectionString = database.connectionString
-})
+}, 30_000)
 
 afterAll(async () => {
   await database?.drop()

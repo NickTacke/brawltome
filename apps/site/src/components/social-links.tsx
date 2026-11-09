@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+export const discordInviteUrl = 'https://discord.gg/ft5CJyjkkS'
+
 export interface SocialLink {
   href: string
   label: string
@@ -8,7 +10,7 @@ export interface SocialLink {
 
 export const socialLinks: SocialLink[] = [
   {
-    href: 'https://discord.gg/ft5CJyjkkS',
+    href: discordInviteUrl,
     label: 'Discord',
     svg: (
       <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" fillRule="evenodd">

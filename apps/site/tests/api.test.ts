@@ -207,4 +207,26 @@ describe('postApi', () => {
 
     expect(message).toBe('load summaries: api answered 500')
   })
+
+  test('postApi sends the headers it is given beside the secret', async () => {
+    const calls = stubFetch(() => jsonAnswer({ name: 'Warriors' }))
+    const visitorHeaders = { 'x-visitor-real-ip': '198.51.100.20' }
+
+    await postApi('/players/7/refresh', {}, guildSchema, 'refresh player 7', { headers: visitorHeaders })
+    const headers = new Headers(calls[0]?.init.headers)
+
+    expect(headers.get('x-visitor-real-ip')).toBe('198.51.100.20')
+    expect(headers.get('x-internal-secret')).toBe(internalSecret)
+  })
+
+  test('postApi never lets a given header replace the secret or the content type', async () => {
+    const calls = stubFetch(() => jsonAnswer({ name: 'Warriors' }))
+    const forged = { 'x-internal-secret': 'forged', 'content-type': 'text/plain' }
+
+    await postApi('/players/7/refresh', {}, guildSchema, 'refresh player 7', { headers: forged })
+    const headers = new Headers(calls[0]?.init.headers)
+
+    expect(headers.get('x-internal-secret')).toBe(internalSecret)
+    expect(headers.get('content-type')).toBe('application/json')
+  })
 })

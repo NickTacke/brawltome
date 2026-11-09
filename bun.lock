@@ -94,6 +94,7 @@
       "name": "@brawltome/site",
       "dependencies": {
         "@brawltome/contracts": "workspace:*",
+        "@marsidev/react-turnstile": "^1.5.0",
         "@solar-icons/react": "^1.1.0",
         "@tanstack/react-router": "1.170.46",
         "@tanstack/react-start": "1.169.5",
@@ -225,12 +226,14 @@
     "packages/modules/discovery": {
       "name": "@brawltome/discovery",
       "dependencies": {
+        "@brawltome/contracts": "workspace:*",
         "@brawltome/foundation": "workspace:*",
         "@brawltome/queue": "workspace:*",
         "postgres": "^3.4.0",
       },
       "devDependencies": {
         "@brawltome/telemetry": "workspace:*",
+        "@orpc/server": "1.16.2",
         "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
@@ -268,6 +271,7 @@
         "@brawltome/contracts": "workspace:*",
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
+        "@brawltome/player": "workspace:*",
         "@brawltome/queue": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "drizzle-orm": "0.45.4",

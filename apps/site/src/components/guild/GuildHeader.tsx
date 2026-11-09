@@ -1,5 +1,6 @@
 import type { ClanProfileContract } from '@brawltome/contracts'
 import { fixEncoding, formatDay, formatWhole, timeAgo } from '../../lib'
+import { RefreshStatus, type RefreshStatusProps } from '../refresh/RefreshStatus'
 import { socialLinks } from '../social-links'
 
 const discordInvitePattern = /^[A-Za-z0-9-]+$/
@@ -43,7 +44,7 @@ function DiscordLink({ url }: { url: string }) {
   )
 }
 
-export function GuildHeader({ clan }: { clan: ClanProfileContract }) {
+export function GuildHeader({ clan, refresh }: { clan: ClanProfileContract; refresh: RefreshStatusProps }) {
   const message = fixEncoding(clan.notice).trim()
   const updatedAt = clan.profile.lastSuccessAt
   const discordUrl = discordInviteUrl(clan.discordInviteCode)
@@ -71,7 +72,12 @@ export function GuildHeader({ clan }: { clan: ClanProfileContract }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {updatedAt && <div suppressHydrationWarning>Updated {timeAgo(updatedAt)}</div>}
+          {(updatedAt || refresh.status !== 'idle') && (
+            <div>
+              {updatedAt && <span suppressHydrationWarning>Updated {timeAgo(updatedAt)}</span>}
+              <RefreshStatus {...refresh} hasTextBefore={Boolean(updatedAt)} />
+            </div>
+          )}
           {updatedAt && discordUrl && bullet}
           {discordUrl && <DiscordLink url={discordUrl} />}
         </div>

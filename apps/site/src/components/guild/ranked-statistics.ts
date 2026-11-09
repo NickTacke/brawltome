@@ -118,5 +118,5 @@ export function winRatePercent({ wins, games, players }: RankedRecord): number |
 export function winRateColour(percent: number): string {
   if (percent >= 60) return 'text-emerald-400'
 
-  return percent >= 50 ? 'text-primary' : 'text-soft'
+  return percent >= 50 ? 'text-win' : 'text-soft'
 }
