@@ -253,7 +253,7 @@ tests:
         values: "0 1 2 3x17"
       - series: 'refresh_failures_total{kind="leaderboard-2v2",failure_category="source_unavailable"}'
         values: "0 1 2 3x17"
-      - series: 'refresh_failures_total{kind="statistics-ranked-collection",failure_category="execution"}'
+      - series: 'refresh_failures_total{kind="clan-refresh",failure_category="execution"}'
         values: "0 1 2 3x17"
       - series: 'refresh_failures_total{kind="statistics-publication",failure_category="lease_lost"}'
         values: "0 1 2 3x17"
@@ -275,13 +275,13 @@ tests:
               description: "More than two refresh attempts failed in the last 15 minutes."
               runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
           - exp_labels:
-              kind: statistics-ranked-collection
+              kind: clan-refresh
               failure_category: execution
               severity: warning
               service: brawltome
               signal: refresh-failures
             exp_annotations:
-              summary: "statistics-ranked-collection refresh failures detected"
+              summary: "clan-refresh refresh failures detected"
               description: "More than two refresh attempts failed in the last 15 minutes."
               runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#refreshfailureselevated"
           - exp_labels:
