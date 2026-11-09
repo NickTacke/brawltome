@@ -1,11 +1,10 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { GuildHeader } from '../components/guild/GuildHeader'
 import { GuildOverview } from '../components/guild/GuildOverview'
-import { parseGuildId } from '../components/guild/guild-id'
 import { MemberTable } from '../components/guild/MemberTable'
 import { rankedRecord } from '../components/guild/ranked-statistics'
 import { rankMembers } from '../components/guild/roster'
-import { fixEncoding } from '../lib'
+import { fixEncoding, parseEntityId } from '../lib'
 import { getGuild } from '../server/guilds'
 
 function pageTitle(guildName: string | undefined, status: string): string {
@@ -16,7 +15,7 @@ function pageTitle(guildName: string | undefined, status: string): string {
 
 export const Route = createFileRoute('/guild/$id')({
   loader: async ({ params }) => {
-    const guildId = parseGuildId(params.id)
+    const guildId = parseEntityId(params.id)
 
     if (guildId === null) throw notFound()
 

@@ -1,6 +1,6 @@
+import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
-// a plain anchor until /player/$id exists on this site, the route types reject a Link to it
 export function PlayerLink({
   playerId,
   className,
@@ -11,8 +11,9 @@ export function PlayerLink({
   children: ReactNode
 }) {
   return (
-    <a href={`/player/${playerId}`} className={className}>
+    // a roster has dozens of rows, and each preloaded player page is six internal reads
+    <Link to="/player/$id" params={{ id: String(playerId) }} preload={false} className={className}>
       {children}
-    </a>
+    </Link>
   )
 }

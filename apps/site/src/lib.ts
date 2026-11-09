@@ -39,6 +39,12 @@ export function formatDay(value: string | null): string {
   return `${date.getUTCDate()} ${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`
 }
 
+export function formatDayAndMonth(timeMs: number): string {
+  const date = new Date(timeMs)
+
+  return `${date.getUTCDate()} ${monthNames[date.getUTCMonth()]}`
+}
+
 export function timeAgo(value: string, now = new Date()): string {
   const date = new Date(value)
 
@@ -57,4 +63,16 @@ export function timeAgo(value: string, now = new Date()): string {
   if (hours < 24) return `${hours} h ago`
 
   return `${Math.floor(hours / 24)} d ago`
+}
+
+const largestEntityId = 2_147_483_647
+const canonicalIdPattern = /^[1-9]\d*$/
+
+/** The player or guild id in a url, or null for anything the API could never know, so bad urls cost no API call. */
+export function parseEntityId(value: string): number | null {
+  if (!canonicalIdPattern.test(value)) return null
+
+  const id = Number(value)
+
+  return id <= largestEntityId ? id : null
 }

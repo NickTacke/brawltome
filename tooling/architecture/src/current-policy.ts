@@ -54,7 +54,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/analytics-review': [],
     '@brawltome/accounts': ['.', './dead-letter-hooks', './testing'],
     '@brawltome/clan': ['.', './dead-letter-hooks'],
-    '@brawltome/contracts': ['.'],
+    '@brawltome/contracts': ['.', './legend-weapons'],
     '@brawltome/discovery': ['.'],
     '@brawltome/player': ['.', './dead-letter-hooks'],
     '@brawltome/queue': ['.', './testing'],

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fixEncoding, formatDay, formatWhole, timeAgo } from '../src/lib'
+import { fixEncoding, formatDay, formatDayAndMonth, formatWhole, timeAgo } from '../src/lib'
 
 describe('formatWhole', () => {
   test('groups a numeric string by thousands', () => {
@@ -78,5 +78,16 @@ describe('formatters on bad input', () => {
   test('formatDay and timeAgo say unknown for a bad date', () => {
     expect(formatDay('garbage')).toBe('Unknown')
     expect(timeAgo('garbage')).toBe('Unknown')
+  })
+})
+
+describe('formatDayAndMonth', () => {
+  // chrome's Intl says Sept, which breaks hydration against the server's Sep
+  test('spells september the same everywhere', () => {
+    expect(formatDayAndMonth(Date.parse('2026-09-25T12:00:00.000Z'))).toBe('25 Sep')
+  })
+
+  test('reads the day in utc', () => {
+    expect(formatDayAndMonth(Date.parse('2026-10-01T23:30:00.000Z'))).toBe('1 Oct')
   })
 })
