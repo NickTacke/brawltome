@@ -50,6 +50,7 @@ export const playerRefreshInputSchema = z
   .strict()
 
 export const playerViewInputSchema = z.object({ id: brawlhallaIdSchema }).strict()
+export const playerViewResponseSchema = z.object({ recorded: z.boolean() }).strict()
 
 export const discordPlayerRefreshInputSchema = z
   .object({

@@ -104,6 +104,7 @@ export {
   playerRefreshInputSchema,
   playerRefreshResponseSchema,
   playerViewInputSchema,
+  playerViewResponseSchema,
   type RefreshOutcomeContract,
 } from './refresh-outcome'
 export {

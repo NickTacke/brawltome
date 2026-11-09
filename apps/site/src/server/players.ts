@@ -3,6 +3,7 @@ import { getCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { excludeUnarmedCookie } from '../components/player/player-format'
 import { loadPlayer } from './load-player'
+import { recordView } from './record-view'
 import { requestRefresh } from './request-refresh'
 import { currentVisitor } from './visitor'
 
@@ -22,3 +23,8 @@ export const getIsUnarmedExcluded = createServerFn({ method: 'GET' }).handler(
 export const refreshPlayer = createServerFn({ method: 'POST' })
   .validator(refreshRequestSchema)
   .handler(({ data }) => requestRefresh('players', data, currentVisitor()))
+
+// a post that only the page on screen sends, so prefetches and the server's own reads are never counted
+export const recordPlayerView = createServerFn({ method: 'POST' })
+  .validator(playerIdSchema)
+  .handler(({ data: playerId }) => recordView(playerId, currentVisitor()))

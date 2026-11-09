@@ -19,8 +19,14 @@ const page: PlayerPage = {
 const getPlayer = mock(async (): Promise<PlayerPage | null> => page)
 
 const refreshPlayer = mock(async () => ({ kind: 'fresh' }))
+const recordPlayerView = mock(async () => undefined)
 
-mock.module('../src/server/players', () => ({ getPlayer, getIsUnarmedExcluded: async () => true, refreshPlayer }))
+mock.module('../src/server/players', () => ({
+  getPlayer,
+  getIsUnarmedExcluded: async () => true,
+  refreshPlayer,
+  recordPlayerView,
+}))
 
 type LoaderData = { kind: 'player'; player: { name: string } } | { kind: 'lookup'; playerId: number }
 
@@ -87,6 +93,13 @@ describe('player route', () => {
     await options.loader({ params: { id: '7' } })
 
     expect(refreshPlayer).not.toHaveBeenCalled()
+  })
+
+  // the server's own read is not a visitor, the view is counted from the page once it is on screen
+  test('loading the page never counts a view', async () => {
+    await options.loader({ params: { id: '7' } })
+
+    expect(recordPlayerView).not.toHaveBeenCalled()
   })
 
   test('returns the page and the remembered unarmed choice', async () => {

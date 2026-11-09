@@ -10,6 +10,7 @@ import { apiModules } from '../src/modules'
 import { createOrpcRoutes } from '../src/orpc/mount'
 import { createOrpcRouter, type OrpcRouter } from '../src/orpc/router'
 import { createVisitorRefreshProcedures, type VisitorRefreshDependencies } from '../src/orpc/visitor-refresh'
+import { createVisitorViewProcedures, type VisitorViewDependencies } from '../src/orpc/visitor-views'
 import { workerModules } from '../src/worker-modules'
 
 function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): BrawltomeModule[] {
@@ -20,6 +21,7 @@ function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): Br
 const runtime: ModuleRuntime = { database: {} as Database }
 // the same goes for the api's own procedures and what they are handed
 const refresh = createVisitorRefreshProcedures({} as VisitorRefreshDependencies)
+const views = createVisitorViewProcedures({} as VisitorViewDependencies)
 
 describe('module lists', () => {
   test('the API loads every module its modules depend on', () => {
@@ -66,10 +68,11 @@ describe('oRPC router built from a module list', () => {
 
   test("puts the api's own procedures beside the modules", () => {
     const moduleKeys = Object.keys(createOrpcRouter(apiModules, runtime))
-    const router = createOrpcRouter(apiModules, runtime, { refresh })
+    const router = createOrpcRouter(apiModules, runtime, { refresh, views })
 
-    expect(Object.keys(router).sort()).toEqual([...moduleKeys, 'refresh'].sort())
+    expect(Object.keys(router).sort()).toEqual([...moduleKeys, 'refresh', 'views'].sort())
     expect(Object.keys(router.refresh)).toEqual(['player', 'clan'])
+    expect(Object.keys(router.views)).toEqual(['player'])
   })
 
   test("refuses a module named like one of the api's own groups", () => {
@@ -81,7 +84,7 @@ describe('oRPC router built from a module list', () => {
   })
 
   test('types the router with exactly the served keys', () => {
-    const servedKeys: (keyof OrpcRouter)[] = ['status', 'refresh', 'clan', 'player']
+    const servedKeys: (keyof OrpcRouter)[] = ['status', 'refresh', 'views', 'clan', 'player']
 
     // @ts-expect-error a module name that widened to string would let any key through
     const unservedKey: keyof OrpcRouter = 'nothing'

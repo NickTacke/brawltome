@@ -5,6 +5,7 @@ import type { apiModules } from '../modules'
 import type { OrpcContext } from './context'
 import { status } from './status'
 import type { createVisitorRefreshProcedures } from './visitor-refresh'
+import type { createVisitorViewProcedures } from './visitor-views'
 
 type ModuleWithRoutes = BrawltomeModule & { routes: NonNullable<BrawltomeModule['routes']> }
 
@@ -17,7 +18,10 @@ type ModuleProcedures<TModules extends readonly BrawltomeModule[]> = {
 type ApiProcedures = Record<string, Router<AnyContractRouter, OrpcContext>>
 
 /** The groups serve.ts passes in. */
-export type ServedApiProcedures = { refresh: ReturnType<typeof createVisitorRefreshProcedures> }
+export type ServedApiProcedures = {
+  refresh: ReturnType<typeof createVisitorRefreshProcedures>
+  views: ReturnType<typeof createVisitorViewProcedures>
+}
 
 function hasRoutes(module: BrawltomeModule): module is ModuleWithRoutes {
   return module.routes !== undefined
