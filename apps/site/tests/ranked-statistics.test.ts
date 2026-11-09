@@ -205,8 +205,8 @@ describe('winRateColour', () => {
   })
 
   test('50% or more is blue', () => {
-    expect(winRateColour(59.9)).toBe('text-primary')
-    expect(winRateColour(50)).toBe('text-primary')
+    expect(winRateColour(59.9)).toBe('text-win')
+    expect(winRateColour(50)).toBe('text-win')
   })
 
   test('below 50% is grey', () => {

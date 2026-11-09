@@ -98,6 +98,22 @@ describe('application secret bootstrap', () => {
     expect(result.stdout.split('\n')[0]).not.toContain('secret')
   })
 
+  test('exports the internal API secret for the site', () => {
+    const values = { internal_api_secret: 'internal-secret-value' }
+
+    const { bin, secrets } = fixture(values)
+
+    const result = spawnSync('sh', [runner, 'site'], {
+      encoding: 'utf8',
+      env: { ...process.env, BRAWLTOME_SECRETS_ROOT: secrets, PATH: `${bin}:${process.env.PATH}` },
+    })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('args=run infra/app/site-server.ts')
+    expect(result.stdout).toContain(`internal=${values.internal_api_secret}`)
+    expect(result.stdout.split('\n')[0]).not.toContain(values.internal_api_secret)
+  })
+
   test('exports dedicated dead-letter secrets and forwards CLI arguments', () => {
     const values = {
       dead_letter_database_url: 'postgres://dead-letter-operator',

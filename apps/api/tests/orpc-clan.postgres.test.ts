@@ -199,6 +199,29 @@ describe('clan.standingById over oRPC', () => {
   })
 })
 
+describe('clan.rankedList over oRPC', () => {
+  test('returns the first page at /rpc and at GET /v1/clans', async () => {
+    const client = createRpcClient()
+    const list = await client.clan.rankedList({ page: 1 })
+
+    expect(list.entries[0]).toMatchObject({ rank: 1, clanId: completeClan.clan.clanId })
+    expect(list.totalRows).toBe(storedScenarios.length)
+    expect(await fetchJson('/v1/clans?page=1')).toEqual({ status: 200, body: list })
+  })
+
+  test('returns no entries past the last page', async () => {
+    expect(await fetchJson('/v1/clans?page=2')).toMatchObject({
+      status: 200,
+      body: { page: 2, hasMore: false, entries: [] },
+    })
+  })
+
+  test('rejects a page the contract does not accept', async () => {
+    expect((await fetchJson('/v1/clans?page=0')).status).toBe(400)
+    expect((await fetchJson('/v1/clans')).status).toBe(400)
+  })
+})
+
 describe('the internal secret on the oRPC clan reads', () => {
   for (const { caller, headers } of refusedCallers) {
     test(`refuses ${caller} over /rpc with FORBIDDEN`, async () => {
@@ -208,16 +231,19 @@ describe('the internal secret on the oRPC clan reads', () => {
       await expect(client.clan.byId({ id: completeClan.clan.clanId })).rejects.toMatchObject(forbidden)
       await expect(client.clan.membershipByPlayerId({ id: 30 })).rejects.toMatchObject(forbidden)
       await expect(client.clan.standingById({ id: completeClan.clan.clanId })).rejects.toMatchObject(forbidden)
+      await expect(client.clan.rankedList({ page: 1 })).rejects.toMatchObject(forbidden)
     })
 
     test(`refuses ${caller} over /v1 with 403`, async () => {
       const clan = await fetchJson(`/v1/clans/${completeClan.clan.clanId}`, headers)
       const membership = await fetchJson('/v1/players/30/clan', headers)
       const standing = await fetchJson(`/v1/clans/${completeClan.clan.clanId}/standing`, headers)
+      const rankedList = await fetchJson('/v1/clans?page=1', headers)
 
       expect(clan).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
       expect(membership).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
       expect(standing).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
+      expect(rankedList).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
     })
   }
 
@@ -232,12 +258,14 @@ describe('the OpenAPI document with the clan module loaded', () => {
     const document = body as { paths: Record<string, Record<string, { operationId?: string }>> }
 
     expect(Object.keys(document.paths).sort()).toEqual([
+      '/clans',
       '/clans/{id}',
       '/clans/{id}/standing',
       '/players/{id}/clan',
       '/status',
     ])
 
+    expect(document.paths['/clans'].get.operationId).toBe('clan.rankedList')
     expect(document.paths['/clans/{id}'].get.operationId).toBe('clan.byId')
     expect(document.paths['/clans/{id}/standing'].get.operationId).toBe('clan.standingById')
     expect(document.paths['/players/{id}/clan'].get.operationId).toBe('clan.membershipByPlayerId')
@@ -255,6 +283,7 @@ describe('the OpenAPI document with the clan module loaded', () => {
       internalSecret: { type: 'apiKey', in: 'header', name: 'x-internal-secret' },
     })
 
+    expect(document.paths['/clans'].get.security).toEqual([{ internalSecret: [] }])
     expect(document.paths['/clans/{id}'].get.security).toEqual([{ internalSecret: [] }])
     expect(document.paths['/clans/{id}/standing'].get.security).toEqual([{ internalSecret: [] }])
     expect(document.paths['/players/{id}/clan'].get.security).toEqual([{ internalSecret: [] }])

@@ -61,6 +61,15 @@ describe('runRefresh', () => {
     expect(fake.reloads()).toBe(1)
   })
 
+  // another visitor may finish the refresh first, the page still has to show the new data before it stops trying
+  test('fresh data that fails to load ends in a failure', async () => {
+    const { run, statuses } = fakeRun({ answers: [{ kind: 'fresh' }], failingReloads: true })
+
+    await runRefresh(run)
+
+    expect(statuses).toEqual(['updating', 'failed'])
+  })
+
   test('the challenge answer is sent with the next request', async () => {
     const fake = fakeRun({ answers: [{ kind: 'verify', siteKey: 'site-key' }, refreshing] })
 

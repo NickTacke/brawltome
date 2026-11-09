@@ -74,7 +74,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/discovery': ['@brawltome/queue'],
     '@brawltome/player': ['@brawltome/queue'],
     '@brawltome/queue': [],
-    '@brawltome/ranking': ['@brawltome/queue'],
+    '@brawltome/ranking': ['@brawltome/player', '@brawltome/queue'],
     '@brawltome/request-admission': [],
     '@brawltome/replay-analysis': ['@brawltome/accounts'],
     '@brawltome/statistics': ['@brawltome/queue'],
