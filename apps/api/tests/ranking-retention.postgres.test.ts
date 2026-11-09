@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
 import { runJobOnce } from '@brawltome/queue/testing'
 import {
@@ -82,7 +83,7 @@ afterAll(async () => {
 async function migratedDatabase() {
   const database = await createTestDatabase({
     label: 'ranking_retention',
-    modules: [queueModule, requestAdmissionModule, rankingModule],
+    modules: [queueModule, requestAdmissionModule, playerModule, rankingModule],
   })
 
   testDatabases.push(database)
