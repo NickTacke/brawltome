@@ -1,6 +1,7 @@
 import { leaderboardRegions } from './leaderboard'
 import { legendMetaBrackets } from './statistics'
 import {
+  cohortCellsSchema,
   directionFor,
   statisticsHistoryCompatibilityReasonSchema,
   statisticsHistoryDirectionSchema,
@@ -161,6 +162,7 @@ const careerWeaponHistorySnapshotSchema = z
     observationWindow: observationWindowSchema,
     publishedAt: utcDateTimeSchema,
     scope: filtersSchema,
+    cohortCells: cohortCellsSchema,
     selectedPlayers: nonnegativeInt32,
     successfulObservations: nonnegativeInt32,
     coverage: careerWeaponExactRatioSchema.nullable(),

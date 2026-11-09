@@ -3,6 +3,7 @@ import type { Database, JsonValue, Sql } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import { acquireActiveLease, type EffectLineage, operationMatches, readEffectLineage } from '@brawltome/queue'
 import {
+  canReplaceLaunchGeneration,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
   type LaunchCohortCapacityEnvelope,
@@ -54,6 +55,7 @@ import {
   type LegendMetaArtifact,
   LegendMetaBuildError,
   type LegendMetaCell,
+  type LegendMetaCohortCell,
 } from './legend-meta'
 import {
   type CellCollectionProgress,
@@ -185,6 +187,15 @@ type LegendMetaSelectionRow = {
   active_artifact: LegendMetaArtifact | null
 }
 
+type LaunchGenerationPaceRow = {
+  id: string
+  methodology_version: string
+  evidence_state: 'ready' | 'insufficient-evidence'
+  observation_window_starts_at: Date
+  observation_window_ends_at: Date
+  decision_count: string | number
+}
+
 type UnpublishedGenerationRow = {
   generation_id: string
   product: CollectionProduct
@@ -262,6 +273,16 @@ function publicationOperationKey(generationId: string, product: CollectionProduc
 
 function legendMetaPublicationOperationKey(generationId: string): string {
   return `statistics:${generationId}:legend-meta`
+}
+
+function launchGenerationDecisionState(row: LaunchGenerationPaceRow) {
+  return {
+    methodologyVersion: row.methodology_version,
+    state: row.evidence_state,
+    startedAt: row.observation_window_starts_at,
+    observationWindowEndsAt: row.observation_window_ends_at,
+    decisionCount: Number(row.decision_count),
+  }
 }
 
 function capacityEnvelope(row: GenerationRow): LaunchCohortCapacityEnvelope {
@@ -352,6 +373,16 @@ const legendMetaReferences = referenceLegends
     name: displayName,
     slug: legendSlug(heroId, displayName),
   }))
+
+// only the cells this view is built from, so a cell changing elsewhere cannot break this view's history
+function coveredCellKeys(cells: readonly LegendMetaCohortCell[], scope: { region: string; bracket: string }): string[] {
+  const inScope = cells.filter(
+    ({ region, bracket }) =>
+      (scope.region === 'all' || region === scope.region) && (scope.bracket === 'all' || bracket === scope.bracket),
+  )
+
+  return inScope.filter(({ status }) => status === 'covered').map(({ region, bracket }) => `${region}/${bracket}`)
+}
 
 function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
   if (error instanceof LegendMetaBuildError) {
@@ -795,6 +826,22 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     return isActive ? 'allowed' : 'lease-lost'
   }
 
+  // the newest generation keeps its place until it is due, or until a stalled one runs out of observation window
+  async function readBlockingGenerationId(sql: typeof client): Promise<string | null> {
+    const [latest] = await sql<LaunchGenerationPaceRow[]>`
+      SELECT generation.id, generation.methodology_version, generation.evidence_state,
+             generation.observation_window_starts_at, generation.observation_window_ends_at,
+             (SELECT count(*)::bigint FROM statistics.publication_decisions decision
+              WHERE decision.generation_id = generation.id) AS decision_count
+      FROM statistics.cohort_generations generation
+      ORDER BY generation.created_at DESC, generation.id DESC LIMIT 1
+    `
+
+    if (!latest || canReplaceLaunchGeneration(launchGenerationDecisionState(latest), now())) return null
+
+    return latest.id
+  }
+
   const tracer: StatisticsTracer = {
     async reconcileCohort(snapshot): Promise<CohortAudit> {
       const selected = selectLaunchCohort(snapshot)
@@ -865,15 +912,10 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
           return found
         }
 
-        const [unfinished] = await sql<{ id: string }[]>`
-          SELECT generation.id FROM statistics.cohort_generations generation
-          WHERE (SELECT count(*) FROM statistics.publication_decisions decision
-                 WHERE decision.generation_id = generation.id) < 2
-          ORDER BY generation.created_at DESC LIMIT 1
-        `
+        const blockingGenerationId = await readBlockingGenerationId(sql)
 
-        if (unfinished) {
-          const active = await auditLaunch(sql, unfinished.id)
+        if (blockingGenerationId) {
+          const active = await auditLaunch(sql, blockingGenerationId)
 
           if (!active) throw new Error('active Statistics launch cohort disappeared')
 
@@ -881,7 +923,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         }
 
         const generationId = randomUUID()
-        const startsAt = new Date()
+        const startsAt = now()
         const endsAt = new Date(startsAt.getTime() + LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS * 1_000)
         const envelope = selected.capacityEnvelope
 
@@ -952,9 +994,15 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             source_generation_id: string
             decision_count: string | number
             cohort_ids: string[]
+            methodology_version: string
+            evidence_state: 'ready' | 'insufficient-evidence'
+            observation_window_starts_at: Date
+            observation_window_ends_at: Date
           }[]
         >`
           SELECT generation.id AS generation_id, generation.source_generation_id,
+                 generation.methodology_version, generation.evidence_state,
+                 generation.observation_window_starts_at, generation.observation_window_ends_at,
                  (SELECT count(*)::bigint FROM statistics.publication_decisions decision
                   WHERE decision.generation_id = generation.id) AS decision_count,
                  ARRAY(SELECT cohort.id FROM statistics.cohorts cohort
@@ -975,6 +1023,16 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               sourceGenerationId: current.source_generation_id,
               decisionCount: Number(current.decision_count),
               cohortIds: current.cohort_ids,
+              isNextGenerationDue: canReplaceLaunchGeneration(
+                {
+                  methodologyVersion: current.methodology_version,
+                  state: current.evidence_state,
+                  startedAt: current.observation_window_starts_at,
+                  observationWindowEndsAt: current.observation_window_ends_at,
+                  decisionCount: Number(current.decision_count),
+                },
+                now(),
+              ),
             }
           : null,
       }
@@ -1619,10 +1677,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               id: string
               region: LaunchCohortRegion
               bracket: 'Platinum' | 'Diamond+'
+              eligible_players: number
               selected_players: number
             }[]
           >`
-            SELECT id, region, bracket, selected_players
+            SELECT id, region, bracket, eligible_players, selected_players
             FROM statistics.cohorts WHERE generation_id = ${authorization.generationId}
             ORDER BY region, bracket
           `
@@ -1662,7 +1721,12 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
                 {
                   brawlhallaId,
                   rating: evidence.rating,
-                  legends: evidence.legends.map(({ legendId, games, wins }) => ({ legendId, games, wins })),
+                  legends: evidence.legends.map(({ legendId, games, wins, rating }) => ({
+                    legendId,
+                    games,
+                    wins,
+                    rating,
+                  })),
                 },
               ])
             }
@@ -1684,6 +1748,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               cells: cohortRows.map((cohort) => ({
                 region: cohort.region,
                 bracket: cohort.bracket,
+                eligiblePlayers: cohort.eligible_players,
                 selectedPlayers: cohort.selected_players,
                 observations: observationsByCohort.get(cohort.id) ?? [],
               })),
@@ -1736,6 +1801,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         return {
           snapshotId: artifact.snapshotId,
           generationId: artifact.generationId,
+          cohortCells: artifact.cohortCells,
           publishedAt: artifact.publishedAt,
           observationWindow: artifact.observationWindow,
           sequence: { at: sequence_at.toISOString(), id: sequence_id },
@@ -1744,6 +1810,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: artifact.cohortMethodologyVersion,
             metricMethodologyVersion: artifact.methodologyVersion,
             scope: input,
+            coveredCells: coveredCellKeys(artifact.cohortCells, input),
           },
           rows: slice.rows.map((row) => ({
             legend: row.legend,
@@ -1755,7 +1822,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             winRateBasisPoints: row.winRate.basisPoints,
           })),
           data: slice,
-        } satisfies LegendMetaHistorySnapshot & { generationId: string; data: typeof slice }
+        } satisfies LegendMetaHistorySnapshot & {
+          generationId: string
+          cohortCells: LegendMetaCohortCell[]
+          data: typeof slice
+        }
       })
 
       return { status: 'available', ...input, entries: buildLegendMetaHistory(snapshots) }
@@ -1821,12 +1892,20 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     getLaunchCohort: (generationId) => auditLaunch(client, generationId),
 
     async getCareerWeaponUsageHistory(filters): Promise<CareerWeaponUsageHistoryView> {
-      const snapshots = await client<CareerSnapshotRow[]>`
+      const snapshots = await client<(CareerSnapshotRow & { cohort_cells: LegendMetaCohortCell[] })[]>`
         SELECT snapshot.id AS snapshot_id, snapshot.generation_id,
                snapshot.cohort_methodology_version, snapshot.methodology_version,
                generation.observation_window_starts_at, generation.observation_window_ends_at,
                snapshot.published_at, scope.selected_players, scope.successful_observations,
-               scope.total_held_seconds
+               scope.total_held_seconds,
+               (SELECT jsonb_agg(jsonb_build_object(
+                         'region', cohort.region, 'bracket', cohort.bracket,
+                         'status', CASE WHEN cohort.selected_players > 0 THEN 'covered' ELSE 'left-out' END,
+                         'eligiblePlayers', cohort.eligible_players,
+                         'selectedPlayers', cohort.selected_players
+                       ) ORDER BY array_position(${launchCohortRegions}::text[], cohort.region),
+                                  array_position(${launchCohortBrackets}::text[], cohort.bracket))
+                FROM statistics.cohorts cohort WHERE cohort.generation_id = snapshot.generation_id) AS cohort_cells
         FROM statistics.career_weapon_usage_snapshots snapshot
         JOIN statistics.cohort_generations generation ON generation.id = snapshot.generation_id
         JOIN statistics.career_weapon_usage_scopes scope ON scope.snapshot_id = snapshot.id
@@ -1888,6 +1967,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         return {
           snapshotId: snapshot.snapshot_id,
           generationId: snapshot.generation_id,
+          cohortCells: snapshot.cohort_cells,
           publishedAt: snapshot.published_at.toISOString(),
           observationWindow: {
             startsAt: snapshot.observation_window_starts_at.toISOString(),
@@ -1898,6 +1978,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: snapshot.cohort_methodology_version,
             metricMethodologyVersion: snapshot.methodology_version,
             scope: filters,
+            coveredCells: coveredCellKeys(snapshot.cohort_cells, filters),
           },
           rows: aggregate.rows.map((row) => ({
             weapon: row.weapon,
@@ -1908,7 +1989,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             medianKosPerHour: row.medianKosPerHour,
           })),
           data: aggregate,
-        } satisfies CareerWeaponHistorySnapshot & { generationId: string; data: CareerWeaponUsageAggregate }
+        } satisfies CareerWeaponHistorySnapshot & {
+          generationId: string
+          cohortCells: LegendMetaCohortCell[]
+          data: CareerWeaponUsageAggregate
+        }
       })
 
       return { status: 'available', filters, entries: buildCareerWeaponUsageHistory(historySnapshots) }

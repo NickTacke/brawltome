@@ -39,6 +39,7 @@ export function mapLegendMetaOutput(result: LegendMetaQueryResult): LegendMetaOu
           ? 'publication_overdue'
           : null,
     filter: { region, bracket },
+    sliceCoverage: slice.sliceCoverage,
     selectedPlayers: slice.selectedPlayers,
     observedPlayers: slice.observedPlayers,
     observedLegendGames: slice.observedLegendGames,

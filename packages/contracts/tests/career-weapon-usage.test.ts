@@ -6,6 +6,7 @@ import {
   parseCareerWeaponUsageHistoryOutput,
   parseCareerWeaponUsageOutput,
 } from '../src/career-weapon-usage'
+import { leaderboardRegions } from '../src/leaderboard'
 
 const available = {
   status: 'fresh',
@@ -56,6 +57,16 @@ const available = {
   ],
 } as const
 
+const cohortCells = leaderboardRegions.flatMap((region) =>
+  (['Platinum', 'Diamond+'] as const).map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
+
 const historySnapshot = {
   snapshotId: available.snapshotId,
   generationId: available.generationId,
@@ -64,6 +75,7 @@ const historySnapshot = {
   observationWindow: available.observationWindow,
   publishedAt: available.publishedAt,
   scope: available.filters,
+  cohortCells,
   selectedPlayers: available.selectedPlayers,
   successfulObservations: available.successfulObservations,
   coverage: available.coverage,

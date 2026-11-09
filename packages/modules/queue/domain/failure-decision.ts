@@ -29,7 +29,7 @@ export type FailureDecision =
       action: 'fail'
       failure: OperationFailure
       delayMs: number
-      category: 'execution' | 'source_rate_limited'
+      category: 'execution' | 'source_rate_limited' | 'source_unavailable'
     }
 
 const minimumSourceWaitMs = 60_000

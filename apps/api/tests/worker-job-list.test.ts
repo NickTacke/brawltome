@@ -482,6 +482,7 @@ describe('worker job list', () => {
 
         return {} as never
       },
+      collectionPace: { waitMsForTurn: () => 0 },
     })
 
     expect(jobs.map((job) => job.kind)).toEqual([

@@ -68,6 +68,7 @@ export const idleStatisticsDependencies: WorkerStatisticsDependencies = {
   collectEvidence: async () => {
     throw new Error('this test never collects Statistics evidence')
   },
+  collectionPace: { waitMsForTurn: () => 0 },
 }
 
 export const idleLeaderboardDependencies: WorkerLeaderboardDependencies = {

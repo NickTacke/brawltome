@@ -5,6 +5,7 @@ import {
   legendMetaRegions,
 } from '@brawltome/contracts'
 import { legendAvatarUrl } from '@brawltome/game-data'
+import { SliceCoverageLabel } from './SliceCoverageLabel'
 
 const regionLabels: Record<(typeof legendMetaRegions)[number], string> = {
   all: 'All regions',
@@ -37,6 +38,18 @@ function uncertainty(interval: { lowerBasisPoints: number; upperBasisPoints: num
   if (!interval) return 'Unavailable'
 
   return `${percentage(interval.lowerBasisPoints)}–${percentage(interval.upperBasisPoints)}`
+}
+
+type LegendMetaCohortCells = Exclude<LegendMetaOutput, { status: 'unavailable' }>['cohortCells']
+
+function cohortCoverageNote(cells: LegendMetaCohortCells): string {
+  const leftOut = cells.filter(({ status }) => status === 'left-out')
+
+  if (leftOut.length === 0) return `Covers all ${cells.length} region and bracket cells.`
+
+  const names = leftOut.map(({ region, bracket }) => `${region} ${bracket}`).join(', ')
+
+  return `Covers ${cells.length - leftOut.length} of ${cells.length} region and bracket cells. Left out for too few players: ${names}.`
 }
 
 function formattedRating(rating: number | null): string {
@@ -160,6 +173,8 @@ export function LegendMetaView({
             </output>
           )}
 
+          <SliceCoverageLabel coverage={data.sliceCoverage} />
+
           <dl className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-card/60 p-4">
               <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coverage</dt>
@@ -219,6 +234,9 @@ export function LegendMetaView({
                     95% interval
                   </th>
                   <th scope="col" className="px-4 py-3 text-right">
+                    Avg legend elo
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
                     Median rating
                   </th>
                   <th scope="col" className="px-4 py-3 text-right">
@@ -258,6 +276,7 @@ export function LegendMetaView({
                       <MetricBar basisPoints={row.winRate.basisPoints} />
                     </td>
                     <td className="px-4 py-4 text-right text-muted-foreground">{uncertainty(row.uncertainty95)}</td>
+                    <td className="px-4 py-4 text-right">{formattedRating(row.averageLegendRating)}</td>
                     <td className="px-4 py-4 text-right">{formattedRating(row.medianRating)}</td>
                     <td className="px-4 py-4 text-right">
                       {row.playerCount.toLocaleString('en-US')} / {row.gameCount.toLocaleString('en-US')}
@@ -274,6 +293,7 @@ export function LegendMetaView({
             </summary>
             <div className="mt-4 space-y-4 text-sm leading-6 text-muted-foreground">
               <p>{data.methodology.seasonalScope}</p>
+              <p>{cohortCoverageNote(data.cohortCells)}</p>
               <dl className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <dt className="font-semibold text-foreground">Pick share</dt>
@@ -286,6 +306,10 @@ export function LegendMetaView({
                 <div>
                   <dt className="font-semibold text-foreground">Observed win rate</dt>
                   <dd>{data.methodology.formulas.winRate}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-foreground">Avg legend elo</dt>
+                  <dd>{data.methodology.formulas.averageLegendRating}</dd>
                 </div>
                 <div>
                   <dt className="font-semibold text-foreground">Median rating</dt>

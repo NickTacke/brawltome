@@ -15,6 +15,7 @@ import type {
 import type {
   LegendMetaArtifact,
   LegendMetaArtifactSlice,
+  LegendMetaCohortCell,
   LegendMetaFilterBracket,
   LegendMetaFilterRegion,
 } from './legend-meta'
@@ -32,6 +33,7 @@ export {
   createStatisticsRankedCollectionJob,
   type StatisticsCollectionJobDependencies,
   type StatisticsCollectionLease,
+  StatisticsSourceOutageError,
 } from './jobs/statistics-collection-job'
 export {
   statisticsCollectionContract,
@@ -53,10 +55,14 @@ import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregat
 export {
   type CohortCandidateSnapshot,
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+  isLaunchGenerationDue,
   LAUNCH_COHORT_BRACKET,
   LAUNCH_COHORT_CAP,
+  LAUNCH_COHORT_GENERATION_INTERVAL_SECONDS,
+  LAUNCH_COHORT_INSUFFICIENT_RETRY_SECONDS,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_METHODOLOGY_VERSION,
+  LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
   LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
   LAUNCH_COHORT_REGION,
@@ -99,6 +105,7 @@ export {
   LEGEND_META_MINIMUM_PLAYERS,
   type LegendMetaArtifact,
   type LegendMetaArtifactSlice,
+  type LegendMetaCohortCell,
   type LegendMetaFilterBracket,
   type LegendMetaFilterRegion,
   type LegendMetaLegend,
@@ -345,6 +352,7 @@ export type CareerWeaponUsageView =
 
 export type LegendMetaHistoryViewSnapshot = LegendMetaHistorySnapshot & {
   generationId: string
+  cohortCells: LegendMetaCohortCell[]
   data: LegendMetaArtifactSlice
 }
 
@@ -363,6 +371,7 @@ export type LegendMetaHistoryView =
     }
 
 export type CareerWeaponHistoryViewSnapshot = CareerWeaponHistorySnapshot & {
+  cohortCells: LegendMetaCohortCell[]
   generationId: string
   data: CareerWeaponUsageAggregate
 }
@@ -394,6 +403,7 @@ export type StatisticsReconciliationState = {
     sourceGenerationId: string
     decisionCount: number
     cohortIds: string[]
+    isNextGenerationDue: boolean
   } | null
 }
 

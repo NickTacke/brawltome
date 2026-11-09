@@ -1,5 +1,6 @@
 import {
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
+  LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
   LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
   LAUNCH_COHORT_REQUESTS_PER_PLAYER,
@@ -31,6 +32,7 @@ export type AuditedCellCollectionProgress = CellCollectionProgress & {
 }
 
 export type PublicationValidationReason =
+  | { code: 'covered-cells-minimum-not-met'; coveredCells: number }
   | { code: 'cell-minimum-not-met'; region: LaunchCohortRegion; bracket: LaunchCohortBracket }
   | { code: 'collection-operations-incomplete' }
   | { code: 'overall-coverage-below-95-percent' }
@@ -121,7 +123,16 @@ export function validatePublicationDecision(input: {
   const successes = cells.reduce((total, cell) => total + cell.successes, 0)
   const reasons: PublicationValidationReason[] = []
 
-  const minimumFailure = cells.find(({ selectedPlayers }) => selectedPlayers < LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS)
+  // a cell with no selected players was left out at selection; only the cells that were kept are held to the rules
+  const coveredCells = cells.filter(({ selectedPlayers }) => selectedPlayers > 0)
+
+  if (coveredCells.length < LAUNCH_COHORT_MINIMUM_COVERED_CELLS) {
+    reasons.push({ code: 'covered-cells-minimum-not-met', coveredCells: coveredCells.length })
+  }
+
+  const minimumFailure = coveredCells.find(
+    ({ selectedPlayers }) => selectedPlayers < LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS,
+  )
 
   if (minimumFailure) {
     reasons.push({
@@ -149,7 +160,7 @@ export function validatePublicationDecision(input: {
     })
   }
 
-  const windowViolated = cells.some((cell) => {
+  const windowViolated = coveredCells.some((cell) => {
     if (cell.operations === 0) return true
 
     if (!cell.firstAttemptAt || !cell.lastCompletedAt) return true

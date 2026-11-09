@@ -79,7 +79,7 @@ describe('Statistics V1 purpose-specific source evidence', () => {
     })
   })
 
-  test('preserves an omitted top-level ranked tier as unknown while keeping legend tiers strict', () => {
+  test('preserves an omitted top-level ranked tier as unknown', () => {
     const { tier: _omitted, ...withoutTier } = ranked
 
     expect(decodeRankedEvidence(withoutTier, playerId)).toMatchObject({
@@ -90,16 +90,24 @@ describe('Statistics V1 purpose-specific source evidence', () => {
 
     expect(validateRankedEvidence(decodeRankedEvidence(withoutTier, playerId), playerId).tier).toBeNull()
     expect(() => decodeRankedEvidence({ ...withoutTier, tier: 1 }, playerId)).toThrow('tier')
+  })
 
-    expect(() =>
-      decodeRankedEvidence(
-        {
-          ...withoutTier,
-          legends: [{ ...withoutTier.legends[0], tier: undefined }],
-        },
-        playerId,
-      ),
-    ).toThrow('legends[0].tier')
+  test('treats a missing or blank legend tier as unknown on both the source and stored evidence', () => {
+    const [legend] = ranked.legends
+    const { tier: _omitted, ...legendWithoutTier } = legend
+
+    for (const sourceLegend of [legendWithoutTier, { ...legend, tier: null }, { ...legend, tier: '' }]) {
+      const decoded = decodeRankedEvidence({ ...ranked, legends: [sourceLegend] }, playerId)
+
+      expect(decoded.legends[0]?.tier).toBeNull()
+      expect(validateRankedEvidence(decoded, playerId).legends[0]?.tier).toBeNull()
+    }
+  })
+
+  test('still rejects a legend tier of the wrong type', () => {
+    const [legend] = ranked.legends
+
+    expect(() => decodeRankedEvidence({ ...ranked, legends: [{ ...legend, tier: 7 }] }, playerId)).toThrow('tier')
   })
 
   test('accepts all-mode lifetime evidence with weapon-held facts', () => {

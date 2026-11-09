@@ -1,9 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import type { LegendMetaOutput } from '@brawltome/contracts'
+import { rankedRegions } from '@brawltome/game-data/ranked'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { LegendMetaView } from '../../../src/components/statistics/LegendMetaView'
 
 type AvailableLegendMeta = Exclude<LegendMetaOutput, { status: 'unavailable' }>
+
+const cohortCells = rankedRegions.flatMap((region) =>
+  (['Platinum', 'Diamond+'] as const).map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
 
 const methodology: AvailableLegendMeta['methodology'] = {
   population: 'deterministic-observed-cohort' as const,
@@ -14,6 +25,8 @@ const methodology: AvailableLegendMeta['methodology'] = {
       'Observed players with games on the legend divided by players with a successful ranked observation in the selected filter.' as const,
     winRate: 'Observed legend wins divided by observed legend games, weighted by games.' as const,
     medianRating: 'Median current 1v1 player rating among observed players with games on the legend.' as const,
+    averageLegendRating:
+      "Mean of each observed player's current rating on the legend, among players with games on it. A legend never played stays at the default 750 and is not counted." as const,
     coverage: 'Successful ranked observations divided by selected Observed Cohort players.' as const,
     uncertainty: '95% Wilson score interval over observed legend wins and games.' as const,
   },
@@ -26,6 +39,9 @@ const methodology: AvailableLegendMeta['methodology'] = {
   caveats: [
     'BrawlTome-observed values are not exhaustive or live.',
     'Missing source observations reduce coverage and are not counted as zero games.',
+    'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+    'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+    "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
     'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
     'Observed win rate describes this cohort and does not establish legend strength or causation.',
   ],
@@ -36,7 +52,7 @@ const fresh: AvailableLegendMeta = {
   staleReason: null,
   snapshotId: '10000000-0000-4000-8000-000000000001',
   generationId: '10000000-0000-4000-8000-000000000002',
-  methodologyVersion: 'current-season-legend-meta-v1',
+  methodologyVersion: 'current-season-legend-meta-v2',
   cohortMethodologyVersion: 'full-launch-cohort-v1',
   sourceGenerationId: '10000000-0000-4000-8000-000000000003',
   sourceObservedAt: '2026-08-10T00:00:00.000Z',
@@ -45,6 +61,8 @@ const fresh: AvailableLegendMeta = {
   expectedNextPublicationAt: '2026-08-19T00:00:00.000Z',
   season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
   filter: { region: 'all', bracket: 'all' },
+  cohortCells,
+  sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
   selectedPlayers: 40,
   observedPlayers: 40,
   observedLegendGames: 200,
@@ -59,6 +77,7 @@ const fresh: AvailableLegendMeta = {
       gameCount: 200,
       winCount: 0,
       medianRating: 1_950.5,
+      averageLegendRating: 1_702,
       pickShare: { numerator: 200, denominator: 200, basisPoints: 10_000 },
       adoption: { numerator: 30, denominator: 40, basisPoints: 7_500 },
       winRate: { numerator: 0, denominator: 200, basisPoints: 0 },
@@ -72,6 +91,7 @@ const fresh: AvailableLegendMeta = {
       gameCount: 0,
       winCount: 0,
       medianRating: null,
+      averageLegendRating: null,
       pickShare: { numerator: 0, denominator: 200, basisPoints: 0 },
       adoption: { numerator: 0, denominator: 40, basisPoints: 0 },
       winRate: { numerator: 0, denominator: 0, basisPoints: null },
@@ -93,10 +113,68 @@ describe('Current Season Legend Meta view', () => {
     expect(html).toContain('0.00%')
     expect(html).toContain('Unavailable')
     expect(html).toContain('1,950.5')
+    expect(html).toContain('1,702')
     expect(html).toContain('0.00%–1.89%')
     expect(html).toContain('40 of 40 selected players observed')
     expect(html).toContain('Insufficient sample')
     expect(html).toContain('Not ranked')
+  })
+
+  test('labels a partial view with the cells it is missing and that Platinum is only the top', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: {
+        filterCells: 18,
+        coveredCells: 14,
+        leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+        includesPlatinumBoardTop: true,
+      },
+    })
+
+    expect(html).toContain('Covers 14 of the 18 cells in this view. Left out for too few players: EU Platinum.')
+    expect(html).toContain('Platinum here is only the top of each region')
+  })
+
+  test('says the view is empty instead of counting zero covered cells', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: {
+        filterCells: 1,
+        coveredCells: 0,
+        leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+        includesPlatinumBoardTop: false,
+      },
+    })
+
+    expect(html).toContain('This view has no data. Left out for too few players: EU Platinum.')
+    expect(html).not.toContain('Covers 0')
+  })
+
+  test('shows no label on a view with every region and no Platinum', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: { filterCells: 9, coveredCells: 9, leftOutCells: [], includesPlatinumBoardTop: false },
+    })
+
+    expect(html).not.toContain('cells in this view')
+    expect(html).not.toContain('Platinum here is only')
+  })
+
+  test('keeps the whole-cohort cell count in the methodology', () => {
+    const partial = {
+      ...fresh,
+      cohortCells: cohortCells.map((cell) =>
+        cell.region === 'EU' && cell.bracket === 'Platinum'
+          ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 }
+          : cell,
+      ),
+    }
+
+    expect(render()).toContain('Covers all 18 region and bracket cells.')
+
+    expect(render(partial)).toContain(
+      'Covers 17 of 18 region and bracket cells. Left out for too few players: EU Platinum.',
+    )
   })
 
   test('uses labeled native filters, semantic table structure, and responsive overflow', () => {

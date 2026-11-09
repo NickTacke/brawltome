@@ -1,6 +1,8 @@
 import {
   type AttemptOutcome,
   defineJob,
+  type FailureDecision,
+  failureDetails,
   type JobDefinition,
   type JobTools,
   type Lease,
@@ -24,7 +26,14 @@ export type StatisticsCollectionJobDependencies = {
   >
   sourceAdmission: Pick<SourceAdmissionPort, 'admitSource'>
   collectEvidence(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
+  collectionPace: { waitMsForTurn(operationId: string): number }
 }
+
+// raised by the source adapter, so this job can tell a V1 outage from a failed collection without knowing the client
+export class StatisticsSourceOutageError extends Error {}
+
+// the third failure ends the operation, so these keep a short outage from using up one player's three calls
+const sourceOutageRetryDelaysMs = [5 * 60_000, 30 * 60_000]
 
 type AttemptCheck = Awaited<
   ReturnType<
@@ -94,6 +103,19 @@ function commitEvidence(
   })
 }
 
+// a 5xx comes after the attempt is recorded, and handing the attempt back would make the retry look like a different
+// lease reusing that record. it spends the attempt instead, so a player gets three source calls and no more
+function decideCollectionFailure(error: unknown, lease: StatisticsCollectionLease): FailureDecision | null {
+  if (!(error instanceof StatisticsSourceOutageError)) return null
+
+  return {
+    action: 'fail',
+    failure: failureDetails(error, 'source_unavailable'),
+    delayMs: sourceOutageRetryDelaysMs[lease.attemptNumber - 1] ?? 0,
+    category: 'source_unavailable',
+  }
+}
+
 function collectionAuthorization(lease: StatisticsCollectionLease): CollectionAttemptAuthorization {
   return {
     operationId: lease.operationId,
@@ -113,7 +135,7 @@ async function runCollection(
   { queue, leaseMs }: JobTools,
   dependencies: StatisticsCollectionJobDependencies,
 ): Promise<AttemptOutcome> {
-  const { statistics, sourceAdmission, collectEvidence } = dependencies
+  const { statistics, sourceAdmission, collectEvidence, collectionPace } = dependencies
 
   if ((await queue.renew(lease, leaseMs)) === 'lease-lost') return 'lease_lost'
 
@@ -131,6 +153,10 @@ async function runCollection(
   )
 
   if (attemptRefused) return attemptRefused
+
+  const waitMs = collectionPace.waitMsForTurn(lease.operationId)
+
+  if (waitMs > 0) throw new SourceAdmissionLimitedError(Math.ceil(waitMs / 1_000))
 
   await admitSourceCall(lease, sourceAdmission)
 
@@ -162,6 +188,7 @@ function createCollectionJob(
     ...statisticsCollectionContract(kind),
     failureCode: 'statistics_collection_failed',
     effectState: statisticsCollectionEffectState,
+    decideFailure: async (error, lease) => decideCollectionFailure(error, { ...lease, kind }),
     run: (lease, tools) => runCollection({ ...lease, kind }, tools, dependencies),
   })
 }

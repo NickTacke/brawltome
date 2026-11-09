@@ -1,4 +1,9 @@
-import { type LegendMetaInput, legendMetaBrackets, legendMetaRegions } from '@brawltome/contracts'
+import {
+  type LegendMetaInput,
+  type LegendMetaOutput,
+  legendMetaBrackets,
+  legendMetaRegions,
+} from '@brawltome/contracts'
 
 export function parseLegendMetaSearchParams(searchParams: URLSearchParams): LegendMetaInput {
   const region = searchParams.get('region')
@@ -16,4 +21,28 @@ export function parseLegendMetaSearchParams(searchParams: URLSearchParams): Lege
 
 export function buildLegendMetaQueryString(filters: LegendMetaInput): string {
   return new URLSearchParams(filters).toString()
+}
+
+type LegendMetaSliceCoverage = Exclude<LegendMetaOutput, { status: 'unavailable' }>['sliceCoverage']
+
+// null means nothing about this view needs saying, so the page shows no label at all
+export function sliceCoverageNote(coverage: LegendMetaSliceCoverage): string | null {
+  const notes: string[] = []
+
+  if (coverage.leftOutCells.length > 0) {
+    const names = coverage.leftOutCells.map(({ region, bracket }) => `${region} ${bracket}`).join(', ')
+
+    const covers =
+      coverage.coveredCells === 0
+        ? 'This view has no data.'
+        : `Covers ${coverage.coveredCells} of the ${coverage.filterCells} cells in this view.`
+
+    notes.push(`${covers} Left out for too few players: ${names}.`)
+  }
+
+  if (coverage.includesPlatinumBoardTop) {
+    notes.push("Platinum here is only the top of each region's leaderboard, not all Platinum players.")
+  }
+
+  return notes.length > 0 ? notes.join(' ') : null
 }

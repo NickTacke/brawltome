@@ -6,12 +6,12 @@ import {
   type CohortCandidateSnapshot,
   createPostgresStatistics,
   createStatisticsReservations,
-  type LaunchCohortAudit,
   launchCohortRegions,
   statisticsModule,
 } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { createStatisticsTestJobs, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
+import { seedTerminalProduct } from './fixtures/statistics-cohort'
 
 let database: TestDatabase
 const reservations = () => createStatisticsReservations(database)
@@ -71,117 +71,21 @@ function snapshots(generation: number): CohortCandidateSnapshot[] {
   })
 }
 
-async function seedTerminalProduct(
-  generation: LaunchCohortAudit,
-  product: 'ranked' | 'lifetime',
-  successesPerCell: number,
-) {
+// the seeded legend rating is the member's source rating
+async function observedSourceRatingAverage(generationId: string): Promise<number> {
   const sql = postgres(connectionString, { max: 1 })
-  const kind = product === 'ranked' ? 'statistics-ranked-collection' : 'statistics-lifetime-collection'
 
   try {
-    await sql`
-      WITH candidates AS (
-        SELECT cohort.id AS cohort_id, member.brawlhalla_id, member.ordinal,
-               gen_random_uuid() AS operation_id,
-               'statistics:' || cohort.id::text || ':' || member.brawlhalla_id::text || ':' || ${product} AS operation_key,
-               generation.observation_window_starts_at
-        FROM statistics.cohorts cohort
-        JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
-        JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
-        WHERE cohort.generation_id = ${generation.generationId}
-      )
-      INSERT INTO queue.operations
-        (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-         status, attempt_count, max_attempts, lease_token, completed_at, created_at, updated_at)
-      SELECT operation_id, operation_id, ${kind}, operation_key, operation_key, 'global-statistics',
-             jsonb_build_object('cohortId', cohort_id::text, 'brawlhallaId', brawlhalla_id),
-             jsonb_build_object('source', 'statistics-cohort-reconciliation', 'requestedBy', 'issue-210'),
-             CASE WHEN ordinal <= ${successesPerCell} THEN 'succeeded' ELSE 'dead_letter' END,
-             1, 3, 1, observation_window_starts_at + interval '2 hours',
-             observation_window_starts_at + interval '1 hour', observation_window_starts_at + interval '2 hours'
-      FROM candidates
-    `
-
-    await sql`
-      INSERT INTO statistics.collection_operations (cohort_id, brawlhalla_id, product, operation_id)
-      SELECT cohort.id, member.brawlhalla_id, ${product}, operation.id
-      FROM statistics.cohorts cohort
-      JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
-      JOIN queue.operations operation
-        ON operation.operation_key = 'statistics:' || cohort.id::text || ':' || member.brawlhalla_id::text || ':' || ${product}
-      WHERE cohort.generation_id = ${generation.generationId}
-    `
-
-    await sql`
-      INSERT INTO statistics.collection_attempts
-        (cohort_id, brawlhalla_id, product, operation_id, effect_operation_id,
-         attempt_number, lease_token, attempted_at)
-      SELECT collection.cohort_id, collection.brawlhalla_id, collection.product,
-             operation.id, operation.effect_operation_id, 1, 1,
-             generation.observation_window_starts_at + interval '1 hour'
-      FROM statistics.collection_operations collection
-      JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
-      JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
-      JOIN queue.operations operation ON operation.id = collection.operation_id
-      WHERE cohort.generation_id = ${generation.generationId} AND collection.product = ${product}
-    `
-
-    await sql`
-      INSERT INTO statistics.observations
-        (cohort_id, brawlhalla_id, product, effect_operation_id, operation_key,
-         lease_token, observed_at, evidence_version, evidence)
-      SELECT collection.cohort_id, collection.brawlhalla_id, collection.product,
-             operation.effect_operation_id, operation.operation_key, 1,
-             generation.observation_window_starts_at + interval '2 hours', 1,
-             CASE
-               WHEN collection.product = 'ranked' THEN jsonb_build_object(
-                 'brawlhallaId', member.brawlhalla_id,
-                 'games', 10,
-                 'wins', 5,
-                 'rating', member.source_rating,
-                 'peakRating', member.source_rating,
-                 'tier', 'Observed',
-                 'region', cohort.region,
-                 'legends', jsonb_build_array(jsonb_build_object(
-                   'legendId', 3,
-                   'games', 10,
-                   'wins', 5,
-                   'rating', member.source_rating,
-                   'peakRating', member.source_rating,
-                   'tier', 'Observed'
-                 ))
-               )
-               WHEN collection.product = 'lifetime' THEN jsonb_build_object(
-                 'brawlhallaId', member.brawlhalla_id,
-                 'games', 100,
-                 'wins', 50,
-                 'combat', jsonb_build_object(
-                   'damage_bomb', 0, 'damage_mine', 0, 'damage_spikeball', 0, 'damage_sidekick', 0,
-                   'hit_snowball', 0, 'ko_bomb', 0, 'ko_mine', 0, 'ko_sidekick', 0,
-                   'ko_snowball', 0, 'ko_spikeball', 0
-                 ),
-                 'legends', jsonb_build_array(jsonb_build_object(
-                   'legendId', 3, 'games', 100, 'wins', 50,
-                   'damageDealt', 999999, 'damageTaken', 800000, 'kos', 999, 'falls', 500,
-                   'suicides', 2, 'teamKos', 1, 'matchTime', 20000,
-                   'damageUnarmed', 50000, 'damageThrownItem', 10000,
-                   'damageWeaponOne', 600, 'damageWeaponTwo', 0, 'damageGadgets', 5000,
-                   'koUnarmed', 100, 'koWeaponOne', 1, 'koWeaponTwo', 0, 'koGadgets', 50,
-                   'timeHeldWeaponOne', 3600, 'timeHeldWeaponTwo', 1800
-                 ))
-               )
-               ELSE '{}'::jsonb
-             END
-      FROM statistics.collection_operations collection
-      JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
+    const [row] = await sql<{ average: number }[]>`
+      SELECT round(avg(member.source_rating))::integer AS average
+      FROM statistics.observations observation
+      JOIN statistics.cohorts cohort ON cohort.id = observation.cohort_id
       JOIN statistics.cohort_members member
-        ON member.cohort_id = collection.cohort_id AND member.brawlhalla_id = collection.brawlhalla_id
-      JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
-      JOIN queue.operations operation ON operation.id = collection.operation_id
-      WHERE cohort.generation_id = ${generation.generationId} AND collection.product = ${product}
-        AND member.ordinal <= ${successesPerCell}
+        ON member.cohort_id = observation.cohort_id AND member.brawlhalla_id = observation.brawlhalla_id
+      WHERE cohort.generation_id = ${generationId} AND observation.product = 'ranked'
     `
+
+    return row.average
   } finally {
     await sql.end()
   }
@@ -443,8 +347,8 @@ describe('Statistics full launch cohort publication', () => {
 
     expect(await statistics.collectionIntents()).toHaveLength(500)
 
-    await seedTerminalProduct(first, 'ranked', 119)
-    await seedTerminalProduct(first, 'lifetime', 119)
+    await seedTerminalProduct(connectionString, first, 'ranked', 119)
+    await seedTerminalProduct(connectionString, first, 'lifetime', 119)
     expect(await statistics.collectionIntents()).toEqual([])
 
     const replayControl = postgres(connectionString, { max: 1 })
@@ -752,7 +656,7 @@ describe('Statistics full launch cohort publication', () => {
     expect(allLegendMeta).toMatchObject({
       status: 'fresh',
       generationId: first.generationId,
-      methodologyVersion: 'current-season-legend-meta-v1',
+      methodologyVersion: 'current-season-legend-meta-v2',
       season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
       slice: {
         selectedPlayers: 2_250,
@@ -764,6 +668,9 @@ describe('Statistics full launch cohort publication', () => {
 
     if (allLegendMeta.status === 'unavailable') throw new Error('Legend Meta publication missing')
 
+    expect(allLegendMeta.cohortCells).toHaveLength(18)
+    expect(allLegendMeta.cohortCells.every(({ status }) => status === 'covered')).toBe(true)
+
     expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
       rank: 1,
       eligible: true,
@@ -771,9 +678,17 @@ describe('Statistics full launch cohort publication', () => {
       gameCount: 21_420,
       winCount: 10_710,
       medianRating: 1_902,
+      averageLegendRating: await observedSourceRatingAverage(first.generationId),
       pickShare: { numerator: 21_420, denominator: 21_420, basisPoints: 10_000 },
       adoption: { numerator: 2_142, denominator: 2_142, basisPoints: 10_000 },
       winRate: { numerator: 10_710, denominator: 21_420, basisPoints: 5_000 },
+    })
+
+    // every seeded player reports legend 4 at the default 750 with no games
+    expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 4)).toMatchObject({
+      playerCount: 0,
+      averageLegendRating: null,
+      eligible: false,
     })
 
     const euPlatinum = await statistics.getLegendMeta({ region: 'EU', bracket: 'Platinum' })
@@ -910,11 +825,19 @@ describe('Statistics full launch cohort publication', () => {
     if (!duplicatedPlayerId || !secondSnapshots[0]?.candidates[124]) throw new Error('duplicate fixture missing')
 
     secondSnapshots[0].candidates[124].brawlhallaId = duplicatedPlayerId
-    const second = await statistics.reconcileLaunchCohort(secondSnapshots)
+    expect(await statistics.reconcileLaunchCohort(secondSnapshots)).toMatchObject({ generationId: first.generationId })
+    expect((await statistics.reconciliationState()).launch?.isNextGenerationDue).toBe(false)
+
+    const dayMs = 24 * 60 * 60 * 1_000
+    const nextInterval = createPostgresStatistics(database, { now: () => new Date(Date.now() + 7 * dayMs) })
+
+    expect((await nextInterval.reconciliationState()).launch?.isNextGenerationDue).toBe(true)
+
+    const second = await nextInterval.reconcileLaunchCohort(secondSnapshots)
 
     expect(second.generationId).not.toBe(first.generationId)
-    await seedTerminalProduct(second, 'ranked', 118)
-    await seedTerminalProduct(second, 'lifetime', 119)
+    await seedTerminalProduct(connectionString, second, 'ranked', 118)
+    await seedTerminalProduct(connectionString, second, 'lifetime', 119)
     const rejectedOperationId = await bindPublication(statistics, second.generationId, 'ranked')
 
     await bindPublication(statistics, second.generationId, 'lifetime')
@@ -957,7 +880,10 @@ describe('Statistics full launch cohort publication', () => {
       },
     })
 
-    const third = await statistics.reconcileLaunchCohort(snapshots(3))
+    const third = await createPostgresStatistics(database, {
+      now: () => new Date(Date.now() + 14 * dayMs),
+    }).reconcileLaunchCohort(snapshots(3))
+
     const thirdRankedOperationId = await bindPublicationFixture(third.generationId, 'ranked')
 
     await insertAcceptedPublicationFixture({

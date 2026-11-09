@@ -7,6 +7,7 @@ import {
   createStatisticsLifetimeCollectionJob,
   createStatisticsRankedCollectionJob,
   type StatisticsCollectionJobDependencies,
+  StatisticsSourceOutageError,
 } from '../../jobs/statistics-collection-job'
 import { createQueueSpy, statisticsLease } from './job-fixtures'
 
@@ -32,6 +33,7 @@ function dependencies(
     } as StatisticsCollectionJobDependencies['statistics'],
     sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
     collectEvidence: async () => ({}) as never,
+    collectionPace: { waitMsForTurn: () => 0 },
     ...overrides,
   }
 }
@@ -80,6 +82,34 @@ describe('statistics collection job', () => {
     expect(recorded).toBe(false)
   })
 
+  test('defers until its turn without admitting or recording, so the worker slot is free while it waits', async () => {
+    const spy = createQueueSpy(rankedLease())
+    let recorded = false
+
+    const job = createStatisticsRankedCollectionJob(
+      dependencies(
+        {
+          recordCollectionAttempt: async () => {
+            recorded = true
+
+            return 'recorded'
+          },
+        },
+        {
+          collectionPace: { waitMsForTurn: () => 4_200 },
+          sourceAdmission: { admitSource: shouldNotRun('source admission') },
+          collectEvidence: shouldNotRun('the source call'),
+        },
+      ),
+    )
+
+    await runJobOnce(spy.queue as never, job, { retryDelayMs: 10 })
+
+    expect(spy.deferrals.map(({ retryDelayMs }) => retryDelayMs)).toEqual([5_000])
+    expect(spy.failures).toEqual([])
+    expect(recorded).toBe(false)
+  })
+
   test('consumes an attempt for an upstream Statistics 429 after recording its immutable fence', async () => {
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
     const spy = createQueueSpy(rankedLease())
@@ -108,6 +138,36 @@ describe('statistics collection job', () => {
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
 
     expect(failures?.series[0]?.labels.failure_category).toBe('source_rate_limited')
+  })
+
+  test('spends an attempt on a v1 outage and reports it as source unavailable', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const spy = createQueueSpy(rankedLease())
+
+    const job = createStatisticsRankedCollectionJob(
+      dependencies(
+        {},
+        {
+          collectEvidence: async () => {
+            throw new StatisticsSourceOutageError('v1 is down')
+          },
+        },
+      ),
+    )
+
+    await runJobOnce(spy.queue as never, job, { retryDelayMs: 10, telemetry })
+
+    expect(spy.failures).toEqual([
+      {
+        failure: { code: 'source_unavailable', message: 'v1 is down', retryable: true },
+        retryDelayMs: 5 * 60_000,
+      },
+    ])
+
+    expect(spy.deferrals).toEqual([])
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
+
+    expect(failures?.series[0]?.labels.failure_category).toBe('source_unavailable')
   })
 
   test('commits ranked and lifetime evidence under their own kind', async () => {

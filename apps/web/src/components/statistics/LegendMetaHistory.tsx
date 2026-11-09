@@ -1,4 +1,5 @@
 import type { LegendMetaHistoryOutput } from '@brawltome/contracts'
+import { SliceCoverageLabel } from './SliceCoverageLabel'
 
 function signed(value: number, digits = 0): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(digits)}`
@@ -80,6 +81,7 @@ export function LegendMetaHistory({
             ); {snapshot.observedLegendGames.toLocaleString('en-US')} observed Legend games. Counts and coverage are
             snapshot values, not changes.
           </p>
+          <SliceCoverageLabel coverage={snapshot.sliceCoverage} />
           {comparisonToPrevious?.status === 'incompatible' && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <strong>Series break.</strong>

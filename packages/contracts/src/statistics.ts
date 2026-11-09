@@ -1,6 +1,9 @@
 import { leaderboardRegions } from './leaderboard'
 import {
+  cohortCellsSchema,
   directionFor,
+  legendMetaSliceCoverageSchema,
+  nonnegativeSafeInteger,
   statisticsHistoryCompatibilityReasonSchema,
   statisticsHistoryDirectionSchema,
   validateExactHistoryDeltaKeys,
@@ -26,7 +29,6 @@ const utcDateTimeSchema = z.iso
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
 
-const nonnegativeSafeInteger = z.int().min(0).max(Number.MAX_SAFE_INTEGER)
 const basisPointsSchema = z.int().min(0).max(10_000)
 
 const exactRatioSchema = z
@@ -106,6 +108,7 @@ const legendMetaRowSchema = z
       .max(2_147_483_647)
       .refine((value) => Number.isInteger(value * 2), 'median rating must be an integer or half-integer')
       .nullable(),
+    averageLegendRating: z.int().min(0).max(2_147_483_647).nullable(),
     pickShare: exactRatioSchema,
     adoption: exactRatioSchema,
     winRate: exactRatioSchema,
@@ -152,6 +155,9 @@ const methodologyCommonFields = {
       ),
       winRate: z.literal('Observed legend wins divided by observed legend games, weighted by games.'),
       medianRating: z.literal('Median current 1v1 player rating among observed players with games on the legend.'),
+      averageLegendRating: z.literal(
+        "Mean of each observed player's current rating on the legend, among players with games on it. A legend never played stays at the default 750 and is not counted.",
+      ),
       coverage: z.literal('Successful ranked observations divided by selected Observed Cohort players.'),
       uncertainty: z.literal('95% Wilson score interval over observed legend wins and games.'),
     })
@@ -178,6 +184,15 @@ const methodologySchema = z.union([
       caveats: z.tuple([
         z.literal('BrawlTome-observed values are not exhaustive or live.'),
         z.literal('Missing source observations reduce coverage and are not counted as zero games.'),
+        z.literal(
+          'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+        ),
+        z.literal(
+          'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+        ),
+        z.literal(
+          "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
+        ),
         z.literal('The source does not expose a stable season identity, so cross-publication trends are unavailable.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
       ]),
@@ -197,6 +212,15 @@ const methodologySchema = z.union([
       caveats: z.tuple([
         z.literal('BrawlTome-observed values are not exhaustive or live.'),
         z.literal('Missing source observations reduce coverage and are not counted as zero games.'),
+        z.literal(
+          'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+        ),
+        z.literal(
+          'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+        ),
+        z.literal(
+          "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
+        ),
         z.literal('Cross-publication trends stop at the first incompatible adjacent snapshot.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
       ]),
@@ -214,7 +238,7 @@ const filterSchema = z
 const availableFields = {
   snapshotId: z.uuid(),
   generationId: z.uuid(),
-  methodologyVersion: z.literal('current-season-legend-meta-v1'),
+  methodologyVersion: z.literal('current-season-legend-meta-v2'),
   cohortMethodologyVersion: z.string().min(1).max(200),
   sourceGenerationId: z.uuid(),
   sourceObservedAt: utcDateTimeSchema,
@@ -234,6 +258,8 @@ const availableFields = {
     })
     .strict(),
   filter: filterSchema,
+  cohortCells: cohortCellsSchema,
+  sliceCoverage: legendMetaSliceCoverageSchema,
   selectedPlayers: nonnegativeSafeInteger,
   observedPlayers: nonnegativeSafeInteger,
   observedLegendGames: nonnegativeSafeInteger,
@@ -313,6 +339,8 @@ const historySnapshotSchema = z
       })
       .strict(),
     scope: filterSchema,
+    cohortCells: cohortCellsSchema,
+    sliceCoverage: legendMetaSliceCoverageSchema,
     selectedPlayers: nonnegativeSafeInteger,
     observedPlayers: nonnegativeSafeInteger,
     observedLegendGames: nonnegativeSafeInteger,

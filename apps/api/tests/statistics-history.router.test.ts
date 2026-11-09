@@ -5,6 +5,8 @@ import {
   buildLegendMetaHistory,
   type CareerWeaponHistoryViewSnapshot,
   type LegendMetaHistoryViewSnapshot,
+  launchCohortBrackets,
+  launchCohortRegions,
 } from '@brawltome/statistics'
 import { statisticsRouter } from '../src/router/statistics.router'
 import type { Context } from '../src/trpc/context'
@@ -15,6 +17,7 @@ const legendRow = {
   gameCount: 200,
   winCount: 100,
   medianRating: 2_000,
+  averageLegendRating: 1_900,
   pickShare: { numerator: 200, denominator: 200, basisPoints: 10_000 },
   adoption: { numerator: 30, denominator: 30, basisPoints: 10_000 },
   winRate: { numerator: 100, denominator: 200, basisPoints: 5_000 },
@@ -23,16 +26,28 @@ const legendRow = {
   rank: 1,
 } as const
 
+const cohortCells = launchCohortRegions.flatMap((region) =>
+  launchCohortBrackets.map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
+
 function legendSnapshot(snapshotId: string, generationId: string, publishedAt: string): LegendMetaHistoryViewSnapshot {
   return {
     snapshotId,
     generationId,
+    cohortCells,
     publishedAt,
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     compatibility: {
       season: { applicability: 'required', identity: null },
       cohortMethodologyVersion: 'full-launch-cohort-v1',
-      metricMethodologyVersion: 'current-season-legend-meta-v1',
+      metricMethodologyVersion: 'current-season-legend-meta-v2',
+      coveredCells: [],
       scope: { region: 'all', bracket: 'all' },
     },
     rows: [
@@ -49,6 +64,7 @@ function legendSnapshot(snapshotId: string, generationId: string, publishedAt: s
     data: {
       region: 'all',
       bracket: 'all',
+      sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
       selectedPlayers: 30,
       observedPlayers: 30,
       observedLegendGames: 200,
@@ -86,11 +102,13 @@ function careerSnapshot(
     snapshotId,
     generationId,
     publishedAt,
+    cohortCells,
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     compatibility: {
       season: { applicability: 'not-applicable' },
       cohortMethodologyVersion: 'full-launch-cohort-v1',
       metricMethodologyVersion: 'career-weapon-usage-v1',
+      coveredCells: [],
       scope: { region: 'all', bracket: 'all' },
     },
     rows: [
