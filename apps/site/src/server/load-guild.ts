@@ -40,6 +40,9 @@ async function readProfile(guildId: number): Promise<ClanProfileContract | null>
   }
 }
 
+// a short limit, so a slow optional read can't double how long the visitor waits for numbers that only decorate the page
+const optionalRead = { timeoutMs: 3_000 }
+
 // these numbers only decorate the roster, so the page is still worth showing without them
 async function readOptional<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -54,14 +57,20 @@ async function readOptional<T>(read: () => Promise<T>, fallback: T): Promise<T> 
 function readStanding(guildId: number): Promise<ClanStandingContract | null> {
   const description = `load standing for guild ${guildId}`
 
-  return readOptional(() => readApi(`/clans/${guildId}/standing`, clanStandingSchema.nullable(), description), null)
+  return readOptional(
+    () => readApi(`/clans/${guildId}/standing`, clanStandingSchema.nullable(), description, optionalRead),
+    null,
+  )
 }
 
 async function readSummaries(guildId: number, memberIds: number[]): Promise<PlayerRankedSummaryContract[]> {
   const description = `load ranked summaries for guild ${guildId}`
 
   const batches = batchIds(memberIds).map((ids) =>
-    readOptional(() => postApi('/players/ranked-summaries', { ids }, playerRankedSummariesSchema, description), []),
+    readOptional(
+      () => postApi('/players/ranked-summaries', { ids }, playerRankedSummariesSchema, description, optionalRead),
+      [],
+    ),
   )
 
   const answers = await Promise.all(batches)

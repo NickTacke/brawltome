@@ -9,6 +9,12 @@ const originalFetch = globalThis.fetch
 const originalApiUrl = process.env.INTERNAL_API_URL
 const originalSecret = process.env.INTERNAL_API_SECRET
 
+// assigning undefined would store the text "undefined"
+function restoreSetting(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 type Call = { path: string; body: { ids: number[] } | null }
 type Answer = { status: number; body: unknown }
 
@@ -101,9 +107,21 @@ describe('loadGuild', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
-    process.env.INTERNAL_API_URL = originalApiUrl
-    process.env.INTERNAL_API_SECRET = originalSecret
+    restoreSetting('INTERNAL_API_URL', originalApiUrl)
+    restoreSetting('INTERNAL_API_SECRET', originalSecret)
     mock.restore()
+  })
+
+  test('waits less for the optional reads than for the profile', async () => {
+    const timeoutSpy = spyOn(AbortSignal, 'timeout')
+
+    stubApi((call) => healthyAnswer(2, call))
+
+    await loadGuild(42)
+
+    expect(timeoutSpy.mock.calls.map(([timeoutMs]) => timeoutMs).sort((left, right) => left - right)).toEqual([
+      3_000, 3_000, 10_000,
+    ])
   })
 
   test('returns the profile, standing and summaries', async () => {
