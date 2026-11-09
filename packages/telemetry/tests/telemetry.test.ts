@@ -607,6 +607,64 @@ describe('telemetry foundation', () => {
     expect(telemetry.stats().seriesDropped).toBe(0)
   })
 
+  test('keeps every dead letter series the queue reports, one per kind and work class', () => {
+    const telemetry = createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 })
+
+    const kinds = [
+      'proof',
+      'primary-player-verification',
+      'interactive-player-refresh',
+      'clan-refresh',
+      'clan-weekly-snapshot',
+      'ranked-player-pulse',
+      'player-name-verification',
+      'ranking-retention',
+      'leaderboard-deep-crawl',
+      'player-discovery-projection',
+      'clan-discovery-projection',
+      'discovery-reconciliation',
+      'leaderboard-1v1',
+      'leaderboard-2v2',
+      'leaderboard-solo-2v2',
+      'leaderboard-3v3',
+      'statistics-ranked-collection',
+      'statistics-lifetime-collection',
+      'statistics-publication',
+      'statistics-legend-meta-publication',
+    ]
+
+    const workClasses = [
+      'interactive',
+      'primary-monitoring',
+      'leaderboard',
+      'global-statistics',
+      'projection',
+      'maintenance',
+    ]
+
+    // the interactive refresh kinds also keep an admission series in every work class
+    const admissionKinds = ['interactive-player-refresh', 'clan-refresh']
+
+    for (const workClass of workClasses) {
+      for (const kind of kinds) {
+        telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
+      }
+
+      for (const kind of admissionKinds) {
+        telemetry.metrics.set('operation_dead_letters', 0, {
+          kind,
+          work_class: workClass,
+          reason: 'admission_rejected',
+        })
+      }
+    }
+
+    const deadLetters = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_dead_letters')
+
+    expect(telemetry.stats().seriesDropped).toBe(0)
+    expect(deadLetters?.series.filter(({ labels }) => labels.kind === 'clan-weekly-snapshot')).toHaveLength(6)
+  })
+
   test('counts deep crawl metrics with an unknown mode or region as other', () => {
     const telemetry = createTelemetry({ service: 'operations-worker', sink: createMemorySink(), capacity: 10 })
 

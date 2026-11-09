@@ -178,6 +178,7 @@ const operationKind = [
   'primary-player-verification',
   'interactive-player-refresh',
   'clan-refresh',
+  'clan-weekly-snapshot',
   'ranked-player-pulse',
   'player-name-verification',
   'ranking-retention',
@@ -837,7 +838,8 @@ export function createTelemetry(options: {
   }
 }) {
   const capacity = Math.max(1, Math.min(options.capacity ?? 1000, 10_000))
-  const maxSeries = Math.max(1, Math.min(options.maxSeriesPerMetric ?? 128, 1024))
+  // operation_dead_letters keeps a series for every kind in every work class, 132 with twenty kinds
+  const maxSeries = Math.max(1, Math.min(options.maxSeriesPerMetric ?? 256, 1024))
   const drainIntervalMs = Math.max(0, Math.min(options.drainIntervalMs ?? 1000, 60_000))
   const exportTimeoutMs = Math.max(1, Math.min(options.exportTimeoutMs ?? 250, 5_000))
   const sampleRate = Math.max(0, Math.min(options.sampleRate ?? 0.1, 1))
