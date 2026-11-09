@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  clanWeeklySnapshotGuildDelayMs,
   clanWeeklySnapshotScheduleDefinition,
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
@@ -128,6 +127,7 @@ describe('operations worker configuration', () => {
         soloIntervalMs: 3 * 60 * 60 * 1000,
         teamsIntervalMs: 6 * 60 * 60 * 1000,
       },
+      clanWeeklySnapshot: { guildDelayMs: 150 },
       admission: {
         totalConcurrency: 8,
         interactiveReservation: 2,
@@ -322,7 +322,9 @@ describe('operations worker configuration', () => {
   })
 
   test('pauses between weekly snapshot guilds as long as the deep crawl pauses between pages', () => {
-    expect(clanWeeklySnapshotGuildDelayMs).toBe(readOperationsWorkerConfig({}).deepCrawl.pageDelayMs)
+    const config = readOperationsWorkerConfig({ DEEP_CRAWL_PAGE_DELAY_MS: '400' })
+
+    expect(config.clanWeeklySnapshot.guildDelayMs).toBe(400)
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {

@@ -62,7 +62,6 @@ import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation
 import { createFreshnessPlanner, readFreshnessPlannerConfig } from './freshness-planner'
 import { createHealthRoutes } from './health-routes'
 import {
-  clanWeeklySnapshotGuildDelayMs,
   clanWeeklySnapshotScheduleDefinition,
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
@@ -221,7 +220,7 @@ const workerJobs = createWorkerJobs({
     weeklySnapshot: {
       snapshots: createPostgresWeeklySnapshots(databases.main),
       sliceGuilds: defaultClanWeeklySnapshotSliceGuilds,
-      guildDelayMs: clanWeeklySnapshotGuildDelayMs,
+      guildDelayMs: workerConfig.clanWeeklySnapshot.guildDelayMs,
       waitBetweenGuilds: waitForRenewal,
       waitBeforeGuildRetry: waitForRenewal,
       retryTimings: {
