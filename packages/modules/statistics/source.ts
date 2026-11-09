@@ -35,6 +35,13 @@ function optionalText(value: unknown, path: string): string | null {
   return value === undefined || value === null ? null : text(value, path)
 }
 
+// statistics never reads a legend's tier, so a missing or blank one must not cost the player's whole observation
+function optionalLegendTier(value: unknown, path: string): string | null {
+  if (typeof value === 'string' && value.trim() === '') return null
+
+  return optionalText(value, path)
+}
+
 function array(value: unknown, path: string, maximumLength?: number): unknown[] {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`)
 
@@ -81,7 +88,7 @@ export type RankedEvidence = {
     wins: number
     rating: number
     peakRating: number
-    tier: string
+    tier: string | null
   }>
 }
 
@@ -106,7 +113,7 @@ export function decodeRankedEvidence(payload: unknown, requestedBrawlhallaId: nu
       ...gamesAndWins(legend, path),
       rating: integer(legend.rating, `${path}.rating`),
       peakRating: integer(legend.peak_rating, `${path}.peak_rating`),
-      tier: text(legend.tier, `${path}.tier`),
+      tier: optionalLegendTier(legend.tier, `${path}.tier`),
     }
   })
 
@@ -259,7 +266,7 @@ export function validateRankedEvidence(evidence: unknown, requestedBrawlhallaId:
       ...gamesAndWins(legend, path),
       rating: integer(legend.rating, `${path}.rating`),
       peakRating: integer(legend.peakRating, `${path}.peakRating`),
-      tier: text(legend.tier, `${path}.tier`),
+      tier: optionalLegendTier(legend.tier, `${path}.tier`),
     }
   })
 
