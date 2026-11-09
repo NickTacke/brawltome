@@ -18,6 +18,8 @@ export default [
       'packages/game-data/src/generated/**',
       'packages/contracts/openapi/**',
       'apps/web/next-env.d.ts',
+      'apps/site/src/routeTree.gen.ts',
+      '**/.tanstack/**',
       'apps/desktop/app/gen/**',
     ],
   },

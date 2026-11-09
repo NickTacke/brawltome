@@ -1,0 +1,29 @@
+{
+  "name": "@brawltome/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vite dev --port 3200 --host 127.0.0.1",
+    "build": "bun --bun vite build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@solar-icons/react": "^1.1.0",
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.5",
+    "lucide-react": "^0.577.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/bun": "^1.4.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "tailwindcss": "4.3.5",
+    "typescript": "^5.7.0",
+    "vite": "8.3.6"
+  }
+}

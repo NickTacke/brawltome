@@ -7,6 +7,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/desktop': 'application',
     '@brawltome/discord-bot': 'application',
     '@brawltome/replay-bridge': 'application',
+    '@brawltome/site': 'application',
     '@brawltome/web': 'application',
     '@brawltome/bhapi': 'adapter',
     '@brawltome/database-migrations': 'tooling',
@@ -42,6 +43,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/desktop': [],
     '@brawltome/discord-bot': [],
     '@brawltome/replay-bridge': [],
+    '@brawltome/site': [],
     '@brawltome/web': [],
     '@brawltome/bhapi': ['.'],
     '@brawltome/database-migrations': [],
@@ -84,6 +86,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
   },
   workspaceRoleDependencies: {
     '@brawltome/database-migrations': ['adapter', 'capability', 'foundation'],
+    '@brawltome/site': ['contracts'],
   },
   deployedMigrations: deployedOrder,
   exceptions: [],
