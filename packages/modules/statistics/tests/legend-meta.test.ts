@@ -17,9 +17,9 @@ const legends: LegendMetaLegend[] = [
 function player(
   brawlhallaId: number,
   rating: number,
-  observedLegends: LegendMetaObservedPlayer['legends'],
+  observedLegends: Array<Omit<LegendMetaObservedPlayer['legends'][number], 'rating'> & { rating?: number }>,
 ): LegendMetaObservedPlayer {
-  return { brawlhallaId, rating, legends: observedLegends }
+  return { brawlhallaId, rating, legends: observedLegends.map((legend) => ({ rating: 1_500, ...legend })) }
 }
 
 describe('Current Season Legend Meta formulas', () => {
@@ -122,7 +122,7 @@ describe('Current Season Legend Meta formulas', () => {
       selectedPlayers: 29,
       observations: observations.slice(0, 29).map((entry) => ({
         ...entry,
-        legends: [{ legendId: 3, games: 10, wins: 5 }],
+        legends: [{ legendId: 3, games: 10, wins: 5, rating: 1_500 }],
       })),
     })
 
@@ -131,7 +131,7 @@ describe('Current Season Legend Meta formulas', () => {
       selectedPlayers: 30,
       observations: observations.map((entry, index) => ({
         ...entry,
-        legends: [{ legendId: 3, games: index === 0 ? 170 : 1, wins: 0 }],
+        legends: [{ legendId: 3, games: index === 0 ? 170 : 1, wins: 0, rating: 1_500 }],
       })),
     })
 
@@ -384,6 +384,36 @@ describe('Current Season Legend Meta formulas', () => {
     const allSlice = artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'all')
 
     expect(allSlice?.selectedPlayers).toBe(17)
+  })
+
+  test('averages legend rating over players with games and leaves never-played legends out', () => {
+    const result = aggregateLegendMetaSlice({
+      legends,
+      selectedPlayers: 4,
+      observations: [
+        player(1, 2_000, [{ legendId: 3, games: 40, wins: 20, rating: 1_600 }]),
+        player(2, 2_100, [{ legendId: 3, games: 2, wins: 1, rating: 1_001 }]),
+        player(3, 2_200, [{ legendId: 3, games: 0, wins: 0, rating: 750 }]),
+        player(4, 2_300, [{ legendId: 4, games: 0, wins: 0, rating: 750 }]),
+      ],
+    })
+
+    const rows = new Map(result.rows.map((row) => [row.legend.legendId, row]))
+
+    expect(rows.get(3)?.playerCount).toBe(2)
+    expect(rows.get(3)?.averageLegendRating).toBe(1_301)
+    expect(rows.get(4)?.averageLegendRating).toBeNull()
+    expect(rows.get(5)?.averageLegendRating).toBeNull()
+  })
+
+  test('counts a played legend sitting at exactly 750', () => {
+    const result = aggregateLegendMetaSlice({
+      legends,
+      selectedPlayers: 1,
+      observations: [player(1, 2_000, [{ legendId: 3, games: 1, wins: 0, rating: 750 }])],
+    })
+
+    expect(result.rows.find(({ legend }) => legend.legendId === 3)?.averageLegendRating).toBe(750)
   })
 
   test('rejects a player repeated across launch cells instead of double-counting all-region adoption', () => {

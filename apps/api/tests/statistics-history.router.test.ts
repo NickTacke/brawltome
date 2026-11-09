@@ -17,6 +17,7 @@ const legendRow = {
   gameCount: 200,
   winCount: 100,
   medianRating: 2_000,
+  averageLegendRating: 1_900,
   pickShare: { numerator: 200, denominator: 200, basisPoints: 10_000 },
   adoption: { numerator: 30, denominator: 30, basisPoints: 10_000 },
   winRate: { numerator: 100, denominator: 200, basisPoints: 5_000 },

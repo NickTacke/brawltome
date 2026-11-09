@@ -39,7 +39,7 @@ function availableResult() {
           {
             brawlhallaId: playerId++,
             rating: 2_000,
-            legends: [{ legendId: 3, games: 10, wins: 5 }],
+            legends: [{ legendId: 3, games: 10, wins: 5, rating: 1_800 }],
           },
         ],
       })),

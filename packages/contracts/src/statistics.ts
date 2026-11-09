@@ -106,6 +106,7 @@ const legendMetaRowSchema = z
       .max(2_147_483_647)
       .refine((value) => Number.isInteger(value * 2), 'median rating must be an integer or half-integer')
       .nullable(),
+    averageLegendRating: z.int().min(0).max(2_147_483_647).nullable(),
     pickShare: exactRatioSchema,
     adoption: exactRatioSchema,
     winRate: exactRatioSchema,
@@ -152,6 +153,9 @@ const methodologyCommonFields = {
       ),
       winRate: z.literal('Observed legend wins divided by observed legend games, weighted by games.'),
       medianRating: z.literal('Median current 1v1 player rating among observed players with games on the legend.'),
+      averageLegendRating: z.literal(
+        "Mean of each observed player's current rating on the legend, among players with games on it. A legend never played stays at the default 750 and is not counted.",
+      ),
       coverage: z.literal('Successful ranked observations divided by selected Observed Cohort players.'),
       uncertainty: z.literal('95% Wilson score interval over observed legend wins and games.'),
     })

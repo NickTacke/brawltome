@@ -12,6 +12,8 @@ const LEGEND_META_FORMULAS = {
     'Observed players with games on the legend divided by players with a successful ranked observation in the selected filter.',
   winRate: 'Observed legend wins divided by observed legend games, weighted by games.',
   medianRating: 'Median current 1v1 player rating among observed players with games on the legend.',
+  averageLegendRating:
+    "Mean of each observed player's current rating on the legend, among players with games on it. A legend never played stays at the default 750 and is not counted.",
   coverage: 'Successful ranked observations divided by selected Observed Cohort players.',
   uncertainty: '95% Wilson score interval over observed legend wins and games.',
 } as const
@@ -83,7 +85,7 @@ export type LegendMetaLegend = {
 export type LegendMetaObservedPlayer = {
   brawlhallaId: number
   rating: number
-  legends: Array<{ legendId: number; games: number; wins: number }>
+  legends: Array<{ legendId: number; games: number; wins: number; rating: number }>
 }
 
 export type ExactRatio = {
@@ -103,6 +105,7 @@ export type LegendMetaRow = {
   gameCount: number
   winCount: number
   medianRating: number | null
+  averageLegendRating: number | null
   pickShare: ExactRatio
   adoption: ExactRatio
   winRate: ExactRatio
@@ -249,8 +252,14 @@ export function aggregateLegendMetaSlice(input: {
 
   const observedPlayerIds = new Set<number>()
 
-  const aggregates = new Map<number, { players: number; games: number; wins: number; ratings: number[] }>(
-    input.legends.map(({ legendId }) => [legendId, { players: 0, games: 0, wins: 0, ratings: [] }]),
+  const aggregates = new Map<
+    number,
+    { players: number; games: number; wins: number; ratings: number[]; legendRatingTotal: number }
+  >(
+    input.legends.map(({ legendId }) => [
+      legendId,
+      { players: 0, games: 0, wins: 0, ratings: [], legendRatingTotal: 0 },
+    ]),
   )
 
   let observedLegendGames = 0
@@ -280,14 +289,17 @@ export function aggregateLegendMetaSlice(input: {
       observedLegendIds.add(observedLegend.legendId)
       nonnegativeInteger(observedLegend.games, 'legend games')
       nonnegativeInteger(observedLegend.wins, 'legend wins')
+      nonnegativeInteger(observedLegend.rating, 'legend rating')
       if (observedLegend.wins > observedLegend.games) throw new Error('wins cannot exceed games')
 
       aggregate.games = checkedAdd(aggregate.games, observedLegend.games, 'legend games')
       aggregate.wins = checkedAdd(aggregate.wins, observedLegend.wins, 'legend wins')
       observedLegendGames = checkedAdd(observedLegendGames, observedLegend.games, 'observed legend games')
+      // a legend without games only reports the default 750, which says nothing about how the player does on it
       if (observedLegend.games > 0) {
         aggregate.players++
         aggregate.ratings.push(observation.rating)
+        aggregate.legendRatingTotal = checkedAdd(aggregate.legendRatingTotal, observedLegend.rating, 'legend rating')
       }
     }
   }
@@ -305,6 +317,7 @@ export function aggregateLegendMetaSlice(input: {
       gameCount: aggregate.games,
       winCount: aggregate.wins,
       medianRating: median(aggregate.ratings),
+      averageLegendRating: aggregate.players === 0 ? null : Math.round(aggregate.legendRatingTotal / aggregate.players),
       pickShare: exactRatio(aggregate.games, observedLegendGames),
       adoption: exactRatio(aggregate.players, input.observations.length),
       winRate: exactRatio(aggregate.wins, aggregate.games),

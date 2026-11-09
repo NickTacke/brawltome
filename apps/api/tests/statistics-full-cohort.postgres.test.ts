@@ -764,6 +764,9 @@ describe('Statistics full launch cohort publication', () => {
 
     if (allLegendMeta.status === 'unavailable') throw new Error('Legend Meta publication missing')
 
+    expect(allLegendMeta.cohortCells).toHaveLength(18)
+    expect(allLegendMeta.cohortCells.every(({ status }) => status === 'covered')).toBe(true)
+
     expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 3)).toMatchObject({
       rank: 1,
       eligible: true,
@@ -771,6 +774,7 @@ describe('Statistics full launch cohort publication', () => {
       gameCount: 21_420,
       winCount: 10_710,
       medianRating: 1_902,
+      averageLegendRating: expect.any(Number),
       pickShare: { numerator: 21_420, denominator: 21_420, basisPoints: 10_000 },
       adoption: { numerator: 2_142, denominator: 2_142, basisPoints: 10_000 },
       winRate: { numerator: 10_710, denominator: 21_420, basisPoints: 5_000 },

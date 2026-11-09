@@ -1664,7 +1664,12 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
                 {
                   brawlhallaId,
                   rating: evidence.rating,
-                  legends: evidence.legends.map(({ legendId, games, wins }) => ({ legendId, games, wins })),
+                  legends: evidence.legends.map(({ legendId, games, wins, rating }) => ({
+                    legendId,
+                    games,
+                    wins,
+                    rating,
+                  })),
                 },
               ])
             }

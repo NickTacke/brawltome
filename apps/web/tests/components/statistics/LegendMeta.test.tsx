@@ -25,6 +25,8 @@ const methodology: AvailableLegendMeta['methodology'] = {
       'Observed players with games on the legend divided by players with a successful ranked observation in the selected filter.' as const,
     winRate: 'Observed legend wins divided by observed legend games, weighted by games.' as const,
     medianRating: 'Median current 1v1 player rating among observed players with games on the legend.' as const,
+    averageLegendRating:
+      "Mean of each observed player's current rating on the legend, among players with games on it. A legend never played stays at the default 750 and is not counted." as const,
     coverage: 'Successful ranked observations divided by selected Observed Cohort players.' as const,
     uncertainty: '95% Wilson score interval over observed legend wins and games.' as const,
   },
@@ -72,6 +74,7 @@ const fresh: AvailableLegendMeta = {
       gameCount: 200,
       winCount: 0,
       medianRating: 1_950.5,
+      averageLegendRating: 1_702,
       pickShare: { numerator: 200, denominator: 200, basisPoints: 10_000 },
       adoption: { numerator: 30, denominator: 40, basisPoints: 7_500 },
       winRate: { numerator: 0, denominator: 200, basisPoints: 0 },
@@ -85,6 +88,7 @@ const fresh: AvailableLegendMeta = {
       gameCount: 0,
       winCount: 0,
       medianRating: null,
+      averageLegendRating: null,
       pickShare: { numerator: 0, denominator: 200, basisPoints: 0 },
       adoption: { numerator: 0, denominator: 40, basisPoints: 0 },
       winRate: { numerator: 0, denominator: 0, basisPoints: null },
@@ -106,6 +110,7 @@ describe('Current Season Legend Meta view', () => {
     expect(html).toContain('0.00%')
     expect(html).toContain('Unavailable')
     expect(html).toContain('1,950.5')
+    expect(html).toContain('1,702')
     expect(html).toContain('0.00%–1.89%')
     expect(html).toContain('40 of 40 selected players observed')
     expect(html).toContain('Insufficient sample')

@@ -233,6 +233,9 @@ export function LegendMetaView({
                     95% interval
                   </th>
                   <th scope="col" className="px-4 py-3 text-right">
+                    Avg legend elo
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
                     Median rating
                   </th>
                   <th scope="col" className="px-4 py-3 text-right">
@@ -272,6 +275,7 @@ export function LegendMetaView({
                       <MetricBar basisPoints={row.winRate.basisPoints} />
                     </td>
                     <td className="px-4 py-4 text-right text-muted-foreground">{uncertainty(row.uncertainty95)}</td>
+                    <td className="px-4 py-4 text-right">{formattedRating(row.averageLegendRating)}</td>
                     <td className="px-4 py-4 text-right">{formattedRating(row.medianRating)}</td>
                     <td className="px-4 py-4 text-right">
                       {row.playerCount.toLocaleString('en-US')} / {row.gameCount.toLocaleString('en-US')}
@@ -300,6 +304,10 @@ export function LegendMetaView({
                 <div>
                   <dt className="font-semibold text-foreground">Observed win rate</dt>
                   <dd>{data.methodology.formulas.winRate}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-foreground">Avg legend elo</dt>
+                  <dd>{data.methodology.formulas.averageLegendRating}</dd>
                 </div>
                 <div>
                   <dt className="font-semibold text-foreground">Median rating</dt>
