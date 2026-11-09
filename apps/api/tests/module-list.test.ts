@@ -46,9 +46,16 @@ describe('oRPC router built from a module list', () => {
   test('puts the procedures of each module under its name', () => {
     const router = createOrpcRouter(apiModules, runtime)
 
-    expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'status'])
+    expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'ranking', 'status'])
     expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId', 'standingById'])
-    expect(Object.keys(router.player)).toEqual(['rankedSummaries'])
+
+    expect(Object.keys(router.player)).toEqual([
+      'rankedSummaries',
+      'referenceById',
+      'rankedById',
+      'careerById',
+      'seasonStarts',
+    ])
   })
 
   test('types the router with exactly the served keys', () => {
@@ -70,7 +77,7 @@ describe('oRPC router built from a module list', () => {
     const response = await app.fetch(new Request('http://api.test/v1/status'))
 
     expect(router).not.toHaveProperty('clan')
-    expect(Object.keys(router).sort()).toEqual(['player', 'status'])
+    expect(Object.keys(router).sort()).toEqual(['player', 'ranking', 'status'])
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ status: 'ready' })
   })

@@ -76,8 +76,10 @@ export {
 export {
   nullableLeaderboardStandingSchema,
   nullablePlayerRankedProfileSchema,
+  nullablePlayerValhallanEvidenceSchema,
   type PlayerRankedProfileContract,
   type PlayerRankedSummaryContract,
+  type PlayerValhallanEvidenceContract,
   parsePlayerRankedProfileOutput,
   playerRankedSummariesInputSchema,
   playerRankedSummariesSchema,
@@ -108,6 +110,7 @@ export {
   replayJobFailureSchema,
   replayJobSummarySchema,
 } from './replay-analysis'
+export { type SeasonStartContract, seasonStartsSchema } from './season-starts'
 export {
   type LegendMetaHistoryOutput,
   type LegendMetaInput,

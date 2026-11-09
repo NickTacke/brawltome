@@ -1,5 +1,5 @@
 import { type PlayerRankedProfileContract, parsePlayerRankedProfileOutput } from '@brawltome/contracts'
-import type { RankedPlayerProfile } from '@brawltome/player'
+import type { RankedPlayerProfile } from '../ranked/model'
 
 export function mapPlayerRankedProfile(profile: RankedPlayerProfile | null): PlayerRankedProfileContract | null {
   if (!profile) return null

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/contracts": "workspace:*",
     "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
     "@brawltome/queue": "workspace:*",
@@ -17,6 +18,7 @@
     "drizzle-orm": "0.45.4"
   },
   "devDependencies": {
+    "@orpc/server": "1.16.2",
     "typescript": "^5.7.0"
   }
 }

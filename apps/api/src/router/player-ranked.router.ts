@@ -3,9 +3,8 @@ import {
   nullablePlayerRankedProfileSchema,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
-import type { RankedPlayerProfile } from '@brawltome/player'
+import { mapPlayerRankedProfile, type RankedPlayerProfile } from '@brawltome/player'
 import type { PlayerValhallanEvidence } from '@brawltome/ranking'
-import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
 import { internalProcedure, router } from '../trpc/trpc'
 
 function withOfficialValhallanTier(
