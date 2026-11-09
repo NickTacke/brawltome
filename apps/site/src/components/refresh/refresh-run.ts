@@ -65,11 +65,13 @@ async function askUntilSettled(run: RefreshRun): Promise<RefreshAnswer> {
 }
 
 // a failed load keeps the data already on screen, the next look may work
-async function reload(run: RefreshRun): Promise<void> {
+async function reload(run: RefreshRun): Promise<boolean> {
   try {
     await run.reload()
+
+    return true
   } catch {
-    return
+    return false
   }
 }
 
@@ -98,12 +100,10 @@ export async function runRefresh(run: RefreshRun): Promise<void> {
   run.setStatus('updating')
 
   const answer = await askUntilSettled(run)
-
-  if (answer.kind === 'fresh') await reload(run)
-
+  const isFreshLoaded = answer.kind === 'fresh' && (await reload(run))
   const isRefreshed = answer.kind === 'refreshing' && (await pollUntilRefreshed(run, answer.pollAfterSeconds))
 
   if (run.isCancelled()) return
 
-  run.setStatus(answer.kind === 'fresh' || isRefreshed ? 'idle' : 'failed')
+  run.setStatus(isFreshLoaded || isRefreshed ? 'idle' : 'failed')
 }
