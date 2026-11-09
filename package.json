@@ -11,6 +11,7 @@
   "scripts": {
     "dev:api": "bun run --filter @brawltome/api dev",
     "dev:web": "bun run --filter @brawltome/web dev",
+    "dev:site": "bun run --filter @brawltome/site dev",
     "dev:operations-worker": "bun run --filter @brawltome/api dev:operations-worker",
     "operations:dead-letters": "bun run --filter @brawltome/api dead-letters --",
     "dev:desktop": "bun run --filter @brawltome/desktop dev",
@@ -35,6 +36,7 @@
     "@biomejs/biome": "2.6.6",
     "@stylistic/eslint-plugin": "5.10.0",
     "@typescript-eslint/parser": "8.72.1",
-    "eslint": "10.14.0"
+    "eslint": "10.14.0",
+    "vite": "8.3.6"
   }
 }
