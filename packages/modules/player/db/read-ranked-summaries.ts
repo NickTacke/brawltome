@@ -26,12 +26,28 @@ export async function readRankedSummaries(
   database: Database,
   brawlhallaIds: number[],
 ): Promise<PlayerRankedSummaryContract[]> {
-  // a rating of 0 means unrated, and a player checked but never fetched has null wins and games
+  // a rating of 0 means unrated, and a player checked but never fetched has null wins and games. a newer v1 pulse
+  // overrides the stored record, by the same rule as the player page
   const rows = await database.sql<RankedSummaryRow[]>`
-    SELECT brawlhalla_id, NULLIF(rating, 0) AS rating, COALESCE(wins, 0) AS wins, COALESCE(games, 0) AS games,
-           ranked_main_legend_name_key, last_success_at
-    FROM players.ranked_profiles
-    WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
+    SELECT profile.brawlhalla_id,
+           NULLIF(CASE WHEN effective.is_pulse THEN COALESCE(pulse.rating, profile.rating) ELSE profile.rating END, 0) AS rating,
+           COALESCE(CASE WHEN effective.is_pulse THEN COALESCE(pulse.wins, profile.wins) ELSE profile.wins END, 0) AS wins,
+           COALESCE(CASE WHEN effective.is_pulse THEN COALESCE(pulse.games, profile.games) ELSE profile.games END, 0) AS games,
+           profile.ranked_main_legend_name_key,
+           CASE WHEN effective.is_pulse THEN GREATEST(profile.last_success_at, pulse.last_success_at)
+                ELSE profile.last_success_at END AS last_success_at
+    FROM players.ranked_profiles profile
+    LEFT JOIN players.ranked_v1_pulse_state pulse USING (brawlhalla_id)
+    CROSS JOIN LATERAL (
+      SELECT COALESCE(
+        pulse.one_vs_one_effect_created_at > profile.v0_effect_created_at
+          OR (pulse.one_vs_one_effect_created_at = profile.v0_effect_created_at
+              AND pulse.one_vs_one_effect_operation_id > profile.v0_effect_operation_id)
+          OR (pulse.one_vs_one_effect_created_at IS NOT NULL AND profile.v0_effect_created_at IS NULL),
+        false
+      ) AS is_pulse
+    ) effective
+    WHERE profile.brawlhalla_id = ANY(${brawlhallaIds}::integer[])
   `
 
   return rows.map(toRankedSummary)

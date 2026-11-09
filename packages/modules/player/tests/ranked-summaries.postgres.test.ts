@@ -14,6 +14,10 @@ const zeroRatedPlayerId = 102
 const neverSucceededPlayerId = 103
 const noMainLegendPlayerId = 104
 const unknownPlayerId = 999_999
+const newerPulsePlayerId = 105
+const olderPulsePlayerId = 106
+const partialPulsePlayerId = 107
+const pulseLastSuccessAt = '2026-11-06T09:00:00.000Z'
 
 type RatedProfile = {
   brawlhallaId: number
@@ -36,6 +40,27 @@ async function insertRatedProfile({ brawlhallaId, rating, mainLegend }: RatedPro
   `
 }
 
+async function setProfileEffect(brawlhallaId: number, effectCreatedAt: string) {
+  await database.sql`
+    UPDATE players.ranked_profiles
+    SET v0_effect_created_at = ${effectCreatedAt}, v0_effect_operation_id = ${crypto.randomUUID()}
+    WHERE brawlhalla_id = ${brawlhallaId}
+  `
+}
+
+async function insertPulse(brawlhallaId: number, effectCreatedAt: string, rating: number | null = 2222) {
+  await database.sql`
+    INSERT INTO players.ranked_v1_pulse_state (
+      brawlhalla_id, checked_at, last_success_at, rating, peak_rating, wins, games,
+      one_vs_one_effect_created_at, one_vs_one_effect_operation_id
+    )
+    VALUES (
+      ${brawlhallaId}, ${pulseLastSuccessAt}, ${pulseLastSuccessAt}, ${rating}, ${rating}, 99, 199,
+      ${effectCreatedAt}, ${crypto.randomUUID()}
+    )
+  `
+}
+
 // a player the refresh checked but never got a ranked snapshot for: every snapshot column is null
 async function insertNeverSucceededProfile(brawlhallaId: number) {
   await database.sql`
@@ -46,6 +71,10 @@ async function insertNeverSucceededProfile(brawlhallaId: number) {
 
 function createProcedures() {
   return createPlayerProcedures({ database })
+}
+
+function readSummaries(ids: number[]) {
+  return call(createProcedures().rankedSummaries, { ids }, internalCaller)
 }
 
 beforeAll(async () => {
@@ -128,6 +157,36 @@ describe('player.rankedSummaries', () => {
 
     expect(summary.mainLegend).toBeNull()
     expect(summary.rating).toBe(1200)
+  })
+
+  test('a pulse newer than the stored profile overrides its record', async () => {
+    await insertRatedProfile({ brawlhallaId: newerPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(newerPulsePlayerId, '2026-11-01T00:00:00.000Z')
+    await insertPulse(newerPulsePlayerId, '2026-11-05T00:00:00.000Z')
+
+    const [summary] = await readSummaries([newerPulsePlayerId])
+
+    expect(summary).toMatchObject({ rating: 2222, wins: 99, games: 199, updatedAt: pulseLastSuccessAt })
+  })
+
+  test('a pulse older than the stored profile is ignored', async () => {
+    await insertRatedProfile({ brawlhallaId: olderPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(olderPulsePlayerId, '2026-11-05T00:00:00.000Z')
+    await insertPulse(olderPulsePlayerId, '2026-11-01T00:00:00.000Z')
+
+    const [summary] = await readSummaries([olderPulsePlayerId])
+
+    expect(summary).toMatchObject({ rating: 1000, wins: 40, games: 90, updatedAt: lastSuccessAt })
+  })
+
+  test('a pulse with no rating keeps the stored one', async () => {
+    await insertRatedProfile({ brawlhallaId: partialPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(partialPulsePlayerId, '2026-11-01T00:00:00.000Z')
+    await insertPulse(partialPulsePlayerId, '2026-11-05T00:00:00.000Z', null)
+
+    const [summary] = await readSummaries([partialPulsePlayerId])
+
+    expect(summary?.rating).toBe(1000)
   })
 
   test('250 ids are accepted', async () => {
