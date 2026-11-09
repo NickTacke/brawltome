@@ -98,10 +98,11 @@ groups:
 
       # Brawlhalla outages (source_unavailable) are reported once by BrawlhallaSourceUnavailable instead of once per
       # operation kind, and local throttling (admission_deferred) is expected, so neither counts as our failure here.
+      # Statistics collection is left out too: one unreadable player is routine, and a burst fires NewDeadLetters.
       - alert: RefreshFailuresElevated
         expr: |
           sum by (kind, failure_category) (
-            increase(refresh_failures_total{failure_category!~"admission_deferred|source_unavailable"}[15m])
+            increase(refresh_failures_total{failure_category!~"admission_deferred|source_unavailable",kind!~"statistics-(ranked|lifetime)-collection"}[15m])
           ) > 2
         for: 1m
         labels:

@@ -717,3 +717,13 @@ tests:
               summary: "statistics-publication produced new dead letters"
               description: "At least one maintenance operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
               runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"
+
+  - name: one statistics collection player failing stays quiet
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="statistics-ranked-collection",failure_category="execution"}'
+        values: "0 1 2 3 3x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RefreshFailuresElevated
+        exp_alerts: []

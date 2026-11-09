@@ -327,6 +327,9 @@ posting a notice on the site.
 
 **Meaning:** the five-minute p95 latency of a runtime's HTTP requests exceeded 250 ms for five minutes.
 
+Statistics collection is not counted: one player it cannot read is routine, and a burst fires
+[NewDeadLetters](#newdeadletters).
+
 **Likely causes:** slow database queries (a missing index, a table that grew); the host is CPU-bound; a slow upstream
 call on a request path.
 
