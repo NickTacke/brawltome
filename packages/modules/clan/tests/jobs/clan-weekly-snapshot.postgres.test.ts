@@ -420,6 +420,48 @@ describe('clan weekly snapshot job', () => {
     expect(await isWeekCompleted(week)).toBe(true)
   })
 
+  test('fetches the guilds failing at the end of a full slice again in the next slice', async () => {
+    const clanIds = Array.from({ length: 12 }, (_, index) => 701 + index)
+
+    for (const clanId of clanIds) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>(clanIds.map((clanId) => [clanId, { guildPoints: `${clanId}` }]))
+
+    for (const clanId of clanIds.slice(3)) answers.set(clanId, 'unavailable')
+
+    const { job, queue, sourceAdmission } = createHarness(answers, 6)
+
+    const week = await scheduleWeek(queue, 'failing-slice-end')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(await readProfileCheck(704)).toBeNull()
+    expect(await readProfileCheck(706)).toBeNull()
+
+    for (const clanId of clanIds) answers.set(clanId, { guildPoints: `${clanId}` })
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toHaveLength(clanIds.length)
+  })
+
+  test('skips a full slice of failing guilds rather than fetching it forever', async () => {
+    for (const clanId of [721, 722, 723]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>([
+      [721, 'unavailable'],
+      [722, 'unavailable'],
+      [723, { guildPoints: '7' }],
+    ])
+
+    const { job, queue, sourceAdmission } = createHarness(answers, 2)
+
+    const week = await scheduleWeek(queue, 'failing-slice')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toEqual([{ clanId: 723, guildPoints: '7' }])
+  })
+
   test('defers the run without pausing V1 when guilds in a row keep failing, then picks up the first of them', async () => {
     const clanIds = Array.from({ length: clanWeeklySnapshotOutageGuilds + 1 }, (_, index) => 431 + index)
 

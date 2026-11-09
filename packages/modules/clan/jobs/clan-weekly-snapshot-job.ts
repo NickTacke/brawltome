@@ -107,6 +107,19 @@ async function skipFailedGuilds(slice: SnapshotSlice, progress: SliceProgress): 
   progress.failedGuilds = []
 }
 
+// failures at the end of a full slice wait for the next slice to confirm them, unless the slice moved past no guild:
+// a slice of nothing but failures would otherwise be fetched again forever. The last slice has no next one
+async function skipFailedGuildsAtSliceEnd(
+  slice: SnapshotSlice,
+  progress: SliceProgress,
+  clanIds: number[],
+): Promise<void> {
+  const isLastSlice = clanIds.length < slice.dependencies.sliceGuilds
+  const hasMovedOn = progress.storedGuilds + progress.skippedGuilds > 0
+
+  if (isLastSlice || !hasMovedOn) await skipFailedGuilds(slice, progress)
+}
+
 function throwIfSourceDown(slice: SnapshotSlice, progress: SliceProgress): void {
   const { failedGuilds } = progress
 
@@ -145,8 +158,7 @@ async function snapshotGuilds(slice: SnapshotSlice, clanIds: number[]): Promise<
     await snapshotGuild(slice, progress, clanId)
   }
 
-  // the run may end with this slice, and a slice of failures would otherwise list the same guilds again
-  await skipFailedGuilds(slice, progress)
+  await skipFailedGuildsAtSliceEnd(slice, progress, clanIds)
 
   return progress
 }
