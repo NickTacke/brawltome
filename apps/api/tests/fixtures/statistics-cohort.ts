@@ -75,14 +75,24 @@ export async function seedTerminalProduct(
                  'peakRating', member.source_rating,
                  'tier', 'Observed',
                  'region', cohort.region,
-                 'legends', jsonb_build_array(jsonb_build_object(
-                   'legendId', 3,
-                   'games', 10,
-                   'wins', 5,
-                   'rating', member.source_rating,
-                   'peakRating', member.source_rating,
-                   'tier', 'Observed'
-                 ))
+                 'legends', jsonb_build_array(
+                   jsonb_build_object(
+                     'legendId', 3,
+                     'games', 10,
+                     'wins', 5,
+                     'rating', member.source_rating,
+                     'peakRating', member.source_rating,
+                     'tier', 'Observed'
+                   ),
+                   jsonb_build_object(
+                     'legendId', 4,
+                     'games', 0,
+                     'wins', 0,
+                     'rating', 750,
+                     'peakRating', 750,
+                     'tier', 'Observed'
+                   )
+                 )
                )
                WHEN collection.product = 'lifetime' THEN jsonb_build_object(
                  'brawlhallaId', member.brawlhalla_id,

@@ -71,6 +71,26 @@ function snapshots(generation: number): CohortCandidateSnapshot[] {
   })
 }
 
+// the seeded legend rating is the member's source rating
+async function observedSourceRatingAverage(generationId: string): Promise<number> {
+  const sql = postgres(connectionString, { max: 1 })
+
+  try {
+    const [row] = await sql<{ average: number }[]>`
+      SELECT round(avg(member.source_rating))::integer AS average
+      FROM statistics.observations observation
+      JOIN statistics.cohorts cohort ON cohort.id = observation.cohort_id
+      JOIN statistics.cohort_members member
+        ON member.cohort_id = observation.cohort_id AND member.brawlhalla_id = observation.brawlhalla_id
+      WHERE cohort.generation_id = ${generationId} AND observation.product = 'ranked'
+    `
+
+    return row.average
+  } finally {
+    await sql.end()
+  }
+}
+
 async function expectPostgresRejection(action: () => Promise<void>, message: string): Promise<void> {
   let failure: unknown
 
@@ -658,10 +678,17 @@ describe('Statistics full launch cohort publication', () => {
       gameCount: 21_420,
       winCount: 10_710,
       medianRating: 1_902,
-      averageLegendRating: expect.any(Number),
+      averageLegendRating: await observedSourceRatingAverage(first.generationId),
       pickShare: { numerator: 21_420, denominator: 21_420, basisPoints: 10_000 },
       adoption: { numerator: 2_142, denominator: 2_142, basisPoints: 10_000 },
       winRate: { numerator: 10_710, denominator: 21_420, basisPoints: 5_000 },
+    })
+
+    // every seeded player reports legend 4 at the default 750 with no games
+    expect(allLegendMeta.slice.rows.find(({ legend }) => legend.legendId === 4)).toMatchObject({
+      playerCount: 0,
+      averageLegendRating: null,
+      eligible: false,
     })
 
     const euPlatinum = await statistics.getLegendMeta({ region: 'EU', bracket: 'Platinum' })
