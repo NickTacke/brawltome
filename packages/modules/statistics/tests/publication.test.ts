@@ -146,6 +146,57 @@ describe('Statistics publication validation', () => {
     expect(decision.capacityEnvelope.maximumSourceAttempts).toBe(13_494)
   })
 
+  function exclude(cell: ReturnType<typeof progress>[number]) {
+    return {
+      ...cell,
+      selectedPlayers: 0,
+      operations: 0,
+      sourceAttempts: 0,
+      maximumPlayerAttempts: 0,
+      successes: 0,
+      firstAttemptAt: null,
+      lastCompletedAt: null,
+    }
+  }
+
+  test('accepts a generation with left-out cells and holds only the covered cells to the rules', () => {
+    const cells = progress().map((cell, index) => (index < 9 ? exclude(cell) : cell))
+    const decision = validate(cells)
+
+    expect(decision.reasons).toEqual([])
+    expect(decision.outcome).toBe('accepted')
+    expect(decision.progress.selectedPlayers).toBe(1_125)
+    expect(decision.progress.cells).toHaveLength(18)
+  })
+
+  test('rejects fewer than nine covered cells', () => {
+    const cells = progress().map((cell, index) => (index < 10 ? exclude(cell) : cell))
+
+    expect(validate(cells).reasons).toContainEqual({ code: 'covered-cells-minimum-not-met', coveredCells: 8 })
+  })
+
+  test('still rejects a kept cell below the minimum or below 90% coverage', () => {
+    const thin = progress()
+
+    thin[0] = { ...thin[0], selectedPlayers: 100, operations: 100, successes: 100 }
+
+    expect(validate(thin).reasons).toContainEqual({
+      code: 'cell-minimum-not-met',
+      region: thin[0].region,
+      bracket: thin[0].bracket,
+    })
+
+    const uncollected = progress().map((cell, index) => (index < 9 ? exclude(cell) : cell))
+
+    uncollected[9] = { ...uncollected[9], successes: 112 }
+
+    expect(validate(uncollected).reasons).toContainEqual({
+      code: 'cell-coverage-below-90-percent',
+      region: uncollected[9].region,
+      bracket: uncollected[9].bracket,
+    })
+  })
+
   test('enforces the product half of the shared envelope and three attempts per player across replays', () => {
     const productOverflow = progress(119)
 

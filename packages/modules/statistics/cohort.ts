@@ -7,7 +7,9 @@ export const LAUNCH_COHORT_BRACKET = 'Diamond+' as const
 export const LAUNCH_COHORT_CAP = 750
 export const LAUNCH_COHORT_MINIMUM_EVIDENCE_PLAYERS = 125
 export const LAUNCH_COHORT_METHODOLOGY_VERSION = 'eu-diamond-tracer-v1'
-export const FULL_LAUNCH_COHORT_METHODOLOGY_VERSION = 'full-launch-cohort-v1'
+export const FULL_LAUNCH_COHORT_METHODOLOGY_VERSION = 'full-launch-cohort-v2'
+// half of the 18 cells, which always spans at least five regions; fewer would not describe "all regions" honestly
+export const LAUNCH_COHORT_MINIMUM_COVERED_CELLS = 9
 export const launchCohortRegions = rankedRegions
 export const launchCohortBrackets = ['Platinum', 'Diamond+'] as const satisfies readonly CurrentOneVsOneBracket[]
 export const LAUNCH_COHORT_SOURCE_QUOTA_UNITS = 150
@@ -167,11 +169,13 @@ export function selectLaunchCohort(
   return selectLaunchCohortCell(snapshot, LAUNCH_COHORT_BRACKET, methodologyVersion)
 }
 
-export function selectFullLaunchCohort(
-  snapshots: readonly CohortCandidateSnapshot[],
-  methodologyVersion = FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
-): SelectedFullLaunchCohort {
-  validateMethodologyVersion(methodologyVersion)
+type RegionalSnapshots = {
+  byRegion: Map<LaunchCohortRegion, CohortCandidateSnapshot>
+  generationId: string
+  observedAt: string
+}
+
+function readRegionalSnapshots(snapshots: readonly CohortCandidateSnapshot[]): RegionalSnapshots {
   if (snapshots.length !== launchCohortRegions.length) {
     throw new Error('full launch cohort requires exactly nine regional snapshots')
   }
@@ -192,7 +196,40 @@ export function selectFullLaunchCohort(
     throw new Error('full launch cohort snapshots must share one observation timestamp')
   }
 
-  const cells = launchCohortRegions.flatMap((region) => {
+  return { byRegion, generationId: first.generationId, observedAt: first.observedAt }
+}
+
+// the cell stays on record with its eligible count, but no members are kept for a cell that will not be collected
+function excludeCell(cell: SelectedLaunchCohort): SelectedLaunchCohort {
+  return { ...cell, selectedPlayers: 0, state: 'insufficient-evidence', members: [] }
+}
+
+function launchCapacityEnvelope(selectedPlayers: number): LaunchCohortCapacityEnvelope {
+  const plannedRequests = selectedPlayers * LAUNCH_COHORT_REQUESTS_PER_PLAYER
+  const maximumSourceAttempts = plannedRequests * LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST
+
+  return {
+    sourceDomain: 'brawlhalla-v1',
+    quotaUnitsPerWindow: LAUNCH_COHORT_SOURCE_QUOTA_UNITS,
+    quotaWindowSeconds: LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS,
+    requestsPerPlayer: LAUNCH_COHORT_REQUESTS_PER_PLAYER,
+    maxAttemptsPerRequest: LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
+    plannedRequests,
+    maximumSourceAttempts,
+    minimumCapacitySeconds:
+      Math.ceil(maximumSourceAttempts / LAUNCH_COHORT_SOURCE_QUOTA_UNITS) * LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS,
+    observationWindowSeconds: LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
+  }
+}
+
+export function selectFullLaunchCohort(
+  snapshots: readonly CohortCandidateSnapshot[],
+  methodologyVersion = FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+): SelectedFullLaunchCohort {
+  validateMethodologyVersion(methodologyVersion)
+  const { byRegion, generationId, observedAt } = readRegionalSnapshots(snapshots)
+
+  const evaluatedCells = launchCohortRegions.flatMap((region) => {
     const snapshot = byRegion.get(region)
 
     if (!snapshot) throw new Error(`missing launch cohort region ${region}`)
@@ -200,28 +237,18 @@ export function selectFullLaunchCohort(
     return launchCohortBrackets.map((bracket) => selectLaunchCohortCell(snapshot, bracket, methodologyVersion))
   })
 
+  const coveredCellCount = evaluatedCells.filter(({ state }) => state === 'ready').length
+  const hasEnoughCells = coveredCellCount >= LAUNCH_COHORT_MINIMUM_COVERED_CELLS
+  const cells = evaluatedCells.map((cell) => (hasEnoughCells && cell.state === 'ready' ? cell : excludeCell(cell)))
   const selectedPlayers = cells.reduce((total, cell) => total + cell.selectedPlayers, 0)
-  const plannedRequests = selectedPlayers * LAUNCH_COHORT_REQUESTS_PER_PLAYER
-  const maximumSourceAttempts = plannedRequests * LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST
 
   return {
     methodologyVersion,
-    sourceGenerationId: first.generationId,
-    sourceObservedAt: first.observedAt,
+    sourceGenerationId: generationId,
+    sourceObservedAt: observedAt,
     cells,
     selectedPlayers,
-    state: cells.every(({ state }) => state === 'ready') ? 'ready' : 'insufficient-evidence',
-    capacityEnvelope: {
-      sourceDomain: 'brawlhalla-v1',
-      quotaUnitsPerWindow: LAUNCH_COHORT_SOURCE_QUOTA_UNITS,
-      quotaWindowSeconds: LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS,
-      requestsPerPlayer: LAUNCH_COHORT_REQUESTS_PER_PLAYER,
-      maxAttemptsPerRequest: LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
-      plannedRequests,
-      maximumSourceAttempts,
-      minimumCapacitySeconds:
-        Math.ceil(maximumSourceAttempts / LAUNCH_COHORT_SOURCE_QUOTA_UNITS) * LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS,
-      observationWindowSeconds: LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
-    },
+    state: hasEnoughCells ? 'ready' : 'insufficient-evidence',
+    capacityEnvelope: launchCapacityEnvelope(selectedPlayers),
   }
 }

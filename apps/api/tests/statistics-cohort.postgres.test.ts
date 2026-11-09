@@ -151,6 +151,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     expect(generation.state).toBe('insufficient-evidence')
     expect(generation.cells).toHaveLength(18)
+    expect(generation.cells.every(({ members }) => members.length === 0)).toBe(true)
     expect(await statistics.collectionIntents()).toEqual([])
     const publicationIntents = await statistics.publicationIntents()
 
@@ -189,7 +190,10 @@ describe('Statistics EU Diamond+ production tracer', () => {
     })
 
     expect(rejected.decision?.outcome).toBe('rejected')
-    expect(rejected.decision?.reasons).toContainEqual(expect.objectContaining({ code: 'cell-minimum-not-met' }))
+
+    expect(rejected.decision?.reasons).toContainEqual(
+      expect.objectContaining({ code: 'covered-cells-minimum-not-met' }),
+    )
   })
 
   test('concurrent reconciliation pins one immutable generation and restart keeps it after newer input', async () => {

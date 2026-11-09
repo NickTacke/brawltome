@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+  LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
   launchCohortBrackets,
   launchCohortRegions,
   selectFullLaunchCohort,
@@ -139,7 +140,7 @@ describe('full launch cohort selection', () => {
     expect(selected.state).toBe('ready')
   })
 
-  test('retains all 18 auditable cells when one cell misses 125 players', () => {
+  test('leaves out a thin cell but keeps it on record with its eligible count', () => {
     const selected = selectFullLaunchCohort(
       launchCohortRegions.map((region) => regionSnapshot(region, region === 'ME' ? 124 : 125)),
     )
@@ -147,11 +148,63 @@ describe('full launch cohort selection', () => {
     expect(selected.cells).toHaveLength(18)
 
     expect(selected.cells.filter(({ state }) => state === 'insufficient-evidence')).toEqual([
-      expect.objectContaining({ region: 'ME', bracket: 'Platinum', selectedPlayers: 124 }),
-      expect.objectContaining({ region: 'ME', bracket: 'Diamond+', selectedPlayers: 124 }),
+      expect.objectContaining({
+        region: 'ME',
+        bracket: 'Platinum',
+        eligiblePlayers: 124,
+        selectedPlayers: 0,
+        members: [],
+      }),
+      expect.objectContaining({
+        region: 'ME',
+        bracket: 'Diamond+',
+        eligiblePlayers: 124,
+        selectedPlayers: 0,
+        members: [],
+      }),
     ])
 
+    expect(selected.state).toBe('ready')
+    expect(selected.selectedPlayers).toBe(2_000)
+    expect(selected.capacityEnvelope.plannedRequests).toBe(4_000)
+  })
+
+  test('is ready at exactly nine covered cells', () => {
+    const coveredRegions = launchCohortRegions.slice(0, 4)
+    const emptyRegions = launchCohortRegions.slice(5)
+
+    const selected = selectFullLaunchCohort(
+      launchCohortRegions.map((region) => {
+        if (coveredRegions.includes(region)) return regionSnapshot(region)
+
+        if (emptyRegions.includes(region)) return regionSnapshot(region, 0)
+
+        const snapshot = regionSnapshot(region)
+
+        return { ...snapshot, candidates: snapshot.candidates.filter(({ rating }) => rating >= 2000) }
+      }),
+    )
+
+    expect(selected.cells.filter(({ state }) => state === 'ready')).toHaveLength(LAUNCH_COHORT_MINIMUM_COVERED_CELLS)
+    expect(selected.state).toBe('ready')
+  })
+
+  test('stores no members and plans no requests below nine covered cells', () => {
+    const coveredRegions = launchCohortRegions.slice(0, 4)
+
+    const selected = selectFullLaunchCohort(
+      launchCohortRegions.map((region) => regionSnapshot(region, coveredRegions.includes(region) ? 125 : 0)),
+    )
+
     expect(selected.state).toBe('insufficient-evidence')
+    expect(selected.selectedPlayers).toBe(0)
+
+    expect(selected.cells.every(({ members, selectedPlayers }) => members.length === 0 && selectedPlayers === 0)).toBe(
+      true,
+    )
+
+    expect(selected.cells.filter(({ eligiblePlayers }) => eligiblePlayers === 125)).toHaveLength(8)
+    expect(selected.capacityEnvelope.plannedRequests).toBe(0)
   })
 
   test('rejects missing, duplicate, or cross-generation regional snapshots before selection', () => {
