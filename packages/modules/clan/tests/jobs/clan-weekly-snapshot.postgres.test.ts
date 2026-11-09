@@ -109,7 +109,13 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
   const job = createClanWeeklySnapshotJob({
     clans: createPostgresClans(database),
     snapshots: createPostgresWeeklySnapshots(database),
-    createAdmittedSource: () => ({ getGuildStatsV1 }),
+    createAdmittedSource: (admitSource) => ({
+      getGuildStatsV1: async (clanId: number) => {
+        await admitSource('brawlhalla-v1')
+
+        return getGuildStatsV1(clanId)
+      },
+    }),
     sliceGuilds,
     guildDelayMs: 500,
     waitBetweenGuilds: async (delayMs) => {
@@ -478,6 +484,34 @@ describe('clan weekly snapshot job', () => {
     expect(await readProfileCheck(431)).toBeNull()
 
     for (const clanId of clanIds) answers.set(clanId, { guildPoints: `${clanId}` })
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toHaveLength(clanIds.length)
+  })
+
+  test('spends an attempt when admission fails, since that is the database and not V1', async () => {
+    const clanIds = Array.from({ length: clanWeeklySnapshotOutageGuilds + 1 }, (_, index) => 741 + index)
+
+    for (const clanId of clanIds) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>(clanIds.map((clanId) => [clanId, { guildPoints: `${clanId}` }]))
+    const { job, queue, sourceCalls, sourceAdmission } = createHarness(answers)
+
+    const failingAdmission = {
+      ...sourceAdmission,
+      admitSource: async (): Promise<{ outcome: 'admitted' }> => {
+        throw new Error('connection to the queue database was terminated')
+      },
+    }
+
+    const week = await scheduleWeek(queue, 'admission-down')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission: failingAdmission })).toBe('retry')
+    expect(sourceCalls).toEqual([])
+    expect(await readOperation()).toMatchObject({ attemptCount: 1, errorCode: 'clan_weekly_snapshot_failed' })
+    expect(await readProfileCheck(741)).toBeNull()
+
     await makeOperationDue()
 
     expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')

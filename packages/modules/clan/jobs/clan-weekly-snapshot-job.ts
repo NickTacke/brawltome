@@ -18,7 +18,7 @@ import { classifySourceFailure } from '../domain/source-failure'
 import { clanWeeklySnapshotContract } from './clan-weekly-snapshot-contract'
 import type { ClanSource } from './refresh-clan'
 import { ClanWeeklySnapshotSourceDown, ClanWeeklySnapshotYield, decideSnapshotFailure } from './weekly-snapshot-failure'
-import { fetchGuildStats, type GuildStatsFetcher } from './weekly-snapshot-fetch'
+import { fetchGuildStats, type GuildStatsFetcher, markAdmissionFailures } from './weekly-snapshot-fetch'
 
 export const defaultClanWeeklySnapshotSliceGuilds = 100
 
@@ -188,7 +188,7 @@ function createSlice(
   weekStarting: string,
 ): SnapshotSlice {
   // each claim gets its own reservation keys, a deferred attempt keeps its attempt number
-  const admitSource = tools.createSourceAdmitter(`weekly-snapshot:${lease.leaseToken}`)
+  const admitSource = markAdmissionFailures(tools.createSourceAdmitter(`weekly-snapshot:${lease.leaseToken}`))
 
   const fetcher: GuildStatsFetcher = {
     source: dependencies.createAdmittedSource(admitSource),

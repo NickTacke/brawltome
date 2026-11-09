@@ -1,6 +1,7 @@
-import { JobLeaseLostError } from '@brawltome/queue'
+import { JobLeaseLostError, type SourceAdmitter } from '@brawltome/queue'
 import { classifySourceFailure } from '../domain/source-failure'
 import type { ClanSource } from './refresh-clan'
+import { ClanWeeklySnapshotAdmissionFailed } from './weekly-snapshot-failure'
 
 export type GuildStatsFetcher = {
   source: Pick<ClanSource, 'getGuildStatsV1'>
@@ -19,10 +20,30 @@ export function isRateLimited(error: unknown): boolean {
   return classifySourceFailure(error).isRetryable
 }
 
+// a rate limit, a failed admission or a lost lease is about the whole run rather than the guild being fetched
+function isRunFailure(error: unknown): boolean {
+  return (
+    error instanceof JobLeaseLostError || error instanceof ClanWeeklySnapshotAdmissionFailed || isRateLimited(error)
+  )
+}
+
+/** Marks a failure of admission itself, so it isn't taken for V1 failing the guild. A rate limit stays as it is. */
+export function markAdmissionFailures(admitSource: SourceAdmitter): SourceAdmitter {
+  return async (domain) => {
+    try {
+      await admitSource(domain)
+    } catch (error) {
+      if (isRateLimited(error)) throw error
+
+      throw new ClanWeeklySnapshotAdmissionFailed(error)
+    }
+  }
+}
+
 async function waitBeforeRetry(fetcher: GuildStatsFetcher, retry: number, error: unknown): Promise<void> {
   const delayMs = guildRetryDelaysMs[retry]
 
-  if (delayMs === undefined || isRateLimited(error)) throw error
+  if (delayMs === undefined || isRunFailure(error)) throw error
 
   await fetcher.waitBeforeRetry(delayMs, fetcher.signal)
 
@@ -41,7 +62,7 @@ async function fetchWithRetries(fetcher: GuildStatsFetcher, clanId: number): Pro
 
 /**
  * Fetches a guild's stats, retrying a failed call in place. A failure that outlasts the retries comes back as the
- * guild's error; a rate limit or a lost lease is thrown, since it's about the whole run rather than this guild.
+ * guild's error; a run failure is thrown.
  */
 export async function fetchGuildStats(fetcher: GuildStatsFetcher, clanId: number): Promise<GuildStatsFetch> {
   try {
@@ -49,7 +70,7 @@ export async function fetchGuildStats(fetcher: GuildStatsFetcher, clanId: number
 
     return { payload }
   } catch (error) {
-    if (error instanceof JobLeaseLostError || isRateLimited(error)) throw error
+    if (isRunFailure(error)) throw error
 
     return { error }
   }

@@ -23,6 +23,15 @@ export class ClanWeeklySnapshotSourceDown extends Error {
   }
 }
 
+// thrown when admission itself fails, which is the queue's database and not V1, so the normal retry rules take it
+export class ClanWeeklySnapshotAdmissionFailed extends Error {
+  constructor(cause: unknown) {
+    const causeMessage = cause instanceof Error ? cause.message : 'unknown admission failure'
+
+    super(`clan weekly snapshot source admission failed: ${causeMessage}`, { cause })
+  }
+}
+
 /**
  * Defers a yield, an outage and a 429, so none of them spends an attempt. Unlike the dispatcher's own source rule,
  * an outage doesn't pause V1: the run only knows its own calls failed, and a pause would hold every other caller.
