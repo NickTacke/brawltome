@@ -26,7 +26,7 @@ function RailLink({ to, label, icon: Icon, exact, wip }: RailItem) {
   return (
     <Link
       to={to}
-      aria-label={label}
+      aria-label={wip ? `${label} (Soon)` : label}
       activeOptions={{ exact: exact ?? false, includeSearch: false }}
       activeProps={{ className: 'bg-white/[0.08] !text-text' }}
       className={`group relative my-2 flex size-10 items-center justify-center rounded-control text-soft transition-colors hover:bg-white/[0.04] hover:text-text ${wip ? 'opacity-60 hover:opacity-80' : ''}`}
