@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: hsl(224 19.5% 13.5%);
+  --color-rail: hsl(226.15 19.4% 13.14%);
+  --color-raised: hsl(222 19.61% 21%);
+  --color-line: hsl(221.54 20.31% 25.1%);
+
+  --color-text: hsl(210 22% 86%);
+  --color-strong: hsl(207 26% 95%);
+  --color-soft: hsl(213.33 16% 68%);
+
+  --color-primary: hsl(212 92% 65%);
+  --color-primary-ink: hsl(224 30% 12%);
+
+  --color-gold: var(--color-yellow-500);
+  --color-silver: var(--color-slate-300);
+  --color-bronze: var(--color-amber-600);
+
+  --radius-control: 0.5rem;
+
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.5rem;
+  --text-figure: 1rem;
+  --text-figure--line-height: 1.5rem;
+  --text-name: clamp(2.5rem, 1.6rem + 3.4vw, 4rem);
+  --text-name--line-height: 1;
+}
+
+@layer base {
+  html {
+    background: var(--color-ink);
+    color: var(--color-text);
+    color-scheme: dark;
+    font-size: 100%;
+    -webkit-font-smoothing: antialiased;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
+  }
+
+  input {
+    caret-color: var(--color-primary);
+  }
+}
+
+@utility numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
