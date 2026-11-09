@@ -32,9 +32,12 @@ export function sliceCoverageNote(coverage: LegendMetaSliceCoverage): string | n
   if (coverage.leftOutCells.length > 0) {
     const names = coverage.leftOutCells.map(({ region, bracket }) => `${region} ${bracket}`).join(', ')
 
-    notes.push(
-      `Covers ${coverage.coveredCells} of the ${coverage.filterCells} cells in this view. Left out for too few players: ${names}.`,
-    )
+    const covers =
+      coverage.coveredCells === 0
+        ? 'This view has no data.'
+        : `Covers ${coverage.coveredCells} of the ${coverage.filterCells} cells in this view.`
+
+    notes.push(`${covers} Left out for too few players: ${names}.`)
   }
 
   if (coverage.includesPlatinumBoardTop) {

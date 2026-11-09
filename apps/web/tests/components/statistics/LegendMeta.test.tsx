@@ -135,6 +135,21 @@ describe('Current Season Legend Meta view', () => {
     expect(html).toContain('Platinum here is only the top of each region')
   })
 
+  test('says the view is empty instead of counting zero covered cells', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: {
+        filterCells: 1,
+        coveredCells: 0,
+        leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+        includesPlatinumBoardTop: false,
+      },
+    })
+
+    expect(html).toContain('This view has no data. Left out for too few players: EU Platinum.')
+    expect(html).not.toContain('Covers 0')
+  })
+
   test('shows no label on a view with every region and no Platinum', () => {
     const html = render({
       ...fresh,
