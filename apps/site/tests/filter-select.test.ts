@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { nextOptionIndex, viewportShiftPx } from '../src/components/FilterSelect'
+import { nextOptionIndex, panelVerticalShiftPx, viewportShiftPx } from '../src/components/filter-select-logic'
 
 describe('viewportShiftPx', () => {
   test('leaves a panel that already fits', () => {
@@ -56,5 +56,40 @@ describe('nextOptionIndex in a grid', () => {
   test('wraps a column past the last row', () => {
     expect(nextOptionIndex('ArrowDown', 7, 10, 5)).toBe(2)
     expect(nextOptionIndex('ArrowUp', 2, 10, 5)).toBe(7)
+  })
+})
+
+describe('nextOptionIndex in a part-filled grid', () => {
+  test('keeps the column when wrapping down', () => {
+    expect(nextOptionIndex('ArrowDown', 3, 7, 5)).toBe(3)
+    expect(nextOptionIndex('ArrowDown', 5, 7, 5)).toBe(0)
+  })
+
+  test('goes to the lowest option in the column when wrapping up', () => {
+    expect(nextOptionIndex('ArrowUp', 0, 7, 5)).toBe(5)
+    expect(nextOptionIndex('ArrowUp', 3, 7, 5)).toBe(3)
+  })
+
+  test('stays valid with fewer options than columns', () => {
+    expect(nextOptionIndex('ArrowUp', 0, 3, 5)).toBe(0)
+    expect(nextOptionIndex('ArrowDown', 2, 3, 5)).toBe(2)
+  })
+})
+
+describe('panelVerticalShiftPx', () => {
+  const trigger = { triggerTopPx: 352 }
+
+  test('leaves a panel that fits below', () => {
+    expect(panelVerticalShiftPx({ panelTopPx: 100, panelBottomPx: 300, triggerTopPx: 60, viewportHeightPx: 800 })).toBe(
+      0,
+    )
+  })
+
+  test('flips above the trigger when it only fits there', () => {
+    expect(panelVerticalShiftPx({ panelTopPx: 392, panelBottomPx: 650, viewportHeightPx: 600, ...trigger })).toBe(-302)
+  })
+
+  test('falls back to shifting when it fits neither way', () => {
+    expect(panelVerticalShiftPx({ panelTopPx: 392, panelBottomPx: 792, viewportHeightPx: 600, ...trigger })).toBe(-200)
   })
 })

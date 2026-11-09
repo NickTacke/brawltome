@@ -1,15 +1,7 @@
 import { ChevronDown } from 'lucide-react'
-import {
-  type KeyboardEvent,
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import { dropFocusBeforePress } from './drop-focus-before-press'
+import { useFilterSelect } from './use-filter-select'
 
 export type FilterOption = { value: string; label: string; flag?: ReactNode; detail?: string }
 
@@ -22,144 +14,8 @@ type FilterSelectProps = {
   onChange: (value: string) => void
 }
 
-const viewportMarginPx = 8
 // matches grid-cols-5 on the icon panel
 const iconGridColumns = 5
-
-// when the panel can't fit, its start edge wins so the first options stay reachable
-export function viewportShiftPx(startPx: number, endPx: number, viewportSizePx: number): number {
-  const shiftToStartPx = viewportMarginPx - startPx
-
-  if (shiftToStartPx > 0) return shiftToStartPx
-
-  const overflowEndPx = endPx - (viewportSizePx - viewportMarginPx)
-
-  if (overflowEndPx <= 0) return 0
-
-  return Math.max(-overflowEndPx, shiftToStartPx)
-}
-
-function optionStep(key: string, columns: number): number | null {
-  if (key === 'ArrowDown') return columns
-
-  if (key === 'ArrowUp') return -columns
-
-  if (columns === 1) return null
-
-  if (key === 'ArrowRight') return 1
-
-  if (key === 'ArrowLeft') return -1
-
-  return null
-}
-
-export function nextOptionIndex(
-  key: string,
-  currentIndex: number,
-  optionCount: number,
-  columns: number,
-): number | null {
-  if (key === 'Home') return 0
-
-  if (key === 'End') return optionCount - 1
-
-  const step = optionStep(key, columns)
-
-  if (step === null) return null
-
-  return (currentIndex + step + optionCount) % optionCount
-}
-
-function useDismiss(
-  isOpen: boolean,
-  rootRef: RefObject<HTMLDivElement | null>,
-  close: () => void,
-  closeOnEscape: () => void,
-) {
-  useEffect(() => {
-    if (!isOpen) return
-
-    function closeIfOutside(event: Event) {
-      if (!rootRef.current?.contains(event.target as Node)) close()
-    }
-
-    // on the document, because safari doesn't focus a clicked button so the key never reaches the component
-    function closeIfEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') closeOnEscape()
-    }
-
-    document.addEventListener('pointerdown', closeIfOutside)
-    document.addEventListener('focusin', closeIfOutside)
-    document.addEventListener('keydown', closeIfEscape)
-
-    return () => {
-      document.removeEventListener('pointerdown', closeIfOutside)
-      document.removeEventListener('focusin', closeIfOutside)
-      document.removeEventListener('keydown', closeIfEscape)
-    }
-  }, [isOpen, rootRef, close, closeOnEscape])
-}
-
-function useKeepPanelOnScreen(isOpen: boolean, panelRef: RefObject<HTMLDivElement | null>) {
-  useLayoutEffect(() => {
-    if (!isOpen) return
-
-    function placePanel() {
-      const panel = panelRef.current
-
-      if (!panel) return
-
-      panel.style.transform = ''
-      const { left, right, top, bottom } = panel.getBoundingClientRect()
-      const shiftXPx = viewportShiftPx(left, right, window.innerWidth)
-      const shiftYPx = viewportShiftPx(top, bottom, window.innerHeight)
-
-      panel.style.transform = `translate(${shiftXPx}px, ${shiftYPx}px)`
-    }
-
-    placePanel()
-    window.addEventListener('resize', placePanel)
-
-    return () => window.removeEventListener('resize', placePanel)
-  }, [isOpen, panelRef])
-}
-
-function focusSelectedOption(panel: HTMLDivElement | null) {
-  const selected = panel?.querySelector<HTMLButtonElement>('[aria-current="true"]')
-  const firstOption = panel?.querySelector<HTMLButtonElement>('button')
-  const target = selected ?? firstOption
-
-  target?.focus()
-}
-
-function useOptionKeys(
-  isOpen: boolean,
-  panelRef: RefObject<HTMLDivElement | null>,
-  columns: number,
-  openFromKeyboard: () => void,
-) {
-  function openWithArrow(event: KeyboardEvent) {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-
-    event.preventDefault()
-    openFromKeyboard()
-  }
-
-  function moveOptionFocus(event: KeyboardEvent) {
-    const buttons = Array.from(panelRef.current?.querySelectorAll('button') ?? [])
-    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
-    const nextIndex = nextOptionIndex(event.key, currentIndex, buttons.length, columns)
-
-    if (nextIndex === null) return
-
-    event.preventDefault()
-
-    if (currentIndex === -1) focusSelectedOption(panelRef.current)
-    else buttons[nextIndex]?.focus()
-  }
-
-  return isOpen ? moveOptionFocus : openWithArrow
-}
 
 type OptionButtonProps = {
   option: FilterOption
@@ -204,53 +60,12 @@ function OptionButton({ option, isSelected, isIconOnly, onSelect, onKeyDown }: O
 }
 
 export function FilterSelect({ label, value, options, isLabelHidden, isIconOnly, onChange }: FilterSelectProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const shouldFocusOptionRef = useRef(false)
+  const { isOpen, rootRef, panelRef, triggerRef, toggle, handleKeyDown, select } = useFilterSelect(
+    isIconOnly ? iconGridColumns : 1,
+    onChange,
+  )
+
   const selected = options.find((option) => option.value === value)
-
-  function close() {
-    setIsOpen(false)
-  }
-
-  function closeAndRefocusTrigger() {
-    setIsOpen(false)
-    triggerRef.current?.focus()
-  }
-
-  function openFromKeyboard() {
-    shouldFocusOptionRef.current = true
-    setIsOpen(true)
-  }
-
-  useDismiss(isOpen, rootRef, close, closeAndRefocusTrigger)
-  useKeepPanelOnScreen(isOpen, panelRef)
-  const handleKeyDown = useOptionKeys(isOpen, panelRef, isIconOnly ? iconGridColumns : 1, openFromKeyboard)
-
-  useLayoutEffect(() => {
-    if (isOpen && shouldFocusOptionRef.current) focusSelectedOption(panelRef.current)
-  }, [isOpen])
-
-  // detail is 0 for a click made with enter or space, only those move focus into the panel
-  function toggle(event: MouseEvent) {
-    shouldFocusOptionRef.current = event.detail === 0
-    setIsOpen((current) => !current)
-  }
-
-  // a button focused from the keyboard keeps its ring through a press, unless the press itself gives it focus again
-  function dropFocusBeforePress(event: PointerEvent<HTMLButtonElement>) {
-    event.currentTarget.blur()
-  }
-
-  function select(event: MouseEvent, next: string) {
-    onChange(next)
-    setIsOpen(false)
-
-    if (event.detail === 0) triggerRef.current?.focus()
-  }
-
   const panelLayout = isIconOnly ? 'grid w-max grid-cols-5 gap-0.5' : 'min-w-40'
   // the chevron's wide end makes it look off-centre even when it's exact, so it sits a pixel towards its point
   const chevronPosition = isOpen ? '-translate-y-px rotate-180' : 'translate-y-px'
