@@ -1,6 +1,17 @@
 import { jsonb } from '@brawltome/foundation'
 import { sql } from 'drizzle-orm'
-import { bigint, boolean, integer, numeric, pgSchema, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import {
+  bigint,
+  boolean,
+  date,
+  integer,
+  numeric,
+  pgSchema,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core'
 import type { ClanProvenance } from '../domain/provenance'
 
 // every column of each table the code uses, since tests/tables.test.ts compares them all with the database;
@@ -90,3 +101,23 @@ export const discoveryOutbox = clansSchema.table('discovery_outbox', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
 })
+
+// one row per week the snapshot job has started; last_clan_id is where the job carries on, and only weeks with a
+// completed_at feed the Last week figure
+export const weeklySnapshotRuns = clansSchema.table('weekly_snapshot_runs', {
+  weekStarting: date('week_starting', { mode: 'string' }).primaryKey(),
+  lastClanId: integer('last_clan_id').notNull().default(0),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+})
+
+// a clan's guild points as the snapshot job fetched them in that week
+export const weeklySnapshots = clansSchema.table(
+  'weekly_snapshots',
+  {
+    weekStarting: date('week_starting', { mode: 'string' }).notNull(),
+    clanId: integer('clan_id').notNull(),
+    guildPoints: numeric('guild_points', { precision: 40, scale: 0 }).notNull(),
+    takenAt: timestamp('taken_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  },
+  (table) => [primaryKey({ columns: [table.weekStarting, table.clanId] })],
+)

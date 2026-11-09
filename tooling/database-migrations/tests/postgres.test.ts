@@ -775,6 +775,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         await client`CREATE SCHEMA accounts`
         await client`CREATE SCHEMA rankings`
         await client`CREATE SCHEMA statistics`
+        await client`CREATE SCHEMA clans`
+        await client`CREATE TABLE clans.clans (clan_id integer PRIMARY KEY)`
 
         await client`
           CREATE TABLE refresh_operations.operations (

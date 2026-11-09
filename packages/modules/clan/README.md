@@ -15,6 +15,8 @@ The `clans` schema. The tables are described in `db/tables.ts`:
 - `refresh_effects`: the clan side of a refresh lease, so a publish can check the lease in its own transaction
 - `discovery_state`: one row with the source version
 - `discovery_outbox`: one event per changed clan, for the discovery projection
+- `weekly_snapshot_runs`: one row per week the weekly snapshot job has started, and how far it got
+- `weekly_snapshots`: each clan's guild points in each week
 
 `db/tables.ts` has every column of each table the code uses, because `tests/tables.test.ts` compares each column
 with the database. The migrations in `migrations/` own the defaults, checks, indexes and triggers.

@@ -4,6 +4,7 @@ import { initializeClans } from './migrations/0001-initialize-clans'
 import { addClanDiscoveryFacts } from './migrations/0002-add-discovery-facts'
 import { addV2ClanImportEvidence } from './migrations/0003-add-v2-import-evidence'
 import { allowSparseClanMembers } from './migrations/0004-allow-sparse-members'
+import { addClanWeeklySnapshots } from './migrations/0005-add-weekly-snapshots'
 
 export { toClanProfileContract } from './api/clan-profile-contract'
 export { readClanProfile } from './api/read-clan-profile'
@@ -23,7 +24,13 @@ export {
 } from './jobs/clan-refresh-reservation'
 export type { ClanSource } from './jobs/refresh-clan'
 
-const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvidence, allowSparseClanMembers] as const
+const migrations = [
+  initializeClans,
+  addClanDiscoveryFacts,
+  addV2ClanImportEvidence,
+  allowSparseClanMembers,
+  addClanWeeklySnapshots,
+] as const
 
 export const clanModule = {
   // a literal, so the API router can serve the procedures under this name with their types
