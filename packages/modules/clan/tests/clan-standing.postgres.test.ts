@@ -76,6 +76,12 @@ const staleSnapshots = [
   { weekStarting: daysAgo(15), completed: true, points: [[ember.clanId, '160']] },
 ] as const
 
+// the same two weeks as ember's, but the earlier one never finished, so its points may be from any later day
+const partialSnapshots = [
+  { weekStarting: daysAgo(11), completed: false, points: [[ember.clanId, '100']] },
+  { weekStarting: daysAgo(4), completed: true, points: [[ember.clanId, '160']] },
+] as const
+
 type WeeklySnapshotFixture = {
   weekStarting: string
   completed: boolean
@@ -85,6 +91,7 @@ type WeeklySnapshotFixture = {
 let database: TestDatabase
 let emptyDatabase: TestDatabase
 let staleDatabase: TestDatabase
+let partialDatabase: TestDatabase
 
 async function storeGuild(guild: StoredGuild, target: TestDatabase = database): Promise<void> {
   await target.sql`INSERT INTO clans.clans (clan_id) VALUES (${guild.clanId})`
@@ -119,6 +126,7 @@ beforeAll(async () => {
   database = await createTestDatabase({ label: 'clan_standing', modules: [queueModule, clanModule] })
   emptyDatabase = await createTestDatabase({ label: 'clan_standing_empty', modules: [queueModule, clanModule] })
   staleDatabase = await createTestDatabase({ label: 'clan_standing_stale', modules: [queueModule, clanModule] })
+  partialDatabase = await createTestDatabase({ label: 'clan_standing_partial', modules: [queueModule, clanModule] })
 
   for (const guild of [ember, frost, gale, haze, ivy]) await storeGuild(guild)
 
@@ -126,6 +134,8 @@ beforeAll(async () => {
   await storeGuild(ember, emptyDatabase)
   await storeGuild(ember, staleDatabase)
   await storeWeeklySnapshots(staleSnapshots, staleDatabase)
+  await storeGuild(ember, partialDatabase)
+  await storeWeeklySnapshots(partialSnapshots, partialDatabase)
 
   await database.sql`INSERT INTO clans.clans (clan_id) VALUES (${identityOnlyClanId})`
 }, 20_000)
@@ -134,6 +144,7 @@ afterAll(async () => {
   await database?.drop()
   await emptyDatabase?.drop()
   await staleDatabase?.drop()
+  await partialDatabase?.drop()
 }, 20_000)
 
 describe('reading a guild standing', () => {
@@ -193,6 +204,13 @@ describe('reading the last week of a guild', () => {
 
   test('has no figure when the latest finished week is more than 14 days old', async () => {
     expect(await readClanStanding(staleDatabase, ember.clanId)).toMatchObject({
+      lastWeekPoints: null,
+      lastWeekRank: null,
+    })
+  })
+
+  test('has no figure when the week before the latest finished week never finished', async () => {
+    expect(await readClanStanding(partialDatabase, ember.clanId)).toMatchObject({
       lastWeekPoints: null,
       lastWeekRank: null,
     })

@@ -110,7 +110,7 @@ of the failing clans, so five broken clans in a row cost the week 6 hours, and a
 clan per defer. A 429 or a source admission limit also defers. A failure of admission
 itself is a database error, so it takes the normal retries. Once every clan is done the week gets a `completed_at`.
 
-Last week is the latest completed week's points minus the points of the week seven days before it, so the first
-figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a week of
-earned points. No clan gets one once the latest completed week is more than 14 days old.
+Last week is the latest completed week's points minus the points of the week seven days before it, which must have
+completed too, so the first figure appears a week after the second run. A clan whose points went down gets no figure,
+since that isn't a week of earned points. No clan gets one once the latest completed week is more than 14 days old.
 `clan.standingById` serves it as `lastWeekPoints`, with its rank among the clans that have a figure as `lastWeekRank`.

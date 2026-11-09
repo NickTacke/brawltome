@@ -12,9 +12,10 @@ type ClanStanding = {
  * profile was never fetched. A rank is one more than the clans strictly above, so tied clans share it. One statement,
  * so every rank comes from one snapshot.
  *
- * Last week is the latest finished weekly snapshot minus the one seven days before it. A clan missing either of
- * them, or whose points went down, which is a reset rather than a week of play, has no figure and no rank. Neither
- * has any clan once the latest finished week is more than 14 days old, so a stalled job never shows old numbers.
+ * Last week is the latest finished weekly snapshot minus the one seven days before it, which must have finished too.
+ * A clan missing either of them, or whose points went down, which is a reset rather than a week of play, has no
+ * figure and no rank. Neither has any clan once the latest finished week is more than 14 days old, so a stalled job
+ * never shows old numbers.
  */
 export async function readClanStanding(database: Database, clanId: number): Promise<ClanStanding | null> {
   // a comparison with null matches no row, so without the case a clan with no guild points would rank first
@@ -28,6 +29,8 @@ export async function readClanStanding(database: Database, clanId: number): Prom
     last_week AS (
       SELECT latest.clan_id, latest.guild_points - earlier.guild_points AS points
       FROM latest_week
+      JOIN clans.weekly_snapshot_runs AS earlier_run
+        ON earlier_run.week_starting = latest_week.week_starting - 7 AND earlier_run.completed_at IS NOT NULL
       JOIN clans.weekly_snapshots AS latest ON latest.week_starting = latest_week.week_starting
       JOIN clans.weekly_snapshots AS earlier
         ON earlier.clan_id = latest.clan_id AND earlier.week_starting = latest_week.week_starting - 7
