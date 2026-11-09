@@ -1,10 +1,12 @@
 import {
   clanByIdInputSchema,
   clanProfileSchema,
+  clanStandingSchema,
   playerClanMembershipSchema,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
 import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
+import { readClanStanding } from '../db/read-clan-standing'
 import { readClanProfile } from './read-clan-profile'
 import { readPlayerClanMembership } from './read-player-clan-membership'
 
@@ -30,5 +32,17 @@ export function createClanProcedures(runtime: ModuleRuntime) {
     .output(playerClanMembershipSchema.nullable())
     .handler(({ input }) => readPlayerClanMembership(database, input.id))
 
-  return { byId, membershipByPlayerId }
+  const standingById = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/clans/{id}/standing',
+      operationId: 'clan.standingById',
+      summary: 'Clan standing',
+      tags: ['clan'],
+    })
+    .input(clanByIdInputSchema)
+    .output(clanStandingSchema.nullable())
+    .handler(({ input }) => readClanStanding(database, input.id))
+
+  return { byId, membershipByPlayerId, standingById }
 }
