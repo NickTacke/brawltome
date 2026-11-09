@@ -23,16 +23,17 @@ type RunSetup<T> = {
   isCancelled: () => boolean
 }
 
-function waitFor(milliseconds: number): Promise<void> {
+export function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 // the invisible challenge answers in seconds, a script that never loads must not leave the page on "updating"
 const challengeTimeoutMs = 30_000
 
+/** Shows the challenge until the visitor settles it or it times out; without a site key there is nothing to show. */
 export function askForChallenge(
   siteKey: string | null,
-  setChallenge: RunSetup<unknown>['setChallenge'],
+  setChallenge: (challenge: Challenge | null) => void,
   timeoutMs = challengeTimeoutMs,
 ): Promise<string | null> {
   if (!siteKey) return Promise.resolve(null)
