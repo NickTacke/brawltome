@@ -1,10 +1,13 @@
 import {
   type AttemptOutcome,
+  decideCountedSourceOutage,
   defineJob,
+  type FailureDecision,
   type JobDefinition,
   type JobTools,
   type Lease,
   type LeaseOperations,
+  type RetryTimings,
   SourceAdmissionLimitedError,
   type SourceAdmissionPort,
   type StatisticsCollectionKind,
@@ -24,7 +27,11 @@ export type StatisticsCollectionJobDependencies = {
   >
   sourceAdmission: Pick<SourceAdmissionPort, 'admitSource'>
   collectEvidence(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
+  retryTimings: RetryTimings
 }
+
+// the third failure ends the operation, so these keep a short outage from using up one player's three calls
+const sourceOutageRetryDelaysMs = [5 * 60_000, 30 * 60_000]
 
 type AttemptCheck = Awaited<
   ReturnType<
@@ -92,6 +99,18 @@ function commitEvidence(
     authorization: { ...authorization, kind: lease.kind },
     evidence: evidence as LifetimeEvidence,
   })
+}
+
+// a 5xx comes after the attempt is recorded, and handing the attempt back would make the retry look like a different
+// lease reusing that record. it spends the attempt instead, so a player gets three source calls and no more
+function decideCollectionFailure(
+  error: unknown,
+  lease: StatisticsCollectionLease,
+  retryTimings: RetryTimings,
+): FailureDecision | null {
+  const delayMs = sourceOutageRetryDelaysMs[lease.attemptNumber - 1] ?? 0
+
+  return decideCountedSourceOutage(error, delayMs, retryTimings)
 }
 
 function collectionAuthorization(lease: StatisticsCollectionLease): CollectionAttemptAuthorization {
@@ -162,6 +181,8 @@ function createCollectionJob(
     ...statisticsCollectionContract(kind),
     failureCode: 'statistics_collection_failed',
     effectState: statisticsCollectionEffectState,
+    decideFailure: async (error, lease) =>
+      decideCollectionFailure(error, { ...lease, kind }, dependencies.retryTimings),
     run: (lease, tools) => runCollection({ ...lease, kind }, tools, dependencies),
   })
 }

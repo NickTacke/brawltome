@@ -32,6 +32,7 @@ function dependencies(
     } as StatisticsCollectionJobDependencies['statistics'],
     sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
     collectEvidence: async () => ({}) as never,
+    retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
     ...overrides,
   }
 }

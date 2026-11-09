@@ -482,6 +482,7 @@ describe('worker job list', () => {
 
         return {} as never
       },
+      retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
     })
 
     expect(jobs.map((job) => job.kind)).toEqual([
