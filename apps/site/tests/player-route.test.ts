@@ -81,6 +81,7 @@ describe('player route', () => {
     expect(titleOf({ loaderData: { player: { name: 'Seven' } }, match: { status: 'success' } })).toBe(
       'Seven | BrawlTome',
     )
+
     expect(titleOf({ match: { status: 'notFound' } })).toBe('Player not found | BrawlTome')
     expect(titleOf({ match: { status: 'error' } })).toBe('Player unavailable | BrawlTome')
   })

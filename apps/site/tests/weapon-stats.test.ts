@@ -1,14 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { legends as allLegends, getLegendById, normalizeWeaponName } from '@brawltome/game-data'
+import { legendWeapons } from '@brawltome/contracts/legend-weapons'
 import { type CareerLegend, knownWeapons, type RankedLegend, weaponStats } from '../src/components/player/weapon-stats'
 
-// the first record is a placeholder with no weapons
-const playableLegends = allLegends.filter((legend) => legend.weaponOne !== '')
-const bodvar = playableLegends[0]
+const [playableId, playableWeapons] = [...legendWeapons.entries()][0] as [
+  number,
+  { weaponOne: string; weaponTwo: string },
+]
 
 function legendWith(overrides: Partial<CareerLegend> = {}): CareerLegend {
   return {
-    legendId: bodvar?.heroId ?? 1,
+    legendId: playableId,
     legendNameKey: 'bodvar',
     games: 10,
     wins: 6,
@@ -24,7 +25,7 @@ function legendWith(overrides: Partial<CareerLegend> = {}): CareerLegend {
 
 function rankedWith(overrides: Partial<RankedLegend> = {}): RankedLegend {
   return {
-    legendId: bodvar?.heroId ?? 1,
+    legendId: playableId,
     legendNameKey: 'bodvar',
     rating: 1500,
     peakRating: 1600,
@@ -35,8 +36,8 @@ function rankedWith(overrides: Partial<RankedLegend> = {}): RankedLegend {
   }
 }
 
-const firstWeapon = normalizeWeaponName(bodvar?.weaponOne ?? '')
-const secondWeapon = normalizeWeaponName(bodvar?.weaponTwo ?? '')
+const firstWeapon = playableWeapons.weaponOne
+const secondWeapon = playableWeapons.weaponTwo
 
 function statsFor(name: string, legends: CareerLegend[], ranked: RankedLegend[] = []) {
   return weaponStats(legends, ranked).find((stats) => stats.weapon === name)
@@ -51,6 +52,7 @@ describe('weaponStats', () => {
       games: 10,
       wins: 6,
     })
+
     expect(statsFor(secondWeapon, [legendWith()])).toMatchObject({ timeHeld: 200, KOs: 1, damage: 50 })
   })
 
@@ -65,7 +67,7 @@ describe('weaponStats', () => {
   })
 
   test('every weapon a legend can hold has an icon', () => {
-    const names = playableLegends.flatMap((legend) => [legend.weaponOne, legend.weaponTwo]).map(normalizeWeaponName)
+    const names = [...legendWeapons.values()].flatMap(({ weaponOne, weaponTwo }) => [weaponOne, weaponTwo])
 
     expect(names.filter((name) => !knownWeapons.has(name))).toEqual([])
   })
@@ -89,8 +91,4 @@ describe('weaponStats', () => {
     expect(stats?.ranked.highestPeak).toEqual({ key: 'bodvar', elo: 1600 })
     expect(stats?.ranked.mostPlayed).toEqual({ key: 'bodvar', games: 4 })
   })
-})
-
-test('game data still knows the legend used here', () => {
-  expect(getLegendById(bodvar?.heroId ?? 0)).toBeDefined()
 })

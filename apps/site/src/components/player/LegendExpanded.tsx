@@ -1,4 +1,4 @@
-import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
+import { legendWeapons } from '@brawltome/contracts/legend-weapons'
 import { X } from 'lucide-react'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
 import {
@@ -108,22 +108,22 @@ function WeaponUsage({ name, heldTime, kos, damage }: WeaponUsageProps) {
 }
 
 function LegendWeapons({ legend }: { legend: CareerLegend }) {
-  const reference = getLegendById(legend.legendId)
+  const weapons = legendWeapons.get(legend.legendId)
 
-  if (!reference) return null
+  if (!weapons) return null
 
   const { weaponOne, weaponTwo, unarmed } = legend
 
   return (
     <div className="grid gap-3 border-t border-line/40 pt-4 sm:grid-cols-3">
       <WeaponUsage
-        name={normalizeWeaponName(reference.weaponOne)}
+        name={weapons.weaponOne}
         heldTime={weaponOne.heldTime}
         kos={weaponOne.kos}
         damage={weaponOne.damage}
       />
       <WeaponUsage
-        name={normalizeWeaponName(reference.weaponTwo)}
+        name={weapons.weaponTwo}
         heldTime={weaponTwo.heldTime}
         kos={weaponTwo.kos}
         damage={weaponTwo.damage}

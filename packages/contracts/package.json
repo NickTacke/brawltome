@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./legend-weapons": "./src/legend-weapons.ts"
   },
   "scripts": {
     "generate": "bun run scripts/generate-openapi.ts && cargo run --quiet --locked --manifest-path generator/Cargo.toml",

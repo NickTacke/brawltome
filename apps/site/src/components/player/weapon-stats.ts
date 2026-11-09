@@ -1,5 +1,5 @@
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
-import { getLegendById, normalizeWeaponName } from '@brawltome/game-data'
+import { legendWeapons } from '@brawltome/contracts/legend-weapons'
 
 export type CareerLegend = NonNullable<PlayerCareerProfileContract['snapshot']>['legends'][number]
 export type RankedLegend = NonNullable<PlayerRankedProfileContract['snapshot']>['rankedLegends'][number]
@@ -95,13 +95,13 @@ function addSlot(totals: WeaponStats, legend: CareerLegend, slot: WeaponSlot, ra
 }
 
 function slotsOf(legend: CareerLegend): Array<{ weapon: string; slot: WeaponSlot }> {
-  const reference = getLegendById(legend.legendId)
+  const weapons = legendWeapons.get(legend.legendId)
 
-  if (!reference) return []
+  if (!weapons) return []
 
   const slots = [
-    { weapon: normalizeWeaponName(reference.weaponOne), slot: legend.weaponOne },
-    { weapon: normalizeWeaponName(reference.weaponTwo), slot: legend.weaponTwo },
+    { weapon: weapons.weaponOne, slot: legend.weaponOne },
+    { weapon: weapons.weaponTwo, slot: legend.weaponTwo },
   ]
 
   return slots.filter(({ weapon }) => knownWeapons.has(weapon))

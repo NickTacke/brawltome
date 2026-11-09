@@ -54,6 +54,7 @@ describe('withOfficialValhallanTier', () => {
 
   test('a fixed team matches with its ids in either order', () => {
     const fixedTwoVsTwoTeams = [{ brawlhallaIdOne: 9, brawlhallaIdTwo: 7 }]
+
     const result = withOfficialValhallanTier(profile('Diamond', 'Diamond', 'Diamond'), {
       ...noEvidence,
       fixedTwoVsTwoTeams,
