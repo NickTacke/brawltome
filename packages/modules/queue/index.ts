@@ -158,6 +158,7 @@ export { type RetryBackoff, type RunOneJobOptions, runOneJob } from './jobs/run-
 export { type RunSectionsOptions, runSections, type SectionRun } from './jobs/run-sections'
 export {
   acquireActiveLease,
+  acquireActiveLeaseInTransaction,
   commitInteractiveSection,
   completeRankingRetentionLease,
   type HeldLeaderboardLease,

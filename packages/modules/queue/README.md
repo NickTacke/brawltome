@@ -31,7 +31,7 @@ that owns the job, not to this schema.
 - `jobs/`: what a job is (`job-definition.ts`), finding one by kind (`job-registry.ts`), and running one
   (`run-one-job.ts`, `run-sections.ts`)
 - `lease-fences.ts`: checks that run inside another module's transaction, so its write only commits while the lease
-  is held
+  is held. `acquireActiveLeaseInTransaction` is `acquireActiveLease` for a module that writes through drizzle
 - `model.ts`: the types and kind lists other modules share
 - `operator-auth.ts`: the token check for the dead-letter CLI
 - `testing.ts`: helpers for tests, exported as `@brawltome/queue/testing`

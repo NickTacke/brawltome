@@ -1,4 +1,6 @@
 import type { Sql } from '@brawltome/foundation'
+import { sql } from 'drizzle-orm'
+import type { Transaction } from './db/transaction'
 import type { LeaderboardOperationKind } from './model'
 
 // each fence runs in the caller's transaction, so a module's write commits only while the worker still holds the lease
@@ -24,6 +26,19 @@ export async function acquireActiveLease(transaction: Sql, lease: HeldLease): Pr
       ${lease.leaseToken}
     ) AS active
   `
+
+  return result?.active === true
+}
+
+/** acquireActiveLease for a module that writes through drizzle, in the caller's drizzle transaction. */
+export async function acquireActiveLeaseInTransaction(transaction: Transaction, lease: HeldLease): Promise<boolean> {
+  const [result] = await transaction.execute<{ active: boolean }>(sql`
+    SELECT queue.acquire_active_lease(
+      ${lease.operationId}::uuid,
+      ${lease.leaseOwner},
+      ${lease.leaseToken}
+    ) AS active
+  `)
 
   return result?.active === true
 }
