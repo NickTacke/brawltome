@@ -22,10 +22,12 @@ const refreshPlayer = mock(async () => ({ kind: 'fresh' }))
 
 mock.module('../src/server/players', () => ({ getPlayer, getIsUnarmedExcluded: async () => true, refreshPlayer }))
 
+type LoaderData = { kind: 'player'; player: { name: string } } | { kind: 'lookup'; playerId: number }
+
 type RouteOptions = {
   loader: (context: { params: { id: string } }) => Promise<unknown>
-  head: (context: { loaderData?: { player: { name: string } }; match: { status: string } }) => {
-    meta: Array<{ title: string }>
+  head: (context: { loaderData?: LoaderData; match: { status: string } }) => {
+    meta: Array<{ title?: string; name?: string; content?: string }>
   }
   errorComponent: unknown
   notFoundComponent: unknown
@@ -38,7 +40,7 @@ function failureOf(id: string): Promise<unknown> {
 }
 
 function titleOf(context: Parameters<RouteOptions['head']>[0]): string {
-  return options.head(context).meta[0].title
+  return options.head(context).meta[0].title ?? ''
 }
 
 beforeAll(async () => {
@@ -58,10 +60,12 @@ describe('player route', () => {
     expect(getPlayer).not.toHaveBeenCalled()
   })
 
-  test('an unknown player is not found', async () => {
+  // the browser asks for the lookup once the page is on screen, so a crawler reading random ids costs no refresh
+  test('an unknown player is looked up from the page, not from the server render', async () => {
     getPlayer.mockImplementation(async () => null)
 
-    expect(isNotFound(await failureOf('7'))).toBe(true)
+    expect(await options.loader({ params: { id: '7' } })).toEqual({ kind: 'lookup', playerId: 7 })
+    expect(refreshPlayer).not.toHaveBeenCalled()
   })
 
   test('a failed load reaches the error component', async () => {
@@ -86,15 +90,31 @@ describe('player route', () => {
   })
 
   test('returns the page and the remembered unarmed choice', async () => {
-    expect(await options.loader({ params: { id: '7' } })).toEqual({ ...page, isUnarmedExcluded: true })
+    expect(await options.loader({ params: { id: '7' } })).toEqual({ kind: 'player', ...page, isUnarmedExcluded: true })
   })
 
   test('titles follow the load outcome', () => {
-    expect(titleOf({ loaderData: { player: { name: 'Seven' } }, match: { status: 'success' } })).toBe(
-      'Seven | BrawlTome',
+    const playerData: LoaderData = { kind: 'player', player: { name: 'Seven' } }
+
+    expect(titleOf({ loaderData: playerData, match: { status: 'success' } })).toBe('Seven | BrawlTome')
+
+    expect(titleOf({ loaderData: { kind: 'lookup', playerId: 7 }, match: { status: 'success' } })).toBe(
+      'Looking up player 7 | BrawlTome',
     )
 
     expect(titleOf({ match: { status: 'notFound' } })).toBe('Player not found | BrawlTome')
     expect(titleOf({ match: { status: 'error' } })).toBe('Player unavailable | BrawlTome')
+  })
+
+  test('a lookup page is kept out of search results', () => {
+    const lookupMeta = options.head({ loaderData: { kind: 'lookup', playerId: 7 }, match: { status: 'success' } }).meta
+
+    const playerMeta = options.head({
+      loaderData: { kind: 'player', player: { name: 'Seven' } },
+      match: { status: 'success' },
+    }).meta
+
+    expect(lookupMeta).toContainEqual({ name: 'robots', content: 'noindex' })
+    expect(playerMeta).not.toContainEqual({ name: 'robots', content: 'noindex' })
   })
 })

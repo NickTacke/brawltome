@@ -1,4 +1,6 @@
-import { createFileRoute, notFound } from '@tanstack/react-router'
+import { createFileRoute, notFound, useRouter } from '@tanstack/react-router'
+import { PlayerLookup } from '../components/lookup/PlayerLookup'
+import { usePlayerLookup } from '../components/lookup/use-player-lookup'
 import { PlayerPage as PlayerProfile } from '../components/player/PlayerPage'
 import { RefreshChallenge } from '../components/refresh/RefreshChallenge'
 import { isPlayerRefreshed, isPlayerStale } from '../components/refresh/staleness'
@@ -7,25 +9,39 @@ import { fixEncoding, parseEntityId } from '../lib'
 import type { PlayerPage } from '../server/load-player'
 import { getIsUnarmedExcluded, getPlayer, refreshPlayer } from '../server/players'
 
+type LivePlayerProps = PlayerPage & { isUnarmedExcluded: boolean }
+
+// a player the site has never stored is looked up from the browser, see usePlayerLookup
+type PlayerRouteData = ({ kind: 'player' } & LivePlayerProps) | { kind: 'lookup'; playerId: number }
+
 function pageTitle(playerName: string | undefined, status: string): string {
   if (playerName) return `${fixEncoding(playerName)} | BrawlTome`
 
   return status === 'error' ? 'Player unavailable | BrawlTome' : 'Player not found | BrawlTome'
 }
 
+// a lookup page says nothing yet, and crawlers reading random ids shouldn't index it
+function pageMeta(data: PlayerRouteData | undefined, status: string) {
+  if (data?.kind === 'lookup') {
+    return [{ title: `Looking up player ${data.playerId} | BrawlTome` }, { name: 'robots', content: 'noindex' }]
+  }
+
+  return [{ title: pageTitle(data?.player.name, status) }]
+}
+
 export const Route = createFileRoute('/player/$id')({
-  loader: async ({ params }) => {
+  loader: async ({ params }): Promise<PlayerRouteData> => {
     const playerId = parseEntityId(params.id)
 
     if (playerId === null) throw notFound()
 
     const [page, isUnarmedExcluded] = await Promise.all([getPlayer({ data: playerId }), getIsUnarmedExcluded()])
 
-    if (!page) throw notFound()
+    if (!page) return { kind: 'lookup', playerId }
 
-    return { ...page, isUnarmedExcluded }
+    return { kind: 'player', ...page, isUnarmedExcluded }
   },
-  head: ({ loaderData, match }) => ({ meta: [{ title: pageTitle(loaderData?.player.name, match.status) }] }),
+  head: ({ loaderData, match }) => ({ meta: pageMeta(loaderData, match.status) }),
   notFoundComponent: PlayerNotFound,
   errorComponent: PlayerLoadError,
   component: PlayerRoute,
@@ -58,8 +74,6 @@ function PlayerLoadError() {
   )
 }
 
-type LivePlayerProps = PlayerPage & { isUnarmedExcluded: boolean }
-
 function LivePlayer({ isUnarmedExcluded, ...page }: LivePlayerProps) {
   const playerId = page.player.brawlhallaId
 
@@ -81,8 +95,30 @@ function LivePlayer({ isUnarmedExcluded, ...page }: LivePlayerProps) {
   )
 }
 
+// once the player is stored, the route loads again and shows the page as if it had always been there
+function LookupPlayer({ playerId }: { playerId: number }) {
+  const router = useRouter()
+
+  const lookup = usePlayerLookup({
+    load: () => getPlayer({ data: playerId }),
+    lookUp: (turnstileToken) => refreshPlayer({ data: { id: playerId, turnstileToken } }),
+    onFound: () => void router.invalidate(),
+  })
+
+  return (
+    <>
+      <PlayerLookup playerId={playerId} status={lookup.status} onRetry={lookup.retry} />
+      <RefreshChallenge challenge={lookup.challenge} />
+    </>
+  )
+}
+
 function PlayerRoute() {
-  const page = Route.useLoaderData()
+  const data = Route.useLoaderData()
+
+  if (data.kind === 'lookup') return <LookupPlayer key={data.playerId} playerId={data.playerId} />
+
+  const { kind: _kind, ...page } = data
 
   return <LivePlayer key={page.player.brawlhallaId} {...page} />
 }
