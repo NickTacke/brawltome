@@ -29,6 +29,8 @@ function buildSite(): void {
 
   const build = Bun.spawnSync([process.execPath, 'run', 'build'], {
     cwd: siteRoot,
+    // bun test sets NODE_ENV=test, which would check a development bundle
+    env: { ...process.env, NODE_ENV: 'production' },
     stdout: 'pipe',
     stderr: 'pipe',
   })
