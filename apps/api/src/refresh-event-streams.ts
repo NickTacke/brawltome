@@ -1,4 +1,4 @@
-import type { PlayerRefreshSettled } from '@brawltome/refresh-operations'
+import type { PlayerRefreshSettled } from '@brawltome/queue'
 import type { Telemetry } from '@brawltome/telemetry'
 
 /**

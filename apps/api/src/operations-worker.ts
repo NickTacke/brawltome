@@ -25,6 +25,14 @@ import {
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
 import {
+  createJobRegistry,
+  createPostgresRefreshOperations,
+  type Lease,
+  runOneJob,
+  SourceAdmissionLimitedError,
+  waitForRenewal,
+} from '@brawltome/queue'
+import {
   createLeaderboardDeepCrawlProgress,
   createPostgresRanking,
   defaultDeepCrawlSlicePages,
@@ -36,14 +44,6 @@ import {
   reconcileLeaderboardSchedule,
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
-import {
-  createJobRegistry,
-  createPostgresRefreshOperations,
-  type Lease,
-  runOneJob,
-  SourceAdmissionLimitedError,
-  waitForRenewal,
-} from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations } from '@brawltome/statistics'
 import { instrumentHttpHandler, renderPrometheus } from '@brawltome/telemetry'

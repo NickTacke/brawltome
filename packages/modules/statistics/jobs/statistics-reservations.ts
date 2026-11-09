@@ -11,7 +11,7 @@ import {
   type StatisticsPublicationPayload,
   statisticsCollectionKinds,
   type TransitionResult,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 
 import {
   statisticsCollectionContract,

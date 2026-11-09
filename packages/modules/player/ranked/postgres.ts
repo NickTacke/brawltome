@@ -1,7 +1,7 @@
 import type { Database, Sql } from '@brawltome/foundation'
 import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
-import { acquireActiveLease, commitInteractiveSection } from '@brawltome/refresh-operations'
+import { acquireActiveLease, commitInteractiveSection } from '@brawltome/queue'
 import { selectCanonicalPlayerName } from '../reference'
 import {
   deriveObservedRatingDirection,

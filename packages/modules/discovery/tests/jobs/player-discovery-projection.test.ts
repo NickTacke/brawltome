@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { type EffectState, SourceAdmissionLimitedError } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import { type EffectState, SourceAdmissionLimitedError } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createPlayerDiscoveryProjectionJob } from '../../jobs/player-discovery-projection-job'
 import { createQueueSpy, discoveryLease } from './job-fixtures'
 

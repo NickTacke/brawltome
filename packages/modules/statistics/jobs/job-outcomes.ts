@@ -1,4 +1,4 @@
-import type { AttemptOutcome, Lease, LeaseOperations, OperationFailure } from '@brawltome/refresh-operations'
+import type { AttemptOutcome, Lease, LeaseOperations, OperationFailure } from '@brawltome/queue'
 
 export async function completeAttempt(queue: LeaseOperations, lease: Lease<unknown>): Promise<AttemptOutcome> {
   return (await queue.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'

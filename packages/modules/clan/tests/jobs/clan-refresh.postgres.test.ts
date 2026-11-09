@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { clanModule, createPostgresClans } from '../../index'
 import { createClanRefreshJob } from '../../jobs/clan-refresh-job'
 import { activateClanRefresh, reserveClanRefresh } from '../../jobs/clan-refresh-reservation'
@@ -12,7 +12,7 @@ const clanId = 990120
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_refresh_job', modules: [refreshOperationsModule, clanModule] })
+  database = await createTestDatabase({ label: 'clan_refresh_job', modules: [queueModule, clanModule] })
 }, 20_000)
 
 afterAll(async () => {

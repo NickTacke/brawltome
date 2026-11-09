@@ -9,7 +9,7 @@ import {
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestQueue, runOneWithJobs } from './fixtures/queue'
 
@@ -44,7 +44,7 @@ beforeAll(async () => {
     await setup.end()
   }
 
-  const modules: readonly BrawltomeModule[] = [playerModule, refreshOperationsModule, discoveryModule]
+  const modules: readonly BrawltomeModule[] = [playerModule, queueModule, discoveryModule]
 
   await migratePostgres(connectionString, orderMigrations(modules.flatMap((module) => module.migrations)))
 }, 20_000)

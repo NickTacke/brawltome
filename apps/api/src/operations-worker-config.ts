@@ -1,5 +1,4 @@
 import { parseBoundedInteger, parsePositiveInteger } from '@brawltome/foundation'
-import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
@@ -16,7 +15,8 @@ import {
   minRankingRetentionHours,
   validateAdmissionConfig,
   type WorkClass,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
+import { defaultLeaderboardIntervalMs, defaultLeaderboardPageDepth } from '@brawltome/ranking'
 
 function strictBoolean(value: string | undefined, fallback: boolean, name: string): boolean {
   if (value === undefined || value === '') return fallback

@@ -10,7 +10,7 @@ import {
   playerModule,
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneWithJobs } from './fixtures/queue'
@@ -41,7 +41,7 @@ const admission = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'primary_monitoring',
-    modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
+    modules: [accountsModule, queueModule, requestAdmissionModule, playerModule],
   })
 
   connectionString = database.connectionString

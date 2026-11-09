@@ -14,7 +14,7 @@
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/queue": "workspace:*",
     "drizzle-orm": "0.45.4",
     "postgres": "^3.4.7"
   },

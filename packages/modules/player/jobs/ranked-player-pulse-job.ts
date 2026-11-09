@@ -6,7 +6,7 @@ import {
   type Lease,
   type SourceAdmitter,
   sectionCommitted,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { PostgresRankedPlayers } from '../ranked/postgres'
 import { refreshRankedPlayerPulse, type V1RankedPulseSource } from '../ranked/refresh'
 import { type RankedPlayerPulsePayload, rankedPlayerPulseContract } from './ranked-player-pulse-contract'

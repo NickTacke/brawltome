@@ -28,7 +28,7 @@ const migrations = [initializeClans, addClanDiscoveryFacts, addV2ClanImportEvide
 export const clanModule = {
   // a literal, so the API router can serve the procedures under this name with their types
   name: 'clan' as const,
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
   routes: createClanProcedures,
 } satisfies BrawltomeModule

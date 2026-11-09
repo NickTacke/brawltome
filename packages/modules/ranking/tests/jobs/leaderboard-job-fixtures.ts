@@ -1,10 +1,5 @@
-import type {
-  AttemptOutcome,
-  JobDefinition,
-  LeaderboardOperationKind,
-  QueueWorker,
-} from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { AttemptOutcome, JobDefinition, LeaderboardOperationKind, QueueWorker } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createLeaderboardCollectionJob,

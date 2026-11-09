@@ -6,7 +6,7 @@ import {
   interactiveRefreshMaxAttempts,
   readAttemptHistory,
   recentlyViewedCohort,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const playerRefreshKind = 'interactive-player-refresh'

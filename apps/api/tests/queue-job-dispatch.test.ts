@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { LeaderboardSourceError } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   type OperationFailure,
   type OperationLease,
   retryDelayForAttempt,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
+import { LeaderboardSourceError } from '@brawltome/ranking'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { createProofJob, runOneWithJobs } from './fixtures/queue'
 

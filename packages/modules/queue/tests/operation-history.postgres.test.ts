@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { countActive, readAttemptHistory, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { countActive, queueModule, readAttemptHistory } from '@brawltome/queue'
 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_history', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_history', modules: [queueModule] })
 })
 
 afterAll(async () => {

@@ -2,11 +2,6 @@ import { proofEffectStore } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createInteractivePlayerRefreshJob, type InteractivePlayerRefreshJobDependencies } from '@brawltome/player'
 import {
-  createLeaderboardCollectionJob,
-  defaultDeepCrawlSlicePages,
-  readAppliedLeaderboardEffects,
-} from '@brawltome/ranking'
-import {
   type AppliedLeaderboardEffects,
   createJobRegistry,
   createPostgresDeadLetterOperations,
@@ -23,8 +18,13 @@ import {
   runOneJob,
   type SourceAdmitter,
   waitForRenewal,
-} from '@brawltome/refresh-operations'
-import { testJobContract } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { testJobContract } from '@brawltome/queue/testing'
+import {
+  createLeaderboardCollectionJob,
+  defaultDeepCrawlSlicePages,
+  readAppliedLeaderboardEffects,
+} from '@brawltome/ranking'
 import { createTelemetry } from '@brawltome/telemetry'
 import { sql } from 'drizzle-orm'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'

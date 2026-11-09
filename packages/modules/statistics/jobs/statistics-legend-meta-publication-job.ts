@@ -5,7 +5,7 @@ import {
   type JobTools,
   type Lease,
   type StatisticsLegendMetaPublicationPayload,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { legendMetaPublicationEffectState } from '../db/effects'
 import type { LegendMetaPublicationAuthorization, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt, deferAttempt } from './job-outcomes'

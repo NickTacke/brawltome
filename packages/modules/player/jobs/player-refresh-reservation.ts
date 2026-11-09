@@ -13,7 +13,7 @@ import {
   rejectReserved,
   reserveForAdmission,
   type TransitionResult,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const

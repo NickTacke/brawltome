@@ -1,5 +1,5 @@
 import type { Sql } from '@brawltome/foundation'
-import type { ReconcileObservationWatermark } from '@brawltome/refresh-operations'
+import type { ReconcileObservationWatermark } from '@brawltome/queue'
 
 // a queue-only test database keeps this table in the queue's schema; only player's migration moves it
 export const testWatermark: ReconcileObservationWatermark = {

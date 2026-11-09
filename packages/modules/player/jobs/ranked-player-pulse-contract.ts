@@ -1,4 +1,4 @@
-import { isPositive32BitInteger, type JobContract, readPayloadObject } from '@brawltome/refresh-operations'
+import { isPositive32BitInteger, type JobContract, readPayloadObject } from '@brawltome/queue'
 
 export type RankedPlayerPulsePayload = { brawlhallaId: number }
 

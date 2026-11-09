@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 
 let database: TestDatabase
@@ -11,7 +11,7 @@ let connectionString = ''
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'discovery_player_search',
-    modules: [refreshOperationsModule, discoveryModule],
+    modules: [queueModule, discoveryModule],
   })
 
   connectionString = database.connectionString

@@ -3,8 +3,8 @@ import { clanModule } from '@brawltome/clan'
 import { discoveryModule } from '@brawltome/discovery'
 import type { BrawltomeModule } from '@brawltome/foundation'
 import { playerModule } from '@brawltome/player'
+import { queueModule } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
@@ -12,7 +12,7 @@ import { statisticsModule } from '@brawltome/statistics'
 // a const tuple, so the oRPC router keeps the type of each module's procedures
 export const apiModules = [
   accountsModule,
-  refreshOperationsModule,
+  queueModule,
   requestAdmissionModule,
   playerModule,
   clanModule,

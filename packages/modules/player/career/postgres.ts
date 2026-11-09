@@ -1,5 +1,5 @@
 import type { Database, Sql } from '@brawltome/foundation'
-import { acquireActiveLease, commitInteractiveSection } from '@brawltome/refresh-operations'
+import { acquireActiveLease, commitInteractiveSection } from '@brawltome/queue'
 import {
   CAREER_FRESHNESS_SECONDS,
   type CareerPlayerProfile,

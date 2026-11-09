@@ -1,4 +1,4 @@
-import { isPositiveInteger, isSectionList, type JobContract, readPayloadObject } from '@brawltome/refresh-operations'
+import { isPositiveInteger, isSectionList, type JobContract, readPayloadObject } from '@brawltome/queue'
 import { type ClanRefreshSection, clanRefreshSections } from '../domain/refresh-section'
 
 export type ClanRefreshPayload = {

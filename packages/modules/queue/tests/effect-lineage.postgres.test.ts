@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { operationMatches, readEffectLineage, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { operationMatches, queueModule, readEffectLineage } from '@brawltome/queue'
 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_lineage', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_lineage', modules: [queueModule] })
 }, 20_000)
 
 afterAll(async () => {

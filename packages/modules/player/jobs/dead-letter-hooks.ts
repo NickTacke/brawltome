@@ -1,4 +1,4 @@
-import { type DeadLetterHooks, type EffectDescriber, readInteractiveEffects } from '@brawltome/refresh-operations'
+import { type DeadLetterHooks, type EffectDescriber, readInteractiveEffects } from '@brawltome/queue'
 
 const playerRefreshKinds = ['interactive-player-refresh', 'ranked-player-pulse', 'player-name-verification']
 

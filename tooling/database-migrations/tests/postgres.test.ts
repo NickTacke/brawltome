@@ -5,8 +5,8 @@ import { clanModule } from '@brawltome/clan'
 import { discoveryModule } from '@brawltome/discovery'
 import { checksumSql, deployedOrder, type Migration, migratePostgres } from '@brawltome/foundation'
 import { playerModule } from '@brawltome/player'
+import { queueModule } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
@@ -108,7 +108,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       clanModule.migrations,
       rankingModule.migrations,
       discoveryModule.migrations,
-      refreshOperationsModule.migrations,
+      queueModule.migrations,
       statisticsModule.migrations,
       requestAdmissionModule.migrations,
       replayAnalysisModule.migrations,
@@ -125,7 +125,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
   test('preserves the complete pre-Clans global history as an applied prefix', async () => {
     const oldGlobalInventory = [
       ...playerModule.migrations.slice(0, 3),
-      ...refreshOperationsModule.migrations.slice(0, 6),
+      ...queueModule.migrations.slice(0, 6),
       ...requestAdmissionModule.migrations.slice(0, 2),
       ...accountsModule.migrations.slice(0, 2),
       rankingModule.migrations[0],
@@ -135,33 +135,33 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     expect(orderedMigrations.slice(oldGlobalInventory.length, deployedOrder.length)).toEqual([
       clanModule.migrations[0],
-      refreshOperationsModule.migrations[6],
-      refreshOperationsModule.migrations[7],
+      queueModule.migrations[6],
+      queueModule.migrations[7],
       accountsModule.migrations[2],
-      refreshOperationsModule.migrations[8],
+      queueModule.migrations[8],
       rankingModule.migrations[1],
       playerModule.migrations[3],
       playerModule.migrations[4],
-      refreshOperationsModule.migrations[9],
+      queueModule.migrations[9],
       discoveryModule.migrations[0],
       accountsModule.migrations[3],
       playerModule.migrations[5],
-      refreshOperationsModule.migrations[10],
-      refreshOperationsModule.migrations[11],
+      queueModule.migrations[10],
+      queueModule.migrations[11],
       clanModule.migrations[1],
       discoveryModule.migrations[1],
-      refreshOperationsModule.migrations[12],
+      queueModule.migrations[12],
       statisticsModule.migrations[0],
-      refreshOperationsModule.migrations[13],
+      queueModule.migrations[13],
       accountsModule.migrations[4],
       playerModule.migrations[6],
       statisticsModule.migrations[1],
-      refreshOperationsModule.migrations[14],
+      queueModule.migrations[14],
       clanModule.migrations[2],
       rankingModule.migrations[2],
       accountsModule.migrations[5],
       statisticsModule.migrations[2],
-      refreshOperationsModule.migrations[15],
+      queueModule.migrations[15],
       statisticsModule.migrations[3],
       requestAdmissionModule.migrations[2],
       discoveryModule.migrations[2],
@@ -183,25 +183,25 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       rankingModule.migrations[7],
       playerModule.migrations[13],
       playerModule.migrations[14],
-      refreshOperationsModule.migrations[16],
+      queueModule.migrations[16],
       rankingModule.migrations[8],
-      refreshOperationsModule.migrations[17],
-      refreshOperationsModule.migrations[18],
+      queueModule.migrations[17],
+      queueModule.migrations[18],
       playerModule.migrations[15],
       rankingModule.migrations[9],
       rankingModule.migrations[10],
       rankingModule.migrations[11],
       playerModule.migrations[16],
-      refreshOperationsModule.migrations[19],
-      refreshOperationsModule.migrations[20],
-      refreshOperationsModule.migrations[21],
-      refreshOperationsModule.migrations[22],
+      queueModule.migrations[19],
+      queueModule.migrations[20],
+      queueModule.migrations[21],
+      queueModule.migrations[22],
       playerModule.migrations[17],
-      refreshOperationsModule.migrations[23],
-      refreshOperationsModule.migrations[24],
+      queueModule.migrations[23],
+      queueModule.migrations[24],
       playerModule.migrations[18],
       playerModule.migrations[19],
-      refreshOperationsModule.migrations[25],
+      queueModule.migrations[25],
       discoveryModule.migrations[3],
       discoveryModule.migrations[4],
     ])
@@ -246,12 +246,12 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
     expect(orderedMigrations.slice(deployedPrePlayersImportGlobalHistory.length, deployedOrder.length)).toEqual([
       playerModule.migrations[6],
       statisticsModule.migrations[1],
-      refreshOperationsModule.migrations[14],
+      queueModule.migrations[14],
       clanModule.migrations[2],
       rankingModule.migrations[2],
       accountsModule.migrations[5],
       statisticsModule.migrations[2],
-      refreshOperationsModule.migrations[15],
+      queueModule.migrations[15],
       statisticsModule.migrations[3],
       requestAdmissionModule.migrations[2],
       discoveryModule.migrations[2],
@@ -273,25 +273,25 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       rankingModule.migrations[7],
       playerModule.migrations[13],
       playerModule.migrations[14],
-      refreshOperationsModule.migrations[16],
+      queueModule.migrations[16],
       rankingModule.migrations[8],
-      refreshOperationsModule.migrations[17],
-      refreshOperationsModule.migrations[18],
+      queueModule.migrations[17],
+      queueModule.migrations[18],
       playerModule.migrations[15],
       rankingModule.migrations[9],
       rankingModule.migrations[10],
       rankingModule.migrations[11],
       playerModule.migrations[16],
-      refreshOperationsModule.migrations[19],
-      refreshOperationsModule.migrations[20],
-      refreshOperationsModule.migrations[21],
-      refreshOperationsModule.migrations[22],
+      queueModule.migrations[19],
+      queueModule.migrations[20],
+      queueModule.migrations[21],
+      queueModule.migrations[22],
       playerModule.migrations[17],
-      refreshOperationsModule.migrations[23],
-      refreshOperationsModule.migrations[24],
+      queueModule.migrations[23],
+      queueModule.migrations[24],
       playerModule.migrations[18],
       playerModule.migrations[19],
-      refreshOperationsModule.migrations[25],
+      queueModule.migrations[25],
       discoveryModule.migrations[3],
       discoveryModule.migrations[4],
     ])
@@ -478,10 +478,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 2))).toBe(2)
+      expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations.slice(0, 2))).toBe(2)
 
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations)).toBe(
-        refreshOperationsModule.migrations.length - 2,
+      expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations)).toBe(
+        queueModule.migrations.length - 2,
       )
 
       const client = postgres(databaseUrl.toString(), { max: 1 })
@@ -491,9 +491,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           SELECT identity FROM brawltome_migrations.history ORDER BY ordinal
         `
 
-        expect(history.map(({ identity }) => identity)).toEqual(
-          refreshOperationsModule.migrations.map(({ identity }) => identity),
-        )
+        expect(history.map(({ identity }) => identity)).toEqual(queueModule.migrations.map(({ identity }) => identity))
       } finally {
         await client.end()
       }
@@ -515,7 +513,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 11))).toBe(11)
+      expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations.slice(0, 11))).toBe(11)
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
       try {
@@ -535,8 +533,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
           `
         }
 
-        expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations)).toBe(
-          refreshOperationsModule.migrations.length - 11,
+        expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations)).toBe(
+          queueModule.migrations.length - 11,
         )
 
         const operations = await client<{ resource_key: string; status: string; error_code: string | null }[]>`
@@ -573,8 +571,8 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 5))).toBe(5)
-      expect(await migratePostgres(databaseUrl.toString(), refreshOperationsModule.migrations.slice(0, 6))).toBe(1)
+      expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations.slice(0, 5))).toBe(5)
+      expect(await migratePostgres(databaseUrl.toString(), queueModule.migrations.slice(0, 6))).toBe(1)
       const client = postgres(databaseUrl.toString(), { max: 1 })
 
       try {

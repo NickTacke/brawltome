@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createDiscoveryReconciliationJob } from '../../jobs/discovery-reconciliation-job'
 import { createQueueSpy, discoveryLease } from './job-fixtures'
 

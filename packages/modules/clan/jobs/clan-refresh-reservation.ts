@@ -9,7 +9,7 @@ import {
   rejectReserved,
   reserveForAdmission,
   type TransitionResult,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { ClanRefreshSection } from '../domain/refresh-section'
 import { clanRefreshContract } from './clan-refresh-contract'
 

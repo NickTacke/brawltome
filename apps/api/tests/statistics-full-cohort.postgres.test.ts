@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, queueModule } from '@brawltome/queue'
 import {
   type CohortCandidateSnapshot,
   createPostgresStatistics,
@@ -40,7 +40,7 @@ const admission: AdmissionConfig = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'statistics_full_cohort',
-    modules: [refreshOperationsModule, statisticsModule],
+    modules: [queueModule, statisticsModule],
   })
 
   connectionString = database.connectionString

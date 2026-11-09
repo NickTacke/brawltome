@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NameVerificationPreparation } from '@brawltome/player'
-import { SourceAdmissionLimitedError } from '@brawltome/refresh-operations'
+import { SourceAdmissionLimitedError } from '@brawltome/queue'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createPlayerNameVerificationPlanner,

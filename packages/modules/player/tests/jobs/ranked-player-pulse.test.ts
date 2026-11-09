@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  Lease,
-  OperationFailure,
-  QueueWorker,
-  SourceAdmissionPort,
-  SourceAdmitter,
-} from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { Lease, OperationFailure, QueueWorker, SourceAdmissionPort, SourceAdmitter } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createRankedPlayerPulseJob, type RankedPlayerPulseJobDependencies } from '../../jobs/ranked-player-pulse-job'
 
 function pulseLease(): Lease<unknown> {

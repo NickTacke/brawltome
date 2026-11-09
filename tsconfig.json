@@ -17,9 +17,9 @@
       "@brawltome/player": ["./packages/modules/player/index.ts"],
       "@brawltome/clan": ["./packages/modules/clan/index.ts"],
       "@brawltome/discovery": ["./packages/modules/discovery/index.ts"],
+      "@brawltome/queue": ["./packages/modules/queue/index.ts"],
       "@brawltome/ranking": ["./packages/modules/ranking/index.ts"],
       "@brawltome/request-admission": ["./packages/modules/request-admission/index.ts"],
-      "@brawltome/refresh-operations": ["./packages/modules/refresh-operations/index.ts"],
       "@brawltome/replay-analysis": ["./packages/modules/replay-analysis/index.ts"]
     }
   },

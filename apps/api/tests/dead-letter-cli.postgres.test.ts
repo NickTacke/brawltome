@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountsModule, proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { rankingModule } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
   type OperationLease,
   proofContract,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+  queueModule,
+} from '@brawltome/queue'
+import { rankingModule } from '@brawltome/ranking'
 import { createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { createTestJobs } from './fixtures/queue'
@@ -51,7 +51,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'dead_letter_cli',
-    modules: [refreshOperationsModule, accountsModule, rankingModule, statisticsModule],
+    modules: [queueModule, accountsModule, rankingModule, statisticsModule],
   })
 
   connectionString = database.connectionString

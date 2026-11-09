@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { Database } from '@brawltome/foundation'
-import { type AdmissionConfig, createPostgresRefreshOperations } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, createPostgresRefreshOperations } from '@brawltome/queue'
 
 test('claim names the problem on a queue built without jobs', async () => {
   const database = { sql: {} } as unknown as Database

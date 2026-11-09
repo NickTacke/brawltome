@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createPostgresLeaderboardPlayerNames, createPostgresPlayerNameVerifications, playerModule } from '../index'
 
@@ -21,7 +21,7 @@ const ids = async (input: Partial<typeof policy> & { demandIds?: number[] } = {}
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'player_name_verification',
-    modules: [refreshOperationsModule, playerModule],
+    modules: [queueModule, playerModule],
   })
 
   connectionString = database.connectionString

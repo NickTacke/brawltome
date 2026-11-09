@@ -5,9 +5,9 @@ import {
   createPostgresRefreshOperations,
   interactiveRefreshMaxAttempts,
   proofContract,
-  refreshOperationsModule,
+  queueModule,
   reserveForAdmission,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { clanModule } from '../../index'
 import { clanRefreshContract } from '../../jobs/clan-refresh-contract'
 import {
@@ -23,7 +23,7 @@ let queue: ReturnType<typeof createPostgresRefreshOperations>
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'clan_refresh_reservation',
-    modules: [refreshOperationsModule, clanModule],
+    modules: [queueModule, clanModule],
   })
 
   queue = createPostgresRefreshOperations({ database }, { jobs: [clanRefreshContract, proofContract] })

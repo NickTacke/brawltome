@@ -45,7 +45,7 @@ COPY packages/modules/player/package.json packages/modules/player/
 COPY packages/modules/clan/package.json packages/modules/clan/
 COPY packages/modules/ranking/package.json packages/modules/ranking/
 COPY packages/modules/request-admission/package.json packages/modules/request-admission/
-COPY packages/modules/refresh-operations/package.json packages/modules/refresh-operations/
+COPY packages/modules/queue/package.json packages/modules/queue/
 COPY packages/modules/replay-analysis/package.json packages/modules/replay-analysis/
 COPY packages/modules/statistics/package.json packages/modules/statistics/
 COPY packages/modules/discovery/package.json packages/modules/discovery/

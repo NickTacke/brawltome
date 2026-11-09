@@ -12,7 +12,7 @@
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
     "@brawltome/game-data": "workspace:*",
-    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/queue": "workspace:*",
     "@brawltome/telemetry": "workspace:*",
     "drizzle-orm": "0.45.4"
   },

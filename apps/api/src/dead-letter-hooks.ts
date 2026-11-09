@@ -1,8 +1,8 @@
 import { accountsDeadLetterHooks } from '@brawltome/accounts/dead-letter-hooks'
 import { clanDeadLetterHooks } from '@brawltome/clan/dead-letter-hooks'
 import { playerDeadLetterHooks } from '@brawltome/player/dead-letter-hooks'
+import type { DeadLetterHooks } from '@brawltome/queue'
 import { rankingDeadLetterHooks } from '@brawltome/ranking/dead-letter-hooks'
-import type { DeadLetterHooks } from '@brawltome/refresh-operations'
 import { statisticsDeadLetterHooks } from '@brawltome/statistics/dead-letter-hooks'
 
 // each owner's narrow entry, not its package root: the operator CLI must not load the API server's dependencies

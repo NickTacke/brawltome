@@ -1,5 +1,5 @@
 import type { Sql } from '@brawltome/foundation'
-import type { ReconcileObservationWatermark } from '@brawltome/refresh-operations'
+import type { ReconcileObservationWatermark } from '@brawltome/queue'
 
 // one row: the snapshot time primary monitoring was last reconciled against, so a slow replica can't undo a newer one
 export const primaryMonitoringWatermark: ReconcileObservationWatermark = {

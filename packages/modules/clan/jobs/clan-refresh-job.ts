@@ -8,7 +8,7 @@ import {
   runSections,
   type SectionRun,
   type SourceAdmitter,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { PostgresClans } from '../db/postgres-clans'
 import type { ClanRefreshEffect } from '../domain/refresh-effect'
 import type { ClanRefreshSection } from '../domain/refresh-section'

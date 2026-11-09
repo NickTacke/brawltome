@@ -73,6 +73,6 @@ const migrations = [
 
 export const accountsModule = {
   name: 'accounts',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule

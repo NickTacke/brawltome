@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@brawltome/foundation": "workspace:*",
-    "@brawltome/refresh-operations": "workspace:*",
+    "@brawltome/queue": "workspace:*",
     "postgres": "^3.4.0"
   },
   "devDependencies": {

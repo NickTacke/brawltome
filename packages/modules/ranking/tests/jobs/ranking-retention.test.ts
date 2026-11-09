@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Lease, OperationFailure, QueueWorker } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { Lease, OperationFailure, QueueWorker } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import { createRankingRetentionJob } from '../../jobs/ranking-retention-job'
 import type { RankingRetentionStore } from '../../retention'

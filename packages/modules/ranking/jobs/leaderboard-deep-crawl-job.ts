@@ -7,7 +7,7 @@ import {
   type LeaderboardDeepCrawlPayload,
   type Lease,
   type RetryTimings,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { Telemetry } from '@brawltome/telemetry'
 import {
   type LeaderboardDeepCrawlStanding,

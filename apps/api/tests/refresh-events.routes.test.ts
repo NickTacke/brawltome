@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { PlayerRefreshSettled } from '@brawltome/refresh-operations'
+import type { PlayerRefreshSettled } from '@brawltome/queue'
 import { createTelemetry, renderPrometheus } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'

@@ -1,4 +1,4 @@
-import type { Lease, OperationFailure, RenewResult, TransitionResult } from '@brawltome/refresh-operations'
+import type { Lease, OperationFailure, RenewResult, TransitionResult } from '@brawltome/queue'
 
 export function statisticsLease(kind: string, payload: unknown): Lease<unknown> {
   return {

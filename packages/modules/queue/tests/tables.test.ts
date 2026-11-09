@@ -3,7 +3,7 @@ import { createTestDatabase, expectTablesMatchDatabase, type TestDatabase } from
 import { is } from 'drizzle-orm'
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core'
 import * as refreshOperationsTables from '../db/tables'
-import { refreshOperationsModule } from '../index'
+import { queueModule } from '../index'
 
 // a queue-only test database keeps these here; only the owners' migrations move them
 const movedToOwnerModules = [
@@ -23,7 +23,7 @@ const tables = Object.values(refreshOperationsTables).flatMap((value) => (is(val
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_tables', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_tables', modules: [queueModule] })
 }, 20_000)
 
 afterAll(async () => {

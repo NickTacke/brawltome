@@ -1,4 +1,4 @@
-import { hasOnlyFields, type JobContract, readPayloadObject } from '@brawltome/refresh-operations'
+import { hasOnlyFields, type JobContract, readPayloadObject } from '@brawltome/queue'
 import type { ProjectionOwner } from '../model'
 
 export type ReconciliationPayload = { owner: ProjectionOwner }

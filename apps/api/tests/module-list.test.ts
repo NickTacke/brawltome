@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { accountsModule } from '@brawltome/accounts'
 import { clanModule } from '@brawltome/clan'
 import { type BrawltomeModule, checkModuleList, type Database, type ModuleRuntime } from '@brawltome/foundation'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { queueModule } from '@brawltome/queue'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { createTelemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
@@ -32,8 +32,8 @@ describe('module lists', () => {
   })
 
   test('leaving out a module others depend on names a dependant', () => {
-    expect(() => checkModuleList(without(apiModules, refreshOperationsModule))).toThrow(
-      'module accounts depends on refresh-operations, which is not loaded',
+    expect(() => checkModuleList(without(apiModules, queueModule))).toThrow(
+      'module accounts depends on queue, which is not loaded',
     )
 
     expect(() => checkModuleList(without(apiModules, accountsModule))).toThrow(

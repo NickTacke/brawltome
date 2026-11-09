@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createPostgresLeaderboardPlayerNames, createPostgresPlayerDiscoverySource, playerModule } from '../index'
 
@@ -10,7 +10,7 @@ let connectionString = ''
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'player_leaderboard_names',
-    modules: [refreshOperationsModule, playerModule],
+    modules: [queueModule, playerModule],
   })
 
   connectionString = database.connectionString

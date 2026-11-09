@@ -7,8 +7,8 @@ import {
   createPostgresRefreshOperations,
   type DeadLetterOperations,
   type OperationLease,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+  queueModule,
+} from '@brawltome/queue'
 import {
   statisticsCollectionContract,
   statisticsLegendMetaPublicationContract,
@@ -50,7 +50,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'statistics_dead_letters',
-    modules: [refreshOperationsModule, statisticsModule],
+    modules: [queueModule, statisticsModule],
   })
 
   deadLetters = createPostgresDeadLetterOperations(database, statisticsDeadLetterHooks)

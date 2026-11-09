@@ -1,4 +1,4 @@
-import type { RefreshOperationWorker } from '@brawltome/refresh-operations'
+import type { RefreshOperationWorker } from '@brawltome/queue'
 import type { ActorAdmission } from '@brawltome/request-admission'
 
 // activates player and clan refreshes whose actor reservation has come through, across both owners' kinds

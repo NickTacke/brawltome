@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proofEffectState } from '@brawltome/accounts'
-import { type JobDefinition, type Lease, workClasses } from '@brawltome/refresh-operations'
+import { type JobDefinition, type Lease, workClasses } from '@brawltome/queue'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createStatisticsJobs,

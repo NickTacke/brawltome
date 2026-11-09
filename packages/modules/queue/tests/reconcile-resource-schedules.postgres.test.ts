@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type ResourceSchedule,
-  reconcileResourceSchedules,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
-import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
+import { queueModule, type ResourceSchedule, reconcileResourceSchedules } from '@brawltome/queue'
+import { createPassthroughJobContract } from '@brawltome/queue/testing'
 import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
@@ -17,7 +13,7 @@ const firstDueAt = '2026-08-10T00:00:00.000Z'
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'refresh_operations_resource_schedules',
-    modules: [refreshOperationsModule],
+    modules: [queueModule],
   })
 })
 

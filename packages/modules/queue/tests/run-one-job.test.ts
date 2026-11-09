@@ -9,11 +9,11 @@ import {
   type FailureDecision,
   type JobDefinition,
   type Lease,
-  refreshOperationsModule,
+  queueModule,
   runOneJob,
   type WorkClass,
-} from '@brawltome/refresh-operations'
-import { runJobOnce, testJobContract } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { runJobOnce, testJobContract } from '@brawltome/queue/testing'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 4,
@@ -79,7 +79,7 @@ function createSourceAdmissionSpy() {
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_run_one_job', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_run_one_job', modules: [queueModule] })
 })
 
 afterAll(async () => {

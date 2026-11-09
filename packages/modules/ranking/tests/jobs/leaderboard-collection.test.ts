@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { OperationFailure, OperationLease } from '@brawltome/refresh-operations'
+import type { OperationFailure, OperationLease } from '@brawltome/queue'
 import { createTelemetry } from '@brawltome/telemetry'
 import type { LeaderboardPlayerStanding } from '../../jobs/player-propagation'
 import { LeaderboardSourceError } from '../../v1-leaderboard-source'

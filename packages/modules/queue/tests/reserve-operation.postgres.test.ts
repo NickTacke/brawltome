@@ -8,17 +8,17 @@ import {
   findActiveOperation,
   listAwaiting,
   promotePendingWorkClass,
-  refreshOperationsModule,
+  queueModule,
   rejectReserved,
   reserveForAdmission,
   reserveForBinding,
-} from '@brawltome/refresh-operations'
-import { createPassthroughJobContract, testJobContract } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { createPassthroughJobContract, testJobContract } from '@brawltome/queue/testing'
 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_reserve', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_reserve', modules: [queueModule] })
 })
 
 afterAll(async () => {

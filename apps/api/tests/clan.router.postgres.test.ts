@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { clanModule, createPostgresClans } from '@brawltome/clan'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { queueModule } from '@brawltome/queue'
 import { createClanRouter } from '../src/router/clan.router'
 import type { Context } from '../src/trpc/context'
 import { createDiscordBotProcedure, createInternalProcedure } from '../src/trpc/trpc'
@@ -35,7 +35,7 @@ const profileStaleClan = plainClan(204, 'Profile Stale', justStaleAt, boundaryAt
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_router', modules: [refreshOperationsModule, clanModule] })
+  database = await createTestDatabase({ label: 'clan_router', modules: [queueModule, clanModule] })
 
   const scenarios = [
     completeClan,

@@ -3,7 +3,7 @@ import {
   type ReconcileResourceSchedulesResult,
   type ResourceSchedule,
   reconcileResourceSchedules,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { primaryMonitoringWatermark } from '../db/primary-monitoring-watermark'
 import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 

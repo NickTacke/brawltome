@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Lease, OperationFailure, QueueWorker, SourceAdmissionPort } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { Lease, OperationFailure, QueueWorker, SourceAdmissionPort } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import type { ClanRefreshEffect } from '../../domain/refresh-effect'
 import type { ClanRefreshPayload } from '../../jobs/clan-refresh-contract'

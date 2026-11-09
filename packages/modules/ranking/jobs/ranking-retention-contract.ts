@@ -3,7 +3,7 @@ import {
   type RankingRetentionPayload,
   readPayloadObject,
   validateRankingRetentionPayload,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 
 function parseRankingRetentionPayload(value: unknown): RankingRetentionPayload {
   const payload = readPayloadObject(value, 'ranking retention') as RankingRetentionPayload
