@@ -30,6 +30,7 @@ import {
 } from './auth/refresh-trust-cookie'
 import { createAuthRoutes } from './auth/routes'
 import { verifyTurnstileResult } from './auth/turnstile'
+import { isBotUserAgent } from './bot-user-agent'
 import { readClientIp, requestWithVerifiedClientIp } from './client-ip'
 import { createApiDatabase } from './database-pools'
 import { createHealthRoutes } from './health-routes'
@@ -214,11 +215,7 @@ app.use(
     createContext: async (_opts, c) => {
       const clientIp = readClientIp(c.req.raw.headers)
       const ua = c.req.header('x-original-ua') ?? c.req.header('user-agent') ?? ''
-
-      const isBot =
-        /bot|crawl|spider|slurp|facebookexternalhit|meta-webindexer|bingpreview|yandex|baidu|duckduckbot|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider/i.test(
-          ua,
-        )
+      const isBot = isBotUserAgent(ua)
 
       const internalSecret = c.req.header('x-internal-secret') ?? undefined
       const discordInternalSecret = c.req.header('x-discord-internal-secret') ?? undefined
