@@ -11,6 +11,9 @@ type FilterSelectProps = {
   options: readonly FilterOption[]
   isLabelHidden?: boolean
   isIconOnly?: boolean
+  // shown when no option matches value
+  placeholder?: string
+  footer?: ReactNode
   onChange: (value: string) => void
 }
 
@@ -59,7 +62,16 @@ function OptionButton({ option, isSelected, isIconOnly, onSelect, onKeyDown }: O
   )
 }
 
-export function FilterSelect({ label, value, options, isLabelHidden, isIconOnly, onChange }: FilterSelectProps) {
+export function FilterSelect({
+  label,
+  value,
+  options,
+  isLabelHidden,
+  isIconOnly,
+  placeholder,
+  footer,
+  onChange,
+}: FilterSelectProps) {
   const { isOpen, rootRef, panelRef, triggerRef, toggle, handleKeyDown, select } = useFilterSelect(
     isIconOnly ? iconGridColumns : 1,
     onChange,
@@ -77,7 +89,7 @@ export function FilterSelect({ label, value, options, isLabelHidden, isIconOnly,
         ref={triggerRef}
         type="button"
         title={isIconOnly ? selected?.label : undefined}
-        aria-label={`${label}: ${selected?.label ?? value}`}
+        aria-label={`${label}: ${selected?.label ?? placeholder ?? value}`}
         aria-expanded={isOpen}
         onPointerDown={dropFocusBeforePress}
         onClick={toggle}
@@ -86,7 +98,7 @@ export function FilterSelect({ label, value, options, isLabelHidden, isIconOnly,
       >
         <span className="flex items-center gap-2">
           {selected?.flag}
-          {!isIconOnly && selected?.label}
+          {!isIconOnly && (selected?.label ?? placeholder)}
         </span>
         <ChevronDown className={`size-4 opacity-70 transition-transform ${chevronPosition}`} aria-hidden="true" />
       </button>
@@ -105,6 +117,12 @@ export function FilterSelect({ label, value, options, isLabelHidden, isIconOnly,
               onKeyDown={handleKeyDown}
             />
           ))}
+          {footer && (
+            // arrow keys go on working if focus reaches a control in here
+            <div role="none" onKeyDown={handleKeyDown} className="mt-1 border-t border-line/60 pt-1">
+              {footer}
+            </div>
+          )}
         </div>
       )}
     </div>
