@@ -38,6 +38,7 @@ import { apiModules } from './modules'
 import { createOrpcRoutes } from './orpc/mount'
 import { createOrpcRouter } from './orpc/router'
 import { createVisitorRefreshProcedures } from './orpc/visitor-refresh'
+import { createVisitorViewProcedures } from './orpc/visitor-views'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
@@ -155,7 +156,8 @@ const sharedCtx = {
 }
 
 const visitorRefresh = createVisitorRefreshProcedures({ ...sharedCtx, refreshTrustSecret })
-const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, { refresh: visitorRefresh })
+const visitorViews = createVisitorViewProcedures({ requestAdmission, profileViews })
+const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, { refresh: visitorRefresh, views: visitorViews })
 
 const app = new Hono()
 
