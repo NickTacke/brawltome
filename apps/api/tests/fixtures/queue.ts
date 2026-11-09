@@ -59,6 +59,8 @@ export const idleClanWeeklySnapshotDependencies: WorkerClanDependencies['weeklyS
   sliceGuilds: 100,
   guildDelayMs: 0,
   waitBetweenGuilds: async () => {},
+  waitBeforeGuildRetry: async () => {},
+  retryTimings: { retryDelayMs: 0, sourceUnavailableRetryMs: 0 },
   telemetry: idleTelemetry,
 }
 

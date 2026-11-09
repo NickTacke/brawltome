@@ -73,7 +73,13 @@ export type WorkerClanDependencies = {
   createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
   weeklySnapshot: Pick<
     ClanWeeklySnapshotJobDependencies,
-    'snapshots' | 'sliceGuilds' | 'guildDelayMs' | 'waitBetweenGuilds' | 'telemetry'
+    | 'snapshots'
+    | 'sliceGuilds'
+    | 'guildDelayMs'
+    | 'waitBetweenGuilds'
+    | 'waitBeforeGuildRetry'
+    | 'retryTimings'
+    | 'telemetry'
   >
 }
 

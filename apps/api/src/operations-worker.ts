@@ -223,6 +223,11 @@ const workerJobs = createWorkerJobs({
       sliceGuilds: defaultClanWeeklySnapshotSliceGuilds,
       guildDelayMs: clanWeeklySnapshotGuildDelayMs,
       waitBetweenGuilds: waitForRenewal,
+      waitBeforeGuildRetry: waitForRenewal,
+      retryTimings: {
+        retryDelayMs: workerConfig.retryDelayMs,
+        sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
+      },
       telemetry,
     },
   },
