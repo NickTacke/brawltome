@@ -3,6 +3,7 @@ import {
   type ClanProfileContract,
   clanProfileSchema,
   clanRefreshResponseSchema,
+  clanStandingSchema,
   playerClanMembershipSchema,
 } from '../src/clan'
 
@@ -70,5 +71,22 @@ describe('canonical Clan contract', () => {
       clanId: 77,
       clanName: 'Exact',
     })
+  })
+})
+
+describe('clan standing contract', () => {
+  test('accepts two ranks, or null for a rank the clan has no value for', () => {
+    expect(clanStandingSchema.parse({ guildPointsRank: 3, lifetimeXpRank: 1 })).toEqual({
+      guildPointsRank: 3,
+      lifetimeXpRank: 1,
+    })
+
+    expect(clanStandingSchema.parse({ guildPointsRank: null, lifetimeXpRank: 1 }).guildPointsRank).toBeNull()
+  })
+
+  test('rejects a rank below 1, a fractional rank and an unknown field', () => {
+    expect(() => clanStandingSchema.parse({ guildPointsRank: 0, lifetimeXpRank: 1 })).toThrow()
+    expect(() => clanStandingSchema.parse({ guildPointsRank: 1.5, lifetimeXpRank: 1 })).toThrow()
+    expect(() => clanStandingSchema.parse({ guildPointsRank: 1, lifetimeXpRank: 1, extra: true })).toThrow()
   })
 })

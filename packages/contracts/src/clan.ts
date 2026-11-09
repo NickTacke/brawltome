@@ -57,6 +57,9 @@ export const nullableClanProfileSchema = clanProfileSchema.nullable()
 export const playerClanMembershipSchema = z
   .object({ clanId: clanIdSchema, clanName: z.string().min(1).max(256) })
   .strict()
+const clanRankSchema = z.number().int().positive().nullable()
+
+export const clanStandingSchema = z.object({ guildPointsRank: clanRankSchema, lifetimeXpRank: clanRankSchema }).strict()
 export const clanByIdInputSchema = z.object({ id: clanIdSchema }).strict()
 export const clanRefreshInputSchema = z
   .object({
@@ -76,6 +79,7 @@ export const clanRefreshResponseSchema = z
   .meta({ id: 'ClanRefreshResponse' })
 
 export type ClanProfileContract = z.infer<typeof clanProfileSchema>
+export type ClanStandingContract = z.infer<typeof clanStandingSchema>
 export type ClanRefreshInputContract = z.infer<typeof clanRefreshInputSchema>
 export type DiscordClanRefreshInputContract = z.infer<typeof discordClanRefreshInputSchema>
 export type ClanRefreshResponseContract = z.infer<typeof clanRefreshResponseSchema>
