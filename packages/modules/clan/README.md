@@ -34,6 +34,7 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
   does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it. `clan-refresh-job.ts` is the queue
   job that runs it, section by section. `clan-refresh-reservation.ts` reserves and activates the queue operation.
+  `clan-weekly-snapshot-job.ts` is the weekly snapshot job, and `clan-weekly-snapshot-schedule.ts` keeps its schedule.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
 ## Public surface
@@ -46,6 +47,8 @@ Everything other packages may import is exported from `index.ts`, and only what 
 - `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
 - `createPostgresClanDiscoverySource`, for the operations worker
 - `createClanRefreshJob`, for the operations worker's job list
+- `createClanWeeklySnapshotJob`, `createPostgresWeeklySnapshots` and `reconcileClanWeeklySnapshotSchedule`, for the
+  operations worker, and `clanWeeklySnapshotContract`, for the API's contract tests
 - `createClanRefreshReservations`, for the tRPC clan refresh, and `reserveClanRefresh`, for the API's queue tests
 - the `ClanProvenance` type, for the API's test fixtures
 
@@ -79,3 +82,19 @@ job from `jobs/clan-refresh-job.ts`.
    retryable failure is also thrown back to the worker, which retries it.
 4. Triggers write the change to `discovery_outbox`, and the worker delivers it through
    `createPostgresClanDiscoverySource`.
+
+## Weekly snapshot
+
+The `clan-weekly-snapshot` job runs once a week in the maintenance work class. It fetches every stored clan's guild
+stats from V1, in clan id order with a pause between calls, and does two things with each answer:
+
+1. publishes the profile the same way a refresh does, so guild points and lifetime xp stay fresh for every clan
+2. saves the clan's guild points in `weekly_snapshots`, under the day the schedule window came due
+
+The run row in `weekly_snapshot_runs` remembers the last clan, so a yield, a failed attempt or a lost lease carries on
+after it. The job yields its slot after each slice of 100 clans. A clan the source answers with a 404, or with stats
+that don't parse, is skipped for that week. Once every clan is done the week gets a `completed_at`.
+
+Last week is the difference between the two most recent completed weeks that are exactly seven days apart, so the
+first figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a
+week of earned points.

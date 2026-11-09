@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { primaryPlayerVerificationContract } from '@brawltome/accounts'
-import { clanRefreshContract } from '@brawltome/clan'
+import { clanRefreshContract, clanWeeklySnapshotContract } from '@brawltome/clan'
 import {
   clanDiscoveryProjectionContract,
   discoveryReconciliationContract,
@@ -91,6 +91,15 @@ const cases: { job: JobContract<unknown>; accepted: Sample[]; rejected: Sample[]
       { name: 'player section', workClass: 'interactive', payload: { clanId: 1, staleSections: ['ranked'] } },
       { name: 'string id', workClass: 'interactive', payload: { clanId: '1', staleSections: ['profile'] } },
       { name: 'other work class', workClass: 'maintenance', payload: { clanId: 1, staleSections: ['profile'] } },
+    ],
+  },
+  {
+    job: clanWeeklySnapshotContract,
+    accepted: [{ name: 'an empty payload', workClass: 'maintenance', payload: {} }],
+    rejected: [
+      { name: 'extra field', workClass: 'maintenance', payload: { clanId: 1 } },
+      { name: 'other work class', workClass: 'leaderboard', payload: {} },
+      { name: 'no payload', workClass: 'maintenance', payload: null },
     ],
   },
   {
