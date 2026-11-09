@@ -279,9 +279,11 @@ describe('observability deployment contract', () => {
     expect(alertmanager).toContain('group_interval: 5m')
     expect(alertmanager).toContain('repeat_interval: 12h')
     expect(alertmanager).not.toContain(`Labels.${legacyDimension}`)
+
     expect(rules).toContain(
       'refresh_failures_total{failure_category!~"admission_deferred|source_unavailable",kind!~"statistics-(ranked|lifetime)-collection"}',
     )
+
     expect(rules).toContain('schedule_lateness_ms{kind!="leaderboard-deep-crawl"}')
     expect(read('prometheus', 'prometheus.yml')).toContain('/run/secrets/metrics_scrape_secret')
     expect(read('prometheus', 'prometheus.yml')).not.toContain('internal_api_secret')
