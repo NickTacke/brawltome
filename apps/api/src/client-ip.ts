@@ -1,4 +1,5 @@
 import { BlockList, isIP } from 'node:net'
+import { internalSecretValid } from './auth/internal-secret'
 
 // Bun reports IPv4 peers on a dual-stack socket as IPv4-mapped IPv6 (`::ffff:10.0.5.114`).
 function withoutIpv4MappedPrefix(address: string): string {
@@ -66,22 +67,44 @@ function validIp(value: string | null | undefined): string | null {
   return trimmed && isIP(trimmed) ? trimmed : null
 }
 
-export function requestWithVerifiedClientIp(request: Request, peerAddress: string): Request {
-  let clientIp = peerAddress
+// through Traefik, only a Cloudflare edge may name the visitor; anyone reaching the ingress directly is charged to
+// their own address
+function visitorBehindIngress(ingressPeer: string, cloudflareVisitor: string | null): string {
+  return cloudflareAddress(ingressPeer) && cloudflareVisitor ? cloudflareVisitor : ingressPeer
+}
 
-  if (trustedProxyAddress(peerAddress)) {
-    const cloudflareVisitor = validIp(request.headers.get('cf-connecting-ip'))
-    // Traefik replaces X-Real-Ip with the address that connected to it, so a client cannot forge it. Through Traefik,
-    // only a Cloudflare edge may name the visitor; anyone reaching the origin directly is charged to their own address.
-    const ingressPeer = validIp(request.headers.get('x-real-ip'))
+// the site calls the api for its visitors, so it forwards the ingress evidence of its own request under its own names;
+// only a caller holding the internal secret may name a visitor this way
+function visitorForwardedByInternalCaller(headers: Headers, internalSecret: string | undefined): string | null {
+  if (!internalSecretValid(headers.get('x-internal-secret') ?? undefined, internalSecret)) return null
 
-    if (ingressPeer) {
-      clientIp = cloudflareAddress(ingressPeer) && cloudflareVisitor ? cloudflareVisitor : ingressPeer
-    } else {
-      // Internal callers such as the web server forward the visitor they are acting for.
-      clientIp = cloudflareVisitor ?? validIp(request.headers.get('x-forwarded-for')?.split(',')[0]) ?? peerAddress
-    }
-  }
+  const ingressPeer = validIp(headers.get('x-visitor-real-ip'))
+
+  if (!ingressPeer) return null
+
+  return visitorBehindIngress(ingressPeer, validIp(headers.get('x-visitor-cf-connecting-ip')))
+}
+
+function clientIpFromProxy(headers: Headers, peerAddress: string): string {
+  if (!trustedProxyAddress(peerAddress)) return peerAddress
+
+  const cloudflareVisitor = validIp(headers.get('cf-connecting-ip'))
+  // Traefik replaces X-Real-Ip with the address that connected to it, so a client cannot forge it
+  const ingressPeer = validIp(headers.get('x-real-ip'))
+
+  if (ingressPeer) return visitorBehindIngress(ingressPeer, cloudflareVisitor)
+
+  // internal callers such as the web server forward the visitor they are acting for
+  return cloudflareVisitor ?? validIp(headers.get('x-forwarded-for')?.split(',')[0]) ?? peerAddress
+}
+
+export function requestWithVerifiedClientIp(
+  request: Request,
+  peerAddress: string,
+  internalSecret: string | undefined,
+): Request {
+  const clientIp =
+    visitorForwardedByInternalCaller(request.headers, internalSecret) ?? clientIpFromProxy(request.headers, peerAddress)
 
   const headers = new Headers(request.headers)
 

@@ -305,6 +305,7 @@ const instrumentedFetch = instrumentHttpHandler(
     const verifiedRequest = requestWithVerifiedClientIp(
       request,
       server.current?.requestIP(request)?.address ?? '0.0.0.0',
+      process.env.INTERNAL_API_SECRET,
     )
 
     let pathname: string
