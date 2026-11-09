@@ -265,6 +265,7 @@ describe('clan weekly snapshot job', () => {
 
     expect(await runJobOnce(queue, job, { sourceAdmission: admitting, retryDelayMs: 0 })).toBe('succeeded')
     expect(sourceCalls).toEqual([401, 402, 402])
+
     expect(await readSnapshots(week)).toEqual([
       { clanId: 401, guildPoints: '4' },
       { clanId: 402, guildPoints: '77' },
