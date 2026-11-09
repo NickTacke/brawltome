@@ -18,7 +18,9 @@ const page: PlayerPage = {
 
 const getPlayer = mock(async (): Promise<PlayerPage | null> => page)
 
-mock.module('../src/server/players', () => ({ getPlayer, getIsUnarmedExcluded: async () => true }))
+const refreshPlayer = mock(async () => ({ kind: 'fresh' }))
+
+mock.module('../src/server/players', () => ({ getPlayer, getIsUnarmedExcluded: async () => true, refreshPlayer }))
 
 type RouteOptions = {
   loader: (context: { params: { id: string } }) => Promise<unknown>
@@ -71,6 +73,16 @@ describe('player route', () => {
 
     expect(await failureOf('7')).toBe(failure)
     expect(options.errorComponent).toBeDefined()
+  })
+
+  // the refresh starts from the page on screen, so a prefetch or a crawler reading the html never asks for one
+  test('loading the page never asks for a refresh', async () => {
+    const stalePage = { ...page, player: { ...page.player, currentSeason: null } }
+
+    getPlayer.mockImplementation(async () => stalePage)
+    await options.loader({ params: { id: '7' } })
+
+    expect(refreshPlayer).not.toHaveBeenCalled()
   })
 
   test('returns the page and the remembered unarmed choice', async () => {
