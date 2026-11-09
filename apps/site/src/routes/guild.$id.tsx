@@ -60,7 +60,7 @@ function GuildLoadError() {
 }
 
 function GuildPage() {
-  const { clan, standing, summaries, loadedAt } = Route.useLoaderData()
+  const { clan, standing, summaries, hasAllSummaries, loadedAt } = Route.useLoaderData()
   const members = rankMembers(clan.members, summaries)
   const record = rankedRecord(summaries, new Date(loadedAt))
 
@@ -70,7 +70,14 @@ function GuildPage() {
         <GuildHeader clan={clan} />
       </div>
       <aside className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:mt-9 xl:border-l xl:border-line/50 xl:pl-12">
-        <GuildOverview clan={clan} standing={standing} members={members} record={record} />
+        <GuildOverview
+          key={clan.clanId}
+          clan={clan}
+          standing={standing}
+          members={members}
+          record={record}
+          hasAllSummaries={hasAllSummaries}
+        />
       </aside>
       <div className="min-w-0 xl:col-start-1 xl:row-start-2 xl:mr-(--gutter) xl:border-t xl:border-line/50 xl:pt-4">
         <MemberTable key={clan.clanId} members={members} />

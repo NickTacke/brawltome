@@ -102,22 +102,21 @@ function RatingChart({ bands, average, onBandEnter, onChartLeave }: RatingChartP
   return (
     <div className="mt-6">
       <div className="relative h-14 border-b border-line/70">
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: hovering only adds a detail line to the summary */}
-        <div className="flex h-full gap-0.5" onMouseLeave={onChartLeave}>
+        <ul aria-label="Members by 1v1 elo" className="flex h-full gap-0.5" onMouseLeave={onChartLeave}>
           {bands.map((band) => (
-            // biome-ignore lint/a11y/noStaticElementInteractions: hovering only adds a detail line to the summary
-            <div
+            <li
               key={band.from}
               onMouseEnter={() => onBandEnter(band)}
               className="group flex h-full min-w-0 flex-1 items-end"
             >
+              {band.count > 0 && <span className="sr-only">{bandSummary(band)}</span>}
               <div
                 className={`w-full rounded-t-[3px] transition-colors duration-200 group-hover:bg-primary ${barColour(band)}`}
                 style={{ height: barHeight(band.count, tallest) }}
               />
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
         <div
           className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-strong ring-2 ring-ink"
           style={{ left: `${percentOf(average)}%` }}
@@ -142,9 +141,15 @@ function RatingChart({ bands, average, onBandEnter, onChartLeave }: RatingChartP
   )
 }
 
+// the last rows only show when the window is tall enough for the sticky column, and the new last row loses its line
+const rowHeightRules: Record<number, string> = {
+  3: '[@media(max-height:999px)]:border-b-0',
+  4: '[@media(max-height:999px)]:hidden',
+  5: '[@media(max-height:999px)]:hidden',
+}
+
 function LeaderboardRow({ member, place }: { member: RatedMember; place: number }) {
-  // the last rows only show when the window is tall enough for the sticky column
-  const heightRule = place > 3 ? '[@media(max-height:999px)]:hidden' : ''
+  const heightRule = rowHeightRules[place] ?? ''
 
   return (
     <li
