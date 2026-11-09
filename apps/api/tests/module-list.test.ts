@@ -47,7 +47,7 @@ describe('oRPC router built from a module list', () => {
     const router = createOrpcRouter(apiModules, runtime)
 
     expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'ranking', 'status'])
-    expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId', 'standingById'])
+    expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId', 'rankedList', 'standingById'])
 
     expect(Object.keys(router.player)).toEqual([
       'rankedSummaries',
