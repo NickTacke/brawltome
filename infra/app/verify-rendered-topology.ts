@@ -2,14 +2,24 @@
 
 import { posix } from 'node:path'
 
-const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web'] as const
+const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web', 'site'] as const
 const releaseCommitPattern = /^[0-9a-f]{40}$/
-const observabilityServices = new Set(['api', 'operations-worker', 'web'])
+
+const expectedServiceNetworks: Record<string, string[]> = {
+  api: ['application', 'observability'],
+  migration: ['application'],
+  'operations-worker': ['application', 'observability'],
+  postgres: ['application'],
+  // Dokploy only attaches its network to services with a Dokploy domain, and site is routed from compose instead
+  site: ['application', 'dokploy-network'],
+  web: ['application', 'observability'],
+}
 
 const expectedDependencies: Record<string, [service: string, condition: string]> = {
   api: ['migration', 'service_completed_successfully'],
   migration: ['postgres', 'service_healthy'],
   'operations-worker': ['migration', 'service_completed_successfully'],
+  site: ['api', 'service_healthy'],
   web: ['api', 'service_healthy'],
 }
 
@@ -19,6 +29,7 @@ const expectedHealthPaths: Record<string, string> = {
   'operations-worker': '/health/ready',
   // Liveness only: web readiness depends on the API and PostgreSQL, and an unhealthy container is dropped by the
   // proxy, which would take the whole site offline instead of rendering its error state during a database outage.
+  site: '/health/live',
   web: '/api/health/live',
 }
 
@@ -26,6 +37,7 @@ const expectedStopGracePeriods: Record<string, string> = {
   api: '1m10s',
   postgres: '30s',
   'operations-worker': '1m10s',
+  site: '20s',
   web: '20s',
 }
 
@@ -61,7 +73,29 @@ const expectedServiceSecrets: Record<string, string[]> = {
   migration: ['migration_database_url'],
   'operations-worker': ['brawlhalla_api_key', 'metrics_scrape_secret', 'otel_authorization', 'runtime_database_url'],
   postgres: ['postgres_owner_password', 'postgres_runtime_password'],
+  site: ['internal_api_secret'],
   web: ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
+}
+
+// the pages site has taken over from web. everything else on brawltome.app, including /, banners, legend portraits and
+// the favicon, falls through to Dokploy's plain Host rule for web. only the .svg weapon icons move, web serves its own
+// .png ones from the same directory. the silhouette and one renamed portrait only exist on site. `compose config` keeps the $$ escape, the container label gets a single $
+const siteRouterRule =
+  'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || ' +
+  'Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
+  'Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || ' +
+  'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
+
+const expectedSiteLabels: Record<string, string> = {
+  'traefik.docker.network': 'dokploy-network',
+  'traefik.enable': 'true',
+  'traefik.http.routers.brawltome-site.entrypoints': 'websecure',
+  // Dokploy's Host rule for web gets the default priority, its length, so any explicit value this high wins
+  'traefik.http.routers.brawltome-site.priority': '1000',
+  'traefik.http.routers.brawltome-site.rule': siteRouterRule,
+  'traefik.http.routers.brawltome-site.service': 'brawltome-site',
+  'traefik.http.routers.brawltome-site.tls.certresolver': 'letsencrypt',
+  'traefik.http.services.brawltome-site.loadbalancer.server.port': '3000',
 }
 
 export function verifyAppRenderedTopology(document: unknown): string[] {
@@ -73,7 +107,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
   const violations: string[] = []
 
   checkExactKeys(violations, 'services', services, [...expectedServices])
-  checkExactKeys(violations, 'networks', networks, ['application', 'observability'])
+  checkExactKeys(violations, 'networks', networks, ['application', 'dokploy-network', 'observability'])
   checkExactKeys(violations, 'secrets', secrets, Object.keys(expectedSecretFiles))
 
   const application = networks.application
@@ -88,6 +122,12 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     violations.push('observability must be external network brawltome-observability')
   }
 
+  const dokploy = networks['dokploy-network']
+
+  if (!isRecord(dokploy) || dokploy.external !== true || dokploy.name !== 'dokploy-network') {
+    violations.push('dokploy-network must be external network dokploy-network')
+  }
+
   for (const name of expectedServices) {
     const service = services[name]
 
@@ -96,9 +136,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
       continue
     }
 
-    const expectedNetworks = observabilityServices.has(name) ? ['application', 'observability'] : ['application']
-
-    if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), expectedNetworks)) {
+    if (!isRecord(service.networks) || !sameValues(Object.keys(service.networks), expectedServiceNetworks[name])) {
       violations.push(`${name} networks must match the approved topology`)
     }
 
@@ -106,11 +144,7 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
       violations.push(`${name} must not publish ports`)
     }
 
-    if (service.labels !== undefined && !isRecord(service.labels)) {
-      violations.push(`${name} labels must be an object`)
-    } else if (hasUnapprovedTraefikLabels(service.labels)) {
-      violations.push(`${name} must not have Traefik labels beyond retry and health checks`)
-    }
+    checkLabels(violations, name, service.labels)
 
     if (!sameSecretAttachments(service.secrets, expectedServiceSecrets[name])) {
       violations.push(`${name} secrets must match approved attachments exactly`)
@@ -195,11 +229,11 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
     }
   }
 
-  const web = services.web
+  for (const name of ['web', 'site']) {
+    const service = services[name]
 
-  if (isRecord(web)) {
-    if (readPath(web, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
-      violations.push('web must use the internal API origin for server calls')
+    if (isRecord(service) && readPath(service, 'environment', 'INTERNAL_API_URL') !== 'http://api:3000') {
+      violations.push(`${name} must use the internal API origin for server calls`)
     }
   }
 
@@ -244,6 +278,26 @@ function checkImageSource(violations: string[], name: string, service: Record<st
 
   if (!image.startsWith(imagePrefix) || !releaseCommitPattern.test(tag)) {
     violations.push(`${name} must use image ghcr.io/nicktacke/brawltome-${name} tagged with the release commit`)
+  }
+}
+
+function checkLabels(violations: string[], name: string, labels: unknown): void {
+  if (labels !== undefined && !isRecord(labels)) {
+    violations.push(`${name} labels must be an object`)
+
+    return
+  }
+
+  if (name === 'site') {
+    if (!isRecord(labels) || !sameLabels(labels, expectedSiteLabels)) {
+      violations.push('site labels must match the approved router exactly')
+    }
+
+    return
+  }
+
+  if (hasUnapprovedTraefikLabels(labels)) {
+    violations.push(`${name} must not have Traefik labels beyond retry and health checks`)
   }
 }
 
@@ -386,7 +440,7 @@ function hasBind(value: unknown, source: string, target: string): boolean {
   )
 }
 
-// Dokploy owns routing. Compose may only tune the routes Dokploy creates (retries and load balancer health checks for
+// Dokploy owns routing for every service but site. Compose may only tune the routes Dokploy creates (retries and load balancer health checks for
 // zero-downtime deploys); without traefik.enable or a rule these labels cannot expose anything.
 const approvedTraefikLabel =
   /^traefik\.http\.(?:middlewares\.[a-z0-9-]+\.retry\.[a-z]+|routers\.[a-z0-9-]+\.middlewares|services\.[a-z0-9-]+\.loadbalancer\.healthcheck\.[a-z]+)$/
@@ -420,6 +474,13 @@ function sameSecretAttachments(value: unknown, expected: string[]): boolean {
   const actual = value.map((item) => String(item.source))
 
   return sameValues(actual, expected) && value.every((item) => item.target === `/run/secrets/${String(item.source)}`)
+}
+
+function sameLabels(actual: Record<string, unknown>, expected: Record<string, string>): boolean {
+  return (
+    sameValues(Object.keys(actual), Object.keys(expected)) &&
+    Object.entries(expected).every(([key, value]) => actual[key] === value)
+  )
 }
 
 function sameValues(left: string[], right: string[]): boolean {

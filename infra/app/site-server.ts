@@ -2,13 +2,15 @@
 // and answer for the files in dist/client.
 import { join, resolve } from 'node:path'
 
-type StartServer = { fetch: (request: Request) => Response | Promise<Response> }
+type SiteFetch = (request: Request) => Response | Promise<Response>
+type StartServer = { fetch: SiteFetch }
 
 const siteRoot = resolve(import.meta.dir, '../../apps/site/dist')
 const clientRoot = join(siteRoot, 'client')
 const immutableCacheControl = 'public, max-age=31536000, immutable'
 // above the 10 second api timeout, or bun's default of 10 drops the connection before the error page is sent
 const idleTimeoutSeconds = 30
+const livenessPath = '/health/live'
 
 function readPort(): number {
   const port = Number(process.env.PORT)
@@ -44,23 +46,38 @@ function serveStaticFile(staticFiles: Map<string, string>, request: Request): Re
   return new Response(Bun.file(filePath), { headers })
 }
 
-const port = readPort()
-const staticFiles = listStaticFiles()
-const startServer: StartServer = (await import(join(siteRoot, 'server/server.js'))).default
+// liveness only, so an api outage shows the error page instead of the container dropping out of routing
+function answerLiveness(request: Request): Response | undefined {
+  if (new URL(request.url).pathname !== livenessPath) return undefined
 
-const server = Bun.serve({
-  hostname: '0.0.0.0',
-  port,
-  idleTimeout: idleTimeoutSeconds,
-  fetch: (request) => serveStaticFile(staticFiles, request) ?? startServer.fetch(request),
-})
-
-console.log(`site listening on port ${server.port}`)
-
-// as pid 1 the process ignores SIGTERM unless it handles it
-function stop() {
-  void server.stop().then(() => process.exit(0))
+  return new Response('ok', { headers: { 'cache-control': 'no-store' } })
 }
 
-process.on('SIGTERM', stop)
-process.on('SIGINT', stop)
+export function createSiteFetch(staticFiles: Map<string, string>, startServer: StartServer): SiteFetch {
+  return (request) => answerLiveness(request) ?? serveStaticFile(staticFiles, request) ?? startServer.fetch(request)
+}
+
+async function start(): Promise<void> {
+  const port = readPort()
+  const staticFiles = listStaticFiles()
+  const startServer: StartServer = (await import(join(siteRoot, 'server/server.js'))).default
+
+  const server = Bun.serve({
+    hostname: '0.0.0.0',
+    port,
+    idleTimeout: idleTimeoutSeconds,
+    fetch: createSiteFetch(staticFiles, startServer),
+  })
+
+  console.log(`site listening on port ${server.port}`)
+
+  // as pid 1 the process ignores SIGTERM unless it handles it
+  const stop = () => {
+    void server.stop().then(() => process.exit(0))
+  }
+
+  process.on('SIGTERM', stop)
+  process.on('SIGINT', stop)
+}
+
+if (import.meta.main) await start()
