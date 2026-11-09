@@ -8,8 +8,8 @@ const root = resolve(import.meta.dir, '../../..')
 const deployScript = resolve(root, 'infra/app/deploy.sh')
 const dockerStub = resolve(import.meta.dir, 'fixtures/docker-stub.ts')
 const project = 'brawltome-test'
-const services = ['postgres', 'migration', 'api', 'web', 'operations-worker']
-const appServices = ['api', 'web', 'operations-worker']
+const services = ['postgres', 'migration', 'api', 'site', 'web', 'operations-worker']
+const appServices = ['api', 'site', 'web', 'operations-worker']
 const releaseSha = 'a'.repeat(40)
 const temporaryDirectories: string[] = []
 
@@ -29,7 +29,14 @@ function writeCheckout(directory: string, sha: string) {
   writeFileSync(join(directory, '.git', 'packed-refs'), `# pack-refs\n${sha} refs/heads/master\n`)
 }
 
-function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?: Record<string, string> } = {}) {
+type DeployOptions = {
+  firstDeploy?: boolean
+  /** App services this release adds, so nothing runs them before the deploy. */
+  newServices?: string[]
+  env?: Record<string, string>
+}
+
+function deploy({ firstDeploy = false, newServices = [], env = {} }: DeployOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'brawltome-deploy-'))
 
   temporaryDirectories.push(directory)
@@ -42,7 +49,8 @@ function deploy({ firstDeploy = false, env = {} }: { firstDeploy?: boolean; env?
   writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec '${process.execPath}' '${dockerStub}' "$@"\n`)
   chmodSync(join(bin, 'docker'), 0o755)
 
-  const running = firstDeploy ? ['postgres'] : ['postgres', ...appServices]
+  const runningAppServices = appServices.filter((service) => !newServices.includes(service))
+  const running = firstDeploy ? ['postgres'] : ['postgres', ...runningAppServices]
 
   const containers: Container[] = running.map((service) => ({
     id: `${service}-old`,
@@ -106,7 +114,13 @@ describe('deploy smoke checks and rollback', () => {
 
     expect(result.stderr).toBe('')
     expect(result.status).toBe(0)
-    for (const check of ['api /health/ready', 'web /api/health/ready', 'web renders /', 'api leaderboard read'])
+    for (const check of [
+      'api /health/ready',
+      'web /api/health/ready',
+      'web renders /',
+      'site renders /privacy',
+      'api leaderboard read',
+    ])
       expect(result.stdout).toContain(`smoke: ${check} ok`)
     expect(result.stdout).not.toContain('rolling back')
     for (const service of appServices) {
@@ -127,6 +141,7 @@ describe('deploy smoke checks and rollback', () => {
     )
 
     expect(calls).toContainEqual(expect.stringMatching(/^exec web-\d+ node -e .*http:\/\/127\.0\.0\.1:3000\/'/))
+    expect(calls).toContainEqual(expect.stringMatching(/^exec site-\d+ bun -e .*http:\/\/127\.0\.0\.1:3000\/privacy'/))
     expect(calls).toContainEqual(expect.stringMatching(/^exec api-\d+ bun -e .*\/trpc\/leaderboard\.get\?input=/))
   })
 
@@ -137,7 +152,7 @@ describe('deploy smoke checks and rollback', () => {
     const pulls = calls.filter((call) => call.includes(' pull '))
 
     expect(pulls).toHaveLength(1)
-    expect(pulls[0]).toEndWith(' pull --quiet api web operations-worker migration')
+    expect(pulls[0]).toEndWith(' pull --quiet api site web operations-worker migration')
     expect(calls.some((call) => call.includes(' build'))).toBe(false)
   })
 
@@ -204,6 +219,26 @@ describe('deploy smoke checks and rollback', () => {
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale api=2 api'))
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale web=2 web'))
     expect(imageOf('postgres')).toEqual(['sha256:old-postgres'])
+  })
+
+  test('a release whose site cannot render a page is rolled back', () => {
+    const { result, imageOf } = deploy({ env: { DOCKER_STUB_FAIL_IMAGE: 'new-site' } })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('smoke: site renders /privacy FAILED: HTTP 500')
+    expect(result.stdout).toContain('ROLLED BACK: the previous release is serving again')
+    for (const service of appServices) expect(imageOf(service)).toEqual([`sha256:old-${service}`])
+  })
+
+  test('a first site deploy that cannot render a page rolls the rest back and leaves site in place', () => {
+    const { result, imageOf } = deploy({ newServices: ['site'], env: { DOCKER_STUB_FAIL_IMAGE: 'new-site' } })
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('rollback: no previous site image; it keeps running this release')
+    expect(result.stdout).toContain('ROLLED BACK, but the previous release fails the smoke checks too')
+    expect(imageOf('api')).toEqual(['sha256:old-api'])
+    expect(imageOf('web')).toEqual(['sha256:old-web'])
+    expect(imageOf('site')).toEqual(['sha256:new-site'])
   })
 
   test('a rollback points the configured release image back at the previous image', () => {
@@ -298,9 +333,12 @@ describe('deploy smoke checks and rollback', () => {
     expect(imageOf('api')).toEqual(['sha256:old-api'])
     expect(imageOf('web')).toEqual(['sha256:old-web'])
     expect(imageOf('operations-worker')).toEqual(['sha256:new-operations-worker'])
+    expect(imageOf('site')).toEqual(['sha256:old-site'])
     const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
+    const converges = rollbackCalls.filter((call) => call.includes(' up -d --remove-orphans '))
 
-    expect(rollbackCalls.some((call) => call.includes(' up -d --remove-orphans '))).toBe(false)
+    expect(converges).toHaveLength(1)
+    expect(converges[0]).toEndWith(' site')
   })
 
   test('a forward roll whose new container fails its health check stops the deploy and keeps the old one', () => {

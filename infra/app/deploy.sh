@@ -23,7 +23,7 @@
 # Emergency rollback by hand: never clear the Command setting. Without it Dokploy runs
 # `compose up -d --build --remove-orphans`, which builds postgres and could recreate it. Instead, from the checkout on
 # the server, name only the app services so postgres is never touched:
-#   BRAWLTOME_IMAGE_TAG=<sha> docker compose -p <app> -f infra/app/compose.yml up -d --no-deps api web operations-worker
+#   BRAWLTOME_IMAGE_TAG=<sha> docker compose -p <app> -f infra/app/compose.yml up -d --no-deps api web site operations-worker
 # <sha> must be a commit whose images CI pushed. This restarts those services instead of rolling them.
 #
 # Migrations run while the previous release still serves, so they must stay compatible with it: add before use,
@@ -280,6 +280,7 @@ smoke() {
   smoke_check 'api /health/ready' probe_service api bun /health/ready || smoke_failed=1
   smoke_check 'web /api/health/ready' probe_service web node /api/health/ready || smoke_failed=1
   smoke_check 'web renders /' probe_service web node / || smoke_failed=1
+  smoke_check 'site renders /privacy' probe_service site bun /privacy || smoke_failed=1
   # tRPC GET of leaderboard.get with the superjson input {"mode":"1v1","region":"all","page":1,"pageSize":10}.
   smoke_check 'api leaderboard read' probe_service api bun \
     '/trpc/leaderboard.get?input=%7B%22json%22%3A%7B%22mode%22%3A%221v1%22%2C%22region%22%3A%22all%22%2C%22page%22%3A1%2C%22pageSize%22%3A10%7D%7D' ||
