@@ -13,14 +13,15 @@ type ClanStanding = {
  * so every rank comes from one snapshot.
  *
  * Last week is the latest finished weekly snapshot minus the one seven days before it. A clan missing either of
- * them, or whose points went down, which is a reset rather than a week of play, has no figure and no rank.
+ * them, or whose points went down, which is a reset rather than a week of play, has no figure and no rank. Neither
+ * has any clan once the latest finished week is more than 14 days old, so a stalled job never shows old numbers.
  */
 export async function readClanStanding(database: Database, clanId: number): Promise<ClanStanding | null> {
   // a comparison with null matches no row, so without the case a clan with no guild points would rank first
   const [standing] = await database.sql<ClanStanding[]>`
     WITH latest_week AS (
       SELECT week_starting FROM clans.weekly_snapshot_runs
-      WHERE completed_at IS NOT NULL
+      WHERE completed_at IS NOT NULL AND week_starting >= (now() AT TIME ZONE 'UTC')::date - 14
       ORDER BY week_starting DESC
       LIMIT 1
     ),

@@ -36,12 +36,19 @@ const ivy: StoredGuild = { clanId: 7006, guildPoints: '20', clanXp: '1', clanLif
 const identityOnlyClanId = 7005
 const unknownClanId = 7999
 
+const dayMs = 24 * 60 * 60 * 1000
+
+// weeks are dated from today, since a latest finished week more than 14 days old shows no figure
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * dayMs).toISOString().slice(0, 10)
+}
+
 // the guild points each guild had at each weekly snapshot; ember and frost both earn 60 above 2^53, gale's points
 // drop, haze has only the latest week, and the newest week hasn't finished yet so it can't count
 const weeklySnapshots = [
-  { weekStarting: '2026-10-22', completed: true, points: [[ivy.clanId, '10']] },
+  { weekStarting: daysAgo(18), completed: true, points: [[ivy.clanId, '10']] },
   {
-    weekStarting: '2026-10-29',
+    weekStarting: daysAgo(11),
     completed: true,
     points: [
       [ember.clanId, '900719925474099300000'],
@@ -50,7 +57,7 @@ const weeklySnapshots = [
     ],
   },
   {
-    weekStarting: '2026-11-05',
+    weekStarting: daysAgo(4),
     completed: true,
     points: [
       [ember.clanId, '900719925474099300060'],
@@ -60,11 +67,24 @@ const weeklySnapshots = [
       [ivy.clanId, '20'],
     ],
   },
-  { weekStarting: '2026-11-12', completed: false, points: [[ember.clanId, '900719925474099399999']] },
+  { weekStarting: daysAgo(-3), completed: false, points: [[ember.clanId, '900719925474099399999']] },
 ] as const
+
+// the same two weeks as ember's, but the latest finished one is over two weeks old
+const staleSnapshots = [
+  { weekStarting: daysAgo(22), completed: true, points: [[ember.clanId, '100']] },
+  { weekStarting: daysAgo(15), completed: true, points: [[ember.clanId, '160']] },
+] as const
+
+type WeeklySnapshotFixture = {
+  weekStarting: string
+  completed: boolean
+  points: readonly (readonly [number, string])[]
+}
 
 let database: TestDatabase
 let emptyDatabase: TestDatabase
+let staleDatabase: TestDatabase
 
 async function storeGuild(guild: StoredGuild, target: TestDatabase = database): Promise<void> {
   await target.sql`INSERT INTO clans.clans (clan_id) VALUES (${guild.clanId})`
@@ -76,15 +96,18 @@ async function storeGuild(guild: StoredGuild, target: TestDatabase = database): 
   `
 }
 
-async function storeWeeklySnapshots(): Promise<void> {
-  for (const week of weeklySnapshots) {
-    await database.sql`
+async function storeWeeklySnapshots(
+  weeks: readonly WeeklySnapshotFixture[] = weeklySnapshots,
+  target: TestDatabase = database,
+): Promise<void> {
+  for (const week of weeks) {
+    await target.sql`
       INSERT INTO clans.weekly_snapshot_runs (week_starting, completed_at)
       VALUES (${week.weekStarting}, ${week.completed ? new Date() : null})
     `
 
     for (const [clanId, guildPoints] of week.points) {
-      await database.sql`
+      await target.sql`
         INSERT INTO clans.weekly_snapshots (week_starting, clan_id, guild_points)
         VALUES (${week.weekStarting}, ${clanId}, ${guildPoints})
       `
@@ -95,11 +118,14 @@ async function storeWeeklySnapshots(): Promise<void> {
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'clan_standing', modules: [queueModule, clanModule] })
   emptyDatabase = await createTestDatabase({ label: 'clan_standing_empty', modules: [queueModule, clanModule] })
+  staleDatabase = await createTestDatabase({ label: 'clan_standing_stale', modules: [queueModule, clanModule] })
 
   for (const guild of [ember, frost, gale, haze, ivy]) await storeGuild(guild)
 
   await storeWeeklySnapshots()
   await storeGuild(ember, emptyDatabase)
+  await storeGuild(ember, staleDatabase)
+  await storeWeeklySnapshots(staleSnapshots, staleDatabase)
 
   await database.sql`INSERT INTO clans.clans (clan_id) VALUES (${identityOnlyClanId})`
 }, 20_000)
@@ -107,6 +133,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await database?.drop()
   await emptyDatabase?.drop()
+  await staleDatabase?.drop()
 }, 20_000)
 
 describe('reading a guild standing', () => {
@@ -162,6 +189,13 @@ describe('reading the last week of a guild', () => {
 
   test('has no figure for a guild whose snapshots are not a week apart', async () => {
     expect(await readClanStanding(database, ivy.clanId)).toMatchObject({ lastWeekPoints: null, lastWeekRank: null })
+  })
+
+  test('has no figure when the latest finished week is more than 14 days old', async () => {
+    expect(await readClanStanding(staleDatabase, ember.clanId)).toMatchObject({
+      lastWeekPoints: null,
+      lastWeekRank: null,
+    })
   })
 
   test('has no figure before any snapshot was taken', async () => {
