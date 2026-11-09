@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { type AdmissionConfig, type OperationLease, refreshOperationsModule } from '@brawltome/queue'
+import { type AdmissionConfig, type OperationLease, queueModule } from '@brawltome/queue'
 import {
   type CohortCandidateSnapshot,
   type CohortCollectionIntent,
@@ -39,7 +39,7 @@ const admission: AdmissionConfig = {
 beforeEach(async () => {
   database = await createTestDatabase({
     label: 'statistics_cohort',
-    modules: [refreshOperationsModule, statisticsModule],
+    modules: [queueModule, statisticsModule],
   })
 
   connectionString = database.connectionString

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, test } from 'bun:test'
 import { createTestDatabase, expectTablesMatchDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import { proofEffects } from '../db/proof-effects'
 import { accountsModule } from '../index'
 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'accounts_tables', modules: [refreshOperationsModule, accountsModule] })
+  database = await createTestDatabase({ label: 'accounts_tables', modules: [queueModule, accountsModule] })
 }, 20_000)
 
 afterAll(async () => {

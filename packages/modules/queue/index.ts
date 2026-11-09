@@ -204,8 +204,9 @@ const migrations = [
 
 export type { InvalidRow } from './db/claim-operation'
 
-export const refreshOperationsModule = {
-  name: 'refresh-operations',
+export const queueModule = {
+  name: 'queue',
+  // migration identities keep the refresh-operations prefix because every migrated database records them
   // 0016 reads statistics tables, but only statistics calls it; declaring it would be a cycle
   dependsOn: [],
   migrations,

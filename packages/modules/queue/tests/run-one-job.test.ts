@@ -9,7 +9,7 @@ import {
   type FailureDecision,
   type JobDefinition,
   type Lease,
-  refreshOperationsModule,
+  queueModule,
   runOneJob,
   type WorkClass,
 } from '@brawltome/queue'
@@ -79,7 +79,7 @@ function createSourceAdmissionSpy() {
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_run_one_job', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_run_one_job', modules: [queueModule] })
 })
 
 afterAll(async () => {

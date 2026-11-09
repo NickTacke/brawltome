@@ -168,7 +168,7 @@ const workClass = [
   'maintenance',
 ] as const
 
-// the deep crawl skips 3v3, like leaderboardDeepCrawlModes in refresh-operations
+// the deep crawl skips 3v3, like leaderboardDeepCrawlModes in the queue module
 const deepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const satisfies readonly RankedMode[]
 const deepCrawlMode = [...deepCrawlModes, 'other'] as const
 const deepCrawlRegion = [...rankedRegions, 'other'] as const

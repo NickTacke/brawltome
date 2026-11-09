@@ -3,7 +3,7 @@ import { clanModule } from '@brawltome/clan'
 import { discoveryModule } from '@brawltome/discovery'
 import type { BrawltomeModule } from '@brawltome/foundation'
 import { playerModule } from '@brawltome/player'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
 import { requestAdmissionModule } from '@brawltome/request-admission'
@@ -13,7 +13,7 @@ import { legacyV2Module } from './legacy-v2'
 // every module whose schema the database holds, whichever process loads it
 export const migrationModules: readonly BrawltomeModule[] = [
   accountsModule,
-  refreshOperationsModule,
+  queueModule,
   requestAdmissionModule,
   playerModule,
   clanModule,

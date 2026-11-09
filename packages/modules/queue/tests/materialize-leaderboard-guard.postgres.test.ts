@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, reconcileFixedSchedule, refreshOperationsModule } from '@brawltome/queue'
+import { createPostgresRefreshOperations, queueModule, reconcileFixedSchedule } from '@brawltome/queue'
 import { createPassthroughJobContract } from '@brawltome/queue/testing'
 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'materialize_leaderboard_guard', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'materialize_leaderboard_guard', modules: [queueModule] })
 }, 20_000)
 
 afterAll(async () => {

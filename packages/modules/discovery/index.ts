@@ -32,6 +32,6 @@ const migrations = [
 
 export const discoveryModule = {
   name: 'discovery',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule

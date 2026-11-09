@@ -11,7 +11,7 @@ import {
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/queue'
+import { type AdmissionConfig, queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
@@ -46,7 +46,7 @@ beforeAll(async () => {
     await setup.end()
   }
 
-  const modules: readonly BrawltomeModule[] = [playerModule, clanModule, refreshOperationsModule, discoveryModule]
+  const modules: readonly BrawltomeModule[] = [playerModule, clanModule, queueModule, discoveryModule]
 
   await migratePostgres(connectionString, orderMigrations(modules.flatMap((module) => module.migrations)))
 }, 30_000)

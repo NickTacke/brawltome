@@ -97,6 +97,6 @@ const migrations = [
 
 export const rankingModule = {
   name: 'ranking',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule

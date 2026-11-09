@@ -9,9 +9,9 @@ import {
   type InvalidRow,
   type JobContract,
   type OperationLease,
+  queueModule,
   reconcileFixedSchedule,
   reconcileResourceSchedules,
-  refreshOperationsModule,
   reserveForAdmission,
   reserveForBinding,
 } from '@brawltome/queue'
@@ -45,7 +45,7 @@ const admission = {
 const provenance = { source: 'integration-test' }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_contracts', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_contracts', modules: [queueModule] })
 })
 
 afterAll(async () => {

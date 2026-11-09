@@ -10,7 +10,7 @@ import {
   refreshCanonicalCareerPlayer,
   refreshCanonicalRankedPlayer,
 } from '@brawltome/player'
-import { type OperationLease, type PostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
+import { type OperationLease, type PostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestQueue } from './fixtures/queue'
 
@@ -41,7 +41,7 @@ const emptySnapshot = {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'player_career', modules: [refreshOperationsModule, playerModule] })
+  database = await createTestDatabase({ label: 'player_career', modules: [queueModule, playerModule] })
   connectionString = database.connectionString
 })
 

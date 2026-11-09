@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { type LeaderboardOperationKind, type OperationLease, refreshOperationsModule } from '@brawltome/queue'
+import { type LeaderboardOperationKind, type OperationLease, queueModule } from '@brawltome/queue'
 import {
   collectAndPublishLeaderboardGeneration,
   createPostgresRanking,
@@ -52,7 +52,7 @@ const admission = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'ranking_snapshots',
-    modules: [refreshOperationsModule, requestAdmissionModule, rankingModule],
+    modules: [queueModule, requestAdmissionModule, rankingModule],
   })
 
   connectionString = database.connectionString
@@ -301,7 +301,7 @@ describe('Ranking mode migrations', () => {
     const client = postgres(database.url, { max: 1 })
 
     try {
-      for (const migration of refreshOperationsModule.migrations.slice(0, 8)) await client.unsafe(migration.sql)
+      for (const migration of queueModule.migrations.slice(0, 8)) await client.unsafe(migration.sql)
       await client.unsafe(rankingModule.migrations[0].sql)
       const operationId = randomUUID()
       const generationId = randomUUID()
@@ -341,7 +341,7 @@ describe('Ranking mode migrations', () => {
         VALUES (${randomUUID()}, ${randomUUID()}, now(), now(), 'source_unavailable', 'legacy failure')
       `
 
-      await client.unsafe(refreshOperationsModule.migrations[8].sql)
+      await client.unsafe(queueModule.migrations[8].sql)
       await client.unsafe(rankingModule.migrations[1].sql)
 
       const [row] = await client<

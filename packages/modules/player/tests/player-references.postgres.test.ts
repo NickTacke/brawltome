@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { getLegendById, legendSlug } from '@brawltome/game-data'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createPostgresPlayerReferences, playerModule } from '../index'
 
@@ -12,7 +12,7 @@ let control: ReturnType<typeof postgres>
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'player_references',
-    modules: [refreshOperationsModule, playerModule],
+    modules: [queueModule, playerModule],
   })
 
   control = postgres(database.connectionString, { max: 1 })

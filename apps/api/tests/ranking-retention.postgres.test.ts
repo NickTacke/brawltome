@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import { runJobOnce } from '@brawltome/queue/testing'
 import {
   createPostgresRanking,
@@ -82,7 +82,7 @@ afterAll(async () => {
 async function migratedDatabase() {
   const database = await createTestDatabase({
     label: 'ranking_retention',
-    modules: [refreshOperationsModule, requestAdmissionModule, rankingModule],
+    modules: [queueModule, requestAdmissionModule, rankingModule],
   })
 
   testDatabases.push(database)
@@ -1362,14 +1362,12 @@ describe('Ranking snapshot retention', () => {
     const sql = postgres(url.toString(), { max: 2, onnotice: () => undefined })
 
     try {
-      const validationIndex = refreshOperationsModule.migrations.findIndex(
-        ({ identity }) => identity === 'refresh-operations/0019',
-      )
+      const validationIndex = queueModule.migrations.findIndex(({ identity }) => identity === 'refresh-operations/0019')
 
-      const validation = refreshOperationsModule.migrations[validationIndex]
+      const validation = queueModule.migrations[validationIndex]
 
-      expect(refreshOperationsModule.migrations[validationIndex - 1]?.identity).toBe('refresh-operations/0018')
-      for (const migration of refreshOperationsModule.migrations.slice(0, validationIndex)) {
+      expect(queueModule.migrations[validationIndex - 1]?.identity).toBe('refresh-operations/0018')
+      for (const migration of queueModule.migrations.slice(0, validationIndex)) {
         await sql.begin((transaction) => transaction.unsafe(migration.sql))
       }
 

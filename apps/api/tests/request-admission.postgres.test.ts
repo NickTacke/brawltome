@@ -4,7 +4,7 @@ import { accountsModule } from '@brawltome/accounts'
 import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPlayerRefreshReservations } from '@brawltome/player'
-import { proofContract, refreshOperationsModule } from '@brawltome/queue'
+import { proofContract, queueModule } from '@brawltome/queue'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
 import { leaderboardCollectionContract } from '@brawltome/ranking'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
@@ -47,7 +47,7 @@ const playerRefreshes = (client: Database = database) => createPlayerRefreshRese
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'request_admission',
-    modules: [refreshOperationsModule, requestAdmissionModule, accountsModule],
+    modules: [queueModule, requestAdmissionModule, accountsModule],
   })
 
   connectionString = database.connectionString

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import { createStatisticsReservations, type StatisticsReservations } from '../../jobs/statistics-reservations'
 
 let database: TestDatabase
@@ -10,7 +10,7 @@ let reservations: StatisticsReservations
 const provenance = { source: 'statistics-cohort-reconciliation', requestedBy: 'issue-209' }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'statistics_reservations', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'statistics_reservations', modules: [queueModule] })
   reservations = createStatisticsReservations(database)
 })
 

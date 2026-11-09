@@ -47,8 +47,8 @@ describe('checkModuleList migration owners', () => {
 
 describe('checkModuleList dependencies', () => {
   test('rejects a dependency that is not loaded', () => {
-    expect(() => checkModuleList([dependent('player', ['refresh-operations'])])).toThrow(
-      'module player depends on refresh-operations, which is not loaded',
+    expect(() => checkModuleList([dependent('player', ['queue'])])).toThrow(
+      'module player depends on queue, which is not loaded',
     )
   })
 

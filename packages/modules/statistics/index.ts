@@ -486,6 +486,6 @@ const migrations = [
 // statistics tables reference refresh_operations.operations, and its writes are fenced by lease functions
 export const statisticsModule = {
   name: 'statistics',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule

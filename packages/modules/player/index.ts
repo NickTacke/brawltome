@@ -161,6 +161,6 @@ const migrations = [
 
 export const playerModule = {
   name: 'player',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule

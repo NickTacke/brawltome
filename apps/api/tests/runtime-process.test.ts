@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, proofContract, refreshOperationsModule } from '@brawltome/queue'
+import { createPostgresRefreshOperations, proofContract, queueModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import {
   allocatePort,
@@ -80,7 +80,7 @@ describe('real production runtime lifecycle', () => {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     test(`API ${signal} keeps liveness separate from known-prefix readiness and exits within bounds`, async () => {
       const control = postgres(connectionString, { max: 1 })
-      const migration = refreshOperationsModule.migrations[0]
+      const migration = queueModule.migrations[0]
 
       await control`
           UPDATE brawltome_migrations.history SET checksum = ${'0'.repeat(64)}
@@ -271,7 +271,7 @@ describe('real production runtime lifecycle', () => {
       provenance: { source: 'runtime-process-test', requestedBy: 'SIGINT-process-test' },
     })
 
-    const migration = refreshOperationsModule.migrations[0]
+    const migration = queueModule.migrations[0]
 
     await control`
         UPDATE brawltome_migrations.history SET checksum = ${'0'.repeat(64)}
@@ -321,8 +321,8 @@ describe('real production runtime lifecycle', () => {
       if (runtime.process.exitCode === null) runtime.process.kill('SIGKILL')
 
       await control`
-          UPDATE brawltome_migrations.history SET checksum = ${refreshOperationsModule.migrations[0].checksum}
-          WHERE identity = ${refreshOperationsModule.migrations[0].identity}
+          UPDATE brawltome_migrations.history SET checksum = ${queueModule.migrations[0].checksum}
+          WHERE identity = ${queueModule.migrations[0].identity}
         `
 
       await removeEffectDelay(control)

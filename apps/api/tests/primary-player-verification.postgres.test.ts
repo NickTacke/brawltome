@@ -7,7 +7,7 @@ import {
   assertValidJobInput,
   type JobDefinition,
   proofContract,
-  refreshOperationsModule,
+  queueModule,
   type WorkClass,
 } from '@brawltome/queue'
 import { runJobOnce } from '@brawltome/queue/testing'
@@ -31,7 +31,7 @@ let queue: ReturnType<typeof createTestQueue>
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'primary_player_verification',
-    modules: [refreshOperationsModule, accountsModule],
+    modules: [queueModule, accountsModule],
   })
 
   queue = createTestQueue({ database })

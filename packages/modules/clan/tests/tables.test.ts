@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, expectTablesMatchDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/queue'
+import { queueModule } from '@brawltome/queue'
 import { is } from 'drizzle-orm'
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core'
 import * as clanTables from '../db/tables'
@@ -20,7 +20,7 @@ const tables = Object.values(clanTables).flatMap((value) => (is(value, PgTable) 
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'clan_tables', modules: [refreshOperationsModule, clanModule] })
+  database = await createTestDatabase({ label: 'clan_tables', modules: [queueModule, clanModule] })
 }, 20_000)
 
 afterAll(async () => {

@@ -20,7 +20,7 @@ import {
   type OperationLease,
   type PlayerRefreshSettled,
   proofContract,
-  refreshOperationsModule,
+  queueModule,
   SourceAdmissionLimitedError,
 } from '@brawltome/queue'
 import { leaderboardCollectionContract, reconcileLeaderboardSchedule } from '@brawltome/ranking'
@@ -282,7 +282,7 @@ describe('durable Refresh Operations', () => {
   })
 
   test('accepts a later same-owner migration while rejecting known history mutation', async () => {
-    const readiness = createPostgresReadiness(database.sql, refreshOperationsModule.migrations)
+    const readiness = createPostgresReadiness(database.sql, queueModule.migrations)
 
     await readiness.check()
 
@@ -301,23 +301,23 @@ describe('durable Refresh Operations', () => {
       await control`
         UPDATE brawltome_migrations.history
         SET checksum = ${'0'.repeat(64)}
-        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
+        WHERE identity = ${queueModule.migrations[0].identity}
       `
 
       await expect(readiness.check()).rejects.toThrow('schema checksum mismatch')
 
       await control`
         UPDATE brawltome_migrations.history
-        SET checksum = ${refreshOperationsModule.migrations[0].checksum}
-        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
+        SET checksum = ${queueModule.migrations[0].checksum}
+        WHERE identity = ${queueModule.migrations[0].identity}
       `
 
       await readiness.check()
     } finally {
       await control`
         UPDATE brawltome_migrations.history
-        SET checksum = ${refreshOperationsModule.migrations[0].checksum}
-        WHERE identity = ${refreshOperationsModule.migrations[0].identity}
+        SET checksum = ${queueModule.migrations[0].checksum}
+        WHERE identity = ${queueModule.migrations[0].identity}
       `
 
       await control`

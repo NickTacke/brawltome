@@ -10,7 +10,7 @@ import {
   playerModule,
   playerNameVerificationContract,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
+import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import { testJobContract } from '@brawltome/queue/testing'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createTelemetry } from '@brawltome/telemetry'
@@ -49,7 +49,7 @@ const admission = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'player_name_verification',
-    modules: [accountsModule, refreshOperationsModule, requestAdmissionModule, playerModule],
+    modules: [accountsModule, queueModule, requestAdmissionModule, playerModule],
   })
 
   connectionString = database.connectionString

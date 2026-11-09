@@ -11,9 +11,9 @@ import {
   interactiveRefreshMaxAttempts,
   type OperationLease,
   proofContract,
+  queueModule,
   type ReplayGuard,
   reconcileResourceSchedules,
-  refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/queue'
 import { createPassthroughJobContract } from '@brawltome/queue/testing'
@@ -65,7 +65,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 }
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'refresh_operations_dead_letters', modules: [refreshOperationsModule] })
+  database = await createTestDatabase({ label: 'refresh_operations_dead_letters', modules: [queueModule] })
   connectionString = database.connectionString
   deadLetters = createPostgresDeadLetterOperations(database, noHooks)
 })

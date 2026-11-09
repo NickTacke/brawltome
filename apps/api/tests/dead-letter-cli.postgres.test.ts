@@ -10,7 +10,7 @@ import {
   createPostgresRefreshOperations,
   type OperationLease,
   proofContract,
-  refreshOperationsModule,
+  queueModule,
 } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
 import { createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
@@ -51,7 +51,7 @@ function requireLease(lease: OperationLease | null): OperationLease {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'dead_letter_cli',
-    modules: [refreshOperationsModule, accountsModule, rankingModule, statisticsModule],
+    modules: [queueModule, accountsModule, rankingModule, statisticsModule],
   })
 
   connectionString = database.connectionString
