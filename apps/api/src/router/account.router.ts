@@ -18,7 +18,7 @@ import {
   toPlayerShortcuts,
   toPrimaryPlayerVerificationState,
 } from '../mappers/account.mapper'
-import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
+import { mapPlayerRankedProfile } from '@brawltome/player'
 import type { Context } from '../trpc/context'
 import { protectedProcedure, publicProcedure, router } from '../trpc/trpc'
 

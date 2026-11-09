@@ -92,7 +92,13 @@ describe('player.rankedSummaries over oRPC', () => {
       paths: Record<string, Record<string, { operationId?: string; security?: unknown }>>
     }
 
-    expect(Object.keys(document.paths).sort()).toEqual(['/players/ranked-summaries', '/status'])
+    expect(Object.keys(document.paths).sort()).toEqual([
+      '/players/ranked-summaries',
+      '/players/{id}/career',
+      '/players/{id}/ranked',
+      '/players/{id}/reference',
+      '/status',
+    ])
     expect(document.paths['/players/ranked-summaries'].post.operationId).toBe('player.rankedSummaries')
     expect(document.paths['/players/ranked-summaries'].post.security).toEqual([{ internalSecret: [] }])
   })

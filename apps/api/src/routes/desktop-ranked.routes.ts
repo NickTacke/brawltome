@@ -3,11 +3,15 @@ import {
   desktopRankedLookupInputSchema,
   parseDesktopRankedLookupOutput,
 } from '@brawltome/contracts'
-import type { PlayerReferenceQueries, PlayerRefreshReservations, RankedPlayerQueries } from '@brawltome/player'
+import {
+  mapPlayerRankedProfile,
+  type PlayerReferenceQueries,
+  type PlayerRefreshReservations,
+  type RankedPlayerQueries,
+} from '@brawltome/player'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import { Hono } from 'hono'
 import { requestInteractivePlayerRefresh } from '../interactive-player-refresh'
-import { mapPlayerRankedProfile } from '../mappers/player-ranked.mapper'
 
 const maxConcurrentDesktopLookups = 32
 

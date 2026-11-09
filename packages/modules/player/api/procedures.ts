@@ -1,10 +1,28 @@
-import { playerRankedSummariesInputSchema, playerRankedSummariesSchema } from '@brawltome/contracts'
+import {
+  nullablePlayerCareerProfileSchema,
+  nullablePlayerRankedProfileSchema,
+  nullablePlayerReferenceSchema,
+  playerRankedSummariesInputSchema,
+  playerRankedSummariesSchema,
+  playerReferenceByIdInputSchema,
+} from '@brawltome/contracts'
 import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
+import { createPostgresCareerPlayers } from '../career/postgres'
 import { readRankedSummaries } from '../db/read-ranked-summaries'
+import { createPostgresPlayerReferences } from '../player-references'
+import { createPostgresRankedPlayers } from '../ranked/postgres'
+import { mapPlayerCareerProfile } from './map-career-profile'
+import { mapPlayerRankedProfile } from './map-ranked-profile'
 
 /** The player reads the API serves under player, at /rpc/player/* and /v1. Only internal callers get them. */
 export function createPlayerProcedures(runtime: ModuleRuntime) {
   const { database } = runtime
+  const references = createPostgresPlayerReferences(database)
+  const career = createPostgresCareerPlayers(database)
+
+  const ranked = createPostgresRankedPlayers(database, {
+    resolveCareerMainLegend: (brawlhallaId) => career.mainLegendById(brawlhallaId),
+  })
 
   const rankedSummaries = internalProcedure
     .route({
@@ -18,5 +36,41 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
     .output(playerRankedSummariesSchema)
     .handler(({ input }) => readRankedSummaries(database, input.ids))
 
-  return { rankedSummaries }
+  const referenceById = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/players/{id}/reference',
+      operationId: 'player.referenceById',
+      summary: 'Name and aliases of a player',
+      tags: ['player'],
+    })
+    .input(playerReferenceByIdInputSchema)
+    .output(nullablePlayerReferenceSchema)
+    .handler(({ input }) => references.byId(input.id))
+
+  const rankedById = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/players/{id}/ranked',
+      operationId: 'player.rankedById',
+      summary: 'Ranked profile of a player',
+      tags: ['player'],
+    })
+    .input(playerReferenceByIdInputSchema)
+    .output(nullablePlayerRankedProfileSchema)
+    .handler(async ({ input }) => mapPlayerRankedProfile(await ranked.byId(input.id)))
+
+  const careerById = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/players/{id}/career',
+      operationId: 'player.careerById',
+      summary: 'Career profile of a player',
+      tags: ['player'],
+    })
+    .input(playerReferenceByIdInputSchema)
+    .output(nullablePlayerCareerProfileSchema)
+    .handler(async ({ input }) => mapPlayerCareerProfile(await career.byId(input.id)))
+
+  return { rankedSummaries, referenceById, rankedById, careerById }
 }

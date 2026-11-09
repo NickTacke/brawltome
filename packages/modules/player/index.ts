@@ -23,6 +23,8 @@ import { addLeaderboardTeamObservationsSecondPlayerIndex } from './migrations/00
 import { movePrimaryMonitoringWatermark } from './migrations/0021-move-primary-monitoring-watermark'
 import { dropPrimaryMonitoringWatermarkView } from './migrations/0022-drop-primary-monitoring-watermark-view'
 
+export { mapPlayerCareerProfile } from './api/map-career-profile'
+export { mapPlayerRankedProfile } from './api/map-ranked-profile'
 export {
   CAREER_FRESHNESS_SECONDS,
   type CareerPlayerProfile,
