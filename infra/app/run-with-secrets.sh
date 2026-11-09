@@ -50,6 +50,10 @@ case "$role" in
     read_secret OTEL_EXPORTER_OTLP_AUTHORIZATION "$secrets_root/otel_authorization"
     exec node infra/app/web-server.cjs
     ;;
+  site)
+    read_secret INTERNAL_API_SECRET "$secrets_root/internal_api_secret"
+    exec bun run infra/app/site-server.ts
+    ;;
   discord-bot)
     read_secret DISCORD_INTERNAL_API_SECRET "$secrets_root/discord_internal_api_secret"
     read_secret DISCORD_TOKEN "$secrets_root/discord_token"
@@ -64,7 +68,7 @@ case "$role" in
     exec bun run apps/api/src/dead-letter-cli.ts "$@"
     ;;
   *)
-    printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|discord-bot|dead-letter-cli' >&2
+    printf '%s\n' 'Usage: run-with-secrets.sh migration|api|operations-worker|web|site|discord-bot|dead-letter-cli' >&2
     exit 64
     ;;
 esac
