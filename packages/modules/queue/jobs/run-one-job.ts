@@ -144,8 +144,6 @@ async function settleFailure(
     return settledUnlessLeaseLost(transition, { outcome: 'retry', category: decision.category })
   }
 
-  if (decision.pauseSource) await pauseSource(options, decision.pauseSource)
-
   const transition = await queue.fail(lease, decision.failure, decision.delayMs)
 
   return settledUnlessLeaseLost(transition, {
