@@ -79,6 +79,7 @@ export type WorkerClanDependencies = {
     | 'waitBetweenGuilds'
     | 'waitBeforeGuildRetry'
     | 'retryTimings'
+    | 'now'
     | 'telemetry'
   >
 }

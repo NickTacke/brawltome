@@ -26,6 +26,7 @@ export {
 export { clanWeeklySnapshotContract } from './jobs/clan-weekly-snapshot-contract'
 export {
   type ClanWeeklySnapshotJobDependencies,
+  clanWeeklySnapshotIntervalMs,
   createClanWeeklySnapshotJob,
   defaultClanWeeklySnapshotSliceGuilds,
 } from './jobs/clan-weekly-snapshot-job'

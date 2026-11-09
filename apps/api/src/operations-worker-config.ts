@@ -1,3 +1,4 @@
+import { clanWeeklySnapshotIntervalMs } from '@brawltome/clan'
 import { parseBoundedInteger, parsePositiveInteger } from '@brawltome/foundation'
 import {
   type AdmissionConfig,
@@ -145,8 +146,6 @@ export function rankingRetentionScheduleDefinition(config: RankingRetentionConfi
   }
 }
 
-const weekMs = 7 * 24 * 60 * 60 * 1000
-
 /**
  * Once a week, half an hour after 10:00 UTC on Thursday. The in-game week turns over on Thursday with the daily reset,
  * 5am Eastern: 09:00 UTC in summer and 10:00 UTC in winter. A fixed UTC time can't follow daylight saving, so it sits
@@ -159,7 +158,7 @@ export function clanWeeklySnapshotScheduleDefinition(): CreateClanWeeklySnapshot
     scheduleKey: 'clans:weekly-snapshot:v1',
     operationKeyPrefix: 'clans:weekly-snapshot',
     workClass: 'maintenance',
-    intervalMs: weekMs,
+    intervalMs: clanWeeklySnapshotIntervalMs,
     firstDueAt: '2026-11-19T10:30:00.000Z',
     payload: {},
     provenance: { source: 'clan-weekly-snapshot-schedule', requestedBy: 'guild-last-week' },

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import {
   type CreateClanWeeklySnapshotSchedule,
+  createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   type PostgresRefreshOperations,
   queueModule,
@@ -33,6 +34,8 @@ type Harness = {
   pauses: string[]
   // runs after the source answers and before the job writes, the window in which a lease can be lost
   hooks: { afterSourceCall(clanId: number): Promise<void> }
+  // how far ahead of the real time the job's clock runs
+  clock: { offsetMs: number }
   sourceAdmission: { admitSource(): Promise<{ outcome: 'admitted' }>; pauseSource(domain: string): Promise<void> }
 }
 
@@ -105,6 +108,7 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
   const pauses: string[] = []
   const failedCalls = new Map<number, number>()
   const hooks: Harness['hooks'] = { afterSourceCall: async () => {} }
+  const clock: Harness['clock'] = { offsetMs: 0 }
 
   const getGuildStatsV1 = async (clanId: number) => {
     sourceCalls.push(clanId)
@@ -134,6 +138,7 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
       retryWaits.push(delayMs)
     },
     retryTimings: { retryDelayMs: 0, sourceUnavailableRetryMs: 60_000 },
+    now: () => new Date(Date.now() + clock.offsetMs),
     telemetry: createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 }),
   })
 
@@ -146,7 +151,7 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
     },
   }
 
-  return { job, queue, sourceCalls, waits, retryWaits, pauses, hooks, sourceAdmission }
+  return { job, queue, sourceCalls, waits, retryWaits, pauses, hooks, clock, sourceAdmission }
 }
 
 // a window that came due a minute ago is the only one the schedule owes, so the run's week is the day it is due
@@ -717,6 +722,7 @@ describe('clan weekly snapshot job', () => {
     expect(await isWeekCompleted(week)).toBe(false)
 
     hooks.afterSourceCall = async () => {}
+
     await expireLease()
 
     expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
@@ -738,10 +744,71 @@ describe('clan weekly snapshot job', () => {
     expect(await isWeekCompleted(week)).toBe(false)
 
     hooks.afterSourceCall = async () => {}
+
     await expireLease()
 
     expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(await isWeekCompleted(week)).toBe(true)
+  })
+
+  test('stops fetching an unfinished week once the next window is due, and leaves the week unfinished', async () => {
+    for (const clanId of [901, 902]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>([
+      [901, { guildPoints: '1' }],
+      [902, { guildPoints: '2' }],
+    ])
+
+    const { job, queue, sourceCalls, clock, sourceAdmission } = createHarness(answers, 1)
+
+    const week = await scheduleWeek(queue, 'next-window-due')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+
+    clock.offsetMs = weekMs
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(sourceCalls).toEqual([901])
+    expect(await readSnapshots(week)).toEqual([{ clanId: 901, guildPoints: '1' }])
+    expect(await isWeekCompleted(week)).toBe(false)
+  })
+
+  test('stops a replayed dead letter whose next window is already due, without fetching', async () => {
+    await storeGuild(911)
+
+    const { job, queue, sourceCalls, clock, sourceAdmission } = createHarness(new Map([[911, { guildPoints: '1' }]]))
+
+    const failingAdmission = {
+      ...sourceAdmission,
+      admitSource: async (): Promise<{ outcome: 'admitted' }> => {
+        throw new Error('connection to the queue database was terminated')
+      },
+    }
+
+    const week = await scheduleWeek(queue, 'stale-replay')
+
+    await database.sql`UPDATE queue.operations SET max_attempts = 1 WHERE kind = 'clan-weekly-snapshot' AND status = 'pending'`
+
+    expect(await runJobOnce(queue, job, { sourceAdmission: failingAdmission })).toBe('dead_letter')
+
+    const deadLetters = createPostgresDeadLetterOperations(database, {
+      replayGuards: new Map(),
+      describeEffects: new Map(),
+    })
+
+    const [deadLetter] = await database.sql<{ id: string }[]>`
+      SELECT id FROM queue.operations WHERE kind = 'clan-weekly-snapshot' AND status = 'dead_letter'
+    `
+
+    if (!deadLetter) throw new Error('the weekly snapshot operation did not dead-letter')
+
+    await deadLetters.replayDeadLetter({ operationId: deadLetter.id, actorId: 'operator:test', reason: 'late replay' })
+    clock.offsetMs = weekMs + 60_000
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(sourceCalls).toEqual([])
+    expect(await isWeekCompleted(week)).toBe(false)
   })
 
   test('does not touch the source for a week that already finished', async () => {

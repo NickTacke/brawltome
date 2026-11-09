@@ -32,6 +32,9 @@ export const clanWeeklySnapshotOutageGuilds = 5
 // or a lasting error on the worker's side, than V1 being down
 export const clanWeeklySnapshotOutageLimitMs = 6 * 60 * 60 * 1000
 
+// the schedule's interval; once a window is this old the next one is due and owns the current points
+export const clanWeeklySnapshotIntervalMs = 7 * 24 * 60 * 60 * 1000
+
 export type ClanWeeklySnapshotJobDependencies = {
   snapshots: PostgresWeeklySnapshots
   // the Brawlhalla client, with every call going through this attempt's admission
@@ -41,6 +44,7 @@ export type ClanWeeklySnapshotJobDependencies = {
   waitBetweenGuilds(delayMs: number, signal: AbortSignal): Promise<void>
   waitBeforeGuildRetry(delayMs: number, signal: AbortSignal): Promise<void>
   retryTimings: RetryTimings
+  now(): Date
   telemetry: Telemetry
 }
 
@@ -64,10 +68,17 @@ type SliceProgress = {
   isSourceDown: boolean
 }
 
-function weekStartingOf(lease: WeeklySnapshotLease): string {
-  const windowAt = new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
+// a replayed dead letter keeps its schedule occurrence, so it gets the window it was first due for
+function windowOf(lease: WeeklySnapshotLease): Date {
+  return new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
+}
 
+function weekStartingOf(windowAt: Date): string {
   return windowAt.toISOString().slice(0, 10)
+}
+
+function isNextWindowDue(windowAt: Date, now: Date): boolean {
+  return now.getTime() >= windowAt.getTime() + clanWeeklySnapshotIntervalMs
 }
 
 // every write checks the lease in its own transaction; a worker that lost it stops before writing anything more
@@ -223,6 +234,23 @@ async function completeOperation(lease: WeeklySnapshotLease, tools: JobTools): P
   return transition === 'lease-lost' ? 'lease_lost' : 'succeeded'
 }
 
+// the points fetched now belong to the next window, so filing them under this one would leave Last week near zero.
+// The week is left unfinished instead, which Last week reads as no figure, and the operation is done
+async function abandonWeek(
+  dependencies: ClanWeeklySnapshotJobDependencies,
+  lease: WeeklySnapshotLease,
+  tools: JobTools,
+  weekStarting: string,
+): Promise<AttemptOutcome> {
+  try {
+    dependencies.telemetry.logger.warn('clan.weekly_snapshot.abandoned', { weekStarting })
+  } catch {
+    // telemetry never decides the outcome of the operation
+  }
+
+  return completeOperation(lease, tools)
+}
+
 function createSlice(
   dependencies: ClanWeeklySnapshotJobDependencies,
   lease: WeeklySnapshotLease,
@@ -248,7 +276,11 @@ async function runWeeklySnapshot(
   lease: WeeklySnapshotLease,
   tools: JobTools,
 ): Promise<AttemptOutcome> {
-  const weekStarting = weekStartingOf(lease)
+  const windowAt = windowOf(lease)
+  const weekStarting = weekStartingOf(windowAt)
+
+  if (isNextWindowDue(windowAt, dependencies.now())) return abandonWeek(dependencies, lease, tools, weekStarting)
+
   const run = await dependencies.snapshots.begin(weekStarting)
 
   if (run.isCompleted) return completeOperation(lease, tools)

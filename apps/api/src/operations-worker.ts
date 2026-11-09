@@ -227,6 +227,7 @@ const workerJobs = createWorkerJobs({
         retryDelayMs: workerConfig.retryDelayMs,
         sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
       },
+      now: () => new Date(),
       telemetry,
     },
   },

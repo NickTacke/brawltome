@@ -113,6 +113,11 @@ of the failing clans, so five broken clans in a row cost the week 6 hours, and a
 clan per defer. A 429 or a source admission limit also defers. A failure of admission
 itself is a database error, so it takes the normal retries. Once every clan is done the week gets a `completed_at`.
 
+A week stops once the next weekly window is due, even if it never finished, and so does a dead letter of it replayed
+after that, since a replay keeps its window. The points V1 sends by then belong to the next week, so saving them
+under this one would leave Last week near zero. The job finishes the operation without fetching and leaves the week
+without a `completed_at`, which Last week reads as no figure.
+
 Last week is the latest completed week's points minus the points of the week seven days before it, which must have
 completed too, so the first figure appears a week after the second run. A clan whose points went down gets no figure,
 since that isn't a week of earned points. No clan gets one once the latest completed week is more than 14 days old.
