@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { unarmedStats } from '../src/components/player/unarmed-stats'
+import { unarmedStats, weaponsShown } from '../src/components/player/unarmed-stats'
 import type { CareerLegend } from '../src/components/player/weapon-stats'
 
 function legend(matchTime: number, heldOne: number, heldTwo: number, unarmedKos = 2, games = 1): CareerLegend {
@@ -27,5 +27,19 @@ describe('unarmedStats', () => {
 
   test('counts only legends that were played', () => {
     expect(unarmedStats([legend(10, 0, 0), legend(0, 0, 0, 0, 0)]).legendCount).toBe(1)
+  })
+})
+
+describe('weaponsShown', () => {
+  test('a player with no career shows no weapons, even with unarmed included', () => {
+    expect(weaponsShown([], [], false)).toEqual([])
+  })
+
+  test('adds unarmed once the player has used it', () => {
+    expect(weaponsShown([legend(1000, 300, 200)], [], false).map(({ weapon }) => weapon)).toEqual(['Unarmed'])
+  })
+
+  test('leaves unarmed out when it is excluded', () => {
+    expect(weaponsShown([legend(1000, 300, 200)], [], true)).toEqual([])
   })
 })

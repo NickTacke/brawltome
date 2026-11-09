@@ -5,9 +5,9 @@ import { sectionTitle } from './player-styles'
 import { sortWeapons, type WeaponSortKey, weaponSortOptions, weaponSorts } from './roster-sort'
 import { CardStat } from './StatCells'
 import { TileGrid } from './TileGrid'
-import { unarmedStats } from './unarmed-stats'
+import { weaponsShown } from './unarmed-stats'
 import { WeaponDetail } from './WeaponDetail'
-import { type CareerLegend, type RankedLegend, type WeaponStats, weaponStats, withShares } from './weapon-stats'
+import type { CareerLegend, RankedLegend, WeaponStats } from './weapon-stats'
 
 const weaponColumnsClass = 'grid-cols-8 min-[1500px]:grid-cols-[repeat(var(--tile-count),minmax(0,1fr))]'
 const tallestWeaponBarPx = 56
@@ -86,9 +86,7 @@ export function WeaponStrip({ legends, rankedLegends, isUnarmedExcludedAtStart }
   const [sort, setSort] = useState<WeaponSortKey>('playtime')
   const [isUnarmedExcluded, setIsUnarmedExcluded] = useState(isUnarmedExcludedAtStart)
   const active = weaponSorts[sort]
-  const held = weaponStats(legends, rankedLegends)
-  const withUnarmed = isUnarmedExcluded ? held : withShares([...held, unarmedStats(legends)])
-  const weapons = sortWeapons(withUnarmed, sort)
+  const weapons = sortWeapons(weaponsShown(legends, rankedLegends, isUnarmedExcluded), sort)
 
   if (weapons.length === 0) return null
 
