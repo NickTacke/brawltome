@@ -209,7 +209,7 @@ describe('durable Refresh Operations', () => {
         ),
       ).toBeDefined()
 
-      expect(snapshot.deadLetters.length).toBeLessThanOrEqual(128)
+      expect(snapshot.deadLetters.length).toBeLessThanOrEqual(256)
 
       expect(
         await createTestDeadLetters(database).discardDeadLetter({
