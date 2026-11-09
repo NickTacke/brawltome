@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { knownLegendKeys, legendAvatarUrl } from '../src/components/guild/legend-avatar-url'
 
 const publicRoot = join(import.meta.dir, '..', 'public')
@@ -37,5 +37,15 @@ describe('legendAvatarUrl', () => {
     const avatarFiles = readdirSync(join(publicRoot, 'images/legends/avatars'))
 
     expect(avatarFiles.filter((name) => name.includes('&'))).toEqual([])
+  })
+
+  test('every avatar file belongs to a known legend', () => {
+    const knownFiles = new Set(
+      [...knownLegendKeys].map((legendKey) => basename(fileForUrl(legendAvatarUrl(legendKey)))),
+    )
+
+    const avatarFiles = readdirSync(join(publicRoot, 'images/legends/avatars'))
+
+    expect(avatarFiles.filter((name) => !knownFiles.has(name))).toEqual([])
   })
 })
