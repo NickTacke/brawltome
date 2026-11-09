@@ -1,5 +1,6 @@
 import type { PlayerCareerProfileContract, PlayerRankedProfileContract } from '@brawltome/contracts'
 import { legendWeapons } from '@brawltome/contracts/legend-weapons'
+import { bestRating } from './player-format'
 
 export type CareerLegend = NonNullable<PlayerCareerProfileContract['snapshot']>['legends'][number]
 export type RankedLegend = NonNullable<PlayerRankedProfileContract['snapshot']>['rankedLegends'][number]
@@ -68,19 +69,21 @@ export function emptyWeaponStats(weapon: string): WeaponStats {
 }
 
 function addRanked(totals: RankedWeaponStats, ranked: RankedLegend, legendKey: string) {
+  const peak = bestRating(ranked.rating, ranked.peakRating)
+
   totals.games += ranked.games
 
   // unplayed legends sit at the default rating with a peak of 0
   if (ranked.games > 0) {
     totals.ratings.push(ranked.rating)
-    totals.peakRatings.push(ranked.peakRating)
+    totals.peakRatings.push(peak)
   }
 
   if (ranked.games > totals.mostPlayed.games) totals.mostPlayed = { key: legendKey, games: ranked.games }
 
   if (ranked.rating > totals.highestElo.elo) totals.highestElo = { key: legendKey, elo: ranked.rating }
 
-  if (ranked.peakRating > totals.highestPeak.elo) totals.highestPeak = { key: legendKey, elo: ranked.peakRating }
+  if (peak > totals.highestPeak.elo) totals.highestPeak = { key: legendKey, elo: peak }
 }
 
 function addSlot(totals: WeaponStats, legend: CareerLegend, slot: WeaponSlot, ranked: RankedLegend | undefined) {
@@ -107,7 +110,7 @@ function slotsOf(legend: CareerLegend): Array<{ weapon: string; slot: WeaponSlot
   return slots.filter(({ weapon }) => knownWeapons.has(weapon))
 }
 
-function wasUsed(stats: WeaponStats): boolean {
+export function wasUsed(stats: WeaponStats): boolean {
   return stats.timeHeld > 0 || stats.damage > 0 || stats.KOs > 0
 }
 

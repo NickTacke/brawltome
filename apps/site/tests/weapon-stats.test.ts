@@ -84,6 +84,13 @@ describe('weaponStats', () => {
     expect(stats?.ranked.ratings).toEqual([])
   })
 
+  test('a stored peak below the rating counts as the rating', () => {
+    const stats = statsFor(firstWeapon, [legendWith()], [rankedWith({ rating: 1700, peakRating: 1600 })])
+
+    expect(stats?.ranked.highestPeak.elo).toBe(1700)
+    expect(stats?.ranked.peakRatings).toEqual([1700])
+  })
+
   test('tracks the best ranked legend', () => {
     const stats = statsFor(firstWeapon, [legendWith()], [rankedWith()])
 
