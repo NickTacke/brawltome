@@ -1,5 +1,5 @@
 import { type MouseEvent, useId, useState } from 'react'
-import { formatDay } from '../../lib'
+import { formatDay, formatDayAndMonth } from '../../lib'
 import { ActivityBars } from './ActivityBars'
 import { axisDates, ratingAxisTicks, ratingRange, smoothPath } from './chart-geometry'
 import { formatGrouped, ratingBands, tierColour, tierName } from './player-format'
@@ -7,7 +7,6 @@ import { type ChartPoint, highestPoint } from './rating-seasons'
 
 const lowestTierLabelPercent = 92
 const markerLabelGapPercent = { x: 20, y: 12 }
-const axisDateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 
 type Scale = { xPercent: (time: number) => number; yPercent: (rating: number) => number }
 
@@ -248,7 +247,7 @@ export function RatingChart({ points, heightClass }: { points: ChartPoint[]; hei
       <ActivityBars points={points} start={start} end={end} hoveredTime={hovered?.time ?? null} />
       <div className="mt-1.5 ml-12 flex justify-between font-mono text-xs text-soft">
         {axisDates(start, end).map((time) => (
-          <span key={time}>{axisDateFormat.format(new Date(time))}</span>
+          <span key={time}>{formatDayAndMonth(time)}</span>
         ))}
       </div>
     </div>

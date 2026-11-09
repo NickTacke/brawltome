@@ -39,6 +39,12 @@ export function formatDay(value: string | null): string {
   return `${date.getUTCDate()} ${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`
 }
 
+export function formatDayAndMonth(timeMs: number): string {
+  const date = new Date(timeMs)
+
+  return `${date.getUTCDate()} ${monthNames[date.getUTCMonth()]}`
+}
+
 export function timeAgo(value: string, now = new Date()): string {
   const date = new Date(value)
 
