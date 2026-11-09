@@ -149,6 +149,12 @@ describe('Legend Meta history coverage', () => {
     ],
   }
 
+  const continuedForSeason = {
+    status: 'incompatible',
+    previousSnapshotId: previousHistorySnapshot.snapshotId,
+    reasons: [coverageBreak.reasons[0]],
+  }
+
   const leftOutCells = cohortCells.map((cell, index) =>
     index === 0 ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 } : cell,
   )
@@ -191,14 +197,33 @@ describe('Legend Meta history coverage', () => {
       ],
     })
 
-    const continuedForSeason = {
-      status: 'incompatible',
-      previousSnapshotId: previousHistorySnapshot.snapshotId,
-      reasons: [coverageBreak.reasons[0]],
-    }
-
     expect(() => legendMetaHistoryOutputSchema.parse(history(continuedForSeason))).not.toThrow()
     expect(() => legendMetaHistoryOutputSchema.parse(history(coverageBreak))).toThrow()
+  })
+
+  test('breaks a region series only when a cell in that region changes', () => {
+    const [changedRegion, otherRegion] = leaderboardRegions
+
+    const history = (region: string, comparison: unknown) => {
+      const scope = { region, bracket: 'all' }
+
+      return {
+        status: 'available',
+        filter: scope,
+        entries: [
+          { snapshot: { ...historySnapshot, scope }, comparisonToPrevious: comparison },
+          {
+            snapshot: { ...previousHistorySnapshot, scope, cohortCells: leftOutCells },
+            comparisonToPrevious: null,
+          },
+        ],
+      }
+    }
+
+    expect(() => legendMetaHistoryOutputSchema.parse(history(changedRegion, coverageBreak))).not.toThrow()
+    expect(() => legendMetaHistoryOutputSchema.parse(history(changedRegion, continuedForSeason))).toThrow()
+    expect(() => legendMetaHistoryOutputSchema.parse(history(otherRegion, continuedForSeason))).not.toThrow()
+    expect(() => legendMetaHistoryOutputSchema.parse(history(otherRegion, coverageBreak))).toThrow()
   })
 })
 
