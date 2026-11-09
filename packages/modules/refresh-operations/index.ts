@@ -28,6 +28,8 @@ import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refr
 import { addPrimaryPlayerVerificationKind } from './migrations/0027-add-primary-player-verification-kind'
 import { validatePrimaryPlayerVerificationKind } from './migrations/0028-validate-primary-player-verification-kind'
 import { dropKindConstraints } from './migrations/0029-drop-kind-constraints'
+import { dropScheduleKindConstraints } from './migrations/0030-drop-schedule-kind-constraints'
+import { dropInteractiveSectionCheck } from './migrations/0031-drop-interactive-section-check'
 
 export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 export {
@@ -196,7 +198,11 @@ const migrations = [
   addPrimaryPlayerVerificationKind,
   validatePrimaryPlayerVerificationKind,
   dropKindConstraints,
+  dropScheduleKindConstraints,
+  dropInteractiveSectionCheck,
 ] as const
+
+export type { InvalidRow } from './db/claim-operation'
 
 export const refreshOperationsModule = {
   name: 'refresh-operations',
