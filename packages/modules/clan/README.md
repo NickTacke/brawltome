@@ -99,11 +99,16 @@ Both writes carry `trigger: 'weekly-snapshot'` in their provenance, so they can 
 The run row in `weekly_snapshot_runs` remembers the last clan, so a yield, a failed attempt or a lost lease carries on
 after it. The job yields its slot after each slice of 100 clans. A failed call is retried in place twice, after 500 ms
 and 2 s. A clan that still fails, or that the source answers with a 404 or with stats that don't parse, is skipped for
-that week and gets a failed profile check, as a refresh records one.
+that week and gets a failed profile check, as a refresh records one. A failed clan is only skipped once a later clan
+answers, so clans failing at the end of a slice are fetched again by the next one. Text holding U+0000, which Postgres
+can't store, is saved without it.
 
 When five clans in a row fail every retry, V1 is taken to be down: the run defers without spending an attempt and
-picks up at the first of them. It doesn't pause V1, since that would hold every other caller. A 429 or a source
-admission limit also defers. Once every clan is done the week gets a `completed_at`.
+picks up at the first of them. It doesn't pause V1, since that would hold every other caller. The run row notes when
+that started in `source_down_since`, and a clan that answers clears it. After 6 hours each defer also skips the first
+of the failing clans, so five broken clans in a row cost the week 6 hours, and an outage that lasts longer loses one
+clan per defer. A 429 or a source admission limit also defers. A failure of admission
+itself is a database error, so it takes the normal retries. Once every clan is done the week gets a `completed_at`.
 
 Last week is the latest completed week's points minus the points of the week seven days before it, so the first
 figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a week of
