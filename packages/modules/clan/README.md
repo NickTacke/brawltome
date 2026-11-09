@@ -63,8 +63,8 @@ same read functions, `readClanProfile` and `readPlayerClanMembership`, so both r
 
 ## Refresh
 
-`clan.refresh` and `clan.refreshDiscord` are still tRPC only. The refresh runs on the refresh-operations queue as
-the `clan-refresh` job from `jobs/clan-refresh-job.ts`.
+`clan.refresh` and `clan.refreshDiscord` are still tRPC only. The refresh runs on the queue as the `clan-refresh`
+job from `jobs/clan-refresh-job.ts`.
 
 1. The API sees a stale section, reserves a refresh operation and admits the caller.
 2. The operations worker leases the operation. `prepareRefreshEffect` records the lease in `refresh_effects`.

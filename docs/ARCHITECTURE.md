@@ -20,8 +20,8 @@ one Postgres schema and the migrations that create it, and exposes one `index.ts
 | `clan` | `clans` | Clan profiles and refreshes |
 | `discovery` | `discovery` | Finding players and clans worth tracking |
 | `player` | `players` | Profiles, career and ranked stats, freshness, name verification |
+| `queue` | `refresh_operations` | The job queue: leases, scheduling, dead letters |
 | `ranking` | `rankings` | Leaderboard snapshots and their retention |
-| `refresh-operations` | `refresh_operations` | The job queue: leases, scheduling, dead letters |
 | `replay-analysis` | `replay_analysis` | Replay analysis jobs |
 | `request-admission` | `request_admission` | Rate limits for visitors and for the Brawlhalla API budget |
 | `statistics` | `statistics` | Cohorts, legend meta, weapon usage, history |
@@ -31,7 +31,7 @@ Every `index.ts` exports a `<name>Module` object:
 ```ts
 export const rankingModule = {
   name: 'ranking',
-  dependsOn: ['refresh-operations'],
+  dependsOn: ['queue'],
   migrations,
 } satisfies BrawltomeModule
 ```
@@ -88,9 +88,10 @@ renewals and discovery. Pool sizes and the connection budget are under Productio
 
 A migration is a typed object (`Migration` in `packages/foundation/migration.ts`) with an `identity` like
 `rankings/0002`: the owner name, then four digits. The owner name is the schema name with hyphens instead of
-underscores (`refresh-operations/0007`). A migration also has a `predecessor` in the same module, a `checksum` of its
-SQL, and optionally `requires`: identities from other modules that must run first. The files sit in each module's
-`migrations/` folder.
+underscores (`refresh-operations/0007`), so it isn't always the module's name: the `queue` module's migrations are
+`refresh-operations/`. A database records these identities, so they never change. A migration also has a `predecessor`
+in the same module, a `checksum` of its SQL, and optionally `requires`: identities from other modules that must run
+first. The files sit in each module's `migrations/` folder.
 
 `db:migrate` runs `tooling/database-migrations/src/cli.ts`. It collects the migrations of every module in
 `migrationModules`, orders them with `orderMigrations`, takes an advisory lock and applies what is still pending.
@@ -121,9 +122,8 @@ Migrations still have to be backward compatible with the release that serves dur
 - A module may import only the modules the policy lists for it (`capabilityDependencies` in
   `tooling/architecture/src/current-policy.ts`).
 - A module may import `@brawltome/contracts` for the schemas of its procedures. Contracts may not import a module.
-- A module's non-test source can't hold SQL that names another module's schema. One exception exists today:
-  statistics reads `refresh_operations` tables, tracked in issue #388. Modules that fence a write with a queue lease
-  call the fence functions `@brawltome/queue` exports, which take the caller's transaction. Deployed
+- A module's non-test source can't hold SQL that names another module's schema. Modules that fence a write with a
+  queue lease call the fence functions `@brawltome/queue` exports, which take the caller's transaction. Deployed
   migrations are skipped; a new migration may name another module's schema only when its `requires` lists a
   migration of that module.
 - A module's `index.ts` exports no drizzle tables, views or schemas. drizzle queries hold no `schema.table` text, so the

@@ -45,4 +45,8 @@ another one:
 
 A module that hasn't been rebuilt keeps its old layout. They all have `index.ts` and
 `migrations/` already, and most have `tests/`; the rest of each folder is still arranged the way it grew. Only `clan`
-is rebuilt so far.
+and `queue` are rebuilt so far.
+
+## Adding a background job
+
+Each job lives in the module it belongs to, in that module's `jobs/`. [`queue`](queue/README.md) has the steps.
