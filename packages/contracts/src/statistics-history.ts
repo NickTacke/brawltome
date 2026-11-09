@@ -86,8 +86,14 @@ export type StatisticsHistoryContractSnapshot = {
   cohortCells: ReadonlyArray<{ region: string; bracket: string; status: 'covered' | 'left-out' }>
 }
 
-function coveredCellsKey(cells: StatisticsHistoryContractSnapshot['cohortCells']): string {
-  const covered = cells.filter(({ status }) => status === 'covered')
+// only the cells this view is built from, so a cell changing elsewhere cannot break this view's history
+function coveredCellsKey({ cohortCells, scope }: StatisticsHistoryContractSnapshot): string {
+  const inScope = cohortCells.filter(
+    ({ region, bracket }) =>
+      (scope.region === 'all' || region === scope.region) && (scope.bracket === 'all' || bracket === scope.bracket),
+  )
+
+  const covered = inScope.filter(({ status }) => status === 'covered')
 
   return covered
     .map(({ region, bracket }) => `${region}/${bracket}`)
@@ -115,7 +121,7 @@ export function expectedCompatibilityReasonCodes(
     reasons.push('cohort_methodology_mismatch')
   }
 
-  if (coveredCellsKey(newer.cohortCells) !== coveredCellsKey(older.cohortCells)) {
+  if (coveredCellsKey(newer) !== coveredCellsKey(older)) {
     reasons.push('cohort_coverage_mismatch')
   }
 

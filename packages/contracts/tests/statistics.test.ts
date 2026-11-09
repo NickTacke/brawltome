@@ -169,6 +169,37 @@ describe('Legend Meta history coverage', () => {
 
     expect(() => legendMetaHistoryOutputSchema.parse(historyWith(leftOutCells, continued))).toThrow()
   })
+
+  test('lets a series continue when only a cell outside its scope changes', () => {
+    const [leftOutCell] = leftOutCells
+
+    if (!leftOutCell) throw new Error('left-out cell fixture missing')
+
+    const otherBracket = leftOutCell.bracket === 'Platinum' ? 'Diamond+' : 'Platinum'
+    const scope = { region: 'all', bracket: otherBracket }
+    const scoped = { ...historySnapshot, scope }
+
+    const history = (comparison: unknown) => ({
+      status: 'available',
+      filter: scope,
+      entries: [
+        { snapshot: scoped, comparisonToPrevious: comparison },
+        {
+          snapshot: { ...previousHistorySnapshot, scope, cohortCells: leftOutCells },
+          comparisonToPrevious: null,
+        },
+      ],
+    })
+
+    const continuedForSeason = {
+      status: 'incompatible',
+      previousSnapshotId: previousHistorySnapshot.snapshotId,
+      reasons: [coverageBreak.reasons[0]],
+    }
+
+    expect(() => legendMetaHistoryOutputSchema.parse(history(continuedForSeason))).not.toThrow()
+    expect(() => legendMetaHistoryOutputSchema.parse(history(coverageBreak))).toThrow()
+  })
 })
 
 describe('Current Season Legend Meta contract', () => {

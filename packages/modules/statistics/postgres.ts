@@ -374,8 +374,14 @@ const legendMetaReferences = referenceLegends
     slug: legendSlug(heroId, displayName),
   }))
 
-function coveredCellKeys(cells: readonly LegendMetaCohortCell[]): string[] {
-  return cells.filter(({ status }) => status === 'covered').map(({ region, bracket }) => `${region}/${bracket}`)
+// only the cells this view is built from, so a cell changing elsewhere cannot break this view's history
+function coveredCellKeys(cells: readonly LegendMetaCohortCell[], scope: { region: string; bracket: string }): string[] {
+  const inScope = cells.filter(
+    ({ region, bracket }) =>
+      (scope.region === 'all' || region === scope.region) && (scope.bracket === 'all' || bracket === scope.bracket),
+  )
+
+  return inScope.filter(({ status }) => status === 'covered').map(({ region, bracket }) => `${region}/${bracket}`)
 }
 
 function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
@@ -1804,7 +1810,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: artifact.cohortMethodologyVersion,
             metricMethodologyVersion: artifact.methodologyVersion,
             scope: input,
-            coveredCells: coveredCellKeys(artifact.cohortCells),
+            coveredCells: coveredCellKeys(artifact.cohortCells, input),
           },
           rows: slice.rows.map((row) => ({
             legend: row.legend,
@@ -1972,7 +1978,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: snapshot.cohort_methodology_version,
             metricMethodologyVersion: snapshot.methodology_version,
             scope: filters,
-            coveredCells: coveredCellKeys(snapshot.cohort_cells),
+            coveredCells: coveredCellKeys(snapshot.cohort_cells, filters),
           },
           rows: aggregate.rows.map((row) => ({
             weapon: row.weapon,
