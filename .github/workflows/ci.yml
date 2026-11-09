@@ -48,8 +48,7 @@ jobs:
       - run: bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
       - run: bun run infra:app:check
       - run: BRAWLTOME_IMAGE_TAG=0000000000000000000000000000000000000000 DISCORD_CLIENT_ID=123456789012345678 POSTGRES_DATA_ROOT=/srv/brawltome/postgres docker compose --profile discord --profile operator -f infra/app/compose.yml config --quiet
-      # on master the images job builds the app targets, so only pull requests build here. site is not in that job yet,
-      # it joins when it goes live, because a site build failure there would hold back the production deploy
+      # on master the images job builds the app targets, so only pull requests build here
       - name: Build every image target
         if: github.event_name == 'pull_request'
         run: |
@@ -114,7 +113,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [migration, dead-letter-role, dead-letter-cli, api, web, operations-worker, discord-bot]
+        target: [migration, dead-letter-role, dead-letter-cli, api, web, site, operations-worker, discord-bot]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -181,7 +180,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Promote the checked images
         run: |
-          for target in migration dead-letter-role dead-letter-cli api web operations-worker discord-bot; do
+          for target in migration dead-letter-role dead-letter-cli api web site operations-worker discord-bot; do
             image=ghcr.io/nicktacke/brawltome-$target
             docker buildx imagetools create --tag "$image:$GITHUB_SHA" "$image:$GITHUB_SHA-candidate"
           done
