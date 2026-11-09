@@ -11,6 +11,8 @@ export type ClanProvenance = {
   archiveChecksum?: string
   sourceTables?: Array<'clan_member' | 'player_clan'>
   archiveChecksums?: string[]
+  // set when the weekly snapshot made the call; a refresh leaves it out
+  trigger?: 'weekly-snapshot'
 }
 
 const sectionSources = {
@@ -24,4 +26,8 @@ export function successProvenance(section: ClanRefreshSection): ClanProvenance {
 
 export function failedCheckProvenance(section: ClanRefreshSection, failure: SourceFailure): ClanProvenance {
   return { source: sectionSources[section], outcome: failure.outcome }
+}
+
+export function weeklySnapshotProvenance(provenance: ClanProvenance): ClanProvenance {
+  return { ...provenance, trigger: 'weekly-snapshot' }
 }

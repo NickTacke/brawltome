@@ -5,6 +5,7 @@ import { validateSchedule } from '../domain/schedule-definition'
 import type { JobContract } from '../jobs/job-definition'
 import { assertValidJobInput } from '../jobs/job-input'
 import type {
+  CreateClanWeeklySnapshotSchedule,
   CreateLeaderboardDeepCrawlSchedule,
   CreateLeaderboardSchedule,
   CreateRankingRetentionSchedule,
@@ -19,6 +20,7 @@ export type FixedSchedule =
   | CreateLeaderboardSchedule
   | CreateRankingRetentionSchedule
   | CreateLeaderboardDeepCrawlSchedule
+  | CreateClanWeeklySnapshotSchedule
 
 export type ReconcileFixedScheduleInput = {
   job: JobContract<unknown>

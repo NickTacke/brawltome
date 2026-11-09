@@ -110,6 +110,7 @@ function createFakes(options: FakeOptions = {}) {
         disableRetention: scheduleStore('disable-retention'),
         deepCrawl: scheduleStore('deep-crawl-schedule'),
         disableDeepCrawl: scheduleStore('disable-deep-crawl'),
+        clanWeeklySnapshot: scheduleStore('clan-weekly-snapshot-schedule'),
       },
       leaderboard: [{ scheduleKey: 'rankings:1v1:v1' }, { scheduleKey: 'rankings:2v2:v1' }] as never,
       rankingRetention: {
@@ -120,6 +121,10 @@ function createFakes(options: FakeOptions = {}) {
         config: { enabled: options.deepCrawlEnabled ?? true, intervalMs: 3_600_000 },
         definitions: [{ scheduleKey: 'rankings:1v1:deep:EU' }] as never,
       },
+      clanWeeklySnapshot: {
+        scheduleKey: 'clans:weekly-snapshot:v1',
+        firstDueAt: '2026-11-19T10:30:00.000Z',
+      } as never,
     },
     telemetry: { logger: { info: (event, fields) => logs.push({ event, fields }) } },
   }
@@ -151,8 +156,8 @@ describe('worker planners', () => {
       'leaderboard-schedules',
     ])
 
-    // 2 activated + 7 monitoring + 5 cohort + 7 name verification + 11 freshness + 4 schedules
-    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 4)
+    // 2 activated + 7 monitoring + 5 cohort + 7 name verification + 11 freshness + 5 schedules
+    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 5)
     // the schedules are already in place on the second tick
     expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11)
   })
@@ -174,6 +179,7 @@ describe('worker planners', () => {
       'leaderboard-schedule',
       'retention-schedule',
       'deep-crawl-schedule',
+      'clan-weekly-snapshot-schedule',
     ])
   })
 
@@ -209,7 +215,7 @@ describe('worker planners', () => {
       const fakes = createFakes()
       const planner = schedulesPlanner(fakes)
 
-      expect(await planner.tick()).toBe(4)
+      expect(await planner.tick()).toBe(5)
 
       const callsAfterFirstTick = fakes.calls.length
 
@@ -219,6 +225,7 @@ describe('worker planners', () => {
       expect(fakes.logs.map(({ event }) => event)).toEqual([
         'ranking.retention.scheduled',
         'leaderboard.deep_crawl.scheduled',
+        'clan.weekly_snapshot.scheduled',
       ])
     })
 
@@ -227,7 +234,7 @@ describe('worker planners', () => {
 
       await schedulesPlanner(fakes).tick()
 
-      expect(await schedulesPlanner(fakes).tick()).toBe(4)
+      expect(await schedulesPlanner(fakes).tick()).toBe(5)
     })
 
     test('try again on the next tick when reconciling failed part way', async () => {
@@ -235,8 +242,8 @@ describe('worker planners', () => {
       const planner = schedulesPlanner(fakes)
 
       await expect(planner.tick()).rejects.toThrow('schedule store unavailable')
-      expect(await planner.tick()).toBe(4)
-      expect(fakes.logs).toHaveLength(2)
+      expect(await planner.tick()).toBe(5)
+      expect(fakes.logs).toHaveLength(3)
     })
 
     test('count only schedules that changed', async () => {
@@ -260,9 +267,10 @@ describe('worker planners', () => {
         'leaderboard-schedule',
         'disable-retention',
         'disable-deep-crawl',
+        'clan-weekly-snapshot-schedule',
       ])
 
-      expect(fakes.calls.slice(2)).toEqual([
+      expect(fakes.calls.slice(2, 4)).toEqual([
         ['disable-retention', 'rankings:retention:v1'],
         ['disable-deep-crawl', 'rankings:1v1:deep:EU'],
       ])
@@ -273,6 +281,10 @@ describe('worker planners', () => {
           fields: { enabled: false, outcome: 'already-disabled', retentionHours: 48, maxGenerations: 6 },
         },
         { event: 'leaderboard.deep_crawl.scheduled', fields: { enabled: false, intervalMs: 3_600_000 } },
+        {
+          event: 'clan.weekly_snapshot.scheduled',
+          fields: { outcome: 'already-disabled', firstDueAt: '2026-11-19T10:30:00.000Z' },
+        },
       ])
     })
   })

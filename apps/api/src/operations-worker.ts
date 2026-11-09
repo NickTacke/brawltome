@@ -7,7 +7,13 @@ import {
   createBhApiRequestQueue,
   type RequestQueue,
 } from '@brawltome/bhapi'
-import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
+import {
+  createPostgresClanDiscoverySource,
+  createPostgresClans,
+  createPostgresWeeklySnapshots,
+  defaultClanWeeklySnapshotSliceGuilds,
+  reconcileClanWeeklySnapshotSchedule,
+} from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
 import { checkModuleList } from '@brawltome/foundation'
 import { createLegendReferenceIndex, legendSlug, legends, normalizeWeaponName } from '@brawltome/game-data'
@@ -56,6 +62,7 @@ import { createDiscoveryReconciliationBackoff } from './discovery-reconciliation
 import { createFreshnessPlanner, readFreshnessPlannerConfig } from './freshness-planner'
 import { createHealthRoutes } from './health-routes'
 import {
+  clanWeeklySnapshotScheduleDefinition,
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
@@ -207,7 +214,23 @@ const workerJobs = createWorkerJobs({
     clanSource: clanDiscoverySource,
     leaseActive: discoveryLeaseActive,
   },
-  clan: { clans, createBrawlhallaClient: createWorkerBhApiClient },
+  clan: {
+    clans,
+    createBrawlhallaClient: createWorkerBhApiClient,
+    weeklySnapshot: {
+      snapshots: createPostgresWeeklySnapshots(databases.main),
+      sliceGuilds: defaultClanWeeklySnapshotSliceGuilds,
+      guildDelayMs: workerConfig.clanWeeklySnapshot.guildDelayMs,
+      waitBetweenGuilds: waitForRenewal,
+      waitBeforeGuildRetry: waitForRenewal,
+      retryTimings: {
+        retryDelayMs: workerConfig.retryDelayMs,
+        sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
+      },
+      now: () => new Date(),
+      telemetry,
+    },
+  },
   accounts: {
     accounts: accounts.accounts,
     createEvidenceResolver: createPrimaryPlayerEvidenceResolver,
@@ -435,10 +458,12 @@ const planners = createPlanners({
       disableRetention: (scheduleKey) => disableRankingRetentionSchedule(databases.main, scheduleKey),
       deepCrawl: (schedule) => reconcileLeaderboardDeepCrawlSchedule(databases.main, schedule),
       disableDeepCrawl: (scheduleKey) => disableLeaderboardDeepCrawlSchedule(databases.main, scheduleKey),
+      clanWeeklySnapshot: (schedule) => reconcileClanWeeklySnapshotSchedule(databases.main, schedule),
     },
     leaderboard: leaderboardSchedules,
     rankingRetention: { config: workerConfig.rankingRetention, definition: rankingRetentionSchedule },
     deepCrawl: { config: workerConfig.deepCrawl, definitions: deepCrawlSchedules },
+    clanWeeklySnapshot: clanWeeklySnapshotScheduleDefinition(),
   },
   telemetry,
 })

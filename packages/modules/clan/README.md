@@ -15,6 +15,8 @@ The `clans` schema. The tables are described in `db/tables.ts`:
 - `refresh_effects`: the clan side of a refresh lease, so a publish can check the lease in its own transaction
 - `discovery_state`: one row with the source version
 - `discovery_outbox`: one event per changed clan, for the discovery projection
+- `weekly_snapshot_runs`: one row per week the weekly snapshot job has started, and how far it got
+- `weekly_snapshots`: each clan's guild points in each week
 
 `db/tables.ts` has every column of each table the code uses, because `tests/tables.test.ts` compares each column
 with the database. The migrations in `migrations/` own the defaults, checks, indexes and triggers.
@@ -32,6 +34,9 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
   `clan-profile-contract.ts` does that mapping for a clan, so the tRPC refresh can map a clan it has already read.
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it. `clan-refresh-job.ts` is the queue
   job that runs it, section by section. `clan-refresh-reservation.ts` reserves and activates the queue operation.
+  `clan-weekly-snapshot-job.ts` is the weekly snapshot job, and `clan-weekly-snapshot-schedule.ts` keeps its schedule.
+  `weekly-snapshot-fetch.ts` fetches one guild with its retries, and `weekly-snapshot-failure.ts` decides what a failed
+  attempt does.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
 ## Public surface
@@ -44,6 +49,8 @@ Everything other packages may import is exported from `index.ts`, and only what 
 - `createPostgresClans` and the `ClanQueries` type: the old closure, for the refresh paths until the queue is replaced
 - `createPostgresClanDiscoverySource`, for the operations worker
 - `createClanRefreshJob`, for the operations worker's job list
+- `createClanWeeklySnapshotJob`, `createPostgresWeeklySnapshots` and `reconcileClanWeeklySnapshotSchedule`, for the
+  operations worker, and `clanWeeklySnapshotContract`, for the API's contract tests
 - `createClanRefreshReservations`, for the tRPC clan refresh, and `reserveClanRefresh`, for the API's queue tests
 - the `ClanProvenance` type, for the API's test fixtures
 
@@ -81,3 +88,41 @@ job from `jobs/clan-refresh-job.ts`.
    retryable failure is also thrown back to the worker, which retries it.
 4. Triggers write the change to `discovery_outbox`, and the worker delivers it through
    `createPostgresClanDiscoverySource`.
+
+## Weekly snapshot
+
+The `clan-weekly-snapshot` job runs once a week in the maintenance work class. It fetches every stored clan's guild
+stats from V1, in clan id order with a pause between calls, and does two things with each answer:
+
+1. publishes the profile the same way a refresh does, so guild points and lifetime xp stay fresh for every clan
+2. saves the clan's guild points in `weekly_snapshots`, under the day the schedule window came due, with the rank V1
+   sent alongside them so the Last week rank can be checked against the game's
+
+Both writes carry `trigger: 'weekly-snapshot'` in their provenance, so they can be told apart from a refresh. They
+share one transaction with moving the run past the clan, and that transaction first checks the operation's lease with
+the queue's `acquire_active_lease` fence. Marking or clearing an outage and finishing the week check it the same way. A
+worker whose lease ran out while it waited on V1 writes nothing, so it can't overwrite the worker that took over.
+
+The run row in `weekly_snapshot_runs` remembers the last clan, so a yield, a failed attempt or a lost lease carries on
+after it. The job yields its slot after each slice of 100 clans. A failed call is retried in place twice, after 500 ms
+and 2 s. A clan that still fails, or that the source answers with a 404 or with stats that don't parse, is skipped for
+that week and gets a failed profile check, as a refresh records one. A failed clan is only skipped once a later clan
+answers, so clans failing at the end of a slice are fetched again by the next one. Text holding U+0000, which Postgres
+can't store, is saved without it.
+
+When five clans in a row fail every retry, V1 is taken to be down: the run defers without spending an attempt and
+picks up at the first of them. It doesn't pause V1, since that would hold every other caller. The run row notes when
+that started in `source_down_since`, and a clan that answers clears it. After 6 hours each defer also skips the first
+of the failing clans, so five broken clans in a row cost the week 6 hours, and an outage that lasts longer loses one
+clan per defer. A 429 or a source admission limit also defers. A failure of admission
+itself is a database error, so it takes the normal retries. Once every clan is done the week gets a `completed_at`.
+
+A week stops once the next weekly window is due, even if it never finished, and so does a dead letter of it replayed
+after that, since a replay keeps its window. The points V1 sends by then belong to the next week, so saving them
+under this one would leave Last week near zero. The job finishes the operation without fetching and leaves the week
+without a `completed_at`, which Last week reads as no figure.
+
+Last week is the latest completed week's points minus the points of the week seven days before it, which must have
+completed too, so the first figure appears a week after the second run. A clan whose points went down gets no figure,
+since that isn't a week of earned points. No clan gets one once the latest completed week is more than 14 days old.
+`clan.standingById` serves it as `lastWeekPoints`, with its rank among the clans that have a figure as `lastWeekRank`.

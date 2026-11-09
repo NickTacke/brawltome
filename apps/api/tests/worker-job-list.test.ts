@@ -11,7 +11,11 @@ import {
   type WorkerPlayerDependencies,
   type WorkerStatisticsDependencies,
 } from '../src/worker/job-list'
-import { idleLeaderboardDependencies, idleStatisticsDependencies } from './fixtures/queue'
+import {
+  idleClanWeeklySnapshotDependencies,
+  idleLeaderboardDependencies,
+  idleStatisticsDependencies,
+} from './fixtures/queue'
 
 const playerSource = { name: 'player source' } as unknown as WorkerDiscoveryDependencies['playerSource']
 const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependencies['clanSource']
@@ -19,6 +23,7 @@ const clanSource = { name: 'clan source' } as unknown as WorkerDiscoveryDependen
 const idleClanDependencies: WorkerClanDependencies = {
   clans: {} as WorkerClanDependencies['clans'],
   createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
+  weeklySnapshot: idleClanWeeklySnapshotDependencies,
 }
 
 const evidenceResolver = { resolve: async () => null }
@@ -150,6 +155,7 @@ describe('worker job list', () => {
       'primary-player-verification',
       'interactive-player-refresh',
       'clan-refresh',
+      'clan-weekly-snapshot',
       'ranked-player-pulse',
       'player-name-verification',
       'leaderboard-1v1',
@@ -231,6 +237,7 @@ describe('worker job list', () => {
         },
         getGuildMembersV1: async () => null,
       }),
+      weeklySnapshot: idleClanWeeklySnapshotDependencies,
     })
 
     const tools = {

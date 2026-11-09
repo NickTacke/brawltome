@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseGuildMembers } from '../domain/guild-members'
-import { parseGuildStats } from '../domain/guild-stats'
+import { parseGuildRank, parseGuildStats } from '../domain/guild-stats'
 import { isOlderThanLastSuccess } from '../domain/publication'
 import { effectPreparation } from '../domain/refresh-effect'
 import { classifySourceFailure } from '../domain/source-failure'
@@ -35,6 +35,13 @@ describe('parseGuildStats', () => {
 
   test('rejects a name with nothing visible in it', () => {
     expect(() => parseGuildStats({ ...stats, name: ' \u200B ' }, clanId)).toThrow('guild stats name must be visible')
+  })
+})
+
+describe('parseGuildRank', () => {
+  test('keeps a rank up to the largest Postgres integer and drops one above it', () => {
+    expect(parseGuildRank({ ...stats, rank: 2_147_483_647 })).toBe(2_147_483_647)
+    expect(parseGuildRank({ ...stats, rank: 2_147_483_648 })).toBeNull()
   })
 })
 

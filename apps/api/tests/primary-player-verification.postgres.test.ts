@@ -69,7 +69,7 @@ function createVerificationJobs(verify: Verify) {
       clanSource: {} as WorkerDiscoveryDependencies['clanSource'],
       leaseActive: async () => true,
     },
-    clan: { clans: {} as never, createBrawlhallaClient: () => ({}) as never },
+    clan: { clans: {} as never, createBrawlhallaClient: () => ({}) as never, weeklySnapshot: {} as never },
     accounts,
     player: idlePlayerDependencies,
     statistics: idleStatisticsDependencies,

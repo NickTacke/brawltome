@@ -1,7 +1,9 @@
+import { clanWeeklySnapshotIntervalMs } from '@brawltome/clan'
 import { parseBoundedInteger, parsePositiveInteger } from '@brawltome/foundation'
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
+  type CreateClanWeeklySnapshotSchedule,
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateRankingRetentionSchedule,
   type LeaderboardDeepCrawlMode,
@@ -144,6 +146,26 @@ export function rankingRetentionScheduleDefinition(config: RankingRetentionConfi
   }
 }
 
+/**
+ * Once a week, half an hour after 10:00 UTC on Thursday. The in-game week turns over on Thursday with the daily reset,
+ * 5am Eastern: 09:00 UTC in summer and 10:00 UTC in winter. A fixed UTC time can't follow daylight saving, so it sits
+ * after the later of the two. The first run is a week after the release that adds it, so the old worker, which doesn't
+ * know the kind, is gone by then. A failing guild or a V1 outage spends no attempt, so the 20 are for database errors.
+ */
+export function clanWeeklySnapshotScheduleDefinition(): CreateClanWeeklySnapshotSchedule {
+  return {
+    kind: 'clan-weekly-snapshot',
+    scheduleKey: 'clans:weekly-snapshot:v1',
+    operationKeyPrefix: 'clans:weekly-snapshot',
+    workClass: 'maintenance',
+    intervalMs: clanWeeklySnapshotIntervalMs,
+    firstDueAt: '2026-11-19T10:30:00.000Z',
+    payload: {},
+    provenance: { source: 'clan-weekly-snapshot-schedule', requestedBy: 'guild-last-week' },
+    maxAttempts: 20,
+  }
+}
+
 export type LeaderboardDeepCrawlConfig = {
   // false disables the region schedules; runs already materialized still complete.
   enabled: boolean
@@ -273,6 +295,16 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
     }),
     jitterRatio: 0.2,
   }
+
+  // the weekly snapshot pauses between guilds as long as the deep crawl does between pages. A V1 call takes about
+  // 0.33 s, so a guild takes about 0.5 s: some 600 calls per 5 minutes, like the deep crawl, and about 40 minutes
+  // for production's 4,509 guilds
+  const deepCrawlPageDelayMs = parseBoundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, {
+    name: 'DEEP_CRAWL_PAGE_DELAY_MS',
+    fallback: 150,
+    minimum: 0,
+    maximum: 5_000,
+  })
 
   // After a dead-lettered discovery reconciliation, wait 5 minutes (doubling per consecutive failure, capped at
   // an hour) before enqueueing another one instead of re-enqueueing on every scheduler tick.
@@ -406,12 +438,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
       }),
       // Hourly windows start after the first 3-hour pass; regions then stay staggered across the hour.
       firstDueAt: '2026-10-07T19:30:00.000Z',
-      pageDelayMs: parseBoundedInteger(env.DEEP_CRAWL_PAGE_DELAY_MS, {
-        name: 'DEEP_CRAWL_PAGE_DELAY_MS',
-        fallback: 150,
-        minimum: 0,
-        maximum: 5_000,
-      }),
+      pageDelayMs: deepCrawlPageDelayMs,
       soloIntervalMs: parseBoundedInteger(env.DEEP_CRAWL_SOLO_INTERVAL_MS, {
         name: 'DEEP_CRAWL_SOLO_INTERVAL_MS',
         fallback: 3 * 60 * 60 * 1000,
@@ -425,6 +452,7 @@ export function readOperationsWorkerConfig(env: NodeJS.ProcessEnv) {
         maximum: maxLeaderboardDeepCrawlIntervalMs,
       }),
     } satisfies LeaderboardDeepCrawlConfig,
+    clanWeeklySnapshot: { guildDelayMs: deepCrawlPageDelayMs },
     admission: validateAdmissionConfig(admission),
   }
 }

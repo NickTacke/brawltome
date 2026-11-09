@@ -31,7 +31,7 @@ that owns the job, not to this schema.
 - `jobs/`: what a job is (`job-definition.ts`), finding one by kind (`job-registry.ts`), and running one
   (`run-one-job.ts`, `run-sections.ts`)
 - `lease-fences.ts`: checks that run inside another module's transaction, so its write only commits while the lease
-  is held
+  is held. `acquireActiveLeaseInTransaction` is `acquireActiveLease` for a module that writes through drizzle
 - `model.ts`: the types and kind lists other modules share
 - `operator-auth.ts`: the token check for the dead-letter CLI
 - `testing.ts`: helpers for tests, exported as `@brawltome/queue/testing`
@@ -85,8 +85,9 @@ If the job saves results of its own, those tables go in the owner's migrations.
    `tooling/architecture/src/current-policy.ts`.
 4. Add the kind to `allOperationKinds` in `domain/queue-telemetry.ts`, `OperationLease` in `model.ts`, and
    `operationKind` in `packages/telemetry/src/index.ts`. A kind missing from that last list loses its metrics with no
-   error. No new kind fits yet: `operation_dead_letters` is at 126 of its 128 series (19 kinds across 6 work classes,
-   plus 12 admission series) and a kind adds 6. Dropped series break the dead-letter alert, so raise `maxSeries` first.
+   error. `operation_dead_letters` is at 132 of its 256 series (20 kinds across 6 work classes, plus 12 admission
+   series) and a kind adds 6. Dropped series break the dead-letter alert, so check the limit in `createTelemetry`
+   first.
 5. Test it with `runJobOnce` from `@brawltome/queue/testing`.
 6. Ship that. A new kind's job has to ship one release before anything writes that kind. During a deploy the old worker
    is still claiming, and it dead-letters a kind it doesn't know.

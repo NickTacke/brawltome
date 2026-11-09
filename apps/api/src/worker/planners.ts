@@ -9,6 +9,7 @@ import type { PrimaryMonitoringSnapshot } from '@brawltome/player'
 import type {
   AcceptOperationInput,
   AcceptOperationResult,
+  CreateClanWeeklySnapshotSchedule,
   CreateLeaderboardDeepCrawlSchedule,
   CreateLeaderboardSchedule,
   CreateRankingRetentionSchedule,
@@ -32,6 +33,7 @@ export type ScheduleStore = {
   disableRetention(scheduleKey: string): Promise<ScheduleResult>
   deepCrawl(schedule: CreateLeaderboardDeepCrawlSchedule): Promise<ScheduleResult>
   disableDeepCrawl(scheduleKey: string): Promise<ScheduleResult>
+  clanWeeklySnapshot(schedule: CreateClanWeeklySnapshotSchedule): Promise<ScheduleResult>
 }
 
 export type PlannerDependencies = {
@@ -71,6 +73,7 @@ export type PlannerDependencies = {
       config: { enabled: boolean; intervalMs: number }
       definitions: readonly CreateLeaderboardDeepCrawlSchedule[]
     }
+    clanWeeklySnapshot: CreateClanWeeklySnapshotSchedule
   }
   telemetry: { logger: { info(event: string, fields: Record<string, unknown>): void } }
 }
@@ -206,6 +209,18 @@ async function reconcileDeepCrawlSchedules({ schedules, telemetry }: PlannerDepe
   return changed
 }
 
+async function reconcileClanWeeklySnapshotSchedule({ schedules, telemetry }: PlannerDependencies): Promise<number> {
+  const definition = schedules.clanWeeklySnapshot
+  const snapshot = await schedules.store.clanWeeklySnapshot(definition)
+
+  telemetry.logger.info('clan.weekly_snapshot.scheduled', {
+    outcome: snapshot.outcome,
+    firstDueAt: definition.firstDueAt,
+  })
+
+  return isScheduleChanged(snapshot) ? 1 : 0
+}
+
 // schedules only change with configuration, so once per process is enough; a failed pass is retried on the next tick
 function createScheduleReconciliationPlanner(dependencies: PlannerDependencies): Planner {
   let isReconciled = false
@@ -218,10 +233,11 @@ function createScheduleReconciliationPlanner(dependencies: PlannerDependencies):
       const leaderboard = await reconcileLeaderboardSchedules(dependencies)
       const retention = await reconcileRetentionSchedule(dependencies)
       const deepCrawl = await reconcileDeepCrawlSchedules(dependencies)
+      const clanWeeklySnapshot = await reconcileClanWeeklySnapshotSchedule(dependencies)
 
       isReconciled = true
 
-      return leaderboard + retention + deepCrawl
+      return leaderboard + retention + deepCrawl + clanWeeklySnapshot
     },
   }
 }

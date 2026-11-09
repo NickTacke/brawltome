@@ -59,7 +59,15 @@ export const playerClanMembershipSchema = z
   .strict()
 const clanRankSchema = z.number().int().positive().nullable()
 
-export const clanStandingSchema = z.object({ guildPointsRank: clanRankSchema, lifetimeXpRank: clanRankSchema }).strict()
+export const clanStandingSchema = z
+  .object({
+    guildPointsRank: clanRankSchema,
+    lifetimeXpRank: clanRankSchema,
+    // guild points earned last week, null until two weekly snapshots a week apart exist
+    lastWeekPoints: decimalXpSchema.nullable(),
+    lastWeekRank: clanRankSchema,
+  })
+  .strict()
 export const clanByIdInputSchema = z.object({ id: clanIdSchema }).strict()
 export const rankedClanListInputSchema = z.object({ page: z.int().min(1).max(100_000) }).strict()
 

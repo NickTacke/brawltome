@@ -4,7 +4,13 @@ import {
   proofEffectState,
 } from '@brawltome/accounts'
 import type { BhApiClient, BhApiClientOptions } from '@brawltome/bhapi'
-import { type ClanRefreshJobDependencies, type ClanSource, createClanRefreshJob } from '@brawltome/clan'
+import {
+  type ClanRefreshJobDependencies,
+  type ClanSource,
+  type ClanWeeklySnapshotJobDependencies,
+  createClanRefreshJob,
+  createClanWeeklySnapshotJob,
+} from '@brawltome/clan'
 import {
   type ClanProjectionSource,
   createClanDiscoveryProjectionJob,
@@ -65,6 +71,17 @@ export type WorkerClanDependencies = {
   clans: ClanRefreshJobDependencies['clans']
   // the worker's Brawlhalla client, built around one section's source admission
   createBrawlhallaClient(beforeRequest: BhApiClientOptions['beforeRequest']): ClanSource
+  weeklySnapshot: Pick<
+    ClanWeeklySnapshotJobDependencies,
+    | 'snapshots'
+    | 'sliceGuilds'
+    | 'guildDelayMs'
+    | 'waitBetweenGuilds'
+    | 'waitBeforeGuildRetry'
+    | 'retryTimings'
+    | 'now'
+    | 'telemetry'
+  >
 }
 
 export type WorkerAccountsDependencies = PrimaryPlayerVerificationJobDependencies & {
@@ -134,13 +151,16 @@ function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinit
   return [playerProjection, clanProjection, reconciliation]
 }
 
-function createClanJobs({ clans, createBrawlhallaClient }: WorkerClanDependencies): JobDefinition<unknown>[] {
-  const clanRefresh = createClanRefreshJob({
-    clans,
-    createAdmittedSource: (admitSource) => createBrawlhallaClient(({ domain }) => admitSource(domain)),
-  })
+function createClanJobs(clan: WorkerClanDependencies): JobDefinition<unknown>[] {
+  const { clans, createBrawlhallaClient, weeklySnapshot } = clan
 
-  return [clanRefresh]
+  const createAdmittedSource: ClanRefreshJobDependencies['createAdmittedSource'] = (admitSource) =>
+    createBrawlhallaClient(({ domain }) => admitSource(domain))
+
+  const clanRefresh = createClanRefreshJob({ clans, createAdmittedSource })
+  const clanWeeklySnapshot = createClanWeeklySnapshotJob({ ...weeklySnapshot, createAdmittedSource })
+
+  return [clanRefresh, clanWeeklySnapshot]
 }
 
 function createPlayerJobs(
