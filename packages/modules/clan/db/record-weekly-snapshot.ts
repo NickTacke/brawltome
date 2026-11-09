@@ -8,20 +8,21 @@ export type WeeklySnapshotRecord = {
   clanId: number
   // null when the clan is skipped this week; the run still moves past it
   guildPoints: string | null
+  sourceRank: number | null
 }
 
 /** Saves a clan's points for the week and moves the run past it, together, so a retry can't lose or repeat a clan. */
 export async function recordWeeklySnapshot(database: Database, record: WeeklySnapshotRecord): Promise<void> {
-  const { weekStarting, clanId, guildPoints } = record
+  const { weekStarting, clanId, guildPoints, sourceRank } = record
 
   await database.db.transaction(async (transaction) => {
     if (guildPoints !== null) {
       await transaction
         .insert(weeklySnapshots)
-        .values({ weekStarting, clanId, guildPoints })
+        .values({ weekStarting, clanId, guildPoints, sourceRank })
         .onConflictDoUpdate({
           target: [weeklySnapshots.weekStarting, weeklySnapshots.clanId],
-          set: { guildPoints: excluded(weeklySnapshots.guildPoints) },
+          set: { guildPoints: excluded(weeklySnapshots.guildPoints), sourceRank: excluded(weeklySnapshots.sourceRank) },
         })
     }
 

@@ -53,3 +53,14 @@ export function parseGuildStats(payload: unknown, clanId: number): ClanProfileWr
     isRecruiting: payload.is_recruiting,
   }
 }
+
+/** The rank V1 sends with a guild's stats, or null when it sends none. Optional, so it never fails the stats. */
+export function parseGuildRank(payload: unknown): number | null {
+  if (!isSourceRecord(payload)) return null
+
+  const { rank } = payload
+
+  if (typeof rank !== 'number' || !Number.isSafeInteger(rank) || rank < 1) return null
+
+  return rank
+}

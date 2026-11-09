@@ -12,7 +12,7 @@ import {
 import type { Telemetry } from '@brawltome/telemetry'
 import type { PostgresClans } from '../db/postgres-clans'
 import type { PostgresWeeklySnapshots } from '../db/postgres-weekly-snapshots'
-import { type ClanProfileWrite, parseGuildStats } from '../domain/guild-stats'
+import { type ClanProfileWrite, parseGuildRank, parseGuildStats } from '../domain/guild-stats'
 import { failedCheckProvenance, successProvenance, weeklySnapshotProvenance } from '../domain/provenance'
 import { classifySourceFailure } from '../domain/source-failure'
 import { clanWeeklySnapshotContract } from './clan-weekly-snapshot-contract'
@@ -76,7 +76,7 @@ async function skipGuild(slice: SnapshotSlice, clanId: number, error: unknown): 
   const provenance = weeklySnapshotProvenance(failedCheckProvenance('profile', classifySourceFailure(error)))
 
   await dependencies.clans.recordProfileCheck(clanId, new Date(), provenance)
-  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null })
+  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null, sourceRank: null })
 }
 
 async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown | null): Promise<boolean> {
@@ -91,9 +91,10 @@ async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown 
 
   const { profile } = read
   const provenance = weeklySnapshotProvenance(successProvenance('profile'))
+  const sourceRank = parseGuildRank(payload)
 
   await dependencies.clans.publishProfile(profile, new Date(), provenance)
-  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: profile.guildPoints })
+  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: profile.guildPoints, sourceRank })
 
   return true
 }

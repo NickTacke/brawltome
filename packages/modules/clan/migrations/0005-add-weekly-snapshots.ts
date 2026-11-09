@@ -10,6 +10,7 @@ CREATE TABLE clans.weekly_snapshots (
   week_starting date NOT NULL REFERENCES clans.weekly_snapshot_runs(week_starting) ON DELETE CASCADE,
   clan_id integer NOT NULL REFERENCES clans.clans(clan_id) ON DELETE CASCADE,
   guild_points numeric(40, 0) NOT NULL CHECK (guild_points >= 0),
+  source_rank integer CHECK (source_rank > 0),
   taken_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (week_starting, clan_id)
 );`
@@ -18,6 +19,6 @@ CREATE TABLE clans.weekly_snapshots (
 export const addClanWeeklySnapshots = {
   identity: 'clans/0005',
   predecessor: 'clans/0004',
-  checksum: '55d3ffbfff5152f5e4c0da4442cc04f7473fea19aa307aa82b36f713a7bc8c22',
+  checksum: '8cbaa5a700f530aaeeca7fae8b77d0728a42217ea14e2b90d5dba8366196d3ad',
   sql,
 } as const

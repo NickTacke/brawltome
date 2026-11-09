@@ -274,6 +274,31 @@ describe('clan weekly snapshot job', () => {
     expect(await isWeekCompleted(week)).toBe(true)
   })
 
+  test('keeps the rank the source sent with the points, if it sent one', async () => {
+    for (const clanId of [111, 112]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>([
+      [111, { guildPoints: '30', rank: 12 }],
+      [112, { guildPoints: '20' }],
+    ])
+
+    const { job, queue, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'ranked')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+
+    const ranks = await database.sql<{ clanId: number; sourceRank: number | null }[]>`
+      SELECT clan_id AS "clanId", source_rank AS "sourceRank"
+      FROM clans.weekly_snapshots WHERE week_starting = ${week} ORDER BY clan_id
+    `
+
+    expect([...ranks]).toEqual([
+      { clanId: 111, sourceRank: 12 },
+      { clanId: 112, sourceRank: null },
+    ])
+  })
+
   test('marks the profiles it publishes as coming from the weekly snapshot', async () => {
     await storeGuild(121)
 
