@@ -58,3 +58,15 @@ export function timeAgo(value: string, now = new Date()): string {
 
   return `${Math.floor(hours / 24)} d ago`
 }
+
+const largestEntityId = 2_147_483_647
+const canonicalIdPattern = /^[1-9]\d*$/
+
+/** The player or guild id in a url, or null for anything the API could never know, so bad urls cost no API call. */
+export function parseEntityId(value: string): number | null {
+  if (!canonicalIdPattern.test(value)) return null
+
+  const id = Number(value)
+
+  return id <= largestEntityId ? id : null
+}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { isNotFound, isRedirect } from '@tanstack/react-router'
-import { parseGuildId } from '../src/components/guild/guild-id'
+import { parseEntityId } from '../src/lib'
 import { Route as ClanRoute } from '../src/routes/clan.$id'
 import { Route as GuildRoute } from '../src/routes/guild.$id'
 
@@ -12,19 +12,19 @@ function failureOf(hook: unknown, id: string): Promise<unknown> {
     .catch((failure: unknown) => failure)
 }
 
-describe('parseGuildId', () => {
+describe('parseEntityId', () => {
   test('accepts a plain guild id', () => {
-    expect(parseGuildId('387803')).toBe(387803)
+    expect(parseEntityId('387803')).toBe(387803)
   })
 
   test('accepts the largest id the api allows', () => {
-    expect(parseGuildId('2147483647')).toBe(2147483647)
+    expect(parseEntityId('2147483647')).toBe(2147483647)
   })
 
   test.each(['abc', '0', '-1', '1.5', '1e3', '0x10', '1.0', '99999999999', '', ' 1', '01', '2147483648'])(
     'rejects %p',
     (value) => {
-      expect(parseGuildId(value)).toBeNull()
+      expect(parseEntityId(value)).toBeNull()
     },
   )
 })

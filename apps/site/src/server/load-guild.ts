@@ -7,6 +7,7 @@ import {
   playerRankedSummariesSchema,
 } from '@brawltome/contracts'
 import { postApi, readApi } from './api'
+import { failureText, optionalRead, readOptional } from './optional-read'
 
 export type GuildPage = {
   clan: ClanProfileContract
@@ -20,10 +21,6 @@ export type GuildPage = {
 
 // the most ids the ranked summaries read accepts in one request
 const summaryBatchSize = 250
-
-function failureText(error: unknown): string {
-  return error instanceof Error ? error.message : 'unknown failure'
-}
 
 export function batchIds(ids: number[], batchSize = summaryBatchSize): number[][] {
   const batches: number[][] = []
@@ -41,20 +38,6 @@ async function readProfile(guildId: number): Promise<ClanProfileContract | null>
     console.error(failureText(error))
 
     throw new Error(`load guild ${guildId}: the guild could not be read`)
-  }
-}
-
-// a short limit, so a slow optional read can't double how long the visitor waits for numbers that only decorate the page
-const optionalRead = { timeoutMs: 3_000 }
-
-// these numbers only decorate the roster, so the page is still worth showing without them
-async function readOptional<T>(read: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await read()
-  } catch (error) {
-    console.error(failureText(error))
-
-    return fallback
   }
 }
 
