@@ -1,4 +1,6 @@
-import { legends, normalizeWeaponName } from '@brawltome/game-data'
+// the narrow entries, the package root also loads megabytes of frame data this ships to browsers
+import { legends } from '@brawltome/game-data/legends'
+import { normalizeWeaponName } from '@brawltome/game-data/reference-data'
 
 export type LegendWeapons = { weaponOne: string; weaponTwo: string }
 

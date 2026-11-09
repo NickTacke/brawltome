@@ -8,6 +8,7 @@ const clientOutput = join(outputRoot, 'client')
 const serverOutput = join(outputRoot, 'server')
 const secretMarkers = ['INTERNAL_API_SECRET', 'x-internal-secret']
 const buildTimeoutMs = 180_000
+const largestClientScriptBytes = 500_000
 
 function outputFiles(root: string): string[] {
   const entries = readdirSync(root, { recursive: true, encoding: 'utf8' })
@@ -45,6 +46,14 @@ describe('client bundle', () => {
     const scripts = outputFiles(clientOutput).filter((path) => path.endsWith('.js'))
 
     expect(scripts.length).toBeGreaterThan(0)
+  })
+
+  // the game data package holds megabytes of frame data, one wrong import ships it to every visitor
+  test('no client script is oversized', () => {
+    const scripts = outputFiles(clientOutput).filter((path) => path.endsWith('.js'))
+    const oversized = scripts.filter((path) => statSync(path).size > largestClientScriptBytes)
+
+    expect(oversized.map((path) => relative(clientOutput, path))).toEqual([])
   })
 
   // without this the check below passes on a site where nothing uses the api client
