@@ -2,12 +2,13 @@ import { createFileRoute, useRouterState } from '@tanstack/react-router'
 import { HomeFilters } from '../components/home/HomeFilters'
 import { HomeHero } from '../components/home/HomeHero'
 import { type BoardMode, type BoardRegion, defaultMode, parseMode, parseRegion } from '../components/home/home-filters'
+import { LegendsRow } from '../components/home/LegendsRow'
 import { PatchNews } from '../components/home/PatchNews'
 import { rememberRegion } from '../components/home/region-cookie'
 import { TopGuilds } from '../components/home/TopGuilds'
 import { TopPlayers } from '../components/home/TopPlayers'
 import { useSlowNavigation } from '../components/use-slow-navigation'
-import { getPatches, getTopGuilds, getTopPlayers } from '../server/home'
+import { getMostPlayedLegends, getPatches, getTopGuilds, getTopPlayers } from '../server/home'
 
 type HomeSearch = { mode?: BoardMode; region?: BoardRegion }
 
@@ -22,9 +23,14 @@ export const Route = createFileRoute('/')({
   validateSearch,
   loaderDeps: ({ search }) => ({ mode: search.mode ?? defaultMode, region: search.region }),
   loader: async ({ deps }) => {
-    const [board, guilds, patches] = await Promise.all([getTopPlayers({ data: deps }), getTopGuilds(), getPatches()])
+    const [board, guilds, mostPlayedLegends, patches] = await Promise.all([
+      getTopPlayers({ data: deps }),
+      getTopGuilds(),
+      getMostPlayedLegends(),
+      getPatches(),
+    ])
 
-    return { board, guilds, patches }
+    return { board, guilds, mostPlayedLegends, patches }
   },
   component: Home,
 })
@@ -36,7 +42,7 @@ const halvesStyle =
   'grid gap-y-8 xl:grid-cols-2 xl:divide-x xl:divide-line/50 xl:[&>*:first-child]:pr-12 xl:[&>*:last-child]:pl-12'
 
 function Home() {
-  const { board, guilds, patches } = Route.useLoaderData()
+  const { board, guilds, mostPlayedLegends, patches } = Route.useLoaderData()
   const isSlow = useSlowNavigation()
 
   // the location changes as soon as a filter is picked, the route's own search only once the board has loaded
@@ -70,6 +76,7 @@ function Home() {
         <TopPlayers entries={board.entries} filters={filters} isLoading={isSlow} avatarCount={mode === '2v2' ? 2 : 1} />
         <TopGuilds guilds={guilds} />
       </div>
+      <LegendsRow mostPlayed={mostPlayedLegends} />
       {patches && (
         <div data-search-dim>
           <PatchNews notes={patches} />
