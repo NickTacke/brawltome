@@ -2,6 +2,7 @@ import type { PlayerPage as PlayerPageData } from '../../server/load-player'
 import { Career } from './Career'
 import { Identity } from './Identity'
 import { Ranked } from './Ranked'
+import { RatingHistory } from './RatingHistory'
 import { rankedStanding } from './side-summary'
 import { TwoVsTwo } from './TwoVsTwo'
 
@@ -27,12 +28,7 @@ const stackedSections =
   'divide-y divide-line/50 [&>*]:py-6 max-xl:[&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0'
 
 /** A profile: the player's identity and rank stay on the left while the stats scroll. */
-export function PlayerPage({
-  player,
-  seasonStarts: _seasonStarts,
-  loadedAt,
-  isUnarmedExcluded: _isUnarmedExcluded,
-}: PlayerPageProps) {
+export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded: _isUnarmedExcluded }: PlayerPageProps) {
   const standing = rankedStanding(player.currentSeason) ?? undefined
   const snapshot = player.currentSeason?.snapshot
 
@@ -48,7 +44,9 @@ export function PlayerPage({
           playerId={player.brawlhallaId}
         />
       </aside>
-      <div className={`min-w-0 ${stackedSections} xl:border-l xl:border-line/50 xl:pl-14`} />
+      <div className={`min-w-0 ${stackedSections} xl:border-l xl:border-line/50 xl:pl-14`}>
+        <RatingHistory history={snapshot?.ratingHistory ?? []} seasonStarts={seasonStarts} />
+      </div>
     </div>
   )
 }
