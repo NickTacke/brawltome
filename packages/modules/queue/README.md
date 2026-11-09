@@ -64,8 +64,8 @@ Everything other packages may import is exported from `index.ts`:
    no longer parses, is dead-lettered with the code `invalid_payload`, and claim moves on to the next one.
 3. `run-one-job.ts` renews the lease and calls the job's `run`. The job returns an outcome, or throws and
    `decideFailure` or the default rules choose between retry, defer and dead letter.
-4. If a lease expires, the next claim asks the job's `effectState` whether the work was already saved. If it was, the
-   job is finished rather than run again.
+4. If a lease expires, the next claim asks the job's `effectState`. `acknowledged` finishes the job without running it.
+   Anything else runs it again, so `run` has to cope with work that's already partly saved.
 
 ## How to add a job
 
@@ -76,15 +76,18 @@ If the job saves results of its own, those tables go in the owner's migrations.
    `parsePayload`.
 2. Add the job in `jobs/<kind>-job.ts`, as `create<Name>Job(dependencies)` returning `defineJob({ ...contract,
    failureCode, run })`. `clan/jobs/clan-refresh-job.ts` is a good one to copy. If the job can die after saving its
-   result, give it `effectState`, so the next claim finishes it instead of doing the work twice.
+   result, give it `effectState` and return `acknowledged` once the result is final, so the next claim finishes the job
+   instead of running it again.
 3. Export both from the owner's `index.ts` and add the job to `createWorkerJobs` in `apps/api/src/worker/job-list.ts`.
    If the owner doesn't use the queue yet, add `queue` to its `dependsOn` and to `capabilityDependencies` in
    `tooling/architecture/src/current-policy.ts`.
-4. Add the kind to `allOperationKinds` in `domain/queue-telemetry.ts` and to `OperationLease` in `model.ts`, or its dead
-   letters don't show up in `operation_dead_letters`. Each kind adds one series per work class, and the metric is close
-   to the limit in `packages/telemetry`, so check it still fits.
+4. Add the kind to `allOperationKinds` in `domain/queue-telemetry.ts`, `OperationLease` in `model.ts`, and
+   `operationKind` in `packages/telemetry/src/index.ts`. A kind missing from that last list loses its metrics with no
+   error. No new kind fits yet: `operation_dead_letters` is at 126 of its 128 series (19 kinds across 6 work classes,
+   plus 12 admission series) and a kind adds 6. Dropped series break the dead-letter alert, so raise `maxSeries` first.
 5. Test it with `runJobOnce` from `@brawltome/queue/testing`.
 6. Ship that. A new kind's job has to ship one release before anything writes that kind. During a deploy the old worker
    is still claiming, and it dead-letters a kind it doesn't know.
 7. In the next release, start writing it: a call to `acceptOperation`, or a planner in
-   `apps/api/src/worker/planners.ts` if it runs on a schedule.
+   `apps/api/src/worker/planners.ts` if it runs on a schedule. A scheduled job also goes in `scheduledKinds` in
+   `domain/queue-telemetry.ts`, or `schedule_lateness_ms` never reports it.
