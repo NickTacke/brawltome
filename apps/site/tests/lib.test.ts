@@ -19,6 +19,10 @@ describe('formatDay', () => {
   test('formats the day in utc', () => {
     expect(formatDay('2024-03-01T23:30:00Z')).toBe('1 Mar 2024')
   })
+
+  test('abbreviates september the same way everywhere', () => {
+    expect(formatDay('2020-09-09T00:00:00Z')).toBe('9 Sep 2020')
+  })
 })
 
 describe('timeAgo', () => {
