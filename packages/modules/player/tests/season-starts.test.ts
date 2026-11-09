@@ -63,6 +63,16 @@ describe('createSeasonStartsCache', () => {
     expect(read).toHaveBeenCalledTimes(1)
   })
 
+  test('shares one read between callers that arrive together', async () => {
+    const read = mock(async () => firstAnswer)
+    const cached = createSeasonStartsCache(read, () => 1000)
+
+    const answers = await Promise.all([cached(), cached(), cached()])
+
+    expect(answers).toEqual([firstAnswer, firstAnswer, firstAnswer])
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
   test('reads again after the hour', async () => {
     let nowMs = 0
     const read = mock(async () => (nowMs === 0 ? firstAnswer : secondAnswer))

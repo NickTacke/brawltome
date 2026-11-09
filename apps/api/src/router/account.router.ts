@@ -9,6 +9,7 @@ import {
   playerShortcutsSchema,
   primaryPlayerVerificationStateSchema,
 } from '@brawltome/contracts'
+import { mapPlayerRankedProfile } from '@brawltome/player'
 import { TRPCError } from '@trpc/server'
 import {
   type AccountPlayerFacts,
@@ -18,7 +19,6 @@ import {
   toPlayerShortcuts,
   toPrimaryPlayerVerificationState,
 } from '../mappers/account.mapper'
-import { mapPlayerRankedProfile } from '@brawltome/player'
 import type { Context } from '../trpc/context'
 import { protectedProcedure, publicProcedure, router } from '../trpc/trpc'
 
