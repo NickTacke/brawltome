@@ -2,7 +2,7 @@ import { User } from '@solar-icons/react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { railItems, signInPath } from './AppRail'
+import { leavesThisApp, railItems, SignInLink } from './AppRail'
 import { socialLinks } from './social-links'
 
 const iconButtonStyle =
@@ -17,6 +17,7 @@ function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose
     <li className="border-b border-line/40 last:border-b-0">
       <Link
         to={to}
+        {...leavesThisApp}
         onClick={onClose}
         aria-current={isActive ? 'page' : undefined}
         className={`flex h-14 items-center gap-4 text-lg font-bold transition-colors ${isActive ? 'text-strong' : 'text-soft hover:text-strong'} ${wip ? 'opacity-60' : ''}`}
@@ -32,14 +33,10 @@ function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose
 function MenuFooter({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex items-center justify-between border-t border-line/40 px-2 pt-3">
-      <Link
-        to={signInPath}
-        onClick={onClose}
-        className="flex h-10 items-center gap-2.5 font-medium text-soft hover:text-strong"
-      >
+      <SignInLink onClick={onClose} className="flex h-10 items-center gap-2.5 font-medium text-soft hover:text-strong">
         <User className="size-5" weight="Linear" aria-hidden="true" />
         Sign in
-      </Link>
+      </SignInLink>
       <div className="flex items-center gap-1">
         {socialLinks.map((link) => (
           <a

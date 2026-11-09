@@ -1,6 +1,6 @@
 import { BookBookmark, Cup, Gamepad, PieChart, User, UsersGroupRounded } from '@solar-icons/react'
 import { Link } from '@tanstack/react-router'
-import type { ComponentType, SVGProps } from 'react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { HouseOutline } from './rail-icons'
 import { socialLinks } from './social-links'
 
@@ -19,13 +19,18 @@ export const railItems: RailItem[] = [
 // a plain string because the account page isn't a route yet, a literal fails the route types
 export const signInPath: string = '/account'
 
+// while the old site still serves some of these pages on the same domain, a link must load them from the server, or
+// this app would show its own version, or its not found page, in their place
+export const leavesThisApp = { reloadDocument: true } as const
+
 const tooltipStyle =
   'pointer-events-none absolute left-full z-40 ml-3 hidden rounded-control border border-line bg-raised px-2 py-1 text-label whitespace-nowrap text-strong group-hover:block group-focus-visible:block'
 
-function RailLink({ to, label, icon: Icon, exact, wip }: RailItem) {
+export function RailLink({ to, label, icon: Icon, exact, wip }: RailItem) {
   return (
     <Link
       to={to}
+      {...leavesThisApp}
       aria-label={wip ? `${label} (Soon)` : label}
       activeOptions={{ exact: exact ?? false, includeSearch: false }}
       activeProps={{ className: 'bg-white/[0.08] !text-text' }}
@@ -56,6 +61,16 @@ function RailSocialLinks() {
   )
 }
 
+type SignInLinkProps = { className: string; onClick?: () => void; children?: ReactNode }
+
+export function SignInLink({ className, onClick, children }: SignInLinkProps) {
+  return (
+    <Link to={signInPath} {...leavesThisApp} aria-label="Sign in" onClick={onClick} className={className}>
+      {children}
+    </Link>
+  )
+}
+
 export function AppRail() {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[57px] flex-col border-r border-line bg-rail md:flex">
@@ -68,13 +83,9 @@ export function AppRail() {
       <div className="shrink-0 border-t border-line px-2 py-2">
         <RailSocialLinks />
         <div className="border-t border-line pt-2 pb-1">
-          <Link
-            to={signInPath}
-            aria-label="Sign in"
-            className="flex size-10 items-center justify-center rounded-control border-2 border-rail bg-raised text-soft transition-all hover:brightness-150"
-          >
+          <SignInLink className="flex size-10 items-center justify-center rounded-control border-2 border-rail bg-raised text-soft transition-all hover:brightness-150">
             <User className="size-6" weight="Linear" aria-hidden="true" />
-          </Link>
+          </SignInLink>
         </div>
       </div>
     </aside>
