@@ -10,8 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LearnRouteImport } from './routes/learn'
+import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TournamentsRouteImport } from './routes/tournaments'
 import { Route as ClanIdRouteImport } from './routes/clan.$id'
 import { Route as GuildIdRouteImport } from './routes/guild.$id'
 import { Route as PlayerIdRouteImport } from './routes/player.$id'
@@ -21,14 +25,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LearnRoute = LearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MatchesRoute = MatchesRouteImport.update({
+  id: '/matches',
+  path: '/matches',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TournamentsRoute = TournamentsRouteImport.update({
+  id: '/tournaments',
+  path: '/tournaments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClanIdRoute = ClanIdRouteImport.update({
@@ -49,16 +73,24 @@ const PlayerIdRoute = PlayerIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/learn': typeof LearnRoute
+  '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
+  '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
   '/player/$id': typeof PlayerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/learn': typeof LearnRoute
+  '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
+  '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
   '/player/$id': typeof PlayerIdRoute
@@ -66,8 +98,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/learn': typeof LearnRoute
+  '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
+  '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
   '/player/$id': typeof PlayerIdRoute
@@ -75,14 +111,37 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/privacy' | '/terms' | '/clan/$id' | '/guild/$id' | '/player/$id'
+    | '/'
+    | '/learn'
+    | '/matches'
+    | '/privacy'
+    | '/stats'
+    | '/terms'
+    | '/tournaments'
+    | '/clan/$id'
+    | '/guild/$id'
+    | '/player/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/privacy' | '/terms' | '/clan/$id' | '/guild/$id' | '/player/$id'
+  to:
+    | '/'
+    | '/learn'
+    | '/matches'
+    | '/privacy'
+    | '/stats'
+    | '/terms'
+    | '/tournaments'
+    | '/clan/$id'
+    | '/guild/$id'
+    | '/player/$id'
   id:
     | '__root__'
     | '/'
+    | '/learn'
+    | '/matches'
     | '/privacy'
+    | '/stats'
     | '/terms'
+    | '/tournaments'
     | '/clan/$id'
     | '/guild/$id'
     | '/player/$id'
@@ -90,8 +149,12 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LearnRoute: typeof LearnRoute
+  MatchesRoute: typeof MatchesRoute
   PrivacyRoute: typeof PrivacyRoute
+  StatsRoute: typeof StatsRoute
   TermsRoute: typeof TermsRoute
+  TournamentsRoute: typeof TournamentsRoute
   ClanIdRoute: typeof ClanIdRoute
   GuildIdRoute: typeof GuildIdRoute
   PlayerIdRoute: typeof PlayerIdRoute
@@ -106,6 +169,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/learn': {
+      id: '/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof LearnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matches': {
+      id: '/matches'
+      path: '/matches'
+      fullPath: '/matches'
+      preLoaderRoute: typeof MatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -113,11 +190,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tournaments': {
+      id: '/tournaments'
+      path: '/tournaments'
+      fullPath: '/tournaments'
+      preLoaderRoute: typeof TournamentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clan/$id': {
@@ -146,8 +237,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LearnRoute: LearnRoute,
+  MatchesRoute: MatchesRoute,
   PrivacyRoute: PrivacyRoute,
+  StatsRoute: StatsRoute,
   TermsRoute: TermsRoute,
+  TournamentsRoute: TournamentsRoute,
   ClanIdRoute: ClanIdRoute,
   GuildIdRoute: GuildIdRoute,
   PlayerIdRoute: PlayerIdRoute,
