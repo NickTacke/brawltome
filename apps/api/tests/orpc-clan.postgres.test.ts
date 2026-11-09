@@ -166,7 +166,7 @@ describe('clan.membershipByPlayerId over oRPC', () => {
 describe('clan.standingById over oRPC', () => {
   test('returns the standing of a stored clan at /rpc and at GET /v1/clans/{id}/standing', async () => {
     const client = createRpcClient()
-    const topStanding = { guildPointsRank: 1, lifetimeXpRank: 1 }
+    const topStanding = { guildPointsRank: 1, lifetimeXpRank: 1, lastWeekPoints: null, lastWeekRank: null }
 
     expect(await client.clan.standingById({ id: completeClan.clan.clanId })).toEqual(topStanding)
 
@@ -182,6 +182,8 @@ describe('clan.standingById over oRPC', () => {
     expect(await client.clan.standingById({ id: legacyClan.clan.clanId })).toEqual({
       guildPointsRank: null,
       lifetimeXpRank: 4,
+      lastWeekPoints: null,
+      lastWeekRank: null,
     })
   })
 

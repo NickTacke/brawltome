@@ -98,3 +98,4 @@ that don't parse, is skipped for that week. Once every clan is done the week get
 Last week is the difference between the two most recent completed weeks that are exactly seven days apart, so the
 first figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a
 week of earned points.
+`clan.standingById` serves it as `lastWeekPoints`, with its rank among the clans that have a figure as `lastWeekRank`.
