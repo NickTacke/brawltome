@@ -34,7 +34,7 @@ describe('leaderboard collection job', () => {
       operationKey: 'leaderboard:telemetry',
       kind: 'leaderboard-1v1',
       workClass: 'leaderboard',
-      payload: { pageDepth: 1, intervalMs: 1_000 },
+      payload: { pageDepth: 1, intervalMs: 60_000 },
       provenance: { source: 'test' },
       leaseOwner: 'worker',
       leaseToken: 1,

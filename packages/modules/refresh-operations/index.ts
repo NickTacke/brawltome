@@ -27,6 +27,9 @@ import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-mo
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 import { addPrimaryPlayerVerificationKind } from './migrations/0027-add-primary-player-verification-kind'
 import { validatePrimaryPlayerVerificationKind } from './migrations/0028-validate-primary-player-verification-kind'
+import { dropKindConstraints } from './migrations/0029-drop-kind-constraints'
+import { dropScheduleKindConstraints } from './migrations/0030-drop-schedule-kind-constraints'
+import { dropInteractiveSectionCheck } from './migrations/0031-drop-interactive-section-check'
 
 export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 export {
@@ -56,11 +59,6 @@ export {
   operationMatches,
   readEffectLineage,
 } from './db/effect-lineage'
-export {
-  createEffectStates,
-  type EffectStateEntry,
-  type EffectStates,
-} from './db/effect-states'
 export {
   type ActiveOperation,
   type CountActiveInput,
@@ -118,6 +116,13 @@ export {
   sourceRetryAfterMs,
 } from './domain/job-errors'
 export {
+  hasOnlyFields,
+  isPositive32BitInteger,
+  isPositiveInteger,
+  isSectionList,
+  readPayloadObject,
+} from './domain/payload-fields'
+export {
   completeWithProofEffect,
   type ProofEffectPayload,
   type ProofEffectStore,
@@ -128,6 +133,7 @@ export {
   type AttemptOutcome,
   defineJob,
   type EffectState,
+  type JobContract,
   type JobDefinition,
   type JobTools,
   type Lease,
@@ -137,8 +143,10 @@ export {
   type SourceAdmissionPort,
   type SourceAdmitter,
 } from './jobs/job-definition'
+export { assertValidJobInput } from './jobs/job-input'
 export { createJobRegistry, type JobRegistry } from './jobs/job-registry'
 export { waitForRenewal } from './jobs/lease-renewal'
+export { parseProofEffectPayload, proofContract } from './jobs/proof-contract'
 export { type RetryBackoff, type RunOneJobOptions, runOneJob } from './jobs/run-one-job'
 export { type RunSectionsOptions, runSections, type SectionRun } from './jobs/run-sections'
 export {
@@ -189,7 +197,12 @@ const migrations = [
   notifyPlayerRefreshSettled,
   addPrimaryPlayerVerificationKind,
   validatePrimaryPlayerVerificationKind,
+  dropKindConstraints,
+  dropScheduleKindConstraints,
+  dropInteractiveSectionCheck,
 ] as const
+
+export type { InvalidRow } from './db/claim-operation'
 
 export const refreshOperationsModule = {
   name: 'refresh-operations',

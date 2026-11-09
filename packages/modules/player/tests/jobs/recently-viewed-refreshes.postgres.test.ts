@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { interactivePlayerRefreshContract } from '@brawltome/player'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import { reserveInteractivePlayerRefresh } from '../../jobs/player-refresh-reservation'
@@ -115,7 +116,7 @@ describe('Recently viewed freshness operations', () => {
 
   test('enqueues background refreshes once per player and skips players with an active refresh', async () => {
     const control = postgres(connectionString, { max: 1 })
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations({ database }, { jobs: [interactivePlayerRefreshContract] })
 
     try {
       await insertVisitorRefresh(control, 30, 0, false)
@@ -153,27 +154,12 @@ describe('Recently viewed freshness operations', () => {
     }
   })
 
-  test('rejects primary-monitoring refreshes that have neither an assignment nor the cohort', async () => {
-    const control = postgres(connectionString, { max: 1 })
+  test('rejects primary-monitoring refreshes that have neither an assignment nor the cohort', () => {
+    const payload = { brawlhallaId: 40, staleSections: ['ranked', 'stats'] }
 
-    try {
-      const id = randomUUID()
-
-      const insertOrphan = async () => {
-        await control`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
-          VALUES
-            (${id}, ${id}, 'interactive-player-refresh', ${`orphan:${id}`}, ${`orphan:${id}`}, 'primary-monitoring',
-             ${control.json({ brawlhallaId: 40, staleSections: ['ranked', 'stats'] })},
-             ${control.json({ source: 'test' })}, 4)
-        `
-      }
-
-      await expect(insertOrphan()).rejects.toThrow('operations_payload_by_kind')
-    } finally {
-      await control.end()
-    }
+    expect(() => interactivePlayerRefreshContract.parsePayload(payload, 'primary-monitoring')).toThrow(
+      'needs an assignmentId or the recently viewed cohort',
+    )
   })
 
   test('promotes a queued background refresh when a visitor asks for the same player', async () => {

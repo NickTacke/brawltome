@@ -1,13 +1,12 @@
 import type { Database } from '@brawltome/foundation'
 import { and, eq, gt, inArray, lte, type SQL, sql } from 'drizzle-orm'
-import type { OperationKind } from '../domain/operation-kinds'
 import type { TransitionResult } from '../model'
 import { deadLetterReservation, reservationExpiredFailure, reservationFailure } from './reservation-failure'
 import { operations } from './tables'
 import type { Transaction } from './transaction'
 import { notifyWakeup } from './wakeup'
 
-function ofKinds(kinds: readonly OperationKind[]): SQL {
+function ofKinds(kinds: readonly string[]): SQL {
   return inArray(operations.kind, kinds)
 }
 
@@ -24,7 +23,7 @@ async function makePending(transaction: Transaction, operationId: string, condit
 export type ActivateReservedInput = {
   operationId: string
   reservationToken: string
-  kinds: readonly OperationKind[]
+  kinds: readonly string[]
 }
 
 /** Queues a reservation the caller still holds: the token matches and it has not expired. */
@@ -45,7 +44,7 @@ export function activateReserved(database: Database, input: ActivateReservedInpu
   })
 }
 
-export type ActivateAdmittedInput = { operationId: string; kinds: readonly OperationKind[] }
+export type ActivateAdmittedInput = { operationId: string; kinds: readonly string[] }
 
 /** Queues an awaiting_admission operation without checking its token, for a caller that admitted it itself. */
 export function activateAdmitted(database: Database, input: ActivateAdmittedInput): Promise<TransitionResult> {
@@ -68,7 +67,7 @@ export type RejectReservedInput = {
   reservationToken: string
   reason: string
   message: string
-  kinds: readonly OperationKind[]
+  kinds: readonly string[]
 }
 
 /** Sends a reservation the caller holds to dead letter, with the reason as its error code. */
@@ -89,7 +88,7 @@ export async function rejectReserved(database: Database, input: RejectReservedIn
   return rejected ? 'transitioned' : 'lease-lost'
 }
 
-export type RejectExpiredInput = { operationId: string; kinds: readonly OperationKind[] }
+export type RejectExpiredInput = { operationId: string; kinds: readonly string[] }
 
 /** Sends a reservation whose time ran out to dead letter. */
 export async function rejectExpired(database: Database, input: RejectExpiredInput): Promise<TransitionResult> {
@@ -111,7 +110,7 @@ export async function rejectExpired(database: Database, input: RejectExpiredInpu
 
 const boundStatuses = ['pending', 'leased', 'succeeded']
 
-export type ActivateBoundOptions = { kinds: readonly OperationKind[] }
+export type ActivateBoundOptions = { kinds: readonly string[] }
 
 /** Queues an awaiting_binding operation; one already queued, running or done counts as activated. */
 export function activateBound(

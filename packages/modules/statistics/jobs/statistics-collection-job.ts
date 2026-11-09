@@ -13,6 +13,7 @@ import {
 import { statisticsCollectionEffectState } from '../db/effects'
 import type { CollectionAttemptAuthorization, LifetimeEvidence, RankedEvidence, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt } from './job-outcomes'
+import { statisticsCollectionContract } from './statistics-job-contracts'
 
 export type StatisticsCollectionLease = Lease<StatisticsCollectionPayload> & { kind: StatisticsCollectionKind }
 
@@ -158,11 +159,8 @@ function createCollectionJob(
   dependencies: StatisticsCollectionJobDependencies,
 ): JobDefinition<StatisticsCollectionPayload> {
   return defineJob<StatisticsCollectionPayload>({
-    kind,
-    workClasses: ['global-statistics'],
+    ...statisticsCollectionContract(kind),
     failureCode: 'statistics_collection_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as StatisticsCollectionPayload,
     effectState: statisticsCollectionEffectState,
     run: (lease, tools) => runCollection({ ...lease, kind }, tools, dependencies),
   })

@@ -12,12 +12,8 @@ import {
 import type { PostgresClans } from '../db/postgres-clans'
 import type { ClanRefreshEffect } from '../domain/refresh-effect'
 import type { ClanRefreshSection } from '../domain/refresh-section'
+import { type ClanRefreshPayload, clanRefreshContract } from './clan-refresh-contract'
 import { type ClanSectionStore, type ClanSource, processRefreshClanSection } from './refresh-clan'
-
-export type ClanRefreshPayload = {
-  clanId: number
-  staleSections: ClanRefreshSection[]
-}
 
 export type ClanRefreshJobDependencies = {
   clans: ClanSectionStore & Pick<PostgresClans, 'revokeRefreshEffect'>
@@ -118,11 +114,8 @@ async function runClanRefresh(
 
 export function createClanRefreshJob(dependencies: ClanRefreshJobDependencies): JobDefinition<ClanRefreshPayload> {
   return defineJob<ClanRefreshPayload>({
-    kind: 'clan-refresh',
-    workClasses: ['interactive'],
+    ...clanRefreshContract,
     failureCode: 'clan_refresh_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as ClanRefreshPayload,
     effectState: (transaction, lease) => allSectionsCommitted(transaction, lease, lease.payload.staleSections),
     run: (lease, tools) => runClanRefresh(dependencies, lease, tools),
   })

@@ -15,15 +15,13 @@ import type { CareerLegendResolver } from '../career/source'
 import type { CanonicalRankedEffect, PostgresRankedPlayers } from '../ranked/postgres'
 import { refreshCanonicalRankedPlayer, type V0RankedSource } from '../ranked/refresh'
 
-type PlayerRefreshSection = 'ranked' | 'stats'
+import {
+  type InteractivePlayerRefreshPayload,
+  interactivePlayerRefreshContract,
+  type PlayerRefreshSection,
+} from './interactive-player-refresh-contract'
 
-export type InteractivePlayerRefreshPayload = {
-  brawlhallaId: number
-  staleSections: PlayerRefreshSection[]
-  // set on an account's Primary refresh; such a refresh stops once its assignment ends
-  assignmentId?: string
-  cohort?: string
-}
+export type { InteractivePlayerRefreshPayload }
 
 export type PlayerRefreshSource = V0RankedSource & V0CareerSource
 
@@ -139,11 +137,8 @@ export function createInteractivePlayerRefreshJob(
   dependencies: InteractivePlayerRefreshJobDependencies,
 ): JobDefinition<InteractivePlayerRefreshPayload> {
   return defineJob<InteractivePlayerRefreshPayload>({
-    kind: 'interactive-player-refresh',
-    workClasses: ['interactive', 'primary-monitoring'],
+    ...interactivePlayerRefreshContract,
     failureCode: 'interactive_player_refresh_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as InteractivePlayerRefreshPayload,
     effectState: (transaction, lease) => allSectionsCommitted(transaction, lease, lease.payload.staleSections),
     run: (lease, tools) =>
       runSections(

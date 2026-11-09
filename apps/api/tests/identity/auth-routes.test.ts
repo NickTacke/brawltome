@@ -360,7 +360,7 @@ describe('GET /auth/steam/callback', () => {
 
     expect(fakes.queuedVerifications).toEqual([
       {
-        kind: 'primary-player-verification',
+        job: expect.objectContaining({ kind: 'primary-player-verification' }),
         dedupeKey: 'primary-player:5f689990-dc60-4d70-bd1c-7b49b89786b7',
         operationKey: 'primary-player:5f689990-dc60-4d70-bd1c-7b49b89786b7',
         workClass: 'interactive',

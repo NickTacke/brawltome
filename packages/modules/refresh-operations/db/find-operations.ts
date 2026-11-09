@@ -1,6 +1,5 @@
 import type { Database } from '@brawltome/foundation'
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm'
-import type { OperationKind } from '../domain/operation-kinds'
 import type { WorkClass } from '../model'
 import { payloadMatches } from './payload-matches'
 import { operations } from './tables'
@@ -13,7 +12,7 @@ type OperationStatus = typeof operations.$inferSelect.status
 type Reader = Pick<Database['db'], 'select'>
 
 export type FindActiveOperationInput = {
-  kind: OperationKind
+  kind: string
   dedupeKey: string
   // also matches the operation holding this resource, for kinds that allow one active operation per resource
   resourceKey?: string
@@ -55,7 +54,7 @@ export function findActiveOperation(
 }
 
 export type ListAwaitingInput = {
-  kinds: readonly OperationKind[]
+  kinds: readonly string[]
   status: OperationStatus
   limit: number
 }
@@ -73,7 +72,7 @@ export async function listAwaiting(database: Database, input: ListAwaitingInput)
 }
 
 export type CountActiveInput = {
-  kind: OperationKind
+  kind: string
   workClass: WorkClass
   // top-level payload keys the operation must hold, as text
   payloadEquals: Record<string, string>

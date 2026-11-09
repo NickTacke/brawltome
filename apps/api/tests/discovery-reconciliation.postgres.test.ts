@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { clanModule, createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
-import { createClanDiscoveryProjectionJob, createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
+import {
+  clanDiscoveryProjectionContract,
+  createClanDiscoveryProjectionJob,
+  createPostgresDiscovery,
+  discoveryModule,
+  discoveryReconciliationContract,
+} from '@brawltome/discovery'
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
@@ -124,7 +130,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       await clans.publishProfile(profile('Initial Clan', '10'), new Date('2024-01-01'), provenance)
 
       const failedAck = await operations.accept({
-        kind: 'clan-discovery-projection',
+        job: clanDiscoveryProjectionContract,
         dedupeKey: `clan-projection-failed-ack:${randomUUID()}`,
         operationKey: `clan-projection-failed-ack:${randomUUID()}`,
         workClass: 'projection',
@@ -165,7 +171,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(await source.lag()).toBe(0)
 
       const deadLetter = await operations.accept({
-        kind: 'clan-discovery-projection',
+        job: clanDiscoveryProjectionContract,
         dedupeKey: `clan-projection-dead-letter:${randomUUID()}`,
         operationKey: `clan-projection-dead-letter:${randomUUID()}`,
         workClass: 'projection',
@@ -204,7 +210,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(await source.lag()).toBe(0)
 
       const reconciliation = await operations.accept({
-        kind: 'discovery-reconciliation',
+        job: discoveryReconciliationContract,
         dedupeKey: `clan-reconciliation:${randomUUID()}`,
         operationKey: `clan-reconciliation:${randomUUID()}`,
         workClass: 'projection',
@@ -273,7 +279,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       )
 
       const rejectedLateEffect = await operations.accept({
-        kind: 'discovery-reconciliation',
+        job: discoveryReconciliationContract,
         dedupeKey: `late-reconciliation:${randomUUID()}`,
         operationKey: `late-reconciliation:${randomUUID()}`,
         workClass: 'projection',

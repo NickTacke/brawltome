@@ -258,7 +258,11 @@ Worker logs, filtered by the `kind` label, show what that schedule is doing.
 retries. Admission rejections are expected outcomes and are not counted.
 
 **Likely causes:** a bug in that operation kind (consistent failures); a payload Brawlhalla changed shape on; a long
-outage that outlasted the retry budget.
+outage that outlasted the retry budget. A row with the code `invalid_payload` never ran: its payload doesn't parse, or
+this release has no job for its kind. After a rollback, replay those once the newer release is back. A kind the running
+release doesn't know has no `operation_dead_letters` series, so search the worker logs for
+`operation.claim.invalid_row`, or check the CLI, rather than waiting on the alert. A new kind's job has to ship one
+release before anything writes that kind, or a worker still on the old release dead-letters the rows during the deploy.
 
 **First steps:** list and inspect dead letters with the operator CLI (`bun run operations:dead-letters`, which runs
 `apps/api/src/dead-letter-cli.ts`). It needs `DEAD_LETTER_DATABASE_URL`, `DEAD_LETTER_OPERATOR_TOKENS` and

@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { createPlayerDiscoveryProjectionJob, createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
+import {
+  createPlayerDiscoveryProjectionJob,
+  createPostgresDiscovery,
+  discoveryModule,
+  playerDiscoveryProjectionContract,
+} from '@brawltome/discovery'
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
@@ -180,7 +185,7 @@ describe('Players to Discovery projection delivery', () => {
       await expect(playerResults(discovery, 'player')).resolves.toEqual([])
 
       const operationInput = {
-        kind: 'player-discovery-projection' as const,
+        job: playerDiscoveryProjectionContract,
         dedupeKey: 'discovery:players:pending',
         operationKey: `discovery:players:${randomUUID()}`,
         workClass: 'projection' as const,

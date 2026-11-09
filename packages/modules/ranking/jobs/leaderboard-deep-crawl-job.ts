@@ -20,6 +20,7 @@ import {
 import { LeaderboardSourceError } from '../v1-leaderboard-source'
 import { type AdmittedPageFetchDependencies, createAdmittedPageFetch } from './admitted-page-fetch'
 import { decideLeaderboardFailure, LeaderboardDeepCrawlYield } from './leaderboard-failure'
+import { leaderboardDeepCrawlContract } from './leaderboard-job-contracts'
 import { recordLeaderboardTelemetry } from './leaderboard-telemetry'
 import type {
   LeaderboardPlayerNames,
@@ -305,11 +306,8 @@ export function createLeaderboardDeepCrawlJob(
   dependencies: LeaderboardDeepCrawlJobDependencies,
 ): JobDefinition<LeaderboardDeepCrawlPayload> {
   return defineJob<LeaderboardDeepCrawlPayload>({
-    kind: 'leaderboard-deep-crawl',
-    workClasses: ['leaderboard'],
+    ...leaderboardDeepCrawlContract,
     failureCode: 'leaderboard_deep_crawl_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as LeaderboardDeepCrawlPayload,
     decideFailure: async (error) => decideLeaderboardFailure(error, dependencies.retryTimings),
     run: (lease, tools) => runDeepCrawl(lease, dependencies, tools),
   })

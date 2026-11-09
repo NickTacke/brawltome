@@ -5,6 +5,7 @@ import {
   reconcileResourceSchedules,
 } from '@brawltome/refresh-operations'
 import { primaryMonitoringWatermark } from '../db/primary-monitoring-watermark'
+import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const primaryMonitoringSource = 'primary-player-monitoring'
 const primaryMonitoringIntervalMs = 24 * 60 * 60 * 1000
@@ -35,7 +36,7 @@ function monitoringSchedule(target: PrimaryMonitoringTarget): ResourceSchedule {
   validateMonitoringTarget(target)
 
   return {
-    kind: 'interactive-player-refresh',
+    job: interactivePlayerRefreshContract,
     scheduleKey: `primary-player:${target.brawlhallaId}:${target.assignmentId}`,
     operationKeyPrefix: `primary-player:${target.brawlhallaId}`,
     resourceKey: `player:${target.brawlhallaId}`,

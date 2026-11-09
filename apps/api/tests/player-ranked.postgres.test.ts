@@ -7,6 +7,7 @@ import {
   createPostgresRankedPlayers,
   createRankedPlayerPulseJob,
   playerModule,
+  rankedPlayerPulseContract,
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
@@ -104,7 +105,7 @@ async function claimRankedOperation(operations: PostgresRefreshOperations, brawl
 
 async function claimPulseOperation(operations: PostgresRefreshOperations, brawlhallaId: number) {
   const accepted = await operations.accept({
-    kind: 'ranked-player-pulse',
+    job: rankedPlayerPulseContract,
     dedupeKey: `ranked-pulse:${randomUUID()}`,
     operationKey: `ranked-pulse:${randomUUID()}`,
     workClass: 'primary-monitoring',
@@ -455,7 +456,7 @@ describe('Players-owned canonical ranked state', () => {
     await operations.complete(canonicalLease)
 
     const accepted = await operations.accept({
-      kind: 'ranked-player-pulse',
+      job: rankedPlayerPulseContract,
       dedupeKey: `ranked-pulse:${brawlhallaId}`,
       operationKey: `ranked-pulse:${brawlhallaId}:${randomUUID()}`,
       workClass: 'primary-monitoring',

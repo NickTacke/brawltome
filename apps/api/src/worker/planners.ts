@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import type { PostgresDiscovery } from '@brawltome/discovery'
+import {
+  clanDiscoveryProjectionContract,
+  discoveryReconciliationContract,
+  type PostgresDiscovery,
+  playerDiscoveryProjectionContract,
+} from '@brawltome/discovery'
 import type { PrimaryMonitoringSnapshot } from '@brawltome/player'
 import type {
-  AcceptDiscoveryProjection,
-  AcceptDiscoveryReconciliation,
+  AcceptOperationInput,
   AcceptOperationResult,
   CreateLeaderboardDeepCrawlSchedule,
   CreateLeaderboardSchedule,
@@ -35,7 +39,7 @@ export type PlannerDependencies = {
     RefreshOperationWorker,
     'listAwaitingInteractiveRefreshes' | 'activateAdmittedInteractiveRefresh'
   > & {
-    accept(input: AcceptDiscoveryProjection | AcceptDiscoveryReconciliation): Promise<AcceptOperationResult>
+    accept(input: AcceptOperationInput<unknown>): Promise<AcceptOperationResult>
   }
   actorAdmission: Pick<ActorAdmission, 'hasActorReservation'>
   primaryMonitoring: {
@@ -72,8 +76,8 @@ export type PlannerDependencies = {
 }
 
 const discoveryDefinitions = [
-  { owner: 'player', kind: 'player-discovery-projection' },
-  { owner: 'clan', kind: 'clan-discovery-projection' },
+  { owner: 'player', projection: playerDiscoveryProjectionContract },
+  { owner: 'clan', projection: clanDiscoveryProjectionContract },
 ] as const
 
 function createInteractiveAdmissionsPlanner({ operations, actorAdmission }: PlannerDependencies): Planner {
@@ -98,12 +102,12 @@ function createPrimaryMonitoringPlanner({ primaryMonitoring }: PlannerDependenci
 async function enqueueDiscoveryProjection(
   { operations, discovery }: PlannerDependencies,
   owner: DiscoveryOwner,
-  kind: AcceptDiscoveryProjection['kind'],
+  job: typeof playerDiscoveryProjectionContract,
 ): Promise<number> {
   if ((await discovery.sources[owner].lag()) <= 0) return 0
 
   const projection = await operations.accept({
-    kind,
+    job,
     dedupeKey: `discovery:${owner}:pending`,
     operationKey: `discovery:${owner}:${randomUUID()}`,
     workClass: 'projection',
@@ -123,7 +127,7 @@ async function enqueueDiscoveryReconciliation(
   if (!isDue || !(await discovery.reconciliationBackoff.shouldEnqueue(owner))) return 0
 
   const reconciliation = await operations.accept({
-    kind: 'discovery-reconciliation',
+    job: discoveryReconciliationContract,
     dedupeKey: `discovery:${owner}:reconciliation`,
     operationKey: `discovery:${owner}:reconciliation:${randomUUID()}`,
     workClass: 'projection',
@@ -142,8 +146,8 @@ function createDiscoveryPlanner(dependencies: PlannerDependencies): Planner {
     async tick() {
       let enqueued = 0
 
-      for (const { owner, kind } of discoveryDefinitions) {
-        enqueued += await enqueueDiscoveryProjection(dependencies, owner, kind)
+      for (const { owner, projection } of discoveryDefinitions) {
+        enqueued += await enqueueDiscoveryProjection(dependencies, owner, projection)
         enqueued += await enqueueDiscoveryReconciliation(dependencies, owner)
       }
 

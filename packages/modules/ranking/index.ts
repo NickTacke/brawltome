@@ -25,11 +25,13 @@ export {
   defaultDeepCrawlSlicePages,
   type LeaderboardDeepCrawlJobDependencies,
 } from './jobs/leaderboard-deep-crawl-job'
+export { leaderboardCollectionContract, leaderboardDeepCrawlContract } from './jobs/leaderboard-job-contracts'
 export {
   disableLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardDeepCrawlSchedule,
   reconcileLeaderboardSchedule,
 } from './jobs/leaderboard-schedules'
+export { rankingRetentionContract } from './jobs/ranking-retention-contract'
 export { createRankingRetentionJob, type RankingRetentionJobDependencies } from './jobs/ranking-retention-job'
 export { disableRankingRetentionSchedule, reconcileRankingRetentionSchedule } from './jobs/retention-schedule'
 export {

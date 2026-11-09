@@ -13,8 +13,8 @@ type OperationKind = OperationLease['kind']
 export type TelemetryReadings = {
   observedAt: Date
   oldestPending: { workClass: WorkClass; ageMs: number }[]
-  deadLetters: { workClass: WorkClass; kind: OperationKind; reason: DeadLetterReason; count: number }[]
-  scheduleLateness: { kind: OperationKind; latenessMs: number }[]
+  deadLetters: { workClass: WorkClass; kind: string; reason: DeadLetterReason; count: number }[]
+  scheduleLateness: { kind: string; latenessMs: number }[]
 }
 
 const allOperationKinds: OperationKind[] = [

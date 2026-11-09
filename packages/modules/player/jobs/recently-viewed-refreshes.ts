@@ -7,6 +7,7 @@ import {
   readAttemptHistory,
   recentlyViewedCohort,
 } from '@brawltome/refresh-operations'
+import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const playerRefreshKind = 'interactive-player-refresh'
 const freshnessPlannerSource = 'freshness-planner'
@@ -41,7 +42,7 @@ export async function enqueueRecentlyViewedRefreshes(
     }
 
     const accepted = await acceptOperation(database, {
-      kind: playerRefreshKind,
+      job: interactivePlayerRefreshContract,
       dedupeKey: `freshness:${brawlhallaId}`,
       operationKey: `freshness:${brawlhallaId}:${randomUUID()}`,
       resourceKey: `player:${brawlhallaId}`,

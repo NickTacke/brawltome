@@ -1,14 +1,26 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { primaryPlayerVerificationContract } from '@brawltome/accounts'
 import { createClanRefreshReservations, reserveClanRefresh } from '@brawltome/clan'
+import {
+  clanDiscoveryProjectionContract,
+  discoveryReconciliationContract,
+  playerDiscoveryProjectionContract,
+} from '@brawltome/discovery'
 import type { Database, Migration } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPlayerRefreshReservations, reconcilePrimaryMonitoring } from '@brawltome/player'
-import { reconcileLeaderboardSchedule } from '@brawltome/ranking'
+import {
+  createPlayerRefreshReservations,
+  playerNameVerificationContract,
+  rankedPlayerPulseContract,
+  reconcilePrimaryMonitoring,
+} from '@brawltome/player'
+import { leaderboardCollectionContract, reconcileLeaderboardSchedule } from '@brawltome/ranking'
 import {
   acceptOperation,
   type OperationLease,
   type PlayerRefreshSettled,
+  proofContract,
   refreshOperationsModule,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
@@ -18,7 +30,6 @@ import postgres from 'postgres'
 import { apiModules } from '../src/modules'
 import { createPostgresReadiness } from '../src/postgres-readiness'
 import { createRefreshEventStreams } from '../src/refresh-event-streams'
-import { createRefreshOperationRoutes } from '../src/routes/refresh-operations.routes'
 import { createProofJob, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 let database: TestDatabase
@@ -120,6 +131,7 @@ describe('durable Refresh Operations', () => {
 
     try {
       const pending = await operations.accept({
+        job: proofContract,
         dedupeKey: `telemetry-pending:${randomUUID()}`,
         operationKey: `telemetry-pending:${randomUUID()}`,
         workClass: 'maintenance',
@@ -128,6 +140,7 @@ describe('durable Refresh Operations', () => {
       })
 
       const dead = await operations.accept({
+        job: proofContract,
         dedupeKey: `telemetry-dead:${randomUUID()}`,
         operationKey: `telemetry-dead:${randomUUID()}`,
         workClass: 'projection',
@@ -144,6 +157,7 @@ describe('durable Refresh Operations', () => {
       `
 
       const rejected = await operations.accept({
+        job: proofContract,
         dedupeKey: `telemetry-rejected:${randomUUID()}`,
         operationKey: `telemetry-rejected:${randomUUID()}`,
         workClass: 'projection',
@@ -159,6 +173,7 @@ describe('durable Refresh Operations', () => {
       `
 
       await operations.createSchedule({
+        job: proofContract,
         scheduleKey: `telemetry-schedule:${randomUUID()}`,
         operationKeyPrefix: `telemetry-schedule:${randomUUID()}`,
         workClass: 'maintenance',
@@ -238,6 +253,7 @@ describe('durable Refresh Operations', () => {
 
     try {
       yielded = await operations.accept({
+        job: proofContract,
         dedupeKey: `telemetry-yielded:${randomUUID()}`,
         operationKey: `telemetry-yielded:${randomUUID()}`,
         workClass: 'leaderboard',
@@ -317,6 +333,7 @@ describe('durable Refresh Operations', () => {
     const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
+      job: proofContract,
       dedupeKey: `renew:${randomUUID()}`,
       operationKey: `renew-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -360,6 +377,7 @@ describe('durable Refresh Operations', () => {
     })
 
     const input = {
+      job: proofContract,
       dedupeKey: `proof:${randomUUID()}`,
       operationKey: `effect:${randomUUID()}`,
       workClass: 'interactive' as const,
@@ -408,6 +426,7 @@ describe('durable Refresh Operations', () => {
     const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
+      job: proofContract,
       dedupeKey: `fence:${randomUUID()}`,
       operationKey: `shared-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -427,6 +446,7 @@ describe('durable Refresh Operations', () => {
     expect(await operations.complete(current)).toBe('transitioned')
 
     const conflicting = await operations.accept({
+      job: proofContract,
       dedupeKey: `conflict:${randomUUID()}`,
       operationKey: current.operationKey,
       workClass: 'interactive',
@@ -483,7 +503,7 @@ describe('durable Refresh Operations', () => {
     const operations = createTestQueue({ database })
 
     const accepted = await operations.accept({
-      kind: 'discovery-reconciliation',
+      job: discoveryReconciliationContract,
       dedupeKey: `discovery:player:reconciliation:${randomUUID()}`,
       operationKey: `discovery:player:reconciliation:${randomUUID()}`,
       workClass: 'projection',
@@ -705,6 +725,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept proof',
       operations.accept({
+        job: proofContract,
         dedupeKey: `cross-kind-proof:${randomUUID()}`,
         operationKey: `cross-kind-proof:${randomUUID()}`,
         workClass: 'interactive',
@@ -716,7 +737,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept ranked player pulse',
       operations.accept({
-        kind: 'ranked-player-pulse',
+        job: rankedPlayerPulseContract,
         dedupeKey: `cross-kind-ranked-pulse:${randomUUID()}`,
         operationKey: `cross-kind-ranked-pulse:${randomUUID()}`,
         workClass: 'primary-monitoring',
@@ -728,7 +749,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept leaderboard',
       operations.accept({
-        kind: 'leaderboard-1v1',
+        job: leaderboardCollectionContract('leaderboard-1v1'),
         dedupeKey: `cross-kind-leaderboard:${randomUUID()}`,
         operationKey: `cross-kind-leaderboard:${randomUUID()}`,
         workClass: 'leaderboard',
@@ -740,7 +761,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept player discovery projection',
       operations.accept({
-        kind: 'player-discovery-projection',
+        job: playerDiscoveryProjectionContract,
         dedupeKey: `cross-kind-player-discovery:${randomUUID()}`,
         operationKey: `cross-kind-player-discovery:${randomUUID()}`,
         workClass: 'projection',
@@ -752,7 +773,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept clan discovery projection',
       operations.accept({
-        kind: 'clan-discovery-projection',
+        job: clanDiscoveryProjectionContract,
         dedupeKey: `cross-kind-clan-discovery:${randomUUID()}`,
         operationKey: `cross-kind-clan-discovery:${randomUUID()}`,
         workClass: 'projection',
@@ -764,7 +785,7 @@ describe('durable Refresh Operations', () => {
     await settleWithin(
       'accept discovery reconciliation',
       operations.accept({
-        kind: 'discovery-reconciliation',
+        job: discoveryReconciliationContract,
         dedupeKey: `cross-kind-discovery-reconciliation:${randomUUID()}`,
         operationKey: `cross-kind-discovery-reconciliation:${randomUUID()}`,
         workClass: 'projection',
@@ -895,24 +916,17 @@ describe('durable Refresh Operations', () => {
     await settleWithin('restore admission policy', operations.configureAdmission(testAdmission))
   })
 
-  test('runs the real route-to-polling-worker seam and dead-letters bounded runtime failures', async () => {
+  test('runs the real accept-to-polling-worker seam and dead-letters bounded runtime failures', async () => {
     const producer = createTestQueue({ database })
-    const secret = 'operations-integration-secret-operations'
-    const app = createRefreshOperationRoutes(producer, secret)
 
-    const response = await app.request('/proof', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-internal-secret': secret },
-      body: JSON.stringify({
-        dedupeKey: `route:${randomUUID()}`,
-        operationKey: `route-effect:${randomUUID()}`,
-        value: 'from-route',
-      }),
+    const accepted = await producer.accept({
+      job: proofContract,
+      dedupeKey: `route:${randomUUID()}`,
+      operationKey: `route-effect:${randomUUID()}`,
+      workClass: 'interactive',
+      payload: { value: 'from-route' },
+      provenance: { source: 'internal-api' },
     })
-
-    const accepted = (await response.json()) as { operationId: string }
-
-    expect(response.status).toBe(202)
 
     const worker = createTestQueue({ database })
 
@@ -928,6 +942,7 @@ describe('durable Refresh Operations', () => {
     expect((await worker.inspect(accepted.operationId)).operation.status).toBe('succeeded')
 
     const poison = await worker.accept({
+      job: proofContract,
       dedupeKey: `poison:${randomUUID()}`,
       operationKey: `poison-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -973,6 +988,7 @@ describe('durable Refresh Operations', () => {
     const operations = createTestQueue({ database })
 
     const deferred = await operations.accept({
+      job: proofContract,
       dedupeKey: `source-deferral:${randomUUID()}`,
       operationKey: `source-deferral:${randomUUID()}`,
       workClass: 'maintenance',
@@ -1154,6 +1170,7 @@ describe('durable Refresh Operations', () => {
 
     await expect(
       schedulers[0].createSchedule({
+        job: proofContract,
         scheduleKey: `invalid-offset:${randomUUID()}`,
         operationKeyPrefix: 'invalid-offset',
         workClass: 'projection',
@@ -1166,6 +1183,7 @@ describe('durable Refresh Operations', () => {
 
     await expect(
       schedulers[0].createSchedule({
+        job: proofContract,
         scheduleKey: `invalid-date:${randomUUID()}`,
         operationKeyPrefix: 'invalid-date',
         workClass: 'projection',
@@ -1177,6 +1195,7 @@ describe('durable Refresh Operations', () => {
     ).rejects.toThrow('valid timestamp')
 
     const scheduleDefinition = {
+      job: proofContract,
       scheduleKey: `catch-up:${randomUUID()}`,
       operationKeyPrefix: `catch-up-effect:${randomUUID()}`,
       workClass: 'projection' as const,
@@ -1559,6 +1578,7 @@ describe('durable Refresh Operations', () => {
 
     for (let index = 0; index < 2; index += 1) {
       await operations.createSchedule({
+        job: proofContract,
         scheduleKey: `shared-prefix:${index}:${randomUUID()}`,
         operationKeyPrefix: sharedPrefix,
         workClass: 'projection',
@@ -1600,6 +1620,7 @@ describe('durable Refresh Operations', () => {
     await operations.configureAdmission(admission)
     for (let index = 0; index < 4; index += 1) {
       await operations.accept({
+        job: proofContract,
         dedupeKey: `reserved-capacity:${randomUUID()}`,
         operationKey: `reserved-capacity-effect:${randomUUID()}`,
         workClass: 'maintenance',
@@ -1620,6 +1641,7 @@ describe('durable Refresh Operations', () => {
     expect(backgroundLeases.every(({ workClass }) => workClass === 'maintenance')).toBe(true)
 
     await operations.accept({
+      job: proofContract,
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -1660,7 +1682,7 @@ describe('durable Refresh Operations', () => {
     await operations.configureAdmission(admission)
 
     await operations.accept({
-      kind: 'player-discovery-projection',
+      job: playerDiscoveryProjectionContract,
       dedupeKey: `player-projection:${randomUUID()}`,
       operationKey: `player-projection:${randomUUID()}`,
       workClass: 'projection',
@@ -1669,7 +1691,7 @@ describe('durable Refresh Operations', () => {
     })
 
     await operations.accept({
-      kind: 'clan-discovery-projection',
+      job: clanDiscoveryProjectionContract,
       dedupeKey: `clan-projection:${randomUUID()}`,
       operationKey: `clan-projection:${randomUUID()}`,
       workClass: 'projection',
@@ -1739,6 +1761,7 @@ describe('durable Refresh Operations', () => {
 
     for (let index = 0; index < 2; index += 1) {
       await producer.accept({
+        job: proofContract,
         dedupeKey: `bounded:${randomUUID()}`,
         operationKey: `bounded-effect:${randomUUID()}`,
         workClass: 'maintenance',
@@ -1766,6 +1789,7 @@ describe('durable Refresh Operations', () => {
     for (const workClass of ['primary-monitoring', 'leaderboard'] as const) {
       for (let index = 0; index < 16; index += 1) {
         await producer.accept({
+          job: proofContract,
           dedupeKey: `weighted:${workClass}:${randomUUID()}`,
           operationKey: `weighted-effect:${workClass}:${randomUUID()}`,
           workClass,
@@ -1855,6 +1879,7 @@ function uniqueKey(prefix: string): string {
 
 async function acceptProof(operations: Operations, maxAttempts?: number): Promise<string> {
   const accepted = await operations.accept({
+    job: proofContract,
     dedupeKey: uniqueKey('claim-proof'),
     operationKey: uniqueKey('claim-proof-effect'),
     workClass: 'maintenance',
@@ -1868,7 +1893,7 @@ async function acceptProof(operations: Operations, maxAttempts?: number): Promis
 
 async function acceptLeaderboard(operations: Operations): Promise<string> {
   const accepted = await operations.accept({
-    kind: 'leaderboard-1v1',
+    job: leaderboardCollectionContract('leaderboard-1v1'),
     dedupeKey: uniqueKey('claim-leaderboard'),
     operationKey: uniqueKey('claim-leaderboard-effect'),
     workClass: 'leaderboard',
@@ -1881,7 +1906,7 @@ async function acceptLeaderboard(operations: Operations): Promise<string> {
 
 async function acceptRankedPulse(operations: Operations): Promise<string> {
   const accepted = await operations.accept({
-    kind: 'ranked-player-pulse',
+    job: rankedPlayerPulseContract,
     dedupeKey: uniqueKey('claim-pulse'),
     operationKey: uniqueKey('claim-pulse-effect'),
     workClass: 'primary-monitoring',
@@ -1894,7 +1919,7 @@ async function acceptRankedPulse(operations: Operations): Promise<string> {
 
 async function acceptNameVerification(operations: Operations): Promise<string> {
   const accepted = await operations.accept({
-    kind: 'player-name-verification',
+    job: playerNameVerificationContract,
     dedupeKey: uniqueKey('claim-name'),
     operationKey: uniqueKey('claim-name-effect'),
     workClass: 'maintenance',
@@ -1907,7 +1932,7 @@ async function acceptNameVerification(operations: Operations): Promise<string> {
 
 async function acceptPlayerProjection(operations: Operations, maxAttempts?: number): Promise<string> {
   const accepted = await operations.accept({
-    kind: 'player-discovery-projection',
+    job: playerDiscoveryProjectionContract,
     dedupeKey: uniqueKey('claim-projection'),
     operationKey: uniqueKey('claim-projection-effect'),
     workClass: 'projection',
@@ -1921,7 +1946,7 @@ async function acceptPlayerProjection(operations: Operations, maxAttempts?: numb
 
 async function acceptReconciliation(operations: Operations): Promise<string> {
   const accepted = await operations.accept({
-    kind: 'discovery-reconciliation',
+    job: discoveryReconciliationContract,
     dedupeKey: uniqueKey('claim-reconciliation'),
     operationKey: uniqueKey('claim-reconciliation-effect'),
     workClass: 'projection',
@@ -2040,7 +2065,7 @@ async function recordProofEffect(control: ControlClient, lease: OperationLease):
 
 async function acceptPrimaryPlayerVerification(): Promise<string> {
   const accepted = await acceptOperation(database, {
-    kind: 'primary-player-verification',
+    job: primaryPlayerVerificationContract,
     dedupeKey: uniqueKey('claim-verification'),
     operationKey: uniqueKey('claim-verification-effect'),
     workClass: 'interactive',

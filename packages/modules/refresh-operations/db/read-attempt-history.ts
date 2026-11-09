@@ -1,9 +1,8 @@
 import type { Database } from '@brawltome/foundation'
-import type { OperationKind } from '../domain/operation-kinds'
 import type { WorkClass } from '../model'
 
 export type ReadAttemptHistoryInput = {
-  kind: OperationKind
+  kind: string
   groupByPayloadField: string
   windowDays: number
   provenanceSources: readonly string[]

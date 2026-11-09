@@ -1,12 +1,11 @@
 import { and, eq, sql } from 'drizzle-orm'
-import type { OperationKind } from '../domain/operation-kinds'
 import type { WorkClass } from '../model'
 import { payloadMatches } from './payload-matches'
 import { operations } from './tables'
 import type { Transaction } from './transaction'
 
 export type PromotePendingWorkClassInput = {
-  kind: OperationKind
+  kind: string
   resourceKey: string
   from: WorkClass
   to: WorkClass

@@ -5,7 +5,8 @@ import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPlayerRefreshReservations } from '@brawltome/player'
 import type { LeaderboardPageSource } from '@brawltome/ranking'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { leaderboardCollectionContract } from '@brawltome/ranking'
+import { proofContract, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { reconcileInteractiveAdmissions } from '../src/worker/interactive-admissions'
@@ -564,6 +565,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     })
 
     const proof = await operations.accept({
+      job: proofContract,
       dedupeKey: `dispatch-proof:${randomUUID()}`,
       operationKey: `dispatch-proof:${randomUUID()}`,
       workClass: 'interactive',
@@ -585,7 +587,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     await playerRefreshes().activateInteractivePlayerRefresh(reserved.operationId, reserved.reservationToken)
 
     const leaderboard = await operations.accept({
-      kind: 'leaderboard-1v1',
+      job: leaderboardCollectionContract('leaderboard-1v1'),
       dedupeKey: `dispatch-leaderboard:${randomUUID()}`,
       operationKey: `dispatch-leaderboard:${randomUUID()}`,
       workClass: 'leaderboard',

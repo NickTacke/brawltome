@@ -9,6 +9,7 @@ import {
 import { legendMetaPublicationEffectState } from '../db/effects'
 import type { LegendMetaPublicationAuthorization, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt, deferAttempt } from './job-outcomes'
+import { statisticsLegendMetaPublicationContract } from './statistics-job-contracts'
 
 export type StatisticsLegendMetaPublicationJobDependencies = {
   statistics: Pick<StatisticsTracer, 'preflightLegendMetaPublication' | 'buildAndPublishLegendMeta'>
@@ -76,11 +77,8 @@ export function createStatisticsLegendMetaPublicationJob(
   dependencies: StatisticsLegendMetaPublicationJobDependencies,
 ): JobDefinition<StatisticsLegendMetaPublicationPayload> {
   return defineJob<StatisticsLegendMetaPublicationPayload>({
-    kind: 'statistics-legend-meta-publication',
-    workClasses: ['global-statistics'],
+    ...statisticsLegendMetaPublicationContract,
     failureCode: 'statistics_legend_meta_publication_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as StatisticsLegendMetaPublicationPayload,
     effectState: legendMetaPublicationEffectState,
     run: (lease, tools) => runLegendMetaPublication(lease, tools, dependencies),
   })

@@ -45,7 +45,7 @@ function createFakes(options: FakeOptions = {}) {
         return 'transitioned'
       },
       accept: async (input): Promise<AcceptOperationResult> => {
-        calls.push(['accept', input.kind, input.dedupeKey, input.payload, input.provenance])
+        calls.push(['accept', input.job.kind, input.dedupeKey, input.payload, input.provenance])
         operationNumber++
 
         return { outcome: 'accepted', operationId: `operation-${operationNumber}` }

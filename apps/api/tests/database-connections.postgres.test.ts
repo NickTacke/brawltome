@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, proofContract } from '@brawltome/refresh-operations'
 import { apiMaxConnections, createWorkerDatabases, listenerConnections, workerPoolSizes } from '../src/database-pools'
 import { readOperationsWorkerConfig } from '../src/operations-worker-config'
 import {
@@ -145,6 +145,7 @@ describe('one database client per process', () => {
     const accepted = await Promise.all(
       Array.from({ length: 20 }, () =>
         operations.accept({
+          job: proofContract,
           dedupeKey: `connection-burst:${randomUUID()}`,
           operationKey: `connection-burst-effect:${randomUUID()}`,
           workClass: 'interactive',
@@ -222,7 +223,7 @@ describe('one database client per process', () => {
 
     const operations = createPostgresRefreshOperations(
       { database: databases.main, renewals: databases.renewals },
-      { effectStates: {} },
+      { jobs: [proofContract] },
     )
 
     const holdSeconds = 3
@@ -231,6 +232,7 @@ describe('one database client per process', () => {
       await operations.configureAdmission(workerConfig.admission)
 
       await operations.accept({
+        job: proofContract,
         dedupeKey: `renewal-isolation:${randomUUID()}`,
         operationKey: `renewal-isolation-effect:${randomUUID()}`,
         workClass: 'interactive',

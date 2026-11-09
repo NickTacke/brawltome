@@ -6,6 +6,7 @@ import {
   reconcileResourceSchedules,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
 import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
@@ -31,7 +32,7 @@ function schedule(
   const assignmentId = overrides.assignmentId ?? randomUUID()
 
   return {
-    kind: 'interactive-player-refresh',
+    job: createPassthroughJobContract('interactive-player-refresh'),
     scheduleKey: `test-monitoring:${brawlhallaId}:${assignmentId}`,
     operationKeyPrefix: `test-monitoring:${brawlhallaId}`,
     resourceKey: `player:${brawlhallaId}`,

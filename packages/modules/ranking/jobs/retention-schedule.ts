@@ -4,10 +4,11 @@ import {
   disableFixedSchedule,
   reconcileFixedSchedule,
 } from '@brawltome/refresh-operations'
+import { rankingRetentionContract } from './ranking-retention-contract'
 
 // turning retention back on re-enables a schedule that was paused
 export function reconcileRankingRetentionSchedule(database: Database, schedule: CreateRankingRetentionSchedule) {
-  return reconcileFixedSchedule(database, { schedule, reenable: true })
+  return reconcileFixedSchedule(database, { job: rankingRetentionContract, schedule, reenable: true })
 }
 
 export function disableRankingRetentionSchedule(database: Database, scheduleKey: string) {

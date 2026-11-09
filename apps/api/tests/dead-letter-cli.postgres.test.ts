@@ -10,10 +10,12 @@ import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
   type OperationLease,
+  proofContract,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
 import { createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
+import { createTestJobs } from './fixtures/queue'
 
 const repositoryRoot = resolve(import.meta.dir, '../../..')
 
@@ -60,9 +62,13 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
+  const operations = createPostgresRefreshOperations(
+    { database },
+    { jobs: createTestJobs(), proofEffects: proofEffectStore },
+  )
 
   const accepted = await operations.accept({
+    job: proofContract,
     dedupeKey: `dead-letter:${randomUUID()}`,
     operationKey: `effect:${randomUUID()}`,
     workClass: 'maintenance',
@@ -96,7 +102,11 @@ async function createDeadLetter(value = 'sensitive-payload') {
 }
 
 async function createCollectionDeadLetter() {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: proofEffectStore })
+  const operations = createPostgresRefreshOperations(
+    { database },
+    { jobs: createTestJobs(), proofEffects: proofEffectStore },
+  )
+
   const reservations = createStatisticsReservations(database)
   const cohortId = randomUUID()
   const operationKey = `statistics:${cohortId}:42:ranked`

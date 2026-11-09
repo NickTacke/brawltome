@@ -78,11 +78,16 @@ export type JobTools = {
   watchLease(watcher: LeaseWatcher): () => void
 }
 
-export type JobDefinition<Payload> = {
+// what writers and claim need to know about a job, free of the collaborators only the worker has
+export type JobContract<Payload> = {
   kind: string
   workClasses: readonly WorkClass[]
+  // throws when the value can't be this job's payload; given the work class for jobs whose payload shape depends on it
+  parsePayload(value: unknown, workClass: WorkClass): Payload
+}
+
+export type JobDefinition<Payload> = JobContract<Payload> & {
   failureCode: string
-  parsePayload(value: unknown): Payload
   run(lease: Lease<Payload>, tools: JobTools): Promise<AttemptOutcome>
   // reads inside claim's transaction when a lease has expired
   effectState?(

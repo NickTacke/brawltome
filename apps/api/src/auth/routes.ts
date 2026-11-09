@@ -1,6 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import type { Accounts, PrimaryPlayerVerificationAttempt } from '@brawltome/accounts'
-import type { AcceptOperationResult, AcceptProofOperation } from '@brawltome/refresh-operations'
+import {
+  type Accounts,
+  type PrimaryPlayerVerificationAttempt,
+  primaryPlayerVerificationContract,
+} from '@brawltome/accounts'
+import type { AcceptOperationInput, AcceptOperationResult } from '@brawltome/refresh-operations'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
@@ -33,7 +37,7 @@ export interface CreateAuthRoutesDeps {
   accounts: Accounts
   requestAdmission: ActorAdmission
   verificationOperations: {
-    accept(input: AcceptProofOperation): Promise<AcceptOperationResult>
+    accept(input: AcceptOperationInput<{ value: string }>): Promise<AcceptOperationResult>
   }
   config: AuthConfig
   observeSourceCall?: <T>(domain: 'discord' | 'steam', work: () => Promise<T>) => Promise<T>
@@ -269,7 +273,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
 
     if (attempt.status === 'pending') {
       const operation = await verificationOperations.accept({
-        kind: 'primary-player-verification',
+        job: primaryPlayerVerificationContract,
         dedupeKey: `primary-player:${attempt.id}`,
         operationKey: `primary-player:${attempt.id}`,
         workClass: 'interactive',

@@ -16,6 +16,7 @@ import { createPostgresAccountsStore } from './src/postgres-store'
 
 export { proofEffectState, proofEffectStore } from './db/proof-effects'
 
+export { primaryPlayerVerificationContract } from './jobs/primary-player-verification-contract'
 export {
   createPrimaryPlayerVerificationJob,
   type PrimaryPlayerVerificationJobDependencies,

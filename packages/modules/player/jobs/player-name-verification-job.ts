@@ -7,8 +7,9 @@ import {
   type SourceAdmitter,
   sectionCommitted,
 } from '@brawltome/refresh-operations'
+import { type PlayerNameVerificationPayload, playerNameVerificationContract } from './player-name-verification-contract'
 
-export type PlayerNameVerificationPayload = { brawlhallaId: number; playerName: string }
+export type { PlayerNameVerificationPayload }
 
 export type PlayerNameVerificationJobDependencies = {
   verifyName(lease: Lease<PlayerNameVerificationPayload>, admitSource: SourceAdmitter): Promise<unknown>
@@ -31,11 +32,8 @@ export function createPlayerNameVerificationJob(
   dependencies: PlayerNameVerificationJobDependencies,
 ): JobDefinition<PlayerNameVerificationPayload> {
   return defineJob<PlayerNameVerificationPayload>({
-    kind: 'player-name-verification',
-    workClasses: ['maintenance'],
+    ...playerNameVerificationContract,
     failureCode: 'player_name_verification_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as PlayerNameVerificationPayload,
     effectState: (transaction, lease) => sectionCommitted(transaction, lease, 'ranked'),
     run: (lease, tools) => runNameVerification(dependencies, lease, tools),
   })

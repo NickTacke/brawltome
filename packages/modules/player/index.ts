@@ -49,10 +49,12 @@ export {
   type PostgresPlayerDiscoverySource,
 } from './discovery-postgres'
 export { createPostgresPlayerFreshness, type PostgresPlayerFreshness } from './freshness'
+export { interactivePlayerRefreshContract } from './jobs/interactive-player-refresh-contract'
 export {
   createInteractivePlayerRefreshJob,
   type InteractivePlayerRefreshJobDependencies,
 } from './jobs/interactive-player-refresh-job'
+export { playerNameVerificationContract } from './jobs/player-name-verification-contract'
 export {
   createPlayerNameVerificationJob,
   type PlayerNameVerificationJobDependencies,
@@ -66,6 +68,7 @@ export {
   type PrimaryMonitoringSnapshot,
   reconcilePrimaryMonitoring,
 } from './jobs/primary-monitoring-schedules'
+export { rankedPlayerPulseContract } from './jobs/ranked-player-pulse-contract'
 export { createRankedPlayerPulseJob } from './jobs/ranked-player-pulse-job'
 export {
   createRecentlyViewedRefreshes,

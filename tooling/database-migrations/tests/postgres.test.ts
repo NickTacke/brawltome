@@ -788,6 +788,21 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         `
 
         await client`
+          CREATE TABLE refresh_operations.schedules (
+            id uuid PRIMARY KEY,
+            kind text NOT NULL CONSTRAINT schedules_kind_check CHECK (true),
+            payload jsonb NOT NULL CONSTRAINT schedules_payload_by_kind CHECK (true)
+          )
+        `
+
+        await client`
+          CREATE TABLE refresh_operations.interactive_refresh_effects (
+            operation_id uuid NOT NULL,
+            section text NOT NULL CONSTRAINT interactive_refresh_effects_section_check CHECK (true)
+          )
+        `
+
+        await client`
           CREATE TABLE refresh_operations.primary_monitoring_reconciliation (
             singleton boolean PRIMARY KEY,
             observed_at timestamptz NOT NULL

@@ -7,6 +7,7 @@ import {
   reserveForAdmission,
   sectionCommitted,
 } from '@brawltome/refresh-operations'
+import { testJobContract } from '@brawltome/refresh-operations/testing'
 
 let database: TestDatabase
 
@@ -22,7 +23,7 @@ async function reserveEffectOperation(): Promise<string> {
   const key = randomUUID()
 
   const reserved = await reserveForAdmission(database, {
-    kind: 'proof',
+    job: testJobContract,
     dedupeKey: `sections:${key}`,
     operationKey: `sections:${key}`,
     workClass: 'interactive',

@@ -34,6 +34,11 @@ export {
   type StatisticsCollectionLease,
 } from './jobs/statistics-collection-job'
 export {
+  statisticsCollectionContract,
+  statisticsLegendMetaPublicationContract,
+  statisticsPublicationContract,
+} from './jobs/statistics-job-contracts'
+export {
   createStatisticsLegendMetaPublicationJob,
   type StatisticsLegendMetaPublicationJobDependencies,
 } from './jobs/statistics-legend-meta-publication-job'

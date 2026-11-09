@@ -7,6 +7,7 @@ import {
 } from '@brawltome/refresh-operations'
 import { proofEffectState } from '../db/proof-effects'
 import type { Accounts } from '../src/accounts'
+import { primaryPlayerVerificationContract } from './primary-player-verification-contract'
 
 type PrimaryPlayerEvidenceResolver = Parameters<Accounts['resolvePrimaryPlayerVerification']>[1]
 
@@ -22,12 +23,9 @@ export function createPrimaryPlayerVerificationJob(
   const { accounts, createEvidenceResolver } = dependencies
 
   return defineJob<ProofEffectPayload>({
-    kind: 'primary-player-verification',
-    workClasses: ['interactive'],
+    ...primaryPlayerVerificationContract,
     // the code this work reported as a proof, so dashboards read the same before and after
     failureCode: 'proof_execution_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as ProofEffectPayload,
     effectState: proofEffectState,
     async run(lease, tools) {
       await accounts.resolvePrimaryPlayerVerification(lease.payload.value, createEvidenceResolver(lease))

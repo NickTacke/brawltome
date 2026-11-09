@@ -251,13 +251,13 @@ describe('interactive player refresh job', () => {
     const lease = refreshLease('primary-monitoring', {
       assignmentId: crypto.randomUUID(),
       brawlhallaId: 42,
-      staleSections: ['ranked'],
+      staleSections: ['ranked', 'stats'],
     })
 
-    const { queue, failed, committed } = createQueueSpy(lease)
+    const { queue, failed, committed, completions } = createQueueSpy(lease)
     let targetChecks = 0
 
-    const { dependencies } = createDependencies({
+    const { dependencies, record } = createDependencies({
       isPrimaryMonitoringTarget: async () => {
         targetChecks++
 
@@ -273,6 +273,37 @@ describe('interactive player refresh job', () => {
     })
 
     expect(committed).toEqual([])
+    expect(record.domains).toEqual([])
+    expect(failed).toEqual([])
+    expect(completions()).toBe(1)
+  })
+
+  test('fails the attempt when the assignment ends inside the last section', async () => {
+    const lease = refreshLease('primary-monitoring', {
+      assignmentId: crypto.randomUUID(),
+      brawlhallaId: 42,
+      staleSections: ['ranked', 'stats'],
+    })
+
+    const { queue, failed, committed } = createQueueSpy(lease)
+    let targetChecks = 0
+
+    const { dependencies } = createDependencies({
+      isPrimaryMonitoringTarget: async () => {
+        targetChecks++
+
+        // current for ranked's two checks and the stats pre-check, then ended before stats calls upstream
+        return targetChecks <= 3
+      },
+    })
+
+    await runJobOnce(queue, createInteractivePlayerRefreshJob(dependencies), {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      sourceAdmission: admittingSourcePort(),
+    })
+
+    expect(committed).toEqual(['ranked'])
     expect(failed.map(({ failure }) => failure.message)).toEqual(['Primary Player assignment is no longer current'])
   })
 

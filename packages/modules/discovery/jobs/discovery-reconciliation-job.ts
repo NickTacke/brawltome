@@ -1,8 +1,7 @@
 import { defineJob, type JobDefinition, type Lease } from '@brawltome/refresh-operations'
 import type { ProjectionOwner } from '../model'
 import { discoveryClaimLockKey } from './claim-lock-key'
-
-type ReconciliationPayload = { owner: ProjectionOwner }
+import { discoveryReconciliationContract, type ReconciliationPayload } from './discovery-reconciliation-contract'
 
 export type DiscoveryReconciliationJobDependencies = {
   reconcile(owner: ProjectionOwner, effectOperationId: string, isLeaseActive: () => Promise<boolean>): Promise<unknown>
@@ -16,11 +15,8 @@ export function createDiscoveryReconciliationJob(
   const { reconcile, reconciliationEffectApplied, leaseActive } = dependencies
 
   return defineJob<ReconciliationPayload>({
-    kind: 'discovery-reconciliation',
-    workClasses: ['projection'],
+    ...discoveryReconciliationContract,
     failureCode: 'discovery_reconciliation_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as ReconciliationPayload,
     claimLockKey: discoveryClaimLockKey,
     // reconciliation has no in-between: once its effect landed there is nothing left to retry
     async effectState(_transaction, lease) {

@@ -7,6 +7,7 @@ import {
 } from '@brawltome/refresh-operations'
 import type { Telemetry } from '@brawltome/telemetry'
 import type { RankingRetentionInput, RankingRetentionStore } from '../retention'
+import { rankingRetentionContract } from './ranking-retention-contract'
 
 export type RankingRetentionJobDependencies = {
   store: RankingRetentionStore
@@ -71,11 +72,8 @@ export function createRankingRetentionJob(
   const { store, isEnabled, telemetry } = dependencies
 
   return defineJob<RankingRetentionInput>({
-    kind: 'ranking-retention',
-    workClasses: ['maintenance'],
+    ...rankingRetentionContract,
     failureCode: 'ranking_retention_failed',
-    // claim already shapes this payload and the store checks its bounds
-    parsePayload: (value) => value as RankingRetentionInput,
     async run(lease, tools) {
       if (!isEnabled) return completeWithoutExpiring(lease, tools, telemetry)
 

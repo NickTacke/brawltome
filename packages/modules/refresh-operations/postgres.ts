@@ -1,12 +1,12 @@
 import type { Database } from '@brawltome/foundation'
-import { acceptOperation } from './db/accept-operation'
+import { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 import { activateAdmitted } from './db/activate-operation'
 import { admissionLockId } from './db/admission-lock'
-import { claimOperation } from './db/claim-operation'
+import { type ClaimJob, createClaimJobs } from './db/claim-jobs'
+import { claimOperation, type InvalidRow } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
 import type { DeadLetterHooks } from './db/dead-letter-hooks'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
-import type { EffectStates } from './db/effect-states'
 import { inspectDeadLetter } from './db/inspect-dead-letter'
 import { inspectOperation } from './db/inspect-operation'
 import { inspectSchedule } from './db/inspect-schedule'
@@ -19,12 +19,9 @@ import { beginSection, commitSection } from './db/section-checkpoints'
 import { completeOperation, deferOperation, failOperation, retryAppliedEffect } from './db/settle-operation'
 import { wakeupChannel } from './db/wakeup'
 import { admissionConfigHash, validateAdmissionConfig } from './domain/admission'
-import { isDiscoveryProjectionKind, isLeaderboardKind } from './domain/operation-kinds'
 import type { ProofEffectStore } from './jobs/complete-with-proof-effect'
 import type { Lease } from './jobs/job-definition'
 import {
-  type AcceptOperation,
-  type AcceptOperationResult,
   type AdmissionConfig,
   type CreateSchedule,
   type DeadLetterOperations,
@@ -35,7 +32,6 @@ import {
   parsePlayerRefreshSettled,
   playerRefreshSettledChannel,
   type TransitionResult,
-  validateLeaderboardOperationPayload,
 } from './model'
 
 const interactiveRefreshKinds = ['interactive-player-refresh', 'clan-refresh'] as const
@@ -49,12 +45,16 @@ export type RefreshOperationsDatabases = {
 export function createPostgresRefreshOperations(
   { database, renewals = database }: RefreshOperationsDatabases,
   options: {
-    effectStates?: EffectStates
+    // every job the worker can run; claim needs them, so a queue built without them can only write
+    jobs?: readonly ClaimJob[]
+    // an unknown kind has no dead-letter metric series, so this is the only signal one was settled
+    onInvalidRow?: (row: InvalidRow) => void
     proofEffects?: ProofEffectStore
     readAppliedLeaderboardEffects?: AppliedLeaderboardEffects
   } = {},
 ) {
   const client = database.sql
+  const claimJobs = options.jobs && createClaimJobs(options.jobs)
 
   return {
     async configureAdmission(admission: AdmissionConfig): Promise<void> {
@@ -97,62 +97,7 @@ export function createPostgresRefreshOperations(
       return activateAdmitted(database, { operationId, kinds: interactiveRefreshKinds })
     },
 
-    async accept(input: AcceptOperation): Promise<AcceptOperationResult> {
-      const kind = input.kind ?? 'proof'
-
-      if (isLeaderboardKind(kind)) {
-        if (input.workClass !== 'leaderboard') throw new Error('leaderboard operations require leaderboard work class')
-
-        validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })
-      } else if (kind === 'ranked-player-pulse') {
-        const { brawlhallaId } = input.payload as { brawlhallaId: number }
-
-        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
-          throw new Error('ranked player pulse brawlhallaId must be a positive 32-bit integer')
-        }
-      } else if (kind === 'player-name-verification') {
-        const { brawlhallaId, playerName } = input.payload as { brawlhallaId: number; playerName: string }
-
-        if (input.workClass !== 'maintenance')
-          throw new Error('player name verification requires maintenance work class')
-
-        if (!Number.isSafeInteger(brawlhallaId) || brawlhallaId < 1 || brawlhallaId > 2_147_483_647) {
-          throw new Error('player name verification brawlhallaId must be a positive 32-bit integer')
-        }
-
-        if (typeof playerName !== 'string' || playerName.length === 0) {
-          throw new Error('player name verification playerName must be a non-empty string')
-        }
-      }
-
-      if (isDiscoveryProjectionKind(kind)) {
-        const { batchSize } = input.payload as { batchSize: number }
-
-        if (input.workClass !== 'projection') throw new Error('discovery projection requires projection work class')
-
-        if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 1_000) {
-          throw new Error('discovery projection batchSize must be between 1 and 1000')
-        }
-      }
-
-      if (kind === 'discovery-reconciliation') {
-        const { owner } = input.payload as { owner: string }
-
-        if (input.workClass !== 'projection') throw new Error('discovery reconciliation requires projection work class')
-
-        if (owner !== 'player' && owner !== 'clan') throw new Error('discovery reconciliation owner is invalid')
-      }
-
-      return acceptOperation(database, {
-        kind,
-        dedupeKey: input.dedupeKey,
-        operationKey: input.operationKey,
-        workClass: input.workClass,
-        payload: input.payload,
-        provenance: input.provenance,
-        maxAttempts: input.maxAttempts,
-      })
-    },
+    accept: <Payload>(input: AcceptOperationInput<Payload>) => acceptOperation(database, input),
 
     createSchedule: (input: CreateSchedule) => createSchedule(database, input),
 
@@ -166,14 +111,19 @@ export function createPostgresRefreshOperations(
       workerId: string,
       leaseMs: number,
       admission: AdmissionConfig,
-      kind?: OperationLease['kind'],
+      kind?: string,
     ): Promise<OperationLease | null> {
-      // without them claim would never finish an acknowledged operation or take its claim lock
-      if (!options.effectStates) {
-        throw new Error(`claim operation for worker ${workerId}: queue was built without effectStates`)
-      }
+      // without them every due row would look like a kind no job runs
+      if (!claimJobs) throw new Error(`claim operation for worker ${workerId}: queue was built without jobs`)
 
-      return claimOperation(database, { workerId, leaseMs, admission, kind, effectStates: options.effectStates })
+      return claimOperation(database, {
+        workerId,
+        leaseMs,
+        admission,
+        kind,
+        jobs: claimJobs,
+        onInvalidRow: options.onInvalidRow,
+      })
     },
 
     async listAwaitingInteractiveRefreshes(): Promise<string[]> {

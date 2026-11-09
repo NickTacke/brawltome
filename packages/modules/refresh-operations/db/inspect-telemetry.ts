@@ -4,7 +4,6 @@ import { buildTelemetrySnapshot } from '../domain/queue-telemetry'
 import {
   admissionRejectionCodes,
   type DeadLetterReason,
-  type OperationLease,
   type OperationsTelemetrySnapshot,
   type WorkClass,
 } from '../model'
@@ -41,7 +40,7 @@ async function readDeadLetterCounts(database: Database) {
 
   const rows = await database.db.execute<{
     work_class: WorkClass
-    kind: OperationLease['kind']
+    kind: string
     reason: DeadLetterReason
     count: Count
   }>(sql`

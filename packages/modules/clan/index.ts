@@ -11,6 +11,7 @@ export { readPlayerClanMembership } from './api/read-player-clan-membership'
 export { createPostgresClanDiscoverySource } from './db/postgres-clan-discovery-source'
 export { type ClanQueries, createPostgresClans } from './db/postgres-clans'
 export type { ClanProvenance } from './domain/provenance'
+export { clanRefreshContract } from './jobs/clan-refresh-contract'
 export {
   type ClanRefreshJobDependencies,
   createClanRefreshJob,

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { eq, sql } from 'drizzle-orm'
 import { validateSchedule } from '../domain/schedule-definition'
+import type { JobContract } from '../jobs/job-definition'
+import { assertValidJobInput } from '../jobs/job-input'
 import type {
   CreateLeaderboardDeepCrawlSchedule,
   CreateLeaderboardSchedule,
@@ -19,6 +21,7 @@ export type FixedSchedule =
   | CreateLeaderboardDeepCrawlSchedule
 
 export type ReconcileFixedScheduleInput = {
+  job: JobContract<unknown>
   schedule: FixedSchedule
   // worker configuration owns the enabled flag of some schedules: reconciling turns a paused one back on
   reenable?: boolean
@@ -64,8 +67,10 @@ async function insertSchedule(
  */
 export async function reconcileFixedSchedule(
   database: Database,
-  { schedule, reenable = false }: ReconcileFixedScheduleInput,
+  { job, schedule, reenable = false }: ReconcileFixedScheduleInput,
 ): Promise<CreateScheduleResult> {
+  assertValidJobInput(job, schedule.workClass, schedule.payload)
+
   const firstDueAt = validateSchedule(schedule)
 
   const definition: ScheduleDefinition = {

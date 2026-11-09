@@ -1,5 +1,5 @@
 import { type RankedMode, rankedRegions } from '@brawltome/game-data/ranked'
-import type { Lease } from './jobs/job-definition'
+import type { JobContract, Lease } from './jobs/job-definition'
 
 export const workClasses = [
   'interactive',
@@ -165,91 +165,11 @@ export function validateRankingRetentionPayload(payload: RankingRetentionPayload
   return payload
 }
 
-export type AcceptProofOperation = {
-  kind?: 'proof' | 'primary-player-verification'
-  dedupeKey: string
-  operationKey: string
-  workClass: WorkClass
-  payload: { value: string }
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type AcceptRankedPlayerPulseOperation = {
-  kind: 'ranked-player-pulse'
-  dedupeKey: string
-  operationKey: string
-  workClass: 'primary-monitoring'
-  payload: { brawlhallaId: number }
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
 export type PlayerNameVerificationPayload = { brawlhallaId: number; playerName: string }
-
-export type AcceptPlayerNameVerificationOperation = {
-  kind: 'player-name-verification'
-  dedupeKey: string
-  operationKey: string
-  workClass: 'maintenance'
-  payload: PlayerNameVerificationPayload
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type AcceptLeaderboardOperation = {
-  kind: LeaderboardOperationKind
-  dedupeKey: string
-  operationKey: string
-  workClass: 'leaderboard'
-  payload: LeaderboardOperationPayload
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type AcceptDiscoveryProjection = {
-  kind: DiscoveryProjectionKind
-  dedupeKey: string
-  operationKey: string
-  workClass: 'projection'
-  payload: { batchSize: number }
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type AcceptDiscoveryReconciliation = {
-  kind: 'discovery-reconciliation'
-  dedupeKey: string
-  operationKey: string
-  workClass: 'projection'
-  payload: { owner: DiscoveryOwner }
-  provenance: OperationProvenance
-  maxAttempts?: number
-}
-
-export type AcceptOperation =
-  | AcceptProofOperation
-  | AcceptRankedPlayerPulseOperation
-  | AcceptPlayerNameVerificationOperation
-  | AcceptLeaderboardOperation
-  | AcceptDiscoveryProjection
-  | AcceptDiscoveryReconciliation
 
 export type AcceptOperationResult = {
   outcome: 'accepted' | 'already-active'
   operationId: string
-}
-
-export type CreateProofSchedule = {
-  kind?: 'proof'
-  scheduleKey: string
-  operationKeyPrefix: string
-  workClass: WorkClass
-  intervalMs: number
-  firstDueAt: string
-  payload: { value: string }
-  provenance: OperationProvenance
-  maxAttempts?: number
 }
 
 export type CreateLeaderboardSchedule = {
@@ -288,11 +208,17 @@ export type CreateLeaderboardDeepCrawlSchedule = {
   maxAttempts?: number
 }
 
-export type CreateSchedule =
-  | CreateProofSchedule
-  | CreateLeaderboardSchedule
-  | CreateRankingRetentionSchedule
-  | CreateLeaderboardDeepCrawlSchedule
+export type CreateSchedule = {
+  job: JobContract<unknown>
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: WorkClass
+  intervalMs: number
+  firstDueAt: string
+  payload: unknown
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
 
 export type CreateScheduleResult = {
   outcome: 'created' | 'already-exists' | 'reconciled'
@@ -305,7 +231,7 @@ export type MaterializeSchedulesResult = {
     scheduleId: string
     occurrenceId: string
     operationId: string
-    kind: OperationLease['kind']
+    kind: string
     workClass: WorkClass
     latenessMs: number
     missedWindowCount: number
@@ -479,7 +405,8 @@ export type DeadLetterDisposition = 'replayed' | 'discarded'
 
 export type DeadLetterListItem = {
   operationId: string
-  kind: OperationLease['kind']
+  // any string a row holds, including a kind this release has no job for
+  kind: string
   operationKey: string
   workClass: WorkClass
   provenance: OperationProvenance
@@ -598,12 +525,7 @@ export interface DeadLetterOperations {
 
 export interface RefreshOperationWorker {
   inspectTelemetry(): Promise<OperationsTelemetrySnapshot>
-  claim(
-    workerId: string,
-    leaseMs: number,
-    admission: AdmissionConfig,
-    kind?: OperationLease['kind'],
-  ): Promise<OperationLease | null>
+  claim(workerId: string, leaseMs: number, admission: AdmissionConfig, kind?: string): Promise<OperationLease | null>
   listAwaitingInteractiveRefreshes(): Promise<string[]>
   activateAdmittedInteractiveRefresh(operationId: string): Promise<TransitionResult>
   renew(lease: OperationLease, leaseMs: number): Promise<RenewResult>

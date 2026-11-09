@@ -9,6 +9,11 @@ import {
   type OperationLease,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import {
+  statisticsCollectionContract,
+  statisticsLegendMetaPublicationContract,
+  statisticsPublicationContract,
+} from '@brawltome/statistics'
 import { statisticsModule } from '../../index'
 import { statisticsDeadLetterHooks } from '../../jobs/dead-letter-hooks'
 import { createStatisticsReservations } from '../../jobs/statistics-reservations'
@@ -55,8 +60,15 @@ afterAll(async () => {
   await database?.drop()
 })
 
+const statisticsJobs = [
+  statisticsCollectionContract('statistics-ranked-collection'),
+  statisticsCollectionContract('statistics-lifetime-collection'),
+  statisticsPublicationContract,
+  statisticsLegendMetaPublicationContract,
+]
+
 async function createCollectionDeadLetter() {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { jobs: statisticsJobs })
   const reservations = createStatisticsReservations(database)
   const cohortId = randomUUID()
   const operationKey = `statistics:${cohortId}:42:ranked`
@@ -173,7 +185,7 @@ describe('statistics dead letters', () => {
   })
 
   test('lists both publication tables for the publication kinds', async () => {
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations({ database }, { jobs: statisticsJobs })
     const reservations = createStatisticsReservations(database)
     const operationKey = `statistics:${randomUUID()}:legend-meta`
 
