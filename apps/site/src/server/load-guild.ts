@@ -12,6 +12,10 @@ export type GuildPage = {
   clan: ClanProfileContract
   standing: ClanStandingContract | null
   summaries: PlayerRankedSummaryContract[]
+  // false when a batch failed, statistics from part of a roster would look complete and be wrong
+  hasAllSummaries: boolean
+  // one clock for anything that depends on the time, so the server render and hydration can't disagree
+  loadedAt: string
 }
 
 // the most ids the ranked summaries read accepts in one request
@@ -63,19 +67,24 @@ function readStanding(guildId: number): Promise<ClanStandingContract | null> {
   )
 }
 
-async function readSummaries(guildId: number, memberIds: number[]): Promise<PlayerRankedSummaryContract[]> {
+type SummaryResult = { summaries: PlayerRankedSummaryContract[]; hasAllSummaries: boolean }
+
+async function readSummaries(guildId: number, memberIds: number[]): Promise<SummaryResult> {
   const description = `load ranked summaries for guild ${guildId}`
 
   const batches = batchIds(memberIds).map((ids) =>
     readOptional(
       () => postApi('/players/ranked-summaries', { ids }, playerRankedSummariesSchema, description, optionalRead),
-      [],
+      null,
     ),
   )
 
   const answers = await Promise.all(batches)
 
-  return answers.flat()
+  return {
+    summaries: answers.flatMap((answer) => answer ?? []),
+    hasAllSummaries: answers.every((answer) => answer !== null),
+  }
 }
 
 export async function loadGuild(guildId: number): Promise<GuildPage | null> {
@@ -84,7 +93,11 @@ export async function loadGuild(guildId: number): Promise<GuildPage | null> {
   if (!clan) return null
 
   const memberIds = clan.members.map((member) => member.brawlhallaId)
-  const [standing, summaries] = await Promise.all([readStanding(guildId), readSummaries(guildId, memberIds)])
 
-  return { clan, standing, summaries }
+  const [standing, { summaries, hasAllSummaries }] = await Promise.all([
+    readStanding(guildId),
+    readSummaries(guildId, memberIds),
+  ])
+
+  return { clan, standing, summaries, hasAllSummaries, loadedAt: new Date().toISOString() }
 }

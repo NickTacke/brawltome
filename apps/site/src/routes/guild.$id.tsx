@@ -3,6 +3,7 @@ import { GuildHeader } from '../components/guild/GuildHeader'
 import { GuildOverview } from '../components/guild/GuildOverview'
 import { parseGuildId } from '../components/guild/guild-id'
 import { MemberTable } from '../components/guild/MemberTable'
+import { rankedRecord } from '../components/guild/ranked-statistics'
 import { rankMembers } from '../components/guild/roster'
 import { fixEncoding } from '../lib'
 import { getGuild } from '../server/guilds'
@@ -59,8 +60,9 @@ function GuildLoadError() {
 }
 
 function GuildPage() {
-  const { clan, standing, summaries } = Route.useLoaderData()
+  const { clan, standing, summaries, hasAllSummaries, loadedAt } = Route.useLoaderData()
   const members = rankMembers(clan.members, summaries)
+  const record = rankedRecord(summaries, new Date(loadedAt))
 
   return (
     <div className="divide-y divide-line/50 [--gutter:max(4rem,calc((100vw-57px-1080px-380px)/3))] md:px-[max(0px,calc(40px-max(0px,(100vw-1209px)/2)))] max-xl:[&>*]:py-7 max-xl:[&>*:first-child]:pt-0 max-xl:[&>*:first-child]:pb-10 max-xl:[&>*:last-child]:pt-4 max-xl:[&>*:last-child]:pb-0 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-57px)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_380px] xl:grid-rows-[auto_1fr] xl:divide-y-0 xl:px-(--gutter)">
@@ -68,7 +70,14 @@ function GuildPage() {
         <GuildHeader clan={clan} />
       </div>
       <aside className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:mt-9 xl:border-l xl:border-line/50 xl:pl-12">
-        <GuildOverview clan={clan} standing={standing} members={members} />
+        <GuildOverview
+          key={clan.clanId}
+          clan={clan}
+          standing={standing}
+          members={members}
+          record={record}
+          hasAllSummaries={hasAllSummaries}
+        />
       </aside>
       <div className="min-w-0 xl:col-start-1 xl:row-start-2 xl:mr-(--gutter) xl:border-t xl:border-line/50 xl:pt-4">
         <MemberTable key={clan.clanId} members={members} />

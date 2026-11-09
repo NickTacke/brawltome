@@ -1,12 +1,13 @@
 import type { ClanProfileContract, ClanStandingContract } from '@brawltome/contracts'
 import { formatWhole } from '../../lib'
+import { placeColours, sectionTitleStyle } from './guild-styles'
 import { Laurel } from './Laurel'
 import { legendAvatarUrl } from './legend-avatar-url'
 import { PlayerLink } from './PlayerLink'
+import { RankedStatistics } from './RankedStatistics'
+import type { RankedRecord } from './ranked-statistics'
 import { type RankedMember, topContributors } from './roster'
 
-const sectionTitleStyle = 'text-xl font-bold text-strong'
-const placeColours: Record<number, string> = { 1: 'text-gold', 2: 'text-silver', 3: 'text-bronze' }
 const podiumRings: Record<number, string> = { 1: 'ring-gold/70', 2: 'ring-silver/50', 3: 'ring-bronze/60' }
 const lastLaurelRank = 10
 
@@ -111,13 +112,16 @@ type GuildOverviewProps = {
   clan: ClanProfileContract
   standing: ClanStandingContract | null
   members: RankedMember[]
+  record: RankedRecord
+  hasAllSummaries: boolean
 }
 
-export function GuildOverview({ clan, standing, members }: GuildOverviewProps) {
+export function GuildOverview({ clan, standing, members, record, hasAllSummaries }: GuildOverviewProps) {
   return (
     <div className="grid gap-y-7 lg:grid-cols-2 lg:[&>*:first-child]:pr-12 xl:sticky xl:top-10 xl:grid-cols-1 xl:[&>*:first-child]:pr-0">
       <Ranking clan={clan} standing={standing} />
       <Podium members={members} />
+      {hasAllSummaries && <RankedStatistics members={members} record={record} />}
     </div>
   )
 }

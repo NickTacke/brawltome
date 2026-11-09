@@ -134,6 +134,17 @@ describe('loadGuild', () => {
     expect(guild?.summaries.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1, 2])
   })
 
+  test('stamps the time the page was loaded', async () => {
+    stubApi((call) => healthyAnswer(2, call))
+
+    const before = Date.now()
+    const guild = await loadGuild(42)
+    const loadedAt = new Date(guild?.loadedAt ?? 0).getTime()
+
+    expect(loadedAt).toBeGreaterThanOrEqual(before)
+    expect(loadedAt).toBeLessThanOrEqual(Date.now())
+  })
+
   test('an unknown guild is null and makes no further calls', async () => {
     const calls = stubApi(() => ({ status: 200, body: null }))
 
@@ -158,6 +169,27 @@ describe('loadGuild', () => {
 
     expect(batches.map(({ body }) => body?.ids.length)).toEqual([250, 1])
     expect(guild?.summaries).toHaveLength(251)
+  })
+
+  test('reports whether every batch of summaries answered', async () => {
+    stubApi((call) => healthyAnswer(300, call))
+
+    expect((await loadGuild(42))?.hasAllSummaries).toBe(true)
+
+    let summaryCalls = 0
+
+    stubApi((call) => {
+      if (call.path !== '/players/ranked-summaries') return healthyAnswer(300, call)
+
+      summaryCalls += 1
+
+      return summaryCalls === 1 ? { status: 503, body: null } : healthyAnswer(300, call)
+    })
+
+    const guild = await loadGuild(42)
+
+    expect(guild?.hasAllSummaries).toBe(false)
+    expect(guild?.summaries.length).toBeGreaterThan(0)
   })
 
   test('keeps the page when standing fails', async () => {
