@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+  isLaunchGenerationDue,
   LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
   launchCohortBrackets,
   launchCohortRegions,
@@ -250,5 +251,32 @@ describe('full launch cohort selection', () => {
       minimumCapacitySeconds: 486_000,
       observationWindowSeconds: 604_800,
     })
+  })
+})
+
+describe('launch generation pace', () => {
+  const startedAt = new Date('2026-11-09T00:00:00.000Z')
+  const atHours = (hours: number) => new Date(startedAt.getTime() + hours * 60 * 60 * 1_000)
+
+  const ready = {
+    methodologyVersion: FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+    state: 'ready' as const,
+    startedAt,
+  }
+
+  test('waits six days after a ready generation', () => {
+    expect(isLaunchGenerationDue(ready, atHours(6 * 24 - 1))).toBe(false)
+    expect(isLaunchGenerationDue(ready, atHours(6 * 24))).toBe(true)
+  })
+
+  test('checks again after one day when a generation had too few cells', () => {
+    const insufficient = { ...ready, state: 'insufficient-evidence' as const }
+
+    expect(isLaunchGenerationDue(insufficient, atHours(23))).toBe(false)
+    expect(isLaunchGenerationDue(insufficient, atHours(24))).toBe(true)
+  })
+
+  test('never holds back a new methodology behind an older one', () => {
+    expect(isLaunchGenerationDue({ ...ready, methodologyVersion: 'full-launch-cohort-v1' }, startedAt)).toBe(true)
   })
 })

@@ -225,7 +225,13 @@ describe('Statistics immutable Ranking adapter', () => {
       const statistics = {
         reconciliationState: async () => ({
           legacyCohortExists: true,
-          launch: { generationId, sourceGenerationId: generationId, decisionCount: 2, cohortIds: [] },
+          launch: {
+            generationId,
+            sourceGenerationId: generationId,
+            decisionCount: 2,
+            cohortIds: [],
+            isNextGenerationDue: true,
+          },
         }),
         reconcileLaunchCohort: async () => {
           launchReconciliations++
@@ -274,6 +280,46 @@ describe('Statistics immutable Ranking adapter', () => {
       }
     })
   }
+
+  test('skips the leaderboard entirely while the next generation is not due', async () => {
+    let leaderboardRequests = 0
+
+    const statistics = {
+      reconciliationState: async () => ({
+        legacyCohortExists: true,
+        launch: {
+          generationId,
+          sourceGenerationId: generationId,
+          decisionCount: 2,
+          cohortIds: [],
+          isNextGenerationDue: false,
+        },
+      }),
+      boundCollectionOperationIds: async () => [],
+      collectionIntents: async () => [],
+      boundPublicationOperationIds: async () => [],
+      publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
+    } as unknown as StatisticsTracer
+
+    const operations = {
+      listAwaitingStatisticsCollections: async () => [],
+      listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
+    } as unknown as StatisticsReservations
+
+    const ranking: LeaderboardQueries = {
+      async getLeaderboard() {
+        leaderboardRequests++
+
+        return { status: 'unavailable' } as Awaited<ReturnType<LeaderboardQueries['getLeaderboard']>>
+      },
+    }
+
+    expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(0)
+    expect(leaderboardRequests).toBe(0)
+  })
 
   test('bounds one saturated reconciliation pass without loading the full cohort audit', async () => {
     const awaitingCollections = Array.from({ length: 500 }, (_, index) => `awaiting-collection-${index}`)

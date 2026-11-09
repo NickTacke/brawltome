@@ -17,6 +17,10 @@ export const LAUNCH_COHORT_SOURCE_QUOTA_WINDOW_SECONDS = 15 * 60
 export const LAUNCH_COHORT_REQUESTS_PER_PLAYER = 2
 export const LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST = 3
 export const LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS = 7 * 24 * 60 * 60
+// under the weekly publication promise, so a collection that runs a little slow does not show up as overdue
+export const LAUNCH_COHORT_GENERATION_INTERVAL_SECONDS = 6 * 24 * 60 * 60
+// a generation with too few cells stores no members, so checking again daily costs a few rows
+export const LAUNCH_COHORT_INSUFFICIENT_RETRY_SECONDS = 24 * 60 * 60
 
 export type LaunchCohortRegion = (typeof launchCohortRegions)[number]
 export type LaunchCohortBracket = (typeof launchCohortBrackets)[number]
@@ -70,6 +74,21 @@ export type SelectedFullLaunchCohort = {
   selectedPlayers: number
   state: 'ready' | 'insufficient-evidence'
   capacityEnvelope: LaunchCohortCapacityEnvelope
+}
+
+export type LaunchGenerationPace = {
+  methodologyVersion: string
+  state: 'ready' | 'insufficient-evidence'
+  startedAt: Date
+}
+
+export function isLaunchGenerationDue(latest: LaunchGenerationPace, now: Date): boolean {
+  if (latest.methodologyVersion !== FULL_LAUNCH_COHORT_METHODOLOGY_VERSION) return true
+
+  const waitSeconds =
+    latest.state === 'ready' ? LAUNCH_COHORT_GENERATION_INTERVAL_SECONDS : LAUNCH_COHORT_INSUFFICIENT_RETRY_SECONDS
+
+  return now.getTime() >= latest.startedAt.getTime() + waitSeconds * 1_000
 }
 
 function selectionHash(methodologyVersion: string, brawlhallaId: number): string {

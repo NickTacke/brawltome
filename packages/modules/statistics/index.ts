@@ -54,8 +54,11 @@ import type { CAREER_WEAPON_USAGE_METHODOLOGY_VERSION, CareerWeaponUsageAggregat
 export {
   type CohortCandidateSnapshot,
   FULL_LAUNCH_COHORT_METHODOLOGY_VERSION,
+  isLaunchGenerationDue,
   LAUNCH_COHORT_BRACKET,
   LAUNCH_COHORT_CAP,
+  LAUNCH_COHORT_GENERATION_INTERVAL_SECONDS,
+  LAUNCH_COHORT_INSUFFICIENT_RETRY_SECONDS,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_METHODOLOGY_VERSION,
   LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
@@ -398,6 +401,7 @@ export type StatisticsReconciliationState = {
     sourceGenerationId: string
     decisionCount: number
     cohortIds: string[]
+    isNextGenerationDue: boolean
   } | null
 }
 

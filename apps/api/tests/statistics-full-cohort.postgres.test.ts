@@ -914,7 +914,15 @@ describe('Statistics full launch cohort publication', () => {
     if (!duplicatedPlayerId || !secondSnapshots[0]?.candidates[124]) throw new Error('duplicate fixture missing')
 
     secondSnapshots[0].candidates[124].brawlhallaId = duplicatedPlayerId
-    const second = await statistics.reconcileLaunchCohort(secondSnapshots)
+    expect(await statistics.reconcileLaunchCohort(secondSnapshots)).toMatchObject({ generationId: first.generationId })
+    expect((await statistics.reconciliationState()).launch?.isNextGenerationDue).toBe(false)
+
+    const dayMs = 24 * 60 * 60 * 1_000
+    const nextInterval = createPostgresStatistics(database, { now: () => new Date(Date.now() + 7 * dayMs) })
+
+    expect((await nextInterval.reconciliationState()).launch?.isNextGenerationDue).toBe(true)
+
+    const second = await nextInterval.reconcileLaunchCohort(secondSnapshots)
 
     expect(second.generationId).not.toBe(first.generationId)
     await seedTerminalProduct(second, 'ranked', 118)
@@ -961,7 +969,10 @@ describe('Statistics full launch cohort publication', () => {
       },
     })
 
-    const third = await statistics.reconcileLaunchCohort(snapshots(3))
+    const third = await createPostgresStatistics(database, {
+      now: () => new Date(Date.now() + 14 * dayMs),
+    }).reconcileLaunchCohort(snapshots(3))
+
     const thirdRankedOperationId = await bindPublicationFixture(third.generationId, 'ranked')
 
     await insertAcceptedPublicationFixture({

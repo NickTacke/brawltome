@@ -3,6 +3,7 @@ import type { Database, JsonValue, Sql } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
 import { acquireActiveLease, type EffectLineage, operationMatches, readEffectLineage } from '@brawltome/queue'
 import {
+  isLaunchGenerationDue,
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,
   type LaunchCohortCapacityEnvelope,
@@ -186,6 +187,13 @@ type LegendMetaSelectionRow = {
   active_artifact: LegendMetaArtifact | null
 }
 
+type LaunchGenerationPaceRow = {
+  id: string
+  methodology_version: string
+  evidence_state: 'ready' | 'insufficient-evidence'
+  observation_window_starts_at: Date
+}
+
 type UnpublishedGenerationRow = {
   generation_id: string
   product: CollectionProduct
@@ -263,6 +271,14 @@ function publicationOperationKey(generationId: string, product: CollectionProduc
 
 function legendMetaPublicationOperationKey(generationId: string): string {
   return `statistics:${generationId}:legend-meta`
+}
+
+function launchGenerationPace(row: LaunchGenerationPaceRow) {
+  return {
+    methodologyVersion: row.methodology_version,
+    state: row.evidence_state,
+    startedAt: row.observation_window_starts_at,
+  }
 }
 
 function capacityEnvelope(row: GenerationRow): LaunchCohortCapacityEnvelope {
@@ -796,6 +812,28 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     return isActive ? 'allowed' : 'lease-lost'
   }
 
+  // a generation that is still being decided, or is too recent to replace, keeps its place over a new one
+  async function readBlockingGenerationId(sql: typeof client): Promise<string | null> {
+    const [unfinished] = await sql<{ id: string }[]>`
+      SELECT generation.id FROM statistics.cohort_generations generation
+      WHERE (SELECT count(*) FROM statistics.publication_decisions decision
+             WHERE decision.generation_id = generation.id) < 2
+      ORDER BY generation.created_at DESC LIMIT 1
+    `
+
+    if (unfinished) return unfinished.id
+
+    const [latest] = await sql<LaunchGenerationPaceRow[]>`
+      SELECT id, methodology_version, evidence_state, observation_window_starts_at
+      FROM statistics.cohort_generations
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    `
+
+    if (!latest || isLaunchGenerationDue(launchGenerationPace(latest), now())) return null
+
+    return latest.id
+  }
+
   const tracer: StatisticsTracer = {
     async reconcileCohort(snapshot): Promise<CohortAudit> {
       const selected = selectLaunchCohort(snapshot)
@@ -866,15 +904,10 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
           return found
         }
 
-        const [unfinished] = await sql<{ id: string }[]>`
-          SELECT generation.id FROM statistics.cohort_generations generation
-          WHERE (SELECT count(*) FROM statistics.publication_decisions decision
-                 WHERE decision.generation_id = generation.id) < 2
-          ORDER BY generation.created_at DESC LIMIT 1
-        `
+        const blockingGenerationId = await readBlockingGenerationId(sql)
 
-        if (unfinished) {
-          const active = await auditLaunch(sql, unfinished.id)
+        if (blockingGenerationId) {
+          const active = await auditLaunch(sql, blockingGenerationId)
 
           if (!active) throw new Error('active Statistics launch cohort disappeared')
 
@@ -882,7 +915,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         }
 
         const generationId = randomUUID()
-        const startsAt = new Date()
+        const startsAt = now()
         const endsAt = new Date(startsAt.getTime() + LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS * 1_000)
         const envelope = selected.capacityEnvelope
 
@@ -953,9 +986,14 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             source_generation_id: string
             decision_count: string | number
             cohort_ids: string[]
+            methodology_version: string
+            evidence_state: 'ready' | 'insufficient-evidence'
+            observation_window_starts_at: Date
           }[]
         >`
           SELECT generation.id AS generation_id, generation.source_generation_id,
+                 generation.methodology_version, generation.evidence_state,
+                 generation.observation_window_starts_at,
                  (SELECT count(*)::bigint FROM statistics.publication_decisions decision
                   WHERE decision.generation_id = generation.id) AS decision_count,
                  ARRAY(SELECT cohort.id FROM statistics.cohorts cohort
@@ -976,6 +1014,14 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               sourceGenerationId: current.source_generation_id,
               decisionCount: Number(current.decision_count),
               cohortIds: current.cohort_ids,
+              isNextGenerationDue: isLaunchGenerationDue(
+                {
+                  methodologyVersion: current.methodology_version,
+                  state: current.evidence_state,
+                  startedAt: current.observation_window_starts_at,
+                },
+                now(),
+              ),
             }
           : null,
       }
