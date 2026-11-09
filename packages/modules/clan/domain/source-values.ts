@@ -11,6 +11,19 @@ function hasVisibleText(value: string): boolean {
   return /[^\p{Separator}\p{Format}]/u.test(value)
 }
 
+// Postgres can't store U+0000 in text or jsonb, so a value holding one would fail its write every time
+export function withoutNulCharacters(value: unknown): unknown {
+  if (typeof value === 'string') return value.replaceAll('\u0000', '')
+
+  if (Array.isArray(value)) return value.map(withoutNulCharacters)
+
+  if (!isSourceRecord(value)) return value
+
+  const entries = Object.entries(value).map(([key, item]) => [key, withoutNulCharacters(item)])
+
+  return Object.fromEntries(entries)
+}
+
 export function parseNonNegativeInteger(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
     throw new Error(`${field} must be a non-negative safe integer`)

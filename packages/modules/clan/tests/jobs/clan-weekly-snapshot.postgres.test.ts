@@ -20,6 +20,7 @@ type SourceAnswer =
   | { failures: number; guildPoints: string }
   | 'not-found'
   | 'invalid'
+  | 'nul-text'
   | 'unavailable'
   | 'rate-limited'
 
@@ -78,6 +79,8 @@ function answerFor(answers: Map<number, SourceAnswer>, clanId: number, failedCal
   if (answer === undefined || answer === 'not-found') return null
 
   if (answer === 'invalid') return { guild_id: clanId }
+
+  if (answer === 'nul-text') return { ...guildStats(clanId, '6'), notice: 'Join\u0000 us', tags: ['pvp\u0000'] }
 
   if (answer === 'unavailable') throw new SourceHttpError(503)
 
@@ -364,6 +367,32 @@ describe('clan weekly snapshot job', () => {
 
     expect((await readProfileCheck(301))?.checkProvenance).toEqual(failedCheck)
     expect((await readProfileCheck(302))?.checkProvenance).toEqual(failedCheck)
+  })
+
+  test('stores a guild whose text holds characters Postgres cannot store, without them', async () => {
+    for (const clanId of [311, 312]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>([
+      [311, 'nul-text'],
+      [312, { guildPoints: '9' }],
+    ])
+
+    const { job, queue, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'nul-text')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+
+    expect(await readSnapshots(week)).toEqual([
+      { clanId: 311, guildPoints: '6' },
+      { clanId: 312, guildPoints: '9' },
+    ])
+
+    const [profile] = await database.sql<{ notice: string; tags: string[] }[]>`
+      SELECT notice, tags FROM clans.profiles WHERE clan_id = 311
+    `
+
+    expect(profile).toEqual({ notice: 'Join us', tags: ['pvp'] })
   })
 
   test('retries a guild that fails in place and stores it in the same attempt', async () => {

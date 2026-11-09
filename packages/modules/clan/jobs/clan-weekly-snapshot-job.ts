@@ -15,6 +15,7 @@ import type { PostgresWeeklySnapshots } from '../db/postgres-weekly-snapshots'
 import { type ClanProfileWrite, parseGuildRank, parseGuildStats } from '../domain/guild-stats'
 import { failedCheckProvenance, successProvenance, weeklySnapshotProvenance } from '../domain/provenance'
 import { classifySourceFailure } from '../domain/source-failure'
+import { withoutNulCharacters } from '../domain/source-values'
 import { clanWeeklySnapshotContract } from './clan-weekly-snapshot-contract'
 import type { ClanSource } from './refresh-clan'
 import { ClanWeeklySnapshotSourceDown, ClanWeeklySnapshotYield, decideSnapshotFailure } from './weekly-snapshot-failure'
@@ -64,7 +65,7 @@ function readProfile(payload: unknown | null, clanId: number): { profile: ClanPr
   if (payload === null) return { error: new Error('ambiguous guild stats 404') }
 
   try {
-    return { profile: parseGuildStats(payload, clanId) }
+    return { profile: parseGuildStats(withoutNulCharacters(payload), clanId) }
   } catch (error) {
     return { error }
   }
