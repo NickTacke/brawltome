@@ -3,18 +3,41 @@ import { visitorHeaders } from '../src/server/visitor-headers'
 
 describe('visitorHeaders', () => {
   test('forwards the address traefik saw and the one cloudflare names', () => {
-    const headers = visitorHeaders({ realIp: '188.114.97.3', cloudflareIp: '203.0.113.9', peerIp: '10.0.1.5' })
+    const headers = visitorHeaders({
+      realIp: '188.114.97.3',
+      cloudflareIp: '203.0.113.9',
+      peerIp: '10.0.1.5',
+      userAgent: undefined,
+    })
 
-    expect(headers).toEqual({ 'x-visitor-real-ip': '188.114.97.3', 'x-visitor-cf-connecting-ip': '203.0.113.9' })
+    expect(headers).toMatchObject({ 'x-visitor-real-ip': '188.114.97.3', 'x-visitor-cf-connecting-ip': '203.0.113.9' })
   })
 
   test('without traefik in front, the connecting address is the visitor', () => {
-    const headers = visitorHeaders({ realIp: undefined, cloudflareIp: undefined, peerIp: '127.0.0.1' })
+    const headers = visitorHeaders({
+      realIp: undefined,
+      cloudflareIp: undefined,
+      peerIp: '127.0.0.1',
+      userAgent: undefined,
+    })
 
     expect(headers).toEqual({ 'x-visitor-real-ip': '127.0.0.1' })
   })
 
   test('forwards nothing when nothing is known', () => {
-    expect(visitorHeaders({ realIp: undefined, cloudflareIp: undefined, peerIp: undefined })).toEqual({})
+    expect(
+      visitorHeaders({ realIp: undefined, cloudflareIp: undefined, peerIp: undefined, userAgent: undefined }),
+    ).toEqual({})
+  })
+
+  test("forwards the visitor's user agent, so the api can leave out crawlers", () => {
+    const headers = visitorHeaders({
+      realIp: undefined,
+      cloudflareIp: undefined,
+      peerIp: '127.0.0.1',
+      userAgent: 'Googlebot/2.1',
+    })
+
+    expect(headers['x-visitor-user-agent']).toBe('Googlebot/2.1')
   })
 })
