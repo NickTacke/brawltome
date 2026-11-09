@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { pageRange, parsePageInput } from '../src/components/Pager'
+import { pageRange, parsePageInput, previousPage } from '../src/components/Pager'
 
 describe('pageRange', () => {
   test('covers a full first page', () => {
@@ -12,6 +12,11 @@ describe('pageRange', () => {
 
   test('is empty when there are no rows', () => {
     expect(pageRange(1, 30, 0)).toEqual({ first: 0, last: 0 })
+  })
+
+  test('is empty for a page past the end or below the first', () => {
+    expect(pageRange(99, 30, 197)).toEqual({ first: 0, last: 0 })
+    expect(pageRange(0, 30, 197)).toEqual({ first: 0, last: 0 })
   })
 })
 
@@ -40,5 +45,15 @@ describe('parsePageInput', () => {
     expect(parsePageInput(' 4 ', 7)).toBe(4)
     expect(parsePageInput('2.5', 7)).toBe(2)
     expect(parsePageInput('3x', 7)).toBe(3)
+  })
+})
+
+describe('previousPage', () => {
+  test('steps back one page', () => {
+    expect(previousPage(4, 7)).toBe(3)
+  })
+
+  test('comes back to the last page from past the end', () => {
+    expect(previousPage(99, 7)).toBe(7)
   })
 })
