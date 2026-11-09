@@ -1,3 +1,4 @@
+import '@tanstack/react-start/server-only'
 import type { ZodType } from 'zod'
 
 const requestTimeoutMs = 10_000
@@ -14,12 +15,21 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'TimeoutError'
 }
 
+function describeError(error: unknown): { name: string; code?: string } {
+  if (!(error instanceof Error)) return { name: 'unknown' }
+
+  return { name: error.name, code: (error as NodeJS.ErrnoException).code }
+}
+
 // errors from fetch and json parsing can quote the url or the body, and these messages can reach the browser
 async function withFailureMessage<T>(work: () => Promise<T>, failure: string, description: string): Promise<T> {
   try {
     return await work()
   } catch (error) {
     if (isTimeout(error)) throw new Error(`${description}: api gave no answer within ${requestTimeoutMs} ms`)
+
+    // only the kind of failure, the message can quote the url
+    console.error(`${description}: ${failure}`, describeError(error))
 
     throw new Error(`${description}: ${failure}`)
   }
