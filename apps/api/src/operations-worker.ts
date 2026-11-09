@@ -5,6 +5,7 @@ import {
   type BhApiClientOptions,
   brawlhallaV0RequestLimit,
   createBhApiRequestQueue,
+  type RequestQueue,
 } from '@brawltome/bhapi'
 import { createPostgresClanDiscoverySource, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
@@ -72,7 +73,7 @@ import { createPostgresReadiness } from './postgres-readiness'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
-import { collectStatisticsEvidence } from './statistics-collection-source'
+import { collectStatisticsEvidence, createStatisticsCollectionQueue } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
 import { createWorkerJobs } from './worker/job-list'
 import { createPlanners, runPlanners } from './worker/planners'
@@ -222,7 +223,8 @@ const workerJobs = createWorkerJobs({
   statistics: {
     statistics,
     sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
-    collectEvidence: (lease) => collectStatisticsEvidence(createWorkerBhApiClient(), lease),
+    collectEvidence: (lease) =>
+      collectStatisticsEvidence(createWorkerBhApiClient(undefined, statisticsCollectionQueue), lease),
   },
 })
 
@@ -251,6 +253,7 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
 })
 
 const bhapiQueue = createBhApiRequestQueue()
+const statisticsCollectionQueue = createStatisticsCollectionQueue()
 
 // not tools.createSourceAdmitter: verification spends background budget under a key of its own, whatever its work class
 function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {
@@ -268,11 +271,14 @@ function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {
   return createSteamPlayerEvidenceResolver(admittedBhapi)
 }
 
-function createWorkerBhApiClient(beforeRequest?: BhApiClientOptions['beforeRequest']): BhApiClient {
+function createWorkerBhApiClient(
+  beforeRequest?: BhApiClientOptions['beforeRequest'],
+  queue: RequestQueue = bhapiQueue,
+): BhApiClient {
   return new BhApiClient({
     apiKey,
     telemetry,
-    queue: bhapiQueue,
+    queue,
     beforeRequest,
     onRateLimited: ({ domain, retryAfterMs }) =>
       requestAdmission.pauseSource(domain, Math.max(1, Math.ceil(retryAfterMs / 1_000))),
