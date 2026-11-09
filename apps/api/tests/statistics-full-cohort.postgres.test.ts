@@ -752,7 +752,7 @@ describe('Statistics full launch cohort publication', () => {
     expect(allLegendMeta).toMatchObject({
       status: 'fresh',
       generationId: first.generationId,
-      methodologyVersion: 'current-season-legend-meta-v1',
+      methodologyVersion: 'current-season-legend-meta-v2',
       season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
       slice: {
         selectedPlayers: 2_250,

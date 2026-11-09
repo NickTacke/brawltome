@@ -219,6 +219,7 @@ describe('Current Season Legend Meta formulas', () => {
         return {
           region,
           bracket,
+          eligiblePlayers: 2,
           selectedPlayers: 2,
           observations: [player(brawlhallaId, 1_800 + brawlhallaId, observedLegends)],
         }
@@ -305,7 +306,13 @@ describe('Current Season Legend Meta formulas', () => {
 
   test('rejects invalid authoritative season identities instead of storing ambiguous compatibility keys', () => {
     const cells = launchCohortRegions.flatMap((region) =>
-      launchCohortBrackets.map((bracket) => ({ region, bracket, selectedPlayers: 0, observations: [] })),
+      launchCohortBrackets.map((bracket) => ({
+        region,
+        bracket,
+        eligiblePlayers: 0,
+        selectedPlayers: 0,
+        observations: [],
+      })),
     )
 
     const input = {
@@ -327,11 +334,64 @@ describe('Current Season Legend Meta formulas', () => {
     expect(() => buildLegendMetaArtifact({ ...input, seasonIdentity: 'x'.repeat(201) })).toThrow('season identity')
   })
 
+  test('publishes every cell with its status and shows a left-out cell as an empty slice', () => {
+    const cells = launchCohortRegions.flatMap((region, regionIndex) =>
+      launchCohortBrackets.map((bracket, bracketIndex) => {
+        const isLeftOut = region === 'EU' && bracket === 'Platinum'
+        const brawlhallaId = regionIndex * 10 + bracketIndex + 1
+
+        return {
+          region,
+          bracket,
+          eligiblePlayers: isLeftOut ? 40 : 200,
+          selectedPlayers: isLeftOut ? 0 : 1,
+          observations: isLeftOut ? [] : [player(brawlhallaId, 1_900, [{ legendId: 3, games: 10, wins: 5 }])],
+        }
+      }),
+    )
+
+    const artifact = buildLegendMetaArtifact({
+      snapshotId: '10000000-0000-4000-8000-000000000001',
+      generationId: '10000000-0000-4000-8000-000000000002',
+      cohortMethodologyVersion: 'full-launch-cohort-v2',
+      sourceGenerationId: '10000000-0000-4000-8000-000000000003',
+      sourceObservedAt: '2026-08-10T00:00:00.000Z',
+      observationWindow: { startsAt: '2026-08-10T00:00:00.000Z', endsAt: '2026-08-17T00:00:00.000Z' },
+      publishedAt: '2026-08-12T00:00:00.000Z',
+      legends,
+      cells,
+    })
+
+    expect(artifact.cohortCells).toHaveLength(18)
+
+    expect(artifact.cohortCells.slice(0, 2).map(({ region, bracket }) => `${region}/${bracket}`)).toEqual([
+      'US-E/Platinum',
+      'US-E/Diamond+',
+    ])
+
+    expect(artifact.cohortCells.filter(({ status }) => status === 'left-out')).toEqual([
+      { region: 'EU', bracket: 'Platinum', status: 'left-out', eligiblePlayers: 40, selectedPlayers: 0 },
+    ])
+
+    const leftOutSlice = artifact.slices.find(({ region, bracket }) => region === 'EU' && bracket === 'Platinum')
+
+    expect(leftOutSlice).toMatchObject({
+      selectedPlayers: 0,
+      observedPlayers: 0,
+      coverage: { numerator: 0, denominator: 0, basisPoints: null },
+    })
+
+    const allSlice = artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'all')
+
+    expect(allSlice?.selectedPlayers).toBe(17)
+  })
+
   test('rejects a player repeated across launch cells instead of double-counting all-region adoption', () => {
     const cells = launchCohortRegions.flatMap((region) =>
       launchCohortBrackets.map((bracket) => ({
         region,
         bracket,
+        eligiblePlayers: 1,
         selectedPlayers: 1,
         observations: [
           player(region === 'EU' || region === 'US-E' ? 1 : launchCohortRegions.indexOf(region) + 2, 2_000, []),

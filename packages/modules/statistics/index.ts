@@ -15,6 +15,7 @@ import type {
 import type {
   LegendMetaArtifact,
   LegendMetaArtifactSlice,
+  LegendMetaCohortCell,
   LegendMetaFilterBracket,
   LegendMetaFilterRegion,
 } from './legend-meta'
@@ -100,6 +101,7 @@ export {
   LEGEND_META_MINIMUM_PLAYERS,
   type LegendMetaArtifact,
   type LegendMetaArtifactSlice,
+  type LegendMetaCohortCell,
   type LegendMetaFilterBracket,
   type LegendMetaFilterRegion,
   type LegendMetaLegend,
@@ -346,6 +348,7 @@ export type CareerWeaponUsageView =
 
 export type LegendMetaHistoryViewSnapshot = LegendMetaHistorySnapshot & {
   generationId: string
+  cohortCells: LegendMetaCohortCell[]
   data: LegendMetaArtifactSlice
 }
 

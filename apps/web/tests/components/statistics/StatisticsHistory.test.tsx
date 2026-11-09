@@ -1,8 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { parseCareerWeaponUsageHistoryOutput, parseLegendMetaHistoryOutput } from '@brawltome/contracts'
+import { rankedRegions } from '@brawltome/game-data/ranked'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CareerWeaponUsageHistory } from '../../../src/components/statistics/CareerWeaponUsageHistory'
 import { LegendMetaHistory } from '../../../src/components/statistics/LegendMetaHistory'
+
+const cohortCells = rankedRegions.flatMap((region) =>
+  (['Platinum', 'Diamond+'] as const).map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
 
 const legendRow = {
   legend: { legendId: 3, name: 'Bödvar', slug: 'bodvar' },
@@ -22,12 +33,13 @@ function legendSnapshot(snapshotId: string, generationId: string, publishedAt: s
   return {
     snapshotId,
     generationId,
-    methodologyVersion: 'current-season-legend-meta-v1',
+    methodologyVersion: 'current-season-legend-meta-v2',
     cohortMethodologyVersion: 'full-launch-cohort-v1',
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     publishedAt,
     season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
     scope: { region: 'all', bracket: 'all' },
+    cohortCells,
     selectedPlayers: 30,
     observedPlayers: 30,
     observedLegendGames: 200,

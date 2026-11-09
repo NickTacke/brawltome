@@ -1,7 +1,7 @@
 import { requirePositiveInteger } from '@brawltome/foundation'
 import { type LaunchCohortBracket, type LaunchCohortRegion, launchCohortBrackets, launchCohortRegions } from './cohort'
 
-export const LEGEND_META_METHODOLOGY_VERSION = 'current-season-legend-meta-v1'
+export const LEGEND_META_METHODOLOGY_VERSION = 'current-season-legend-meta-v2'
 export const LEGEND_META_MINIMUM_PLAYERS = 30
 export const LEGEND_META_MINIMUM_GAMES = 200
 export const LEGEND_META_PUBLICATION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000
@@ -25,6 +25,7 @@ const LEGEND_META_ELIGIBILITY = {
 const LEGEND_META_COMMON_CAVEATS = [
   'BrawlTome-observed values are not exhaustive or live.',
   'Missing source observations reduce coverage and are not counted as zero games.',
+  'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
 ] as const
 
 export const LEGEND_META_METHODOLOGY_DISCLOSURE = {
@@ -118,6 +119,14 @@ export type LegendMetaSlice = {
   rows: LegendMetaRow[]
 }
 
+export type LegendMetaCohortCell = {
+  region: LaunchCohortRegion
+  bracket: LaunchCohortBracket
+  status: 'covered' | 'left-out'
+  eligiblePlayers: number
+  selectedPlayers: number
+}
+
 export type LegendMetaFilterRegion = 'all' | LaunchCohortRegion
 export type LegendMetaFilterBracket = 'all' | LaunchCohortBracket
 
@@ -142,12 +151,14 @@ export type LegendMetaArtifact = {
     source: 'brawlhalla-v1-ranked-1v1'
   }
   methodology: typeof LEGEND_META_METHODOLOGY_DISCLOSURE | typeof LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE
+  cohortCells: LegendMetaCohortCell[]
   slices: LegendMetaArtifactSlice[]
 }
 
 export type LegendMetaCell = {
   region: LaunchCohortRegion
   bracket: LaunchCohortBracket
+  eligiblePlayers: number
   selectedPlayers: number
   observations: readonly LegendMetaObservedPlayer[]
 }
@@ -335,6 +346,24 @@ export function aggregateLegendMetaSlice(input: {
   }
 }
 
+function cohortCellCoverage(cellsByKey: ReadonlyMap<string, LegendMetaCell>): LegendMetaCohortCell[] {
+  return launchCohortRegions.flatMap((region) =>
+    launchCohortBrackets.map((bracket) => {
+      const cell = cellsByKey.get(`${region}:${bracket}`)
+
+      if (!cell) throw new Error(`missing Legend Meta launch cell ${region}/${bracket}`)
+
+      return {
+        region,
+        bracket,
+        status: cell.selectedPlayers > 0 ? ('covered' as const) : ('left-out' as const),
+        eligiblePlayers: cell.eligiblePlayers,
+        selectedPlayers: cell.selectedPlayers,
+      }
+    }),
+  )
+}
+
 export function buildLegendMetaArtifact(input: {
   snapshotId: string
   generationId: string
@@ -369,13 +398,7 @@ export function buildLegendMetaArtifact(input: {
     }
   }
 
-  for (const region of launchCohortRegions) {
-    for (const bracket of launchCohortBrackets) {
-      if (!cellsByKey.has(`${region}:${bracket}`)) {
-        throw new Error(`missing Legend Meta launch cell ${region}/${bracket}`)
-      }
-    }
-  }
+  const cohortCells = cohortCellCoverage(cellsByKey)
 
   utcTimestamp(input.sourceObservedAt, 'source observed time')
   const startsAt = utcTimestamp(input.observationWindow.startsAt, 'observation window start')
@@ -431,6 +454,7 @@ export function buildLegendMetaArtifact(input: {
       seasonIdentity === null
         ? LEGEND_META_METHODOLOGY_DISCLOSURE
         : LEGEND_META_CONDITIONAL_TREND_METHODOLOGY_DISCLOSURE,
+    cohortCells,
     slices,
   }
 }

@@ -178,6 +178,9 @@ const methodologySchema = z.union([
       caveats: z.tuple([
         z.literal('BrawlTome-observed values are not exhaustive or live.'),
         z.literal('Missing source observations reduce coverage and are not counted as zero games.'),
+        z.literal(
+          'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+        ),
         z.literal('The source does not expose a stable season identity, so cross-publication trends are unavailable.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
       ]),
@@ -197,6 +200,9 @@ const methodologySchema = z.union([
       caveats: z.tuple([
         z.literal('BrawlTome-observed values are not exhaustive or live.'),
         z.literal('Missing source observations reduce coverage and are not counted as zero games.'),
+        z.literal(
+          'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+        ),
         z.literal('Cross-publication trends stop at the first incompatible adjacent snapshot.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
       ]),
@@ -211,10 +217,27 @@ const filterSchema = z
   })
   .strict()
 
+const cohortCellsSchema = z
+  .array(
+    z
+      .object({
+        region: z.enum(leaderboardRegions),
+        bracket: z.enum(['Platinum', 'Diamond+']),
+        status: z.enum(['covered', 'left-out']),
+        eligiblePlayers: nonnegativeSafeInteger,
+        selectedPlayers: nonnegativeSafeInteger,
+      })
+      .strict()
+      .refine(({ status, selectedPlayers }) => (status === 'covered') === selectedPlayers > 0, {
+        message: 'a covered cell must have selected players and a left-out cell none',
+      }),
+  )
+  .length(18)
+
 const availableFields = {
   snapshotId: z.uuid(),
   generationId: z.uuid(),
-  methodologyVersion: z.literal('current-season-legend-meta-v1'),
+  methodologyVersion: z.literal('current-season-legend-meta-v2'),
   cohortMethodologyVersion: z.string().min(1).max(200),
   sourceGenerationId: z.uuid(),
   sourceObservedAt: utcDateTimeSchema,
@@ -234,6 +257,7 @@ const availableFields = {
     })
     .strict(),
   filter: filterSchema,
+  cohortCells: cohortCellsSchema,
   selectedPlayers: nonnegativeSafeInteger,
   observedPlayers: nonnegativeSafeInteger,
   observedLegendGames: nonnegativeSafeInteger,
@@ -313,6 +337,7 @@ const historySnapshotSchema = z
       })
       .strict(),
     scope: filterSchema,
+    cohortCells: cohortCellsSchema,
     selectedPlayers: nonnegativeSafeInteger,
     observedPlayers: nonnegativeSafeInteger,
     observedLegendGames: nonnegativeSafeInteger,

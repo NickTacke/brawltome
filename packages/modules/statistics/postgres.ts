@@ -54,6 +54,7 @@ import {
   type LegendMetaArtifact,
   LegendMetaBuildError,
   type LegendMetaCell,
+  type LegendMetaCohortCell,
 } from './legend-meta'
 import {
   type CellCollectionProgress,
@@ -1619,10 +1620,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               id: string
               region: LaunchCohortRegion
               bracket: 'Platinum' | 'Diamond+'
+              eligible_players: number
               selected_players: number
             }[]
           >`
-            SELECT id, region, bracket, selected_players
+            SELECT id, region, bracket, eligible_players, selected_players
             FROM statistics.cohorts WHERE generation_id = ${authorization.generationId}
             ORDER BY region, bracket
           `
@@ -1684,6 +1686,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
               cells: cohortRows.map((cohort) => ({
                 region: cohort.region,
                 bracket: cohort.bracket,
+                eligiblePlayers: cohort.eligible_players,
                 selectedPlayers: cohort.selected_players,
                 observations: observationsByCohort.get(cohort.id) ?? [],
               })),
@@ -1736,6 +1739,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         return {
           snapshotId: artifact.snapshotId,
           generationId: artifact.generationId,
+          cohortCells: artifact.cohortCells,
           publishedAt: artifact.publishedAt,
           observationWindow: artifact.observationWindow,
           sequence: { at: sequence_at.toISOString(), id: sequence_id },
@@ -1755,7 +1759,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             winRateBasisPoints: row.winRate.basisPoints,
           })),
           data: slice,
-        } satisfies LegendMetaHistorySnapshot & { generationId: string; data: typeof slice }
+        } satisfies LegendMetaHistorySnapshot & {
+          generationId: string
+          cohortCells: LegendMetaCohortCell[]
+          data: typeof slice
+        }
       })
 
       return { status: 'available', ...input, entries: buildLegendMetaHistory(snapshots) }

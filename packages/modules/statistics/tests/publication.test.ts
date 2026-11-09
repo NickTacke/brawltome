@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { type LaunchCohortCapacityEnvelope, launchCohortBrackets, launchCohortRegions } from '../cohort'
-import { validatePublicationDecision } from '../publication'
+import { type CellCollectionProgress, validatePublicationDecision } from '../publication'
 
 const startsAt = '2026-08-10T00:00:00.000Z'
 const endsAt = '2026-08-17T00:00:00.000Z'
 
-function progress(successes = 119, selectedPlayers = 125) {
+function progress(successes = 119, selectedPlayers = 125): CellCollectionProgress[] {
   return launchCohortRegions.flatMap((region) =>
     launchCohortBrackets.map((bracket) => ({
       region,
@@ -146,7 +146,7 @@ describe('Statistics publication validation', () => {
     expect(decision.capacityEnvelope.maximumSourceAttempts).toBe(13_494)
   })
 
-  function exclude(cell: ReturnType<typeof progress>[number]) {
+  function exclude(cell: ReturnType<typeof progress>[number]): CellCollectionProgress {
     return {
       ...cell,
       selectedPlayers: 0,

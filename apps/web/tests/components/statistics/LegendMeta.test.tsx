@@ -1,9 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import type { LegendMetaOutput } from '@brawltome/contracts'
+import { rankedRegions } from '@brawltome/game-data/ranked'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { LegendMetaView } from '../../../src/components/statistics/LegendMetaView'
 
 type AvailableLegendMeta = Exclude<LegendMetaOutput, { status: 'unavailable' }>
+
+const cohortCells = rankedRegions.flatMap((region) =>
+  (['Platinum', 'Diamond+'] as const).map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
 
 const methodology: AvailableLegendMeta['methodology'] = {
   population: 'deterministic-observed-cohort' as const,
@@ -26,6 +37,7 @@ const methodology: AvailableLegendMeta['methodology'] = {
   caveats: [
     'BrawlTome-observed values are not exhaustive or live.',
     'Missing source observations reduce coverage and are not counted as zero games.',
+    'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
     'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
     'Observed win rate describes this cohort and does not establish legend strength or causation.',
   ],
@@ -36,7 +48,7 @@ const fresh: AvailableLegendMeta = {
   staleReason: null,
   snapshotId: '10000000-0000-4000-8000-000000000001',
   generationId: '10000000-0000-4000-8000-000000000002',
-  methodologyVersion: 'current-season-legend-meta-v1',
+  methodologyVersion: 'current-season-legend-meta-v2',
   cohortMethodologyVersion: 'full-launch-cohort-v1',
   sourceGenerationId: '10000000-0000-4000-8000-000000000003',
   sourceObservedAt: '2026-08-10T00:00:00.000Z',
@@ -45,6 +57,7 @@ const fresh: AvailableLegendMeta = {
   expectedNextPublicationAt: '2026-08-19T00:00:00.000Z',
   season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
   filter: { region: 'all', bracket: 'all' },
+  cohortCells,
   selectedPlayers: 40,
   observedPlayers: 40,
   observedLegendGames: 200,
@@ -97,6 +110,23 @@ describe('Current Season Legend Meta view', () => {
     expect(html).toContain('40 of 40 selected players observed')
     expect(html).toContain('Insufficient sample')
     expect(html).toContain('Not ranked')
+  })
+
+  test('says how many cells are covered and names the ones left out', () => {
+    expect(render()).toContain('Covers all 18 region and bracket cells.')
+
+    const partial = {
+      ...fresh,
+      cohortCells: cohortCells.map((cell) =>
+        cell.region === 'EU' && cell.bracket === 'Platinum'
+          ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 }
+          : cell,
+      ),
+    }
+
+    const html = render(partial)
+
+    expect(html).toContain('Covers 17 of 18 region and bracket cells. Left out for too few players: EU Platinum.')
   })
 
   test('uses labeled native filters, semantic table structure, and responsive overflow', () => {

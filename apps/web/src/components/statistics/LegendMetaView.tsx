@@ -39,6 +39,18 @@ function uncertainty(interval: { lowerBasisPoints: number; upperBasisPoints: num
   return `${percentage(interval.lowerBasisPoints)}–${percentage(interval.upperBasisPoints)}`
 }
 
+type LegendMetaCohortCells = Exclude<LegendMetaOutput, { status: 'unavailable' }>['cohortCells']
+
+function cohortCoverageNote(cells: LegendMetaCohortCells): string {
+  const leftOut = cells.filter(({ status }) => status === 'left-out')
+
+  if (leftOut.length === 0) return `Covers all ${cells.length} region and bracket cells.`
+
+  const names = leftOut.map(({ region, bracket }) => `${region} ${bracket}`).join(', ')
+
+  return `Covers ${cells.length - leftOut.length} of ${cells.length} region and bracket cells. Left out for too few players: ${names}.`
+}
+
 function formattedRating(rating: number | null): string {
   return rating === null ? 'Unavailable' : rating.toLocaleString('en-US', { maximumFractionDigits: 1 })
 }
@@ -159,6 +171,8 @@ export function LegendMetaView({
               <time dateTime={data.publishedAt}>{new Date(data.publishedAt).toLocaleString('en-US')}</time>.
             </output>
           )}
+
+          <p className="text-sm text-muted-foreground">{cohortCoverageNote(data.cohortCells)}</p>
 
           <dl className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-card/60 p-4">

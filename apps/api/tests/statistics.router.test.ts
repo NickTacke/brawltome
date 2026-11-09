@@ -33,6 +33,7 @@ function availableResult() {
       launchCohortBrackets.map((bracket) => ({
         region,
         bracket,
+        eligiblePlayers: 1,
         selectedPlayers: 1,
         observations: [
           {

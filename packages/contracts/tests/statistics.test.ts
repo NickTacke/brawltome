@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { leaderboardRegions } from '../src/leaderboard'
 import {
   type LegendMetaOutput,
   legendMetaHistoryOutputSchema,
@@ -8,12 +9,22 @@ import {
   parseLegendMetaOutput,
 } from '../src/statistics'
 
+const cohortCells = leaderboardRegions.flatMap((region) =>
+  (['Platinum', 'Diamond+'] as const).map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
+
 const available: LegendMetaOutput = {
   status: 'fresh',
   staleReason: null,
   snapshotId: '10000000-0000-4000-8000-000000000001',
   generationId: '10000000-0000-4000-8000-000000000002',
-  methodologyVersion: 'current-season-legend-meta-v1',
+  methodologyVersion: 'current-season-legend-meta-v2',
   cohortMethodologyVersion: 'full-launch-cohort-v1',
   sourceGenerationId: '10000000-0000-4000-8000-000000000003',
   sourceObservedAt: '2026-08-10T00:00:00.000Z',
@@ -29,6 +40,7 @@ const available: LegendMetaOutput = {
     source: 'brawlhalla-v1-ranked-1v1',
   },
   filter: { region: 'all', bracket: 'Platinum' },
+  cohortCells,
   selectedPlayers: 125,
   observedPlayers: 119,
   observedLegendGames: 1_190,
@@ -54,6 +66,7 @@ const available: LegendMetaOutput = {
     caveats: [
       'BrawlTome-observed values are not exhaustive or live.',
       'Missing source observations reduce coverage and are not counted as zero games.',
+      'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
       'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
       'Observed win rate describes this cohort and does not establish legend strength or causation.',
     ],
@@ -97,6 +110,7 @@ const historySnapshot = {
   publishedAt: available.publishedAt,
   season: available.season,
   scope: available.filter,
+  cohortCells,
   selectedPlayers: available.selectedPlayers,
   observedPlayers: available.observedPlayers,
   observedLegendGames: available.observedLegendGames,
@@ -142,6 +156,7 @@ describe('Current Season Legend Meta contract', () => {
         caveats: [
           'BrawlTome-observed values are not exhaustive or live.',
           'Missing source observations reduce coverage and are not counted as zero games.',
+          'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
           'Cross-publication trends stop at the first incompatible adjacent snapshot.',
           'Observed win rate describes this cohort and does not establish legend strength or causation.',
         ],
@@ -177,6 +192,22 @@ describe('Current Season Legend Meta contract', () => {
     expect(() =>
       legendMetaOutputSchema.parse({ ...available, status: 'fresh', staleReason: 'publication_overdue' }),
     ).toThrow()
+  })
+
+  test('requires all 18 cells and a status that matches the selected players', () => {
+    expect(() => legendMetaOutputSchema.parse({ ...available, cohortCells: cohortCells.slice(1) })).toThrow()
+
+    const mislabelled = cohortCells.map((cell, index) => (index === 0 ? { ...cell, status: 'left-out' } : cell))
+
+    expect(() => legendMetaOutputSchema.parse({ ...available, cohortCells: mislabelled })).toThrow()
+
+    const leftOut = cohortCells.map((cell, index) =>
+      index === 0 ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 } : cell,
+    )
+
+    expect(legendMetaOutputSchema.parse({ ...available, cohortCells: leftOut })).toMatchObject({
+      cohortCells: [{ status: 'left-out', selectedPlayers: 0 }, ...leftOut.slice(1).map(() => expect.anything())],
+    })
   })
 
   test('rejects invented ranks, percentages, uncertainty, or trend fields', () => {

@@ -5,6 +5,8 @@ import {
   buildLegendMetaHistory,
   type CareerWeaponHistoryViewSnapshot,
   type LegendMetaHistoryViewSnapshot,
+  launchCohortBrackets,
+  launchCohortRegions,
 } from '@brawltome/statistics'
 import { statisticsRouter } from '../src/router/statistics.router'
 import type { Context } from '../src/trpc/context'
@@ -23,16 +25,27 @@ const legendRow = {
   rank: 1,
 } as const
 
+const cohortCells = launchCohortRegions.flatMap((region) =>
+  launchCohortBrackets.map((bracket) => ({
+    region,
+    bracket,
+    status: 'covered' as const,
+    eligiblePlayers: 125,
+    selectedPlayers: 125,
+  })),
+)
+
 function legendSnapshot(snapshotId: string, generationId: string, publishedAt: string): LegendMetaHistoryViewSnapshot {
   return {
     snapshotId,
     generationId,
+    cohortCells,
     publishedAt,
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     compatibility: {
       season: { applicability: 'required', identity: null },
       cohortMethodologyVersion: 'full-launch-cohort-v1',
-      metricMethodologyVersion: 'current-season-legend-meta-v1',
+      metricMethodologyVersion: 'current-season-legend-meta-v2',
       scope: { region: 'all', bracket: 'all' },
     },
     rows: [
