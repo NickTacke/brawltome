@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import type { LegendMetaInput } from '@brawltome/contracts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { type AdmissionConfig, queueModule } from '@brawltome/queue'
 import {
@@ -45,6 +46,36 @@ function snapshots(generation: number, thinRegion: LaunchCohortRegion | null): C
   })
 }
 
+const admission: AdmissionConfig = {
+  totalConcurrency: 4,
+  interactiveReservation: 1,
+  classConcurrency: {
+    interactive: 2,
+    'primary-monitoring': 1,
+    leaderboard: 1,
+    'global-statistics': 1,
+    projection: 1,
+    maintenance: 1,
+  },
+  backgroundWeights: {
+    'primary-monitoring': 8,
+    leaderboard: 4,
+    'global-statistics': 2,
+    projection: 4,
+    maintenance: 1,
+  },
+}
+
+const noLeaderboard = {
+  getLeaderboard: async (input: { mode: string; page: number; pageSize?: number }) => ({
+    status: 'unavailable' as const,
+    reason: 'not_yet_published' as const,
+    mode: input.mode,
+    page: input.page,
+    pageSize: input.pageSize ?? 50,
+  }),
+} as never
+
 describe('Statistics launch cohort with a left-out cell', () => {
   test('keeps the thin cell on record and collects only the covered cells', async () => {
     const statistics = createPostgresStatistics(database)
@@ -71,36 +102,6 @@ describe('Statistics launch cohort with a left-out cell', () => {
 })
 
 describe('Statistics publication with a left-out cell', () => {
-  const admission: AdmissionConfig = {
-    totalConcurrency: 4,
-    interactiveReservation: 1,
-    classConcurrency: {
-      interactive: 2,
-      'primary-monitoring': 1,
-      leaderboard: 1,
-      'global-statistics': 1,
-      projection: 1,
-      maintenance: 1,
-    },
-    backgroundWeights: {
-      'primary-monitoring': 8,
-      leaderboard: 4,
-      'global-statistics': 2,
-      projection: 4,
-      maintenance: 1,
-    },
-  }
-
-  const noLeaderboard = {
-    getLeaderboard: async (input: { mode: string; page: number; pageSize?: number }) => ({
-      status: 'unavailable' as const,
-      reason: 'not_yet_published' as const,
-      mode: input.mode,
-      page: input.page,
-      pageSize: input.pageSize ?? 50,
-    }),
-  } as never
-
   let publicationDatabase: TestDatabase
 
   beforeAll(async () => {
@@ -176,4 +177,80 @@ describe('Statistics publication with a left-out cell', () => {
       slice: { sliceCoverage: { filterCells: 9, coveredCells: 9, leftOutCells: [], includesPlatinumBoardTop: false } },
     })
   })
+})
+
+describe('Statistics history when the covered cells change', () => {
+  const dayMs = 24 * 60 * 60 * 1_000
+  let historyDatabase: TestDatabase
+
+  beforeAll(async () => {
+    historyDatabase = await createTestDatabase({
+      label: 'statistics_coverage_history',
+      modules: [queueModule, statisticsModule],
+    })
+  })
+
+  afterAll(async () => {
+    await historyDatabase?.drop()
+  }, 30_000)
+
+  async function publishGeneration(number: number, thinRegion: LaunchCohortRegion | null, daysLater: number) {
+    const statistics = createPostgresStatistics(historyDatabase, {
+      now: () => new Date(Date.now() + daysLater * dayMs),
+    })
+
+    const reservations = createStatisticsReservations(historyDatabase)
+    const operations = createTestQueue({ database: historyDatabase })
+    const generation = await statistics.reconcileLaunchCohort(snapshots(number, thinRegion))
+
+    await seedTerminalProduct(historyDatabase.connectionString, generation, 'ranked', 120)
+    await seedTerminalProduct(historyDatabase.connectionString, generation, 'lifetime', 120)
+
+    const jobs = createStatisticsTestJobs(statistics)
+    const options = { leaseMs: 5_000, retryDelayMs: 0, admission, jobs }
+
+    for (let round = 0; round < 2; round++) {
+      await reconcileStatisticsCohort(statistics, reservations, noLeaderboard)
+      while (await runOneWithJobs(operations, 'history-worker', options)) {}
+    }
+
+    return statistics
+  }
+
+  function reasonCodes(comparison: { status: string; reasons?: { code: string }[] } | null | undefined) {
+    if (!comparison) throw new Error('history comparison missing')
+
+    return comparison.reasons?.map(({ code }) => code) ?? []
+  }
+
+  test('breaks a series only when a covered cell inside its own scope changed', async () => {
+    await publishGeneration(1, 'EU', 0)
+    const statistics = await publishGeneration(2, null, 7)
+
+    const legendHistory = async (scope: LegendMetaInput) => {
+      const history = await statistics.getLegendMetaHistory(scope)
+
+      if (history.status === 'unavailable') throw new Error('Legend Meta history missing')
+
+      return reasonCodes(history.entries[0]?.comparisonToPrevious)
+    }
+
+    const careerHistory = async (filters: LegendMetaInput) => {
+      const history = await statistics.getCareerWeaponUsageHistory(filters)
+
+      if (history.status === 'unavailable') throw new Error('Career history missing')
+
+      return reasonCodes(history.entries[0]?.comparisonToPrevious)
+    }
+
+    expect(await legendHistory({ region: 'EU', bracket: 'all' })).toContain('cohort_coverage_mismatch')
+    expect(await legendHistory({ region: 'all', bracket: 'all' })).toContain('cohort_coverage_mismatch')
+    expect(await legendHistory({ region: 'all', bracket: 'Diamond+' })).not.toContain('cohort_coverage_mismatch')
+    expect(await legendHistory({ region: 'AUS', bracket: 'all' })).not.toContain('cohort_coverage_mismatch')
+
+    expect(await careerHistory({ region: 'EU', bracket: 'all' })).toContain('cohort_coverage_mismatch')
+    expect(await careerHistory({ region: 'all', bracket: 'all' })).toContain('cohort_coverage_mismatch')
+    expect(await careerHistory({ region: 'all', bracket: 'Diamond+' })).not.toContain('cohort_coverage_mismatch')
+    expect(await careerHistory({ region: 'AUS', bracket: 'all' })).not.toContain('cohort_coverage_mismatch')
+  }, 60_000)
 })
