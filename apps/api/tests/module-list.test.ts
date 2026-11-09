@@ -9,6 +9,7 @@ import { Hono } from 'hono'
 import { apiModules } from '../src/modules'
 import { createOrpcRoutes } from '../src/orpc/mount'
 import { createOrpcRouter, type OrpcRouter } from '../src/orpc/router'
+import { createVisitorRefreshProcedures, type VisitorRefreshDependencies } from '../src/orpc/visitor-refresh'
 import { workerModules } from '../src/worker-modules'
 
 function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): BrawltomeModule[] {
@@ -17,6 +18,8 @@ function without(modules: readonly BrawltomeModule[], left: BrawltomeModule): Br
 
 // building the procedures only hands the database to them; nothing here calls a handler that would read it
 const runtime: ModuleRuntime = { database: {} as Database }
+// the same goes for the api's own procedures and what they are handed
+const refresh = createVisitorRefreshProcedures({} as VisitorRefreshDependencies)
 
 describe('module lists', () => {
   test('the API loads every module its modules depend on', () => {
@@ -58,8 +61,23 @@ describe('oRPC router built from a module list', () => {
     ])
   })
 
+  test("puts the api's own procedures beside the modules", () => {
+    const router = createOrpcRouter(apiModules, runtime, { refresh })
+
+    expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'ranking', 'refresh', 'status'])
+    expect(Object.keys(router.refresh)).toEqual(['player', 'clan'])
+  })
+
+  test("refuses a module named like one of the api's own groups", () => {
+    const refreshModule: BrawltomeModule = { name: 'refresh', dependsOn: [], migrations: [] }
+
+    expect(() => createOrpcRouter([...apiModules, refreshModule], runtime, { refresh })).toThrow(
+      "module refresh has the name of one of the api's own procedure groups",
+    )
+  })
+
   test('types the router with exactly the served keys', () => {
-    const servedKeys: (keyof OrpcRouter)[] = ['status', 'clan', 'player']
+    const servedKeys: (keyof OrpcRouter)[] = ['status', 'refresh', 'clan', 'player']
 
     // @ts-expect-error a module name that widened to string would let any key through
     const unservedKey: keyof OrpcRouter = 'nothing'
