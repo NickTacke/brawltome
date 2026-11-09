@@ -7,6 +7,10 @@ import {
   type StatisticsTracer,
 } from '@brawltome/statistics'
 
+// two minutes of work at one call per 6 seconds. it outlasts the gap between ticks and stays far under the 15 minutes
+// the oldest-runnable alert allows, so that alert keeps meaning something while a collection runs for a day
+export const MAX_QUEUED_STATISTICS_COLLECTIONS = 20
+
 export async function loadLaunchCohortCandidates(
   ranking: Pick<RankingQueries, 'getLeaderboard'>,
   region: LaunchCohortRegion = 'EU',
@@ -148,7 +152,11 @@ export async function reconcileStatisticsCohort(
 
   const launchCohortIds = new Set(launchState?.cohortIds ?? [])
 
-  for (const intent of await statistics.collectionIntents()) {
+  const queuedCollections = await reservations.countQueuedStatisticsCollections()
+  const collectionRoom = MAX_QUEUED_STATISTICS_COLLECTIONS - queuedCollections
+  const collectionIntents = collectionRoom > 0 ? await statistics.collectionIntents(collectionRoom) : []
+
+  for (const intent of collectionIntents) {
     const accepted = await reservations.reserveStatisticsCollection({
       kind: intent.kind,
       dedupeKey: intent.operationKey,

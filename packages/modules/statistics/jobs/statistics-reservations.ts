@@ -2,6 +2,7 @@ import type { Database } from '@brawltome/foundation'
 import {
   type AcceptOperationResult,
   activateBound,
+  countActive,
   listAwaiting,
   type OperationProvenance,
   reserveForBinding,
@@ -49,6 +50,7 @@ export type ReserveStatisticsLegendMetaPublication = StatisticsReservation & {
 export interface StatisticsReservations {
   reserveStatisticsCollection(input: ReserveStatisticsCollection): Promise<AcceptOperationResult>
   listAwaitingStatisticsCollections(): Promise<string[]>
+  countQueuedStatisticsCollections(): Promise<number>
   activateStatisticsCollection(operationId: string): Promise<TransitionResult>
   reserveStatisticsPublication(input: ReserveStatisticsPublication): Promise<AcceptOperationResult>
   listAwaitingStatisticsPublications(): Promise<string[]>
@@ -87,6 +89,16 @@ function reserveStatisticsCollection(
     lockNamespace: 209,
     mismatchMessage: 'statistics collection operation key has a different definition',
   })
+}
+
+async function countQueuedStatisticsCollections(database: Database): Promise<number> {
+  const counts = await Promise.all(
+    statisticsCollectionKinds.map((kind) =>
+      countActive(database, { kind, workClass: 'global-statistics', payloadEquals: {} }),
+    ),
+  )
+
+  return counts.reduce((total, count) => total + count, 0)
 }
 
 function reserveStatisticsPublication(
@@ -151,6 +163,8 @@ export function createStatisticsReservations(database: Database): StatisticsRese
 
     listAwaitingStatisticsCollections: () =>
       listAwaiting(database, { kinds: statisticsCollectionKinds, status: 'awaiting_binding', limit: 500 }),
+
+    countQueuedStatisticsCollections: () => countQueuedStatisticsCollections(database),
 
     activateStatisticsCollection: (operationId) =>
       activateBound(database, operationId, { kinds: statisticsCollectionKinds }),

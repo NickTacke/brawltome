@@ -4,6 +4,7 @@ import { launchCohortRegions, type StatisticsReservations, type StatisticsTracer
 import {
   loadFullLaunchCohortCandidates,
   loadLaunchCohortCandidates,
+  MAX_QUEUED_STATISTICS_COLLECTIONS,
   reconcileStatisticsCohort,
 } from '../src/statistics-cohort-reconciliation'
 
@@ -142,6 +143,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsReservations
@@ -189,6 +191,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsReservations
@@ -248,6 +251,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
       const operations = {
         listAwaitingStatisticsCollections: async () => [],
+        countQueuedStatisticsCollections: async () => 0,
         listAwaitingStatisticsPublications: async () => [],
         listAwaitingStatisticsLegendMetaPublications: async () => [],
       } as unknown as StatisticsReservations
@@ -305,6 +309,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
     } as unknown as StatisticsReservations
@@ -353,7 +358,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
         return [...operationIds]
       },
-      collectionIntents: async () => intents,
+      collectionIntents: async (limit: number) => intents.slice(0, limit),
       recordCollectionOperation: async () => {},
       boundPublicationOperationIds: async (operationIds: readonly string[]) => {
         publicationBindingLookups = operationIds.length
@@ -367,6 +372,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
     const operations = {
       listAwaitingStatisticsCollections: async () => awaitingCollections,
+      countQueuedStatisticsCollections: async () => 0,
       activateStatisticsCollection: async () => {
         activatedCollections++
 
@@ -391,11 +397,51 @@ describe('Statistics immutable Ranking adapter', () => {
       },
     }
 
-    expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(500)
+    expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(MAX_QUEUED_STATISTICS_COLLECTIONS)
     expect(collectionBindingLookups).toBe(500)
     expect(publicationBindingLookups).toBe(100)
-    expect(activatedCollections).toBe(1_000)
+    expect(activatedCollections).toBe(500 + MAX_QUEUED_STATISTICS_COLLECTIONS)
     expect(activatedPublications).toBe(100)
+  })
+
+  test('reserves no more collections while the queue is already full', async () => {
+    let intentLookups = 0
+
+    const statistics = {
+      reconciliationState: async () => ({ legacyCohortExists: true, launch: null }),
+      boundCollectionOperationIds: async () => [],
+      collectionIntents: async () => {
+        intentLookups++
+
+        return []
+      },
+      boundPublicationOperationIds: async () => [],
+      publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
+    } as unknown as StatisticsTracer
+
+    const operations = {
+      listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => MAX_QUEUED_STATISTICS_COLLECTIONS,
+      listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
+    } as unknown as StatisticsReservations
+
+    const ranking: LeaderboardQueries = {
+      async getLeaderboard(input) {
+        return {
+          status: 'unavailable',
+          reason: 'not_yet_published',
+          mode: input.mode,
+          page: input.page,
+          pageSize: input.pageSize ?? 50,
+        }
+      },
+    }
+
+    expect(await reconcileStatisticsCohort(statistics, operations, ranking)).toBe(0)
+    expect(intentLookups).toBe(0)
   })
 
   test('reserves and binds Legend Meta only after an immutable ranked decision exists', async () => {
@@ -425,6 +471,7 @@ describe('Statistics immutable Ranking adapter', () => {
 
     const operations = {
       listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
       listAwaitingStatisticsPublications: async () => [],
       listAwaitingStatisticsLegendMetaPublications: async () => [],
       reserveStatisticsLegendMetaPublication: async (input: unknown) => {
