@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { OperationFailure } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { OperationFailure } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import type { StatisticsTracer } from '../../index'
 import {

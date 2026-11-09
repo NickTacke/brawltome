@@ -11,12 +11,12 @@ import {
   playerNameVerificationContract,
   rankedPlayerPulseContract,
 } from '@brawltome/player'
+import { assertValidJobInput, type JobContract, proofContract, type WorkClass } from '@brawltome/queue'
 import {
   leaderboardCollectionContract,
   leaderboardDeepCrawlContract,
   rankingRetentionContract,
 } from '@brawltome/ranking'
-import { assertValidJobInput, type JobContract, proofContract, type WorkClass } from '@brawltome/refresh-operations'
 import {
   statisticsCollectionContract,
   statisticsLegendMetaPublicationContract,

@@ -6,7 +6,7 @@ import {
   type JobContract,
   type JobDefinition,
   type Lease,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { discoveryClaimLockKey } from './claim-lock-key'
 import type { ProjectionPayload } from './projection-contract'
 

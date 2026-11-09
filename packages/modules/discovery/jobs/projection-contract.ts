@@ -1,4 +1,4 @@
-import { isPositiveInteger, type JobContract, readPayloadObject } from '@brawltome/refresh-operations'
+import { isPositiveInteger, type JobContract, readPayloadObject } from '@brawltome/queue'
 
 export type ProjectionPayload = { batchSize: number }
 

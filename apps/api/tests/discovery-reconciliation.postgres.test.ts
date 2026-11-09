@@ -11,7 +11,7 @@ import {
 import { type BrawltomeModule, type Database, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'
 

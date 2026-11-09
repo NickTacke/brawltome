@@ -1,9 +1,5 @@
 import type { Database } from '@brawltome/foundation'
-import {
-  type CreateRankingRetentionSchedule,
-  disableFixedSchedule,
-  reconcileFixedSchedule,
-} from '@brawltome/refresh-operations'
+import { type CreateRankingRetentionSchedule, disableFixedSchedule, reconcileFixedSchedule } from '@brawltome/queue'
 import { rankingRetentionContract } from './ranking-retention-contract'
 
 // turning retention back on re-enables a schedule that was paused

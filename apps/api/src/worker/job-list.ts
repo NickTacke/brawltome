@@ -24,14 +24,6 @@ import {
   type PrimaryMonitoringSnapshot,
 } from '@brawltome/player'
 import {
-  createLeaderboardCollectionJob,
-  createLeaderboardDeepCrawlJob,
-  createRankingRetentionJob,
-  type LeaderboardCollectionJobDependencies,
-  type LeaderboardDeepCrawlJobDependencies,
-  type RankingRetentionStore,
-} from '@brawltome/ranking'
-import {
   completeWithProofEffect,
   defineJob,
   type JobDefinition,
@@ -39,7 +31,15 @@ import {
   leaderboardOperationKinds,
   type ProofEffectPayload,
   proofContract,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
+import {
+  createLeaderboardCollectionJob,
+  createLeaderboardDeepCrawlJob,
+  createRankingRetentionJob,
+  type LeaderboardCollectionJobDependencies,
+  type LeaderboardDeepCrawlJobDependencies,
+  type RankingRetentionStore,
+} from '@brawltome/ranking'
 import {
   createStatisticsLegendMetaPublicationJob,
   createStatisticsLifetimeCollectionJob,

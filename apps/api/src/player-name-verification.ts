@@ -15,7 +15,7 @@ import {
   type AcceptOperationResult,
   type Lease,
   SourceAdmissionLimitedError,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { SourceDomain } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 

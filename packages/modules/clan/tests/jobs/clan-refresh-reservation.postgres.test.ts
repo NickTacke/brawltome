@@ -7,7 +7,7 @@ import {
   proofContract,
   refreshOperationsModule,
   reserveForAdmission,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { clanModule } from '../../index'
 import { clanRefreshContract } from '../../jobs/clan-refresh-contract'
 import {

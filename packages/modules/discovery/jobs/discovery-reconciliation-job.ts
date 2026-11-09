@@ -1,4 +1,4 @@
-import { defineJob, type JobDefinition, type Lease } from '@brawltome/refresh-operations'
+import { defineJob, type JobDefinition, type Lease } from '@brawltome/queue'
 import type { ProjectionOwner } from '../model'
 import { discoveryClaimLockKey } from './claim-lock-key'
 import { discoveryReconciliationContract, type ReconciliationPayload } from './discovery-reconciliation-contract'

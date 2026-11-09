@@ -5,7 +5,7 @@ import {
   readPayloadObject,
   recentlyViewedCohort,
   type WorkClass,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 
 export type PlayerRefreshSection = 'ranked' | 'stats'
 

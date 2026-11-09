@@ -4,7 +4,7 @@ import {
   type PrimaryPlayerVerificationAttempt,
   primaryPlayerVerificationContract,
 } from '@brawltome/accounts'
-import type { AcceptOperationInput, AcceptOperationResult } from '@brawltome/refresh-operations'
+import type { AcceptOperationInput, AcceptOperationResult } from '@brawltome/queue'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'

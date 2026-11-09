@@ -5,7 +5,7 @@ import type {
   HeldLeaderboardLease,
   LeaderboardEffectResult,
   Transaction,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { asc, eq, inArray, sql as sqlFragment } from 'drizzle-orm'
 import { bigint, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 

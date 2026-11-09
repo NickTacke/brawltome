@@ -14,8 +14,8 @@ import {
   refreshOperationsModule,
   reserveForAdmission,
   reserveForBinding,
-} from '@brawltome/refresh-operations'
-import { createTestJobContract, testJobContract } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { createTestJobContract, testJobContract } from '@brawltome/queue/testing'
 import { testWatermark } from './test-watermark'
 
 let database: TestDatabase

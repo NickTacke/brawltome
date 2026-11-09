@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { type AdmissionConfig, type OperationLease, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, type OperationLease, refreshOperationsModule } from '@brawltome/queue'
 import {
   type CohortCandidateSnapshot,
   type CohortCollectionIntent,

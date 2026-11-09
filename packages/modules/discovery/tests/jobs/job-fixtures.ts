@@ -1,4 +1,4 @@
-import type { Lease, OperationFailure, QueueWorker } from '@brawltome/refresh-operations'
+import type { Lease, OperationFailure, QueueWorker } from '@brawltome/queue'
 
 export type DiscoveryLeaseOptions = {
   kind: string

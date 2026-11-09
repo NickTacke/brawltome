@@ -1,10 +1,5 @@
 import type { Database, Sql } from '@brawltome/foundation'
-import type {
-  DeadLetterInspection,
-  ProofEffectStore,
-  ProofEffectWrite,
-  Transaction,
-} from '@brawltome/refresh-operations'
+import type { DeadLetterInspection, ProofEffectStore, ProofEffectWrite, Transaction } from '@brawltome/queue'
 import { sql as sqlFragment } from 'drizzle-orm'
 
 // a queue-only test database keeps this table in the queue's schema; only accounts' migration moves it

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
+import { type LeaderboardOperationKind, type OperationLease, refreshOperationsModule } from '@brawltome/queue'
 import {
   collectAndPublishLeaderboardGeneration,
   createPostgresRanking,
@@ -16,11 +17,6 @@ import {
   reconcileLeaderboardSchedule,
   regionalLeaderboardScopes,
 } from '@brawltome/ranking'
-import {
-  type LeaderboardOperationKind,
-  type OperationLease,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { createLeaderboardTestJob, createTestDeadLetters, createTestQueue, runOneWithJobs } from './fixtures/queue'

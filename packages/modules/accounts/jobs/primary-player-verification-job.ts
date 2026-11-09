@@ -4,7 +4,7 @@ import {
   type JobDefinition,
   type Lease,
   type ProofEffectPayload,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { proofEffectState } from '../db/proof-effects'
 import type { Accounts } from '../src/accounts'
 import { primaryPlayerVerificationContract } from './primary-player-verification-contract'

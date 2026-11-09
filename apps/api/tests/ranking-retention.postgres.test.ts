@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { refreshOperationsModule } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import {
   createPostgresRanking,
   createRankingRetentionJob,
@@ -11,8 +13,6 @@ import {
   rankingRetentionContract,
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'

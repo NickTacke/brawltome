@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, proofContract } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, proofContract } from '@brawltome/queue'
 import { apiMaxConnections, createWorkerDatabases, listenerConnections, workerPoolSizes } from '../src/database-pools'
 import { readOperationsWorkerConfig } from '../src/operations-worker-config'
 import {

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { countActive, readAttemptHistory, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { countActive, readAttemptHistory, refreshOperationsModule } from '@brawltome/queue'
 
 let database: TestDatabase
 

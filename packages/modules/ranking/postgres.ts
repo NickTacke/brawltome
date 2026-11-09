@@ -4,7 +4,7 @@ import {
   completeRankingRetentionLease,
   lockActiveLeaderboardLease,
   lockActiveRankingRetentionLease,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { recordLeaderboardEffect } from './db/leaderboard-effects'
 import type {
   LeaderboardGenerationCandidate,

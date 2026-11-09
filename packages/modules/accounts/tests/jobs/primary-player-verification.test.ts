@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Lease, OperationFailure, QueueWorker } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import type { Lease, OperationFailure, QueueWorker } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createPrimaryPlayerVerificationJob } from '../../jobs/primary-player-verification-job'
 
 const attemptId = '5f689990-dc60-4d70-bd1c-7b49b89786b7'

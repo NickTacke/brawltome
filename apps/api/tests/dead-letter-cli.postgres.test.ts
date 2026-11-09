@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { accountsModule, proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { rankingModule } from '@brawltome/ranking'
 import {
   type AdmissionConfig,
   createPostgresRefreshOperations,
   type OperationLease,
   proofContract,
   refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
+import { rankingModule } from '@brawltome/ranking'
 import { createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { createTestJobs } from './fixtures/queue'

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { type ClanProjectionSource, createPostgresDiscovery, discoveryModule } from '@brawltome/discovery'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 
 let database: TestDatabase

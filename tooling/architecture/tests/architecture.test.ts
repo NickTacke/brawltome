@@ -209,7 +209,7 @@ describe('dependency architecture', () => {
   it('keeps the dead-letter operator entry in the API app, outside the queue', () => {
     const repositoryRoot = resolve(import.meta.dir, '../../..')
     const repository = readArchitectureRepository(repositoryRoot)
-    const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/refresh-operations')
+    const refreshOperations = repository.workspaces.find(({ name }) => name === '@brawltome/queue')
     const api = repository.workspaces.find(({ name }) => name === '@brawltome/api')
 
     const readScripts = (path: string) =>
@@ -218,7 +218,7 @@ describe('dependency architecture', () => {
     expect(api?.sourceFiles.some(({ path }) => path.endsWith('/src/dead-letter-cli.ts'))).toBe(true)
     expect(refreshOperations?.sourceFiles.some(({ path }) => path.endsWith('/cli.ts'))).toBe(false)
     expect(refreshOperations?.exports).toEqual(['.', './testing'])
-    expect(readScripts('packages/modules/refresh-operations/package.json')?.['dead-letters']).toBeUndefined()
+    expect(readScripts('packages/modules/queue/package.json')?.['dead-letters']).toBeUndefined()
     expect(readScripts('apps/api/package.json')?.['dead-letters']).toBe('bun src/dead-letter-cli.ts')
   })
 

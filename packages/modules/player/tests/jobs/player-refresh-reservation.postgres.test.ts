@@ -8,7 +8,7 @@ import {
   proofContract,
   refreshOperationsModule,
   reserveForAdmission,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { playerModule } from '../../index'
 import {
   activateAdmittedInteractivePlayerRefresh,

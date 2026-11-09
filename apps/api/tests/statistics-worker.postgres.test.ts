@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/queue'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'

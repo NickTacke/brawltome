@@ -4,7 +4,7 @@ import {
   type CreateLeaderboardSchedule,
   disableFixedSchedule,
   reconcileFixedSchedule,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { leaderboardCollectionContract, leaderboardDeepCrawlContract } from './leaderboard-job-contracts'
 
 export function reconcileLeaderboardSchedule(database: Database, schedule: CreateLeaderboardSchedule) {

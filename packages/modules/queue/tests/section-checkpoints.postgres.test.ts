@@ -1,13 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  allSectionsCommitted,
-  refreshOperationsModule,
-  reserveForAdmission,
-  sectionCommitted,
-} from '@brawltome/refresh-operations'
-import { testJobContract } from '@brawltome/refresh-operations/testing'
+import { allSectionsCommitted, refreshOperationsModule, reserveForAdmission, sectionCommitted } from '@brawltome/queue'
+import { testJobContract } from '@brawltome/queue/testing'
 
 let database: TestDatabase
 

@@ -1,4 +1,4 @@
-import type { JobDefinition } from '@brawltome/refresh-operations'
+import type { JobDefinition } from '@brawltome/queue'
 import { clanDiscoveryProjectionContract } from './projection-contract'
 import { createProjectionJob, type ProjectionJobDependencies, type ProjectionPayload } from './projection-job'
 

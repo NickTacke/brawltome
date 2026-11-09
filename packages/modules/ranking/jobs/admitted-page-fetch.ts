@@ -1,4 +1,4 @@
-import type { JobTools, Lease, SourceAdmissionPort } from '@brawltome/refresh-operations'
+import type { JobTools, Lease, SourceAdmissionPort } from '@brawltome/queue'
 import { observeSourceCall, type Telemetry } from '@brawltome/telemetry'
 import { LeaderboardLeaseLostError, type LeaderboardPageSource } from '../leaderboard'
 import { LeaderboardSourceError } from '../v1-leaderboard-source'

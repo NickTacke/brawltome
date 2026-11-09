@@ -6,7 +6,7 @@ import {
   readPayloadObject,
   validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 
 function parseLeaderboardPayload(value: unknown): LeaderboardOperationPayload {
   const payload = readPayloadObject(value, 'leaderboard') as LeaderboardOperationPayload

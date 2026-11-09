@@ -15,8 +15,8 @@ import {
   reconcileResourceSchedules,
   refreshOperationsModule,
   reserveForAdmission,
-} from '@brawltome/refresh-operations'
-import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { createPassthroughJobContract } from '@brawltome/queue/testing'
 import { readTestProofEffects, testProofEffects } from './test-proof-effects'
 import { testWatermark } from './test-watermark'
 

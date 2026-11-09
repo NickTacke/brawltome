@@ -10,8 +10,8 @@ import {
   playerModule,
   playerNameVerificationContract,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
-import { testJobContract } from '@brawltome/refresh-operations/testing'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
+import { testJobContract } from '@brawltome/queue/testing'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'

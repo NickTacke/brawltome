@@ -11,8 +11,8 @@ import {
   createPostgresProfileViews,
   createPostgresRankedPlayers,
 } from '@brawltome/player'
+import { createPostgresRefreshOperations } from '@brawltome/queue'
 import { createPostgresRanking } from '@brawltome/ranking'
-import { createPostgresRefreshOperations } from '@brawltome/refresh-operations'
 import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics } from '@brawltome/statistics'

@@ -7,7 +7,7 @@ import type {
   ProofEffectWrite,
   ProofEffectWriteResult,
   Transaction,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { asc, eq, sql as sqlFragment } from 'drizzle-orm'
 import { bigint, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import type postgres from 'postgres'

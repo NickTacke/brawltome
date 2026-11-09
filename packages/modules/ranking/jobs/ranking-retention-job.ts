@@ -1,10 +1,4 @@
-import {
-  type AttemptOutcome,
-  defineJob,
-  type JobDefinition,
-  type JobTools,
-  type Lease,
-} from '@brawltome/refresh-operations'
+import { type AttemptOutcome, defineJob, type JobDefinition, type JobTools, type Lease } from '@brawltome/queue'
 import type { Telemetry } from '@brawltome/telemetry'
 import type { RankingRetentionInput, RankingRetentionStore } from '../retention'
 import { rankingRetentionContract } from './ranking-retention-contract'

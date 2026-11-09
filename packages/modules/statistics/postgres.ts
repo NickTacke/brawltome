@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Database, JsonValue, Sql } from '@brawltome/foundation'
 import { type LegendReference, legendSlug, legends as referenceLegends } from '@brawltome/game-data'
-import {
-  acquireActiveLease,
-  type EffectLineage,
-  operationMatches,
-  readEffectLineage,
-} from '@brawltome/refresh-operations'
+import { acquireActiveLease, type EffectLineage, operationMatches, readEffectLineage } from '@brawltome/queue'
 import {
   LAUNCH_COHORT_MAX_ATTEMPTS_PER_REQUEST,
   LAUNCH_COHORT_OBSERVATION_WINDOW_SECONDS,

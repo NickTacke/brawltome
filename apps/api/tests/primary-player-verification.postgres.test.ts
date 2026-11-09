@@ -9,8 +9,8 @@ import {
   proofContract,
   refreshOperationsModule,
   type WorkClass,
-} from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+} from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
   createWorkerJobs,

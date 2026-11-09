@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  createPostgresRefreshOperations,
-  reconcileFixedSchedule,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
-import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
+import { createPostgresRefreshOperations, reconcileFixedSchedule, refreshOperationsModule } from '@brawltome/queue'
+import { createPassthroughJobContract } from '@brawltome/queue/testing'
 
 let database: TestDatabase
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { OperationFailure, OperationLease } from '@brawltome/refresh-operations'
+import type { OperationFailure, OperationLease } from '@brawltome/queue'
 import { defaultDeepCrawlSlicePages } from '../../jobs/leaderboard-deep-crawl-job'
 import { LeaderboardDeepCrawlYield } from '../../jobs/leaderboard-failure'
 import type { LeaderboardPlayerStanding } from '../../jobs/player-propagation'

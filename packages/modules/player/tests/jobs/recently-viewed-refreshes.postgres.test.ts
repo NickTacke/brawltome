@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { interactivePlayerRefreshContract } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { reserveInteractivePlayerRefresh } from '../../jobs/player-refresh-reservation'
 import {

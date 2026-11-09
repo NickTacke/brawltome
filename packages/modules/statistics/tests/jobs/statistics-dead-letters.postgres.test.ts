@@ -8,7 +8,7 @@ import {
   type DeadLetterOperations,
   type OperationLease,
   refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import {
   statisticsCollectionContract,
   statisticsLegendMetaPublicationContract,

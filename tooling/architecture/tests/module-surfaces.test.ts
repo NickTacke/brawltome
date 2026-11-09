@@ -4,8 +4,8 @@ import * as clan from '@brawltome/clan'
 import * as discovery from '@brawltome/discovery'
 import type { BrawltomeModule } from '@brawltome/foundation'
 import * as player from '@brawltome/player'
+import * as refreshOperations from '@brawltome/queue'
 import * as ranking from '@brawltome/ranking'
-import * as refreshOperations from '@brawltome/refresh-operations'
 import * as replayAnalysis from '@brawltome/replay-analysis'
 import * as requestAdmission from '@brawltome/request-admission'
 import * as statistics from '@brawltome/statistics'
@@ -25,7 +25,7 @@ const modulePackages: Record<string, ModulePackage> = {
   '@brawltome/discovery': { exports: discovery, module: discovery.discoveryModule },
   '@brawltome/player': { exports: player, module: player.playerModule },
   '@brawltome/ranking': { exports: ranking, module: ranking.rankingModule },
-  '@brawltome/refresh-operations': { exports: refreshOperations, module: refreshOperations.refreshOperationsModule },
+  '@brawltome/queue': { exports: refreshOperations, module: refreshOperations.refreshOperationsModule },
   '@brawltome/replay-analysis': { exports: replayAnalysis, module: replayAnalysis.replayAnalysisModule },
   '@brawltome/request-admission': { exports: requestAdmission, module: requestAdmission.requestAdmissionModule },
   '@brawltome/statistics': { exports: statistics, module: statistics.statisticsModule },

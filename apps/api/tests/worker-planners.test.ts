@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AcceptOperationResult } from '@brawltome/refresh-operations'
+import type { AcceptOperationResult } from '@brawltome/queue'
 import { createPlanners, type PlannerDependencies, runPlanners } from '../src/worker/planners'
 
 type Call = [string, ...unknown[]]

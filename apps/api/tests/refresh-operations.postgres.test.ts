@@ -15,7 +15,6 @@ import {
   rankedPlayerPulseContract,
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
-import { leaderboardCollectionContract, reconcileLeaderboardSchedule } from '@brawltome/ranking'
 import {
   acceptOperation,
   type OperationLease,
@@ -23,7 +22,8 @@ import {
   proofContract,
   refreshOperationsModule,
   SourceAdmissionLimitedError,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
+import { leaderboardCollectionContract, reconcileLeaderboardSchedule } from '@brawltome/ranking'
 import { createStatisticsReservations } from '@brawltome/statistics'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'

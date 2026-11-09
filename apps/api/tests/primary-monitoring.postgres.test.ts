@@ -10,7 +10,7 @@ import {
   playerModule,
   reconcilePrimaryMonitoring,
 } from '@brawltome/player'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import postgres from 'postgres'
 import { runOneWithJobs } from './fixtures/queue'

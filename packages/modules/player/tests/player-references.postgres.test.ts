@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { getLegendById, legendSlug } from '@brawltome/game-data'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createPostgresPlayerReferences, playerModule } from '../index'
 

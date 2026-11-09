@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, test } from 'bun:test'
 import { createTestDatabase, expectTablesMatchDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { refreshOperationsModule } from '@brawltome/refresh-operations'
+import { refreshOperationsModule } from '@brawltome/queue'
 import {
   statisticsCollectionEffects,
   statisticsCollectionSeals,

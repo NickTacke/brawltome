@@ -9,7 +9,7 @@ import {
 import { type BrawltomeModule, migratePostgres, orderMigrations } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createPostgresPlayerDiscoverySource, playerModule } from '@brawltome/player'
-import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { type AdmissionConfig, refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestQueue, runOneWithJobs } from './fixtures/queue'
 

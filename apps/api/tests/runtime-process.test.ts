@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, proofContract, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, proofContract, refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import {
   allocatePort,

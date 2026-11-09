@@ -1,4 +1,4 @@
-import { type DeadLetterHooks, type EffectDescriber, readInteractiveEffects } from '@brawltome/refresh-operations'
+import { type DeadLetterHooks, type EffectDescriber, readInteractiveEffects } from '@brawltome/queue'
 
 const describeSectionEffects: EffectDescriber = async (transaction, effectOperationId) => ({
   interactiveEffects: await readInteractiveEffects(transaction, effectOperationId),

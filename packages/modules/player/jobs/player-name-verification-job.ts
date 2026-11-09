@@ -6,7 +6,7 @@ import {
   type Lease,
   type SourceAdmitter,
   sectionCommitted,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { type PlayerNameVerificationPayload, playerNameVerificationContract } from './player-name-verification-contract'
 
 export type { PlayerNameVerificationPayload }

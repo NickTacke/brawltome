@@ -123,7 +123,7 @@ Migrations still have to be backward compatible with the release that serves dur
 - A module may import `@brawltome/contracts` for the schemas of its procedures. Contracts may not import a module.
 - A module's non-test source can't hold SQL that names another module's schema. One exception exists today:
   statistics reads `refresh_operations` tables, tracked in issue #388. Modules that fence a write with a queue lease
-  call the fence functions `@brawltome/refresh-operations` exports, which take the caller's transaction. Deployed
+  call the fence functions `@brawltome/queue` exports, which take the caller's transaction. Deployed
   migrations are skipped; a new migration may name another module's schema only when its `requires` lists a
   migration of that module.
 - A module's `index.ts` exports no drizzle tables, views or schemas. drizzle queries hold no `schema.table` text, so the

@@ -14,7 +14,7 @@ import type {
   CreateRankingRetentionSchedule,
   ReconcileResourceSchedulesResult,
   RefreshOperationWorker,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import type { ActorAdmission } from '@brawltome/request-admission'
 import type { createDiscoveryReconciliationBackoff } from '../discovery-reconciliation-backoff'
 import { reconcileInteractiveAdmissions } from './interactive-admissions'

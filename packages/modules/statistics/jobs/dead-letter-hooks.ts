@@ -4,7 +4,7 @@ import {
   lockEffectOperation,
   type ReplayGuard,
   statisticsCollectionKinds,
-} from '@brawltome/refresh-operations'
+} from '@brawltome/queue'
 import { hasStatisticsCollectionSeal, readStatisticsEffects, readStatisticsPublicationEffects } from '../db/effects'
 
 // a publication that read the collection has sealed it, and replaying it would change what that publication read

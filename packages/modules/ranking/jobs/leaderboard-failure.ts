@@ -1,4 +1,4 @@
-import { type FailureDecision, failureDetails, type RetryTimings, sourceWaitMs } from '@brawltome/refresh-operations'
+import { type FailureDecision, failureDetails, type RetryTimings, sourceWaitMs } from '@brawltome/queue'
 import { LeaderboardLeaseLostError } from '../leaderboard'
 import { LeaderboardSourceError } from '../v1-leaderboard-source'
 

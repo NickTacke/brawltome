@@ -11,11 +11,7 @@ import {
   refreshCanonicalRankedPlayer,
   refreshRankedPlayerPulse,
 } from '@brawltome/player'
-import {
-  type OperationLease,
-  type PostgresRefreshOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { type OperationLease, type PostgresRefreshOperations, refreshOperationsModule } from '@brawltome/queue'
 import postgres from 'postgres'
 import { createTestQueue, runOneWithJobs } from './fixtures/queue'
 
