@@ -6,6 +6,7 @@ import { orderedMigrations } from '../src/inventories'
 
 const movingIdentities = new Set(['accounts/0011', 'players/0021', 'rankings/0013', 'statistics/0005'])
 const droppingIdentities = new Set(['accounts/0012', 'players/0022', 'rankings/0014', 'statistics/0006'])
+const renameIdentity = 'refresh-operations/0032'
 
 const compatibilityViews = [
   'proof_effects',
@@ -29,7 +30,7 @@ const compatibilityFunctions = [
 
 const compatibilityObjects = [...compatibilityViews, ...compatibilityFunctions]
 
-const droppedNamePattern = `refresh_operations\\.(${compatibilityObjects.map((name) => name.split('(')[0]).join('|')})\\y`
+const droppedNamePattern = `queue\\.(${compatibilityObjects.map((name) => name.split('(')[0]).join('|')})\\y`
 
 const tablesWorkersUse = [
   'refresh_operations.operations',
@@ -119,11 +120,12 @@ type LeasedOperation = {
   workClass?: string
 }
 
-async function insertOperation(operation: LeasedOperation): Promise<void> {
+// seeding runs before the schema rename, the tests after it
+async function insertOperation(operation: LeasedOperation, schema = 'refresh_operations'): Promise<void> {
   const status = operation.status ?? 'leased'
 
   await owner`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO ${owner(schema)}.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
        status, attempt_count, max_attempts, lease_token, lease_owner, lease_expires_at, completed_at)
     VALUES (${operation.id}, ${operation.id}, ${operation.kind}, ${`dedupe:${operation.id}`}, ${operation.operationKey},
@@ -313,31 +315,31 @@ const catalogSnapshotSql = `
   JOIN pg_namespace n ON n.oid = c.relnamespace
   LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
   WHERE a.attnum > 0 AND NOT a.attisdropped AND c.relkind IN ('r', 'v', 'p')
-    AND n.nspname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics')
+    AND n.nspname IN ('queue', 'accounts', 'rankings', 'players', 'statistics')
   UNION ALL
   SELECT 'constraint', n.nspname || '.' || c.relname || '.' || con.conname, pg_get_constraintdef(con.oid)
   FROM pg_constraint con
   JOIN pg_class c ON c.oid = con.conrelid
   JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE n.nspname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics')
+  WHERE n.nspname IN ('queue', 'accounts', 'rankings', 'players', 'statistics')
   UNION ALL
   SELECT 'index', schemaname || '.' || indexname, indexdef FROM pg_indexes
-  WHERE schemaname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics')
+  WHERE schemaname IN ('queue', 'accounts', 'rankings', 'players', 'statistics')
   UNION ALL
   SELECT 'view', schemaname || '.' || viewname, definition FROM pg_views
-  WHERE schemaname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics')
+  WHERE schemaname IN ('queue', 'accounts', 'rankings', 'players', 'statistics')
   UNION ALL
   SELECT 'function', n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
          pg_get_functiondef(p.oid)
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
-  WHERE n.nspname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics') AND p.prokind = 'f'
+  WHERE n.nspname IN ('queue', 'accounts', 'rankings', 'players', 'statistics') AND p.prokind = 'f'
   UNION ALL
   SELECT 'trigger', n.nspname || '.' || c.relname || '.' || t.tgname, pg_get_triggerdef(t.oid)
   FROM pg_trigger t
   JOIN pg_class c ON c.oid = t.tgrelid
   JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE NOT t.tgisinternal AND n.nspname IN ('refresh_operations', 'accounts', 'rankings', 'players', 'statistics')
+  WHERE NOT t.tgisinternal AND n.nspname IN ('queue', 'accounts', 'rankings', 'players', 'statistics')
   ORDER BY 1, 2
 `
 
@@ -375,7 +377,7 @@ describeWithDatabase('queue effect tables at their owners', () => {
   // plpgsql bodies are stored as text, so postgres would let these drops through and fail when the body next ran
   test('no surviving view or function body names a dropped object', async () => {
     const [control] = await owner<{ matches: boolean }[]>`
-      SELECT 'FROM refresh_operations.proof_effects WHERE' ~ ${droppedNamePattern} AS matches
+      SELECT 'FROM queue.proof_effects WHERE' ~ ${droppedNamePattern} AS matches
     `
 
     expect(control.matches).toBe(true)
@@ -436,7 +438,9 @@ describeWithDatabase('queue effect tables at their owners', () => {
       await Promise.race([locked, holding])
 
       try {
-        expect(await migratePostgres(lockUrl, orderedMigrations)).toBe(droppingIdentities.size)
+        expect(await migratePostgres(lockUrl, migrationsWithout(new Set([renameIdentity])))).toBe(
+          droppingIdentities.size,
+        )
       } finally {
         release()
       }
@@ -522,13 +526,16 @@ describeWithDatabase('queue effect tables at their owners', () => {
       const collectionId = randomUUID()
       const collectionKey = `runtime-collection:${collectionId}`
 
-      await insertOperation({
-        id: collectionId,
-        kind: collectionKind,
-        operationKey: collectionKey,
-        payload: collectionPayload,
-        workClass: 'global-statistics',
-      })
+      await insertOperation(
+        {
+          id: collectionId,
+          kind: collectionKind,
+          operationKey: collectionKey,
+          payload: collectionPayload,
+          workClass: 'global-statistics',
+        },
+        'queue',
+      )
 
       await asRole(runtimeRole, async (transaction) => {
         const [effect] = await transaction<{ result: string }[]>`
@@ -578,13 +585,16 @@ describeWithDatabase('queue effect tables at their owners', () => {
       const operationId = randomUUID()
       const operationKey = `runtime-leaderboard:${operationId}`
 
-      await insertOperation({
-        id: operationId,
-        kind: leaderboardKind,
-        operationKey,
-        payload: leaderboardPayload,
-        workClass: 'leaderboard',
-      })
+      await insertOperation(
+        {
+          id: operationId,
+          kind: leaderboardKind,
+          operationKey,
+          payload: leaderboardPayload,
+          workClass: 'leaderboard',
+        },
+        'queue',
+      )
 
       await asRole(runtimeRole, async (transaction) => {
         const [effect] = await transaction<{ result: string }[]>`
@@ -627,7 +637,7 @@ describeWithDatabase('queue effect tables at their owners', () => {
       const operationKey = `runtime:${randomUUID()}`
       const operationId = randomUUID()
 
-      await insertOperation({ id: operationId, kind: 'proof', operationKey, payload: proofPayload })
+      await insertOperation({ id: operationId, kind: 'proof', operationKey, payload: proofPayload }, 'queue')
 
       await asRole(runtimeRole, async (transaction) => {
         await transaction`

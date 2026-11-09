@@ -71,7 +71,7 @@ async function insertRow({
   const id = randomUUID()
 
   await database.sql`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts,
        available_at)
     VALUES
@@ -90,14 +90,14 @@ async function readOperation(operationId: string) {
       last_error: { code: string; message: string; retryable: boolean } | null
     }[]
   >`
-    SELECT status, attempt_count, last_error FROM refresh_operations.operations WHERE id = ${operationId}
+    SELECT status, attempt_count, last_error FROM queue.operations WHERE id = ${operationId}
   `
 
   return row
 }
 
 async function drainDueOperations(): Promise<void> {
-  await database.sql`UPDATE refresh_operations.operations SET status = 'succeeded', lease_owner = NULL,
+  await database.sql`UPDATE queue.operations SET status = 'succeeded', lease_owner = NULL,
     lease_expires_at = NULL, completed_at = clock_timestamp() WHERE status IN ('pending', 'leased')`
 }
 
@@ -208,14 +208,14 @@ describe('claim on a row its release cannot run', () => {
     const expired = await insertRow({ kind: 'kind-from-another-release' })
 
     await database.sql`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'leased', lease_owner = 'old-worker', lease_token = 1, attempt_count = 1,
           lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${expired}
     `
 
     await database.sql`
-      INSERT INTO refresh_operations.attempts (operation_id, attempt_number, lease_token, lease_owner)
+      INSERT INTO queue.attempts (operation_id, attempt_number, lease_token, lease_owner)
       VALUES (${expired}, 1, 1, 'old-worker')
     `
 
@@ -223,7 +223,7 @@ describe('claim on a row its release cannot run', () => {
     expect((await readOperation(expired)).last_error?.code).toBe('invalid_payload')
 
     const [attempt] = await database.sql<{ outcome: string; finished_at: Date | null }[]>`
-      SELECT outcome, finished_at FROM refresh_operations.attempts WHERE operation_id = ${expired}
+      SELECT outcome, finished_at FROM queue.attempts WHERE operation_id = ${expired}
     `
 
     expect(attempt.outcome).toBe('dead_letter')
@@ -295,7 +295,7 @@ describe('write paths', () => {
 
   async function countRows(dedupeKey: string): Promise<number> {
     const [row] = await database.sql<{ count: string }[]>`
-      SELECT count(*)::text AS count FROM refresh_operations.operations WHERE dedupe_key = ${dedupeKey}
+      SELECT count(*)::text AS count FROM queue.operations WHERE dedupe_key = ${dedupeKey}
     `
 
     return Number(row.count)
@@ -421,12 +421,12 @@ describe('write paths', () => {
     const operationId = await insertRow()
 
     await database.sql`
-      INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
+      INSERT INTO queue.interactive_refresh_effects (operation_id, section, lease_token)
       VALUES (${operationId}, 'a-section-with-no-migration', 1)
     `
 
     const [row] = await database.sql<{ section: string }[]>`
-      SELECT section FROM refresh_operations.interactive_refresh_effects WHERE operation_id = ${operationId}
+      SELECT section FROM queue.interactive_refresh_effects WHERE operation_id = ${operationId}
     `
 
     expect(row.section).toBe('a-section-with-no-migration')
@@ -435,8 +435,8 @@ describe('write paths', () => {
   test('the kind, payload and section checks are gone', async () => {
     const constraints = await database.sql<{ conname: string }[]>`
       SELECT conname FROM pg_constraint
-      WHERE conrelid IN ('refresh_operations.operations'::regclass, 'refresh_operations.schedules'::regclass,
-                         'refresh_operations.interactive_refresh_effects'::regclass)
+      WHERE conrelid IN ('queue.operations'::regclass, 'queue.schedules'::regclass,
+                         'queue.interactive_refresh_effects'::regclass)
         AND conname IN ('operations_kind_check', 'operations_payload_by_kind', 'schedules_kind_check',
                         'schedules_payload_by_kind', 'interactive_refresh_effects_section_check')
     `

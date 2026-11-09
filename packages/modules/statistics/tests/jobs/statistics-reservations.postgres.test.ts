@@ -68,7 +68,7 @@ function legendMetaInput(
 
 async function readStatus(operationId: string): Promise<string> {
   const [row] = await database.sql<{ status: string }[]>`
-    SELECT status FROM refresh_operations.operations WHERE id = ${operationId}
+    SELECT status FROM queue.operations WHERE id = ${operationId}
   `
 
   return row.status

@@ -37,7 +37,7 @@ async function insertRefresh(refresh: InsertedRefresh): Promise<string> {
       : { brawlhallaId: refresh.brawlhallaId, staleSections: ['ranked'] }
 
   await database.sql`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts, created_at)
     VALUES
       (${id}, ${id}, 'interactive-player-refresh', ${`history:${id}`}, ${`history:${id}`}, ${workClass},
@@ -51,7 +51,7 @@ async function insertRefresh(refresh: InsertedRefresh): Promise<string> {
   if (status === 'pending') return id
 
   await database.sql`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET status = ${status}, completed_at = clock_timestamp(), last_error = ${failure}
     WHERE id = ${id}
   `

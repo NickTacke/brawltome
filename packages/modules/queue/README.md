@@ -3,13 +3,13 @@
 Runs background work out of Postgres. It leases jobs to the worker, retries them, runs schedules, and keeps what keeps
 failing as dead letters. It doesn't know what a job does: each job lives in the module it belongs to.
 
-The Postgres schema is still called `refresh_operations`, and table, metric and failure names still use the old
-wording. Migration ids keep their `refresh-operations/` prefix for good, because every migrated database has them on
-record. New migrations in this module use that prefix too. It doesn't have to match the module's name.
+Table, metric and failure names still use the old wording, as do the two `pg_notify` channels
+(`refresh_operations_wakeup` and `refresh_operations_player_refresh_settled`). Migration ids keep their
+`refresh-operations/` prefix for good, because every migrated database has them on record. New migrations in this module use that prefix too. It doesn't have to match the module's name.
 
 ## What it owns
 
-The `refresh_operations` schema. The tables are described in `db/tables.ts`:
+The `queue` schema. The tables are described in `db/tables.ts`:
 
 - `operations`: one row per job, with its kind, payload, status and lease
 - `attempts`: one row per run of a job

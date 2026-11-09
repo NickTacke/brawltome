@@ -55,7 +55,7 @@ type ExistingSchedule = {
 function readExistingSchedules(sql: Sql, provenanceSource: string): Promise<ExistingSchedule[]> {
   return sql<ExistingSchedule[]>`
     SELECT id, schedule_key, resource_key, first_due_at, payload
-    FROM refresh_operations.schedules
+    FROM queue.schedules
     WHERE provenance ->> 'source' = ${provenanceSource} AND enabled
     FOR UPDATE
   `
@@ -75,7 +75,7 @@ function matchesDesired(
 
 async function retireSchedule(sql: Sql, scheduleId: string): Promise<void> {
   await sql`
-    UPDATE refresh_operations.schedules
+    UPDATE queue.schedules
     SET enabled = false,
         schedule_key = schedule_key || ':retired:' || id::text,
         updated_at = clock_timestamp()
@@ -85,7 +85,7 @@ async function retireSchedule(sql: Sql, scheduleId: string): Promise<void> {
 
 async function insertSchedule(sql: Sql, schedule: ResourceSchedule): Promise<void> {
   await sql`
-    INSERT INTO refresh_operations.schedules
+    INSERT INTO queue.schedules
       (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
        operation_key_prefix, payload, provenance, max_attempts)
     VALUES

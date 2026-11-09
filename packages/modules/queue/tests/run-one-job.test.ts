@@ -107,7 +107,7 @@ async function acceptProofOperation(): Promise<{
 
 async function readOperation(operationId: string) {
   const [row] = await database.sql<{ status: string; attempt_count: number }[]>`
-    SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${operationId}
+    SELECT status, attempt_count FROM queue.operations WHERE id = ${operationId}
   `
 
   return row
@@ -232,7 +232,7 @@ describe('runOneJob', () => {
         })
 
         await database.sql`
-          UPDATE refresh_operations.operations SET lease_owner = 'someone-else' WHERE id = ${operationId}
+          UPDATE queue.operations SET lease_owner = 'someone-else' WHERE id = ${operationId}
         `
 
         await waitForAbort(tools.signal)

@@ -144,5 +144,5 @@ export async function deferLeaderboardSchedules(database: Database): Promise<voi
     await reconcileLeaderboardDeepCrawlSchedule(database, definition)
   }
 
-  await database.sql`UPDATE refresh_operations.schedules SET next_due_at = '2100-01-01T00:00:00Z'`
+  await database.sql`UPDATE queue.schedules SET next_due_at = '2100-01-01T00:00:00Z'`
 }

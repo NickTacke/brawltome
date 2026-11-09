@@ -25,7 +25,7 @@ export async function readEffectLineage(
            bool_or(status NOT IN ('succeeded', 'dead_letter')) AS has_unfinished,
            bool_or(status IN ('succeeded', 'dead_letter')) AS has_finished,
            max(completed_at) FILTER (WHERE status IN ('succeeded', 'dead_letter')) AS last_finished_at
-    FROM refresh_operations.operations
+    FROM queue.operations
     WHERE effect_operation_id = ANY(${[...effectOperationIds]}::uuid[])
     GROUP BY effect_operation_id
   `
@@ -54,7 +54,7 @@ export async function operationMatches(sql: Sql, identity: OperationIdentity): P
     SELECT effect_operation_id = ${identity.effectOperationId}
        AND operation_key = ${identity.operationKey}
        AND kind = ${identity.kind} AS matches
-    FROM refresh_operations.operations WHERE id = ${identity.operationId}
+    FROM queue.operations WHERE id = ${identity.operationId}
   `
 
   return operation?.matches === true

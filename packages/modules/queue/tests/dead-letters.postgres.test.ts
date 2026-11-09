@@ -593,9 +593,9 @@ describe('dead-letter operations', () => {
     })
 
     for (const statement of [
-      "UPDATE refresh_operations.dead_letter_actions SET reason = 'changed'",
-      'DELETE FROM refresh_operations.dead_letter_actions',
-      'TRUNCATE refresh_operations.dead_letter_actions',
+      "UPDATE queue.dead_letter_actions SET reason = 'changed'",
+      'DELETE FROM queue.dead_letter_actions',
+      'TRUNCATE queue.dead_letter_actions',
     ]) {
       const mutation = Bun.spawn(['psql', connectionString, '-v', 'ON_ERROR_STOP=1', '-c', statement], {
         stdout: 'pipe',
@@ -643,7 +643,7 @@ describe('dead-letter operations', () => {
     const { operations, operationId, lease } = await createDeadLetter('described')
 
     await database.sql`
-      INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+      INSERT INTO queue.proof_effects (operation_key, operation_id, lease_token, effect_value)
       VALUES (${lease.operationKey}, ${lease.effectOperationId}, ${lease.leaseToken}, ${database.sql.json({ value: 'x' })})
     `
 

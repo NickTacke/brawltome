@@ -89,8 +89,8 @@ async function supersedeLeaderboardOperations(
   // locked first: a worker recording its effect locks this row before it inserts, so the check below can't go stale
   const lockedOperations = await transaction.execute<LeaderboardTarget>(sql`
     SELECT operation.id, operation.effect_operation_id
-    FROM refresh_operations.operations operation
-    JOIN refresh_operations.schedule_occurrences occurrence
+    FROM queue.operations operation
+    JOIN queue.schedule_occurrences occurrence
       ON occurrence.id = operation.origin_schedule_occurrence_id
     WHERE occurrence.schedule_id = ${scheduleId}
       AND operation.status IN ('pending', 'leased')
@@ -122,17 +122,17 @@ async function supersedeLeaderboardOperations(
   await transaction.execute(sql`
     WITH targets AS MATERIALIZED (
       SELECT operation.id, operation.attempt_count
-      FROM refresh_operations.operations operation
+      FROM queue.operations operation
       WHERE operation.id IN (${targetIds})
     ), finished_attempts AS (
-      UPDATE refresh_operations.attempts attempt
+      UPDATE queue.attempts attempt
       SET finished_at = ${materializedAt}, outcome = 'dead_letter', error = ${failureJson}
       FROM targets
       WHERE attempt.operation_id = targets.id
         AND attempt.attempt_number = targets.attempt_count
         AND attempt.finished_at IS NULL
     ), superseded AS (
-      UPDATE refresh_operations.operations operation
+      UPDATE queue.operations operation
       SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
           completed_at = ${materializedAt}, updated_at = ${materializedAt},
           last_error = ${failureJson}
@@ -140,7 +140,7 @@ async function supersedeLeaderboardOperations(
       WHERE operation.id = targets.id
       RETURNING operation.id
     )
-    INSERT INTO refresh_operations.dead_letter_actions
+    INSERT INTO queue.dead_letter_actions
       (id, target_operation_id, disposition, actor_id, reason)
     SELECT gen_random_uuid(), id, 'discarded', 'schedule-materializer',
            'Superseded by a newer scheduled leaderboard window'
@@ -159,8 +159,8 @@ async function findCompletedFullRefresh(
 
   const [completed] = await transaction.execute<{ id: string }>(sql`
     SELECT operation.id
-    FROM refresh_operations.operations operation
-    JOIN refresh_operations.interactive_refresh_effects effect
+    FROM queue.operations operation
+    JOIN queue.interactive_refresh_effects effect
       ON effect.operation_id = operation.effect_operation_id
     WHERE operation.resource_key = ${schedule.resourceKey}
       AND operation.status = 'succeeded'

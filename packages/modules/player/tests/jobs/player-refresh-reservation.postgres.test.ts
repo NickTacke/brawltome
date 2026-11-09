@@ -79,7 +79,7 @@ async function queueRecentlyViewed(brawlhallaId: number): Promise<string> {
   const id = randomUUID()
 
   await database.sql`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
     VALUES
       (${id}, ${id}, 'interactive-player-refresh', ${`freshness:${id}`}, ${`freshness:${id}`}, 'primary-monitoring',

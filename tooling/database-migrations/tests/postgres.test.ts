@@ -539,7 +539,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
         const operations = await client<{ resource_key: string; status: string; error_code: string | null }[]>`
           SELECT resource_key, status, last_error->>'code' AS error_code
-          FROM refresh_operations.operations
+          FROM queue.operations
           WHERE id IN ${client(operationIds)}
           ORDER BY status
         `
@@ -917,7 +917,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         `
 
         const [refreshOperationsSchema] = await client<{ exists: boolean }[]>`
-          SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'refresh_operations') AS exists
+          SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'queue') AS exists
         `
 
         const [requestAdmissionSchema] = await client<{ exists: boolean }[]>`
@@ -950,13 +950,13 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
         const [activeLeaseFence] = await client<{ function_name: string | null }[]>`
           SELECT to_regprocedure(
-            'refresh_operations.acquire_active_lease(uuid,text,bigint)'
+            'queue.acquire_active_lease(uuid,text,bigint)'
           )::text AS function_name
         `
 
         const [interactiveSectionFence] = await client<{ function_name: string | null }[]>`
           SELECT to_regprocedure(
-            'refresh_operations.commit_interactive_section_if_owned(uuid,text,bigint,text)'
+            'queue.commit_interactive_section_if_owned(uuid,text,bigint,text)'
           )::text AS function_name
         `
 

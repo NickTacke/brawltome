@@ -61,13 +61,13 @@ beforeEach(async () => {
   const control = postgres(connectionString, { max: 1 })
 
   try {
-    await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions DISABLE TRIGGER USER')
+    await control.unsafe('ALTER TABLE queue.dead_letter_actions DISABLE TRIGGER USER')
 
     await control.unsafe(
-      'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, refresh_operations.interactive_refresh_effects, accounts.proof_effects, refresh_operations.attempts, refresh_operations.operations CASCADE',
+      'TRUNCATE request_admission.source_backoffs, request_admission.actor_reservations, request_admission.source_reservations, request_admission.source_windows, request_admission.actor_windows, queue.interactive_refresh_effects, accounts.proof_effects, queue.attempts, queue.operations CASCADE',
     )
 
-    await control.unsafe('ALTER TABLE refresh_operations.dead_letter_actions ENABLE TRIGGER USER')
+    await control.unsafe('ALTER TABLE queue.dead_letter_actions ENABLE TRIGGER USER')
   } finally {
     await control.end()
   }
@@ -493,7 +493,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     try {
       await control`
-        UPDATE refresh_operations.operations SET reservation_expires_at = clock_timestamp() - interval '1 second'
+        UPDATE queue.operations SET reservation_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${first.operationId}
       `
     } finally {
@@ -741,7 +741,7 @@ describe('PostgreSQL interactive refresh admission', () => {
 
     try {
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${first.operationId}
       `

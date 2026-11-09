@@ -42,7 +42,7 @@ function schedules() {
       max_attempts: number
       enabled: boolean
     }[]
-  >`SELECT * FROM refresh_operations.schedules WHERE provenance->>'source' = 'primary-player-monitoring'`
+  >`SELECT * FROM queue.schedules WHERE provenance->>'source' = 'primary-player-monitoring'`
 }
 
 describe('reconcilePrimaryMonitoring', () => {

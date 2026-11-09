@@ -21,7 +21,7 @@ async function insertProofOperation(input: {
   completedAt?: Date
 }): Promise<void> {
   await database.sql`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
        status, attempt_count, max_attempts, completed_at, replayed_from_operation_id)
     VALUES (${input.id}, ${input.effectOperationId}, 'proof', ${`dedupe:${input.id}`}, ${input.operationKey},

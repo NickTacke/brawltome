@@ -20,8 +20,8 @@ let connectionString = ''
 
 async function installEffectDelay(client: ReturnType<typeof postgres>, seconds: number): Promise<void> {
   await client.unsafe(`
-    DROP FUNCTION IF EXISTS refresh_operations.test_delay_proof_effect() CASCADE;
-    CREATE FUNCTION refresh_operations.test_delay_proof_effect() RETURNS trigger AS $$
+    DROP FUNCTION IF EXISTS queue.test_delay_proof_effect() CASCADE;
+    CREATE FUNCTION queue.test_delay_proof_effect() RETURNS trigger AS $$
     BEGIN
       PERFORM pg_sleep(${seconds});
       RETURN NEW;
@@ -29,12 +29,12 @@ async function installEffectDelay(client: ReturnType<typeof postgres>, seconds: 
     $$ LANGUAGE plpgsql;
     CREATE TRIGGER test_delay_proof_effect
       BEFORE INSERT ON accounts.proof_effects
-      FOR EACH ROW EXECUTE FUNCTION refresh_operations.test_delay_proof_effect();
+      FOR EACH ROW EXECUTE FUNCTION queue.test_delay_proof_effect();
   `)
 }
 
 async function removeEffectDelay(client: ReturnType<typeof postgres>): Promise<void> {
-  await client.unsafe('DROP FUNCTION IF EXISTS refresh_operations.test_delay_proof_effect() CASCADE')
+  await client.unsafe('DROP FUNCTION IF EXISTS queue.test_delay_proof_effect() CASCADE')
 }
 
 function apiEnvironment(port: number) {
@@ -369,7 +369,7 @@ describe('real production runtime lifecycle', () => {
       await removeEffectDelay(control)
 
       await control`
-          UPDATE refresh_operations.operations
+          UPDATE queue.operations
           SET lease_expires_at = clock_timestamp() - interval '1 second'
           WHERE id = ${accepted.operationId}
         `

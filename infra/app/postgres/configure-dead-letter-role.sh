@@ -46,9 +46,9 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brawltome_dead_letter'
 ALTER ROLE brawltome_dead_letter PASSWORD :'dead_letter_password'
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA refresh_operations FROM brawltome_dead_letter;
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA refresh_operations FROM brawltome_dead_letter;
-REVOKE ALL PRIVILEGES ON SCHEMA refresh_operations FROM brawltome_dead_letter;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA queue FROM brawltome_dead_letter;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA queue FROM brawltome_dead_letter;
+REVOKE ALL PRIVILEGES ON SCHEMA queue FROM brawltome_dead_letter;
 REVOKE ALL PRIVILEGES ON accounts.proof_effects FROM brawltome_dead_letter;
 REVOKE ALL PRIVILEGES ON SCHEMA accounts FROM brawltome_dead_letter;
 REVOKE ALL PRIVILEGES ON rankings.leaderboard_effects FROM brawltome_dead_letter;
@@ -63,12 +63,12 @@ REVOKE ALL PRIVILEGES ON SCHEMA statistics FROM brawltome_dead_letter;
 
 SELECT format('GRANT CONNECT ON DATABASE %I TO brawltome_dead_letter', current_database())
 \gexec
-GRANT USAGE ON SCHEMA refresh_operations TO brawltome_dead_letter;
+GRANT USAGE ON SCHEMA queue TO brawltome_dead_letter;
 GRANT USAGE ON SCHEMA accounts TO brawltome_dead_letter;
 GRANT USAGE ON SCHEMA rankings TO brawltome_dead_letter;
 GRANT USAGE ON SCHEMA statistics TO brawltome_dead_letter;
-GRANT SELECT, INSERT, UPDATE ON refresh_operations.operations TO brawltome_dead_letter;
-GRANT SELECT, INSERT ON refresh_operations.dead_letter_actions TO brawltome_dead_letter;
+GRANT SELECT, INSERT, UPDATE ON queue.operations TO brawltome_dead_letter;
+GRANT SELECT, INSERT ON queue.dead_letter_actions TO brawltome_dead_letter;
 GRANT SELECT ON accounts.proof_effects TO brawltome_dead_letter;
 GRANT SELECT ON rankings.leaderboard_effects TO brawltome_dead_letter;
 GRANT SELECT ON
@@ -78,9 +78,9 @@ GRANT SELECT ON
   statistics.statistics_collection_seals
 TO brawltome_dead_letter;
 GRANT SELECT ON
-  refresh_operations.attempts,
-  refresh_operations.interactive_refresh_effects,
-  refresh_operations.schedule_occurrences,
-  refresh_operations.schedules
+  queue.attempts,
+  queue.interactive_refresh_effects,
+  queue.schedule_occurrences,
+  queue.schedules
 TO brawltome_dead_letter;
 SQL

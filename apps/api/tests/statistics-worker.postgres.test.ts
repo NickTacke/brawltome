@@ -228,7 +228,7 @@ describe('Statistics durable production worker', () => {
 
     try {
       const attempts = await sql<{ kind: string; attempt_count: number; status: string }[]>`
-        SELECT kind, attempt_count, status FROM refresh_operations.operations
+        SELECT kind, attempt_count, status FROM queue.operations
         WHERE kind IN ('statistics-ranked-collection', 'statistics-lifetime-collection')
         ORDER BY kind
       `
@@ -246,7 +246,7 @@ describe('Statistics durable production worker', () => {
       expect(reservations.count).toBe('3')
 
       const [rankedOperation] = await sql<{ id: string }[]>`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE kind = 'statistics-ranked-collection'
         RETURNING id
@@ -280,7 +280,7 @@ describe('Statistics durable production worker', () => {
       expect(replaySourceCalls).toBe(0)
 
       const [replayOperation] = await sql<{ status: string }[]>`
-        SELECT status FROM refresh_operations.operations
+        SELECT status FROM queue.operations
         WHERE replayed_from_operation_id = ${rankedOperation.id}
       `
 

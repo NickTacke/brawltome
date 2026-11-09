@@ -235,7 +235,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       expect(evidence).toMatchObject({ exactBefore: false, exactAfter: true, repaired: true })
 
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${reconciliationLease.operationId}
       `
@@ -293,7 +293,7 @@ describe('Clan Discovery delivery and reconciliation', () => {
       if (lateLease?.kind !== 'discovery-reconciliation') throw new Error('Expected late lease')
 
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${lateLease.operationId}
       `
