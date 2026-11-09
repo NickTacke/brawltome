@@ -143,6 +143,28 @@ beforeEach(async () => {
   await database.sql`UPDATE queue.schedules SET enabled = false`
 }, 20_000)
 
+describe('clan weekly snapshot schedule', () => {
+  test('keeps the existing schedule when the worker reconciles the same definition again', async () => {
+    const schedule: CreateClanWeeklySnapshotSchedule = {
+      kind: 'clan-weekly-snapshot',
+      scheduleKey: 'test:weekly-snapshot:reconciled',
+      operationKeyPrefix: 'test:weekly-snapshot:reconciled',
+      workClass: 'maintenance',
+      intervalMs: weekMs,
+      firstDueAt: '2026-11-19T10:30:00.000Z',
+      payload: {},
+      provenance: { source: 'integration-test' },
+      maxAttempts: 20,
+    }
+
+    const created = await reconcileClanWeeklySnapshotSchedule(database, schedule)
+    const reconciled = await reconcileClanWeeklySnapshotSchedule(database, schedule)
+
+    expect(created.outcome).toBe('created')
+    expect(reconciled).toEqual({ outcome: 'already-exists', scheduleId: created.scheduleId })
+  })
+})
+
 describe('clan weekly snapshot job', () => {
   test('finishes the week with no snapshots when no guild is stored', async () => {
     const { job, queue, sourceCalls } = createHarness(new Map())
