@@ -6,6 +6,7 @@ import {
   validateAdmissionConfig,
 } from '../domain/admission'
 import type { EffectState } from '../jobs/job-definition'
+import { assertValidJobInput } from '../jobs/job-input'
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
@@ -223,6 +224,39 @@ async function deadLetterExhausted(sql: Sql, candidate: OperationRow): Promise<v
   `
 }
 
+// null when the job can run this row, otherwise why it can't
+function describeInvalidCandidate(job: ClaimJob | undefined, candidate: OperationRow): string | null {
+  if (!job) return `No job is registered for kind ${candidate.kind}`
+
+  try {
+    assertValidJobInput(job, candidate.work_class, candidate.payload)
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Payload failed validation'
+  }
+
+  return null
+}
+
+// settled here rather than thrown: a throw would roll back this claim and pick the same row on every later poll
+async function deadLetterInvalidCandidate(sql: Sql, candidate: OperationRow, message: string): Promise<void> {
+  const failure = { code: 'invalid_payload', message, retryable: false }
+
+  await sql`
+    UPDATE refresh_operations.attempts
+    SET finished_at = clock_timestamp(), outcome = 'dead_letter', error = ${sql.json(failure)}
+    WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
+      AND finished_at IS NULL
+  `
+
+  await sql`
+    UPDATE refresh_operations.operations
+    SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
+        completed_at = clock_timestamp(), updated_at = clock_timestamp(),
+        last_error = ${sql.json(failure)}
+    WHERE id = ${candidate.id}
+  `
+}
+
 // true when the expired lease ended the operation, so this candidate must not be leased again
 async function finishOrExpireLease(sql: Sql, job: ClaimJob | undefined, candidate: OperationRow): Promise<boolean> {
   const effectState = await readEffectState(job, sql, candidate)
@@ -299,6 +333,13 @@ async function claimOnce(sql: Sql, input: ClaimOperationInput, policy: Admission
   if (!candidate) return { kind: 'retry' }
 
   const job = input.jobs.get(candidate.kind)
+  const invalidReason = describeInvalidCandidate(job, candidate)
+
+  if (invalidReason) {
+    await deadLetterInvalidCandidate(sql, candidate, invalidReason)
+
+    return { kind: 'retry' }
+  }
 
   await takeClaimLock(sql, job, candidate)
 
@@ -321,7 +362,7 @@ async function claimOnce(sql: Sql, input: ClaimOperationInput, policy: Admission
 
 /**
  * Leases the next due operation, or returns null when nothing can be admitted right now.
- * A pass that only cleaned up an expired lease or lost a race starts over in a new transaction.
+ * A pass that only cleaned up an expired lease, dead-lettered a row or lost a race starts over in a new transaction.
  */
 export async function claimOperation(database: Database, input: ClaimOperationInput): Promise<OperationLease | null> {
   validateAdmissionConfig(input.admission)

@@ -27,6 +27,7 @@ import { validateDeepCrawlModes } from './migrations/0025-validate-deep-crawl-mo
 import { notifyPlayerRefreshSettled } from './migrations/0026-notify-player-refresh-settled'
 import { addPrimaryPlayerVerificationKind } from './migrations/0027-add-primary-player-verification-kind'
 import { validatePrimaryPlayerVerificationKind } from './migrations/0028-validate-primary-player-verification-kind'
+import { dropKindConstraints } from './migrations/0029-drop-kind-constraints'
 
 export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 export {
@@ -194,6 +195,7 @@ const migrations = [
   notifyPlayerRefreshSettled,
   addPrimaryPlayerVerificationKind,
   validatePrimaryPlayerVerificationKind,
+  dropKindConstraints,
 ] as const
 
 export const refreshOperationsModule = {
