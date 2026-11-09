@@ -219,6 +219,12 @@ describe('rated members', () => {
     expect(ratedMembers([member(1, 2000), member(2, null)]).map(({ brawlhallaId }) => brawlhallaId)).toEqual([1])
   })
 
+  test('a rating no player can have is left out', () => {
+    const rated = ratedMembers([member(1, 2000), member(2, 2_147_483_647)])
+
+    expect(rated.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1])
+  })
+
   test('the average is rounded', () => {
     expect(averageRating(ratedMembers([member(1, 2000), member(2, 2001)]))).toBe(2001)
   })

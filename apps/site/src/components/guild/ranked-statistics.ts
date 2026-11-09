@@ -13,9 +13,15 @@ const axisStep = 500
 const leaderboardSize = 5
 const minimumRecordPlayers = 5
 const recordWindowMs = 30 * 24 * 60 * 60 * 1000
+// well above the highest rating anyone has reached, one bad stored value would otherwise draw thousands of bars
+const maximumPlausibleRating = 4000
 
 export function ratedMembers(members: RankedMember[]): RatedMember[] {
-  return members.flatMap((member) => (member.elo === null ? [] : [{ ...member, elo: member.elo }]))
+  return members.flatMap((member) => {
+    if (member.elo === null || member.elo > maximumPlausibleRating) return []
+
+    return [{ ...member, elo: member.elo }]
+  })
 }
 
 export function averageRating(rated: RatedMember[]): number {
