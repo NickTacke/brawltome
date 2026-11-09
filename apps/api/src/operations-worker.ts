@@ -73,7 +73,7 @@ import { createPostgresReadiness } from './postgres-readiness'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
-import { collectStatisticsEvidence, createStatisticsCollectionQueue } from './statistics-collection-source'
+import { createStatisticsCollection } from './statistics-collection-source'
 import { createRuntimeTelemetry } from './telemetry'
 import { createWorkerJobs } from './worker/job-list'
 import { createPlanners, runPlanners } from './worker/planners'
@@ -223,8 +223,7 @@ const workerJobs = createWorkerJobs({
   statistics: {
     statistics,
     sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
-    collectEvidence: (lease) =>
-      collectStatisticsEvidence(createWorkerBhApiClient(undefined, statisticsCollectionQueue), lease),
+    ...createStatisticsCollection((queue) => createWorkerBhApiClient(undefined, queue)),
     retryTimings: {
       retryDelayMs: workerConfig.retryDelayMs,
       sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
@@ -257,7 +256,6 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
 })
 
 const bhapiQueue = createBhApiRequestQueue()
-const statisticsCollectionQueue = createStatisticsCollectionQueue()
 
 // not tools.createSourceAdmitter: verification spends background budget under a key of its own, whatever its work class
 function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {

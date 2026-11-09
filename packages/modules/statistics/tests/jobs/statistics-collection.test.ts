@@ -32,6 +32,7 @@ function dependencies(
     } as StatisticsCollectionJobDependencies['statistics'],
     sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
     collectEvidence: async () => ({}) as never,
+    collectionPace: { waitMsForTurn: () => 0 },
     retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
     ...overrides,
   }
@@ -77,6 +78,34 @@ describe('statistics collection job', () => {
     })
 
     expect(spy.deferrals.map(({ retryDelayMs }) => retryDelayMs)).toEqual([37_000])
+    expect(spy.failures).toEqual([])
+    expect(recorded).toBe(false)
+  })
+
+  test('defers until its turn without admitting or recording, so the worker slot is free while it waits', async () => {
+    const spy = createQueueSpy(rankedLease())
+    let recorded = false
+
+    const job = createStatisticsRankedCollectionJob(
+      dependencies(
+        {
+          recordCollectionAttempt: async () => {
+            recorded = true
+
+            return 'recorded'
+          },
+        },
+        {
+          collectionPace: { waitMsForTurn: () => 4_200 },
+          sourceAdmission: { admitSource: shouldNotRun('source admission') },
+          collectEvidence: shouldNotRun('the source call'),
+        },
+      ),
+    )
+
+    await runJobOnce(spy.queue as never, job, { retryDelayMs: 10 })
+
+    expect(spy.deferrals.map(({ retryDelayMs }) => retryDelayMs)).toEqual([5_000])
     expect(spy.failures).toEqual([])
     expect(recorded).toBe(false)
   })

@@ -27,6 +27,7 @@ export type StatisticsCollectionJobDependencies = {
   >
   sourceAdmission: Pick<SourceAdmissionPort, 'admitSource'>
   collectEvidence(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
+  collectionPace: { waitMsForTurn(operationId: string): number }
   retryTimings: RetryTimings
 }
 
@@ -132,7 +133,7 @@ async function runCollection(
   { queue, leaseMs }: JobTools,
   dependencies: StatisticsCollectionJobDependencies,
 ): Promise<AttemptOutcome> {
-  const { statistics, sourceAdmission, collectEvidence } = dependencies
+  const { statistics, sourceAdmission, collectEvidence, collectionPace } = dependencies
 
   if ((await queue.renew(lease, leaseMs)) === 'lease-lost') return 'lease_lost'
 
@@ -150,6 +151,10 @@ async function runCollection(
   )
 
   if (attemptRefused) return attemptRefused
+
+  const waitMs = collectionPace.waitMsForTurn(lease.operationId)
+
+  if (waitMs > 0) throw new SourceAdmissionLimitedError(Math.ceil(waitMs / 1_000))
 
   await admitSourceCall(lease, sourceAdmission)
 

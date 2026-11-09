@@ -482,6 +482,7 @@ describe('worker job list', () => {
 
         return {} as never
       },
+      collectionPace: { waitMsForTurn: () => 0 },
       retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
     })
 
