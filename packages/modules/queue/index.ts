@@ -69,6 +69,12 @@ export {
   listAwaiting,
 } from './db/find-operations'
 export type { AppliedLeaderboardEffects } from './db/materialize-due-schedules'
+export { createPostgresDeadLetterOperations } from './db/postgres-dead-letters'
+export {
+  createPostgresRefreshOperations,
+  type PostgresRefreshOperations,
+  type RefreshOperationsDatabases,
+} from './db/postgres-queue'
 export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
 export {
   type AttemptHistory,
@@ -161,12 +167,6 @@ export {
 } from './lease-fences'
 export * from './model'
 export { authenticateDeadLetterOperator, OperatorAuthenticationError } from './operator-auth'
-export {
-  createPostgresDeadLetterOperations,
-  createPostgresRefreshOperations,
-  type PostgresRefreshOperations,
-  type RefreshOperationsDatabases,
-} from './postgres'
 
 const migrations = [
   initializeRefreshOperations,
