@@ -101,7 +101,7 @@ export async function reconcileStatisticsCohort(
   let reconciled = 0
   const state = await statistics.reconciliationState()
   let launchState = state.launch
-  const needsLaunchSnapshot = !launchState || (launchState.decisionCount === 2 && launchState.isNextGenerationDue)
+  const needsLaunchSnapshot = !launchState || launchState.isNextGenerationDue
 
   if (
     !state.legacyCohortExists ||

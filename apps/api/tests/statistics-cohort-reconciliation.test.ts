@@ -404,6 +404,59 @@ describe('Statistics immutable Ranking adapter', () => {
     expect(activatedPublications).toBe(100)
   })
 
+  test('reloads the leaderboards to replace a generation that stalled past its window', async () => {
+    let launchReconciliations = 0
+
+    const statistics = {
+      reconciliationState: async () => ({
+        legacyCohortExists: true,
+        launch: {
+          generationId,
+          sourceGenerationId: generationId,
+          decisionCount: 1,
+          cohortIds: [],
+          isNextGenerationDue: true,
+        },
+      }),
+      reconcileLaunchCohort: async () => {
+        launchReconciliations++
+
+        return { generationId: newerGenerationId, sourceGenerationId: newerGenerationId, decisions: [], cells: [] }
+      },
+      boundCollectionOperationIds: async () => [],
+      collectionIntents: async () => [],
+      boundPublicationOperationIds: async () => [],
+      publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
+    } as unknown as StatisticsTracer
+
+    const operations = {
+      listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
+      listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
+    } as unknown as StatisticsReservations
+
+    const ranking: LeaderboardQueries = {
+      async getLeaderboard(input) {
+        const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
+        const regional = view(1, [regionIndex + 1], false)
+
+        return {
+          ...regional,
+          generationId: newerGenerationId,
+          region: input.region as (typeof launchCohortRegions)[number],
+          snapshotId: `00000000-0000-4000-8000-${String(regionIndex + 1).padStart(12, '0')}`,
+        }
+      },
+    }
+
+    await reconcileStatisticsCohort(statistics, operations, ranking)
+
+    expect(launchReconciliations).toBe(1)
+  })
+
   test('reserves no more collections while the queue is already full', async () => {
     let intentLookups = 0
 

@@ -91,6 +91,19 @@ export function isLaunchGenerationDue(latest: LaunchGenerationPace, now: Date): 
   return now.getTime() >= latest.startedAt.getTime() + waitSeconds * 1_000
 }
 
+export type LaunchGenerationDecisionState = LaunchGenerationPace & {
+  decisionCount: number
+  observationWindowEndsAt: Date
+}
+
+// a generation missing a publication decision holds its place only for its window: a dead-lettered publication must
+// not stop new generations for good, and the window still limits replacements to one a week
+export function canReplaceLaunchGeneration(latest: LaunchGenerationDecisionState, now: Date): boolean {
+  if (latest.decisionCount >= 2) return isLaunchGenerationDue(latest, now)
+
+  return now.getTime() >= latest.observationWindowEndsAt.getTime()
+}
+
 function selectionHash(methodologyVersion: string, brawlhallaId: number): string {
   return createHash('sha256').update(methodologyVersion).update('\0').update(String(brawlhallaId)).digest('hex')
 }
