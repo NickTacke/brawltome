@@ -67,7 +67,7 @@ describe('Statistics collection pace', () => {
   })
 
   test('holds the next slot back after an outage and rebooks jobs that had a slot', () => {
-    let currentTime = 1_000_000
+    const currentTime = 1_000_000
     const pace = createStatisticsCollectionPace(() => currentTime)
 
     expect(pace.waitMsForTurn('first')).toBe(0)
@@ -80,7 +80,7 @@ describe('Statistics collection pace', () => {
   })
 
   test('doubles the hold while the outage lasts, up to five minutes, and starts over after a success', () => {
-    let currentTime = 1_000_000
+    const currentTime = 1_000_000
     const pace = createStatisticsCollectionPace(() => currentTime)
 
     const holdAfterOutage = (operationId: string) => {
