@@ -54,13 +54,16 @@ export function parseGuildStats(payload: unknown, clanId: number): ClanProfileWr
   }
 }
 
+// source_rank is a Postgres integer, so a larger rank would fail the snapshot write on every attempt
+const maximumGuildRank = 2_147_483_647
+
 /** The rank V1 sends with a guild's stats, or null when it sends none. Optional, so it never fails the stats. */
 export function parseGuildRank(payload: unknown): number | null {
   if (!isSourceRecord(payload)) return null
 
   const { rank } = payload
 
-  if (typeof rank !== 'number' || !Number.isSafeInteger(rank) || rank < 1) return null
+  if (typeof rank !== 'number' || !Number.isInteger(rank) || rank < 1 || rank > maximumGuildRank) return null
 
   return rank
 }
