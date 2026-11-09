@@ -113,14 +113,15 @@ type GuildOverviewProps = {
   standing: ClanStandingContract | null
   members: RankedMember[]
   record: RankedRecord
+  hasAllSummaries: boolean
 }
 
-export function GuildOverview({ clan, standing, members, record }: GuildOverviewProps) {
+export function GuildOverview({ clan, standing, members, record, hasAllSummaries }: GuildOverviewProps) {
   return (
     <div className="grid gap-y-7 lg:grid-cols-2 lg:[&>*:first-child]:pr-12 xl:sticky xl:top-10 xl:grid-cols-1 xl:[&>*:first-child]:pr-0">
       <Ranking clan={clan} standing={standing} />
       <Podium members={members} />
-      <RankedStatistics members={members} record={record} />
+      {hasAllSummaries && <RankedStatistics members={members} record={record} />}
     </div>
   )
 }

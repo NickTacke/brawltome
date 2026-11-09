@@ -171,6 +171,27 @@ describe('loadGuild', () => {
     expect(guild?.summaries).toHaveLength(251)
   })
 
+  test('reports whether every batch of summaries answered', async () => {
+    stubApi((call) => healthyAnswer(300, call))
+
+    expect((await loadGuild(42))?.hasAllSummaries).toBe(true)
+
+    let summaryCalls = 0
+
+    stubApi((call) => {
+      if (call.path !== '/players/ranked-summaries') return healthyAnswer(300, call)
+
+      summaryCalls += 1
+
+      return summaryCalls === 1 ? { status: 503, body: null } : healthyAnswer(300, call)
+    })
+
+    const guild = await loadGuild(42)
+
+    expect(guild?.hasAllSummaries).toBe(false)
+    expect(guild?.summaries.length).toBeGreaterThan(0)
+  })
+
   test('keeps the page when standing fails', async () => {
     stubApi((call) => failingPath(2, '/clans/42/standing', call))
 
