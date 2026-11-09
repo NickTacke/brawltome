@@ -8,7 +8,9 @@ export function isDeployed(identity: string): boolean {
 }
 
 // ties are broken by identity so the order never depends on how the modules list their migrations
-export function orderMigrations(migrations: readonly Migration[]): Migration[] {
+export function orderMigrations(unresolvedMigrations: readonly Migration[]): Migration[] {
+  const migrations = resolveOptionalRequirements(unresolvedMigrations)
+
   validateDependencies(migrations)
 
   const deployed = orderDeployed(migrations)
@@ -32,6 +34,18 @@ export function dependenciesOf(migration: Migration): string[] {
   const requirements = migration.requires ?? []
 
   return migration.predecessor ? [migration.predecessor, ...requirements] : [...requirements]
+}
+
+function resolveOptionalRequirements(migrations: readonly Migration[]): Migration[] {
+  const identities = new Set(migrations.map(({ identity }) => identity))
+
+  return migrations.map((migration) => {
+    if (!migration.requiresIfPresent) return migration
+
+    const present = migration.requiresIfPresent.filter((identity) => identities.has(identity))
+
+    return { ...migration, requires: [...(migration.requires ?? []), ...present] }
+  })
 }
 
 function validateDependencies(migrations: readonly Migration[]): void {

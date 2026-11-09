@@ -109,6 +109,18 @@ describe('orderMigrations', () => {
     )
   })
 
+  test('orders after an optional requirement that is present and ignores one that is absent', () => {
+    const statistics = migration('statistics/0001', null)
+    const queue = { ...migration('queue/0001', null), requiresIfPresent: ['statistics/0001', 'players/0099'] }
+
+    expect(orderMigrations([queue, statistics]).map(({ identity }) => identity)).toEqual([
+      'statistics/0001',
+      'queue/0001',
+    ])
+
+    expect(orderMigrations([queue]).map(({ identity }) => identity)).toEqual(['queue/0001'])
+  })
+
   test('rejects an unknown requirement and names both migrations', () => {
     const statisticsAddition = migration('statistics/0005', 'statistics/0004', ['players/0099'])
 
