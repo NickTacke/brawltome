@@ -1,4 +1,5 @@
 import { socialLinks } from './social-links'
+import { ThemeButton } from './theme/ThemeButton'
 
 const footerLinkStyle = 'transition-colors hover:text-strong'
 
@@ -16,6 +17,7 @@ export function SiteFooter() {
           <a href="/terms" className={footerLinkStyle}>
             Terms
           </a>
+          <ThemeButton className={footerLinkStyle} />
           <span className="h-4 w-px bg-line" aria-hidden="true" />
           {socialLinks.map(({ href, label, svg }) => (
             <a

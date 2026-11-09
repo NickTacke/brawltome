@@ -44,7 +44,7 @@ describe('win rate', () => {
 
   test.each([
     [60, 'text-emerald-400'],
-    [50, 'text-primary'],
+    [50, 'text-win'],
     [49.9, 'text-soft'],
   ])('%p percent is %p', (percent, expected) => {
     expect(winRateColour(percent)).toBe(expected)
