@@ -10,19 +10,40 @@ import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createPostgresWeeklySnapshots } from '../../db/postgres-weekly-snapshots'
 import { clanModule, createPostgresClans } from '../../index'
-import { createClanWeeklySnapshotJob } from '../../jobs/clan-weekly-snapshot-job'
+import { clanWeeklySnapshotOutageGuilds, createClanWeeklySnapshotJob } from '../../jobs/clan-weekly-snapshot-job'
 import { reconcileClanWeeklySnapshotSchedule } from '../../jobs/clan-weekly-snapshot-schedule'
 
 const weekMs = 7 * 24 * 60 * 60 * 1000
-const admitting = { admitSource: async () => ({ outcome: 'admitted' }) as const, pauseSource: async () => {} }
 
-type SourceAnswer = { guildPoints: string } | 'not-found' | 'invalid' | 'fail-once'
+type SourceAnswer =
+  | { guildPoints: string; rank?: number }
+  | { failures: number; guildPoints: string }
+  | 'not-found'
+  | 'invalid'
+  | 'unavailable'
+  | 'rate-limited'
 
 type Harness = {
   job: ReturnType<typeof createClanWeeklySnapshotJob>
   queue: PostgresRefreshOperations
   sourceCalls: number[]
   waits: number[]
+  retryWaits: number[]
+  pauses: string[]
+  sourceAdmission: { admitSource(): Promise<{ outcome: 'admitted' }>; pauseSource(domain: string): Promise<void> }
+}
+
+// the shapes the Brawlhalla client throws, without depending on it
+class SourceHttpError extends Error {
+  readonly domain = 'brawlhalla-v1'
+
+  constructor(readonly status: number) {
+    super(`Brawlhalla API error: ${status}`)
+  }
+}
+
+class SourceRateLimitError extends Error {
+  readonly retryAfterMs = 6_000
 }
 
 let database: TestDatabase
@@ -51,25 +72,38 @@ async function storeGuild(clanId: number): Promise<void> {
   `
 }
 
+function answerFor(answers: Map<number, SourceAnswer>, clanId: number, failedCalls: Map<number, number>) {
+  const answer = answers.get(clanId)
+
+  if (answer === undefined || answer === 'not-found') return null
+
+  if (answer === 'invalid') return { guild_id: clanId }
+
+  if (answer === 'unavailable') throw new SourceHttpError(503)
+
+  if (answer === 'rate-limited') throw new SourceRateLimitError(`Brawlhalla API rate limited for guild ${clanId}`)
+
+  if ('failures' in answer && (failedCalls.get(clanId) ?? 0) < answer.failures) {
+    failedCalls.set(clanId, (failedCalls.get(clanId) ?? 0) + 1)
+    throw new Error(`Brawlhalla API timeout for guild ${clanId}`)
+  }
+
+  const rank = 'rank' in answer ? answer.rank : undefined
+
+  return { ...guildStats(clanId, answer.guildPoints), rank }
+}
+
 function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): Harness {
   const sourceCalls: number[] = []
   const waits: number[] = []
-  const failedOnce = new Set<number>()
+  const retryWaits: number[] = []
+  const pauses: string[] = []
+  const failedCalls = new Map<number, number>()
 
   const getGuildStatsV1 = async (clanId: number) => {
     sourceCalls.push(clanId)
-    const answer = answers.get(clanId)
 
-    if (answer === undefined || answer === 'not-found') return null
-
-    if (answer === 'invalid') return { guild_id: clanId }
-
-    if (answer === 'fail-once' && !failedOnce.has(clanId)) {
-      failedOnce.add(clanId)
-      throw new Error(`Brawlhalla API timeout for guild ${clanId}`)
-    }
-
-    return guildStats(clanId, answer === 'fail-once' ? '77' : answer.guildPoints)
+    return answerFor(answers, clanId, failedCalls)
   }
 
   const job = createClanWeeklySnapshotJob({
@@ -81,12 +115,23 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
     waitBetweenGuilds: async (delayMs) => {
       waits.push(delayMs)
     },
+    waitBeforeGuildRetry: async (delayMs) => {
+      retryWaits.push(delayMs)
+    },
+    retryTimings: { retryDelayMs: 0, sourceUnavailableRetryMs: 60_000 },
     telemetry: createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 }),
   })
 
   const queue = createPostgresRefreshOperations({ database }, { jobs: [job] })
 
-  return { job, queue, sourceCalls, waits }
+  const sourceAdmission = {
+    admitSource: async () => ({ outcome: 'admitted' }) as const,
+    pauseSource: async (domain: string) => {
+      pauses.push(domain)
+    },
+  }
+
+  return { job, queue, sourceCalls, waits, retryWaits, pauses, sourceAdmission }
 }
 
 // a window that came due a minute ago is the only one the schedule owes, so the run's week is the day it is due
@@ -130,6 +175,28 @@ async function isWeekCompleted(weekStarting: string): Promise<boolean> {
   return run?.isCompleted ?? false
 }
 
+async function readProfileCheck(clanId: number) {
+  const [check] = await database.sql<{ checkProvenance: unknown; lastSuccessProvenance: unknown }[]>`
+    SELECT check_provenance AS "checkProvenance", last_success_provenance AS "lastSuccessProvenance"
+    FROM clans.profile_state WHERE clan_id = ${clanId}
+  `
+
+  return check ?? null
+}
+
+async function readOperation() {
+  const [operation] = await database.sql<{ attemptCount: number; status: string; errorCode: string | null }[]>`
+    SELECT attempt_count AS "attemptCount", status, last_error->>'code' AS "errorCode"
+    FROM queue.operations WHERE kind = 'clan-weekly-snapshot' ORDER BY created_at DESC LIMIT 1
+  `
+
+  return operation
+}
+
+async function makeOperationDue(): Promise<void> {
+  await database.sql`UPDATE queue.operations SET available_at = clock_timestamp() WHERE kind = 'clan-weekly-snapshot'`
+}
+
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'clan_weekly_snapshot', modules: [queueModule, clanModule] })
 }, 20_000)
@@ -167,11 +234,11 @@ describe('clan weekly snapshot schedule', () => {
 
 describe('clan weekly snapshot job', () => {
   test('finishes the week with no snapshots when no guild is stored', async () => {
-    const { job, queue, sourceCalls } = createHarness(new Map())
+    const { job, queue, sourceCalls, sourceAdmission } = createHarness(new Map())
 
     const week = await scheduleWeek(queue, 'empty')
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(sourceCalls).toEqual([])
     expect(await readSnapshots(week)).toEqual([])
     expect(await isWeekCompleted(week)).toBe(true)
@@ -186,11 +253,11 @@ describe('clan weekly snapshot job', () => {
       [102, { guildPoints: '20' }],
     ])
 
-    const { job, queue, waits } = createHarness(answers)
+    const { job, queue, waits, sourceAdmission } = createHarness(answers)
 
     const week = await scheduleWeek(queue, 'stored')
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
 
     expect(await readSnapshots(week)).toEqual([
       { clanId: 101, guildPoints: '900719925474099312345' },
@@ -216,15 +283,15 @@ describe('clan weekly snapshot job', () => {
       [203, { guildPoints: '3' }],
     ])
 
-    const { job, queue, sourceCalls } = createHarness(answers, 2)
+    const { job, queue, sourceCalls, sourceAdmission } = createHarness(answers, 2)
 
     const week = await scheduleWeek(queue, 'sliced')
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).not.toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).not.toBe('succeeded')
     expect(sourceCalls).toEqual([201, 202])
     expect(await isWeekCompleted(week)).toBe(false)
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(sourceCalls).toEqual([201, 202, 203])
     expect(await readSnapshots(week)).toHaveLength(3)
     expect(await isWeekCompleted(week)).toBe(true)
@@ -239,32 +306,36 @@ describe('clan weekly snapshot job', () => {
       [303, { guildPoints: '9' }],
     ])
 
-    const { job, queue } = createHarness(answers)
+    const { job, queue, sourceAdmission } = createHarness(answers)
 
     const week = await scheduleWeek(queue, 'skipped')
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(await readSnapshots(week)).toEqual([{ clanId: 303, guildPoints: '9' }])
     expect(await isWeekCompleted(week)).toBe(true)
+
+    const failedCheck = { source: 'v1-guild-stats', outcome: 'ambiguous-failure' }
+
+    expect((await readProfileCheck(301))?.checkProvenance).toEqual(failedCheck)
+    expect((await readProfileCheck(302))?.checkProvenance).toEqual(failedCheck)
   })
 
-  test('retries a failed fetch without repeating the guilds already stored', async () => {
+  test('retries a guild that fails in place and stores it in the same attempt', async () => {
     for (const clanId of [401, 402]) await storeGuild(clanId)
 
     const answers = new Map<number, SourceAnswer>([
       [401, { guildPoints: '4' }],
-      [402, 'fail-once'],
+      [402, { failures: 2, guildPoints: '77' }],
     ])
 
-    const { job, queue, sourceCalls } = createHarness(answers)
+    const { job, queue, sourceCalls, retryWaits, pauses, sourceAdmission } = createHarness(answers)
 
     const week = await scheduleWeek(queue, 'retried')
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting, retryDelayMs: 0 })).toBe('retry')
-    expect(await isWeekCompleted(week)).toBe(false)
-
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting, retryDelayMs: 0 })).toBe('succeeded')
-    expect(sourceCalls).toEqual([401, 402, 402])
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(sourceCalls).toEqual([401, 402, 402, 402])
+    expect(retryWaits).toEqual([500, 2_000])
+    expect(pauses).toEqual([])
 
     expect(await readSnapshots(week)).toEqual([
       { clanId: 401, guildPoints: '4' },
@@ -272,14 +343,91 @@ describe('clan weekly snapshot job', () => {
     ])
   })
 
+  test('skips a guild that keeps failing, records the failed check and leaves V1 alone', async () => {
+    for (const clanId of [411, 412]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>([
+      [411, 'unavailable'],
+      [412, { guildPoints: '8' }],
+    ])
+
+    const { job, queue, sourceCalls, pauses, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'failing-guild')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(sourceCalls).toEqual([411, 411, 411, 412])
+    expect(pauses).toEqual([])
+    expect(await readSnapshots(week)).toEqual([{ clanId: 412, guildPoints: '8' }])
+    expect(await isWeekCompleted(week)).toBe(true)
+
+    expect((await readProfileCheck(411))?.checkProvenance).toEqual({
+      source: 'v1-guild-stats',
+      outcome: 'ambiguous-failure',
+    })
+  })
+
+  test('skips a failing guild at the end of the run and still finishes the week', async () => {
+    await storeGuild(421)
+
+    const { job, queue, sourceAdmission } = createHarness(new Map([[421, 'unavailable']]))
+
+    const week = await scheduleWeek(queue, 'failing-last')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toEqual([])
+    expect(await isWeekCompleted(week)).toBe(true)
+  })
+
+  test('defers the run without pausing V1 when guilds in a row keep failing, then picks up the first of them', async () => {
+    const clanIds = Array.from({ length: clanWeeklySnapshotOutageGuilds + 1 }, (_, index) => 431 + index)
+
+    for (const clanId of clanIds) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>(clanIds.map((clanId) => [clanId, 'unavailable']))
+    const { job, queue, pauses, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'outage')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(pauses).toEqual([])
+    expect(await readOperation()).toMatchObject({ attemptCount: 0, errorCode: 'clan_weekly_snapshot_source_down' })
+    expect(await readProfileCheck(431)).toBeNull()
+
+    for (const clanId of clanIds) answers.set(clanId, { guildPoints: `${clanId}` })
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toHaveLength(clanIds.length)
+  })
+
+  test('defers a rate limited call without spending an attempt', async () => {
+    await storeGuild(441)
+
+    const answers = new Map<number, SourceAnswer>([[441, 'rate-limited']])
+    const { job, queue, sourceCalls, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'rate-limited')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(sourceCalls).toEqual([441])
+    expect(await readOperation()).toMatchObject({ attemptCount: 0, errorCode: 'source_rate_limited' })
+
+    answers.set(441, { guildPoints: '44' })
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toEqual([{ clanId: 441, guildPoints: '44' }])
+  })
+
   test('files a run that missed windows under the latest window, the week it actually covers', async () => {
-    const { job, queue } = createHarness(new Map())
+    const { job, queue, sourceAdmission } = createHarness(new Map())
     const firstDueAt = new Date(Date.now() - 2 * weekMs - 60_000).toISOString()
     const latestWindow = new Date(Date.parse(firstDueAt) + 2 * weekMs).toISOString().slice(0, 10)
 
     await scheduleWeek(queue, 'late', firstDueAt)
 
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(await isWeekCompleted(latestWindow)).toBe(true)
   })
 
@@ -287,15 +435,15 @@ describe('clan weekly snapshot job', () => {
     await storeGuild(501)
 
     const answers = new Map<number, SourceAnswer>([[501, { guildPoints: '5' }]])
-    const { job, queue, sourceCalls } = createHarness(answers)
+    const { job, queue, sourceCalls, sourceAdmission } = createHarness(answers)
 
     const dueAt = new Date(Date.now() - 60_000).toISOString()
 
     await scheduleWeek(queue, 'finished', dueAt)
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
 
     await scheduleWeek(queue, 'finished-again', dueAt)
-    expect(await runJobOnce(queue, job, { sourceAdmission: admitting })).toBe('succeeded')
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
 
     expect(sourceCalls).toEqual([501])
   })

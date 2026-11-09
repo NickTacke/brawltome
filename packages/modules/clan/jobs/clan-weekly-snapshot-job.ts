@@ -2,31 +2,40 @@ import {
   type AttemptOutcome,
   type ClanWeeklySnapshotPayload,
   defineJob,
-  type FailureDecision,
   type JobDefinition,
   JobLeaseLostError,
   type JobTools,
   type Lease,
+  type RetryTimings,
   type SourceAdmitter,
 } from '@brawltome/queue'
 import type { Telemetry } from '@brawltome/telemetry'
 import type { PostgresClans } from '../db/postgres-clans'
 import type { PostgresWeeklySnapshots } from '../db/postgres-weekly-snapshots'
 import { type ClanProfileWrite, parseGuildStats } from '../domain/guild-stats'
-import { successProvenance } from '../domain/provenance'
+import { failedCheckProvenance, successProvenance } from '../domain/provenance'
+import { classifySourceFailure } from '../domain/source-failure'
 import { clanWeeklySnapshotContract } from './clan-weekly-snapshot-contract'
 import type { ClanSource } from './refresh-clan'
+import { ClanWeeklySnapshotSourceDown, ClanWeeklySnapshotYield, decideSnapshotFailure } from './weekly-snapshot-failure'
+import { fetchGuildStats, type GuildStatsFetcher } from './weekly-snapshot-fetch'
 
 export const defaultClanWeeklySnapshotSliceGuilds = 100
 
+// guilds in a row that fail every retry before the run takes V1 to be down and waits. Each has failed three calls
+// over about 2.5 s, so five in a row is 15 failed calls: a 1% error rate or a few broken guilds won't get there
+export const clanWeeklySnapshotOutageGuilds = 5
+
 export type ClanWeeklySnapshotJobDependencies = {
-  clans: Pick<PostgresClans, 'publishProfile'>
+  clans: Pick<PostgresClans, 'publishProfile' | 'recordProfileCheck'>
   snapshots: PostgresWeeklySnapshots
   // the Brawlhalla client, with every call going through this attempt's admission
   createAdmittedSource(admitSource: SourceAdmitter): Pick<ClanSource, 'getGuildStatsV1'>
   sliceGuilds: number
   guildDelayMs: number
   waitBetweenGuilds(delayMs: number, signal: AbortSignal): Promise<void>
+  waitBeforeGuildRetry(delayMs: number, signal: AbortSignal): Promise<void>
+  retryTimings: RetryTimings
   telemetry: Telemetry
 }
 
@@ -35,16 +44,13 @@ type WeeklySnapshotLease = Lease<ClanWeeklySnapshotPayload>
 type SnapshotSlice = {
   weekStarting: string
   dependencies: ClanWeeklySnapshotJobDependencies
-  source: Pick<ClanSource, 'getGuildStatsV1'>
+  fetcher: GuildStatsFetcher
   tools: JobTools
 }
 
-// thrown after a slice so the job gives the maintenance slot back; deferring it spends no attempt
-class ClanWeeklySnapshotYield extends Error {
-  constructor(weekStarting: string) {
-    super(`clan weekly snapshot for week ${weekStarting} yielded between slices`)
-  }
-}
+type FailedGuild = { clanId: number; error: unknown }
+
+type SliceProgress = { storedGuilds: number; skippedGuilds: number; failedGuilds: FailedGuild[] }
 
 function weekStartingOf(lease: WeeklySnapshotLease): string {
   const windowAt = new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
@@ -52,56 +58,104 @@ function weekStartingOf(lease: WeeklySnapshotLease): string {
   return windowAt.toISOString().slice(0, 10)
 }
 
-// a 404 can't be told from a hiccup and a payload that doesn't parse won't parse on a retry, so one such guild
+// a 404 can't be told from a hiccup and a payload that doesn't parse won't parse on a retry, so such a guild
 // misses this week instead of holding up the others
-function readProfile(payload: unknown, clanId: number): ClanProfileWrite | null {
-  if (payload === null) return null
+function readProfile(payload: unknown | null, clanId: number): { profile: ClanProfileWrite } | { error: unknown } {
+  if (payload === null) return { error: new Error('ambiguous guild stats 404') }
 
   try {
-    return parseGuildStats(payload, clanId)
-  } catch {
-    return null
+    return { profile: parseGuildStats(payload, clanId) }
+  } catch (error) {
+    return { error }
   }
 }
 
-async function snapshotGuild(slice: SnapshotSlice, clanId: number): Promise<boolean> {
-  const { weekStarting, dependencies, source } = slice
-  const payload = await source.getGuildStatsV1(clanId, { caller: 'background' })
-  const profile = readProfile(payload, clanId)
+// records the failed check the way a refresh does and moves the run past the guild, which misses this week
+async function skipGuild(slice: SnapshotSlice, clanId: number, error: unknown): Promise<void> {
+  const { weekStarting, dependencies } = slice
+  const provenance = failedCheckProvenance('profile', classifySourceFailure(error))
 
-  if (!profile) {
-    await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null })
+  await dependencies.clans.recordProfileCheck(clanId, new Date(), provenance)
+  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null })
+}
+
+async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown | null): Promise<boolean> {
+  const { weekStarting, dependencies } = slice
+  const read = readProfile(payload, clanId)
+
+  if ('error' in read) {
+    await skipGuild(slice, clanId, read.error)
 
     return false
   }
 
-  await dependencies.clans.publishProfile(profile, new Date(), successProvenance('profile'))
+  const { profile } = read
+  const provenance = successProvenance('profile')
+
+  await dependencies.clans.publishProfile(profile, new Date(), provenance)
   await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: profile.guildPoints })
 
   return true
 }
 
-async function snapshotGuilds(slice: SnapshotSlice, clanIds: number[]): Promise<number> {
+// a failed guild is only skipped once a later one gets an answer, so the guilds an outage hit are fetched again
+async function skipFailedGuilds(slice: SnapshotSlice, progress: SliceProgress): Promise<void> {
+  for (const { clanId, error } of progress.failedGuilds) await skipGuild(slice, clanId, error)
+
+  progress.skippedGuilds += progress.failedGuilds.length
+  progress.failedGuilds = []
+}
+
+function throwIfSourceDown(slice: SnapshotSlice, progress: SliceProgress): void {
+  const { failedGuilds } = progress
+
+  if (failedGuilds.length < clanWeeklySnapshotOutageGuilds) return
+
+  const lastError = failedGuilds.at(-1)?.error
+
+  throw new ClanWeeklySnapshotSourceDown(slice.weekStarting, failedGuilds.length, lastError)
+}
+
+async function snapshotGuild(slice: SnapshotSlice, progress: SliceProgress, clanId: number): Promise<void> {
+  const fetched = await fetchGuildStats(slice.fetcher, clanId)
+
+  if ('error' in fetched) {
+    progress.failedGuilds.push({ clanId, error: fetched.error })
+    throwIfSourceDown(slice, progress)
+
+    return
+  }
+
+  await skipFailedGuilds(slice, progress)
+
+  if (await saveGuild(slice, clanId, fetched.payload)) progress.storedGuilds += 1
+  else progress.skippedGuilds += 1
+}
+
+async function snapshotGuilds(slice: SnapshotSlice, clanIds: number[]): Promise<SliceProgress> {
   const { dependencies, tools } = slice
-  let storedGuilds = 0
+  const progress: SliceProgress = { storedGuilds: 0, skippedGuilds: 0, failedGuilds: [] }
 
   for (const [index, clanId] of clanIds.entries()) {
     if (index > 0) await dependencies.waitBetweenGuilds(dependencies.guildDelayMs, tools.signal)
 
     if (tools.signal.aborted) throw new JobLeaseLostError()
 
-    if (await snapshotGuild(slice, clanId)) storedGuilds += 1
+    await snapshotGuild(slice, progress, clanId)
   }
 
-  return storedGuilds
+  // the run may end with this slice, and a slice of failures would otherwise list the same guilds again
+  await skipFailedGuilds(slice, progress)
+
+  return progress
 }
 
-function logSlice(slice: SnapshotSlice, guilds: number, storedGuilds: number): void {
+function logSlice(slice: SnapshotSlice, progress: SliceProgress): void {
   try {
     slice.dependencies.telemetry.logger.info('clan.weekly_snapshot.slice', {
       weekStarting: slice.weekStarting,
-      storedGuilds,
-      skippedGuilds: guilds - storedGuilds,
+      storedGuilds: progress.storedGuilds,
+      skippedGuilds: progress.skippedGuilds,
     })
   } catch {
     // telemetry never decides the outcome of committed work
@@ -123,11 +177,17 @@ function createSlice(
   // each claim gets its own reservation keys, a deferred attempt keeps its attempt number
   const admitSource = tools.createSourceAdmitter(`weekly-snapshot:${lease.leaseToken}`)
 
-  return { weekStarting, dependencies, source: dependencies.createAdmittedSource(admitSource), tools }
+  const fetcher: GuildStatsFetcher = {
+    source: dependencies.createAdmittedSource(admitSource),
+    waitBeforeRetry: dependencies.waitBeforeGuildRetry,
+    signal: tools.signal,
+  }
+
+  return { weekStarting, dependencies, fetcher, tools }
 }
 
-// stores one slice of guilds per attempt and resumes after the last stored guild, so a yield, a failure or a lost
-// lease only costs the guild in flight
+// stores one slice of guilds per attempt and resumes after the last stored or skipped guild, so a yield, a failure
+// or a lost lease only costs the guilds not yet recorded
 async function runWeeklySnapshot(
   dependencies: ClanWeeklySnapshotJobDependencies,
   lease: WeeklySnapshotLease,
@@ -140,9 +200,9 @@ async function runWeeklySnapshot(
 
   const clanIds = await dependencies.snapshots.listClansAfter(run.lastClanId, dependencies.sliceGuilds)
   const slice = createSlice(dependencies, lease, tools, weekStarting)
-  const storedGuilds = await snapshotGuilds(slice, clanIds)
+  const progress = await snapshotGuilds(slice, clanIds)
 
-  logSlice(slice, clanIds.length, storedGuilds)
+  logSlice(slice, progress)
 
   if (clanIds.length === dependencies.sliceGuilds) throw new ClanWeeklySnapshotYield(weekStarting)
 
@@ -151,27 +211,13 @@ async function runWeeklySnapshot(
   return completeOperation(lease, tools)
 }
 
-// null leaves the error to the dispatcher's source and execution rules
-async function decideSnapshotFailure(error: unknown): Promise<FailureDecision | null> {
-  if (error instanceof JobLeaseLostError) return { action: 'lease-lost' }
-
-  if (!(error instanceof ClanWeeklySnapshotYield)) return null
-
-  return {
-    action: 'defer',
-    failure: { code: 'clan_weekly_snapshot_yield', message: error.message, retryable: true },
-    delayMs: 0,
-    category: 'admission_deferred',
-  }
-}
-
 export function createClanWeeklySnapshotJob(
   dependencies: ClanWeeklySnapshotJobDependencies,
 ): JobDefinition<ClanWeeklySnapshotPayload> {
   return defineJob<ClanWeeklySnapshotPayload>({
     ...clanWeeklySnapshotContract,
     failureCode: 'clan_weekly_snapshot_failed',
-    decideFailure: decideSnapshotFailure,
+    decideFailure: async (error) => decideSnapshotFailure(error, dependencies.retryTimings),
     run: (lease, tools) => runWeeklySnapshot(dependencies, lease, tools),
   })
 }
