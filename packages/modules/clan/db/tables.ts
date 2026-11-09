@@ -102,11 +102,12 @@ export const discoveryOutbox = clansSchema.table('discovery_outbox', {
   deliveredAt: timestamp('delivered_at', { withTimezone: true }),
 })
 
-// one row per week the snapshot job has started; last_clan_id is where the job carries on, and only weeks with a
-// completed_at feed the Last week figure
+// one row per week the snapshot job has started; last_clan_id is where the job carries on, source_down_since is when
+// the guilds started failing in a row, and only weeks with a completed_at feed the Last week figure
 export const weeklySnapshotRuns = clansSchema.table('weekly_snapshot_runs', {
   weekStarting: date('week_starting', { mode: 'string' }).primaryKey(),
   lastClanId: integer('last_clan_id').notNull().default(0),
+  sourceDownSince: timestamp('source_down_since', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
 })
 

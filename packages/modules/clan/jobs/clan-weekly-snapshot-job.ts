@@ -27,6 +27,11 @@ export const defaultClanWeeklySnapshotSliceGuilds = 100
 // over about 2.5 s, so five in a row is 15 failed calls: a 1% error rate or a few broken guilds won't get there
 export const clanWeeklySnapshotOutageGuilds = 5
 
+// how long the run waits out guilds failing in a row before it takes them for broken guilds instead. Brawlhalla's
+// maintenance and outages take an hour or two, so a failure that lasts longer is more likely five broken neighbours,
+// or a lasting error on the worker's side, than V1 being down
+export const clanWeeklySnapshotOutageLimitMs = 6 * 60 * 60 * 1000
+
 export type ClanWeeklySnapshotJobDependencies = {
   clans: Pick<PostgresClans, 'publishProfile' | 'recordProfileCheck'>
   snapshots: PostgresWeeklySnapshots
@@ -51,7 +56,13 @@ type SnapshotSlice = {
 
 type FailedGuild = { clanId: number; error: unknown }
 
-type SliceProgress = { storedGuilds: number; skippedGuilds: number; failedGuilds: FailedGuild[] }
+type SliceProgress = {
+  storedGuilds: number
+  skippedGuilds: number
+  failedGuilds: FailedGuild[]
+  // the run row notes when guilds started failing in a row, until one answers
+  isSourceDown: boolean
+}
 
 function weekStartingOf(lease: WeeklySnapshotLease): string {
   const windowAt = new Date(lease.scheduleWindowAt ?? lease.effectCreatedAt)
@@ -121,14 +132,37 @@ async function skipFailedGuildsAtSliceEnd(
   if (isLastSlice || !hasMovedOn) await skipFailedGuilds(slice, progress)
 }
 
-function throwIfSourceDown(slice: SnapshotSlice, progress: SliceProgress): void {
+// past the limit only the first guild is skipped, and the run still waits: an outage that outlasts it loses one guild
+// per wait, while broken guilds are all skipped once the guild after them answers
+async function skipFirstFailedGuild(slice: SnapshotSlice, progress: SliceProgress): Promise<void> {
+  const [firstGuild] = progress.failedGuilds
+
+  if (!firstGuild) return
+
+  await skipGuild(slice, firstGuild.clanId, firstGuild.error)
+  progress.skippedGuilds += 1
+}
+
+async function deferIfSourceDown(slice: SnapshotSlice, progress: SliceProgress): Promise<void> {
   const { failedGuilds } = progress
 
   if (failedGuilds.length < clanWeeklySnapshotOutageGuilds) return
 
+  const downForMs = await slice.dependencies.snapshots.markSourceDown(slice.weekStarting)
+
+  if (downForMs >= clanWeeklySnapshotOutageLimitMs) await skipFirstFailedGuild(slice, progress)
+
   const lastError = failedGuilds.at(-1)?.error
 
   throw new ClanWeeklySnapshotSourceDown(slice.weekStarting, failedGuilds.length, lastError)
+}
+
+// a guild that answers shows V1 is up, so guilds failing in a row later start their own clock
+async function clearSourceDown(slice: SnapshotSlice, progress: SliceProgress): Promise<void> {
+  if (!progress.isSourceDown) return
+
+  await slice.dependencies.snapshots.clearSourceDown(slice.weekStarting)
+  progress.isSourceDown = false
 }
 
 async function snapshotGuild(slice: SnapshotSlice, progress: SliceProgress, clanId: number): Promise<void> {
@@ -136,20 +170,21 @@ async function snapshotGuild(slice: SnapshotSlice, progress: SliceProgress, clan
 
   if ('error' in fetched) {
     progress.failedGuilds.push({ clanId, error: fetched.error })
-    throwIfSourceDown(slice, progress)
+    await deferIfSourceDown(slice, progress)
 
     return
   }
 
   await skipFailedGuilds(slice, progress)
+  await clearSourceDown(slice, progress)
 
   if (await saveGuild(slice, clanId, fetched.payload)) progress.storedGuilds += 1
   else progress.skippedGuilds += 1
 }
 
-async function snapshotGuilds(slice: SnapshotSlice, clanIds: number[]): Promise<SliceProgress> {
+async function snapshotGuilds(slice: SnapshotSlice, clanIds: number[], isSourceDown: boolean): Promise<SliceProgress> {
   const { dependencies, tools } = slice
-  const progress: SliceProgress = { storedGuilds: 0, skippedGuilds: 0, failedGuilds: [] }
+  const progress: SliceProgress = { storedGuilds: 0, skippedGuilds: 0, failedGuilds: [], isSourceDown }
 
   for (const [index, clanId] of clanIds.entries()) {
     if (index > 0) await dependencies.waitBetweenGuilds(dependencies.guildDelayMs, tools.signal)
@@ -214,7 +249,7 @@ async function runWeeklySnapshot(
 
   const clanIds = await dependencies.snapshots.listClansAfter(run.lastClanId, dependencies.sliceGuilds)
   const slice = createSlice(dependencies, lease, tools, weekStarting)
-  const progress = await snapshotGuilds(slice, clanIds)
+  const progress = await snapshotGuilds(slice, clanIds, run.isSourceDown)
 
   logSlice(slice, progress)
 

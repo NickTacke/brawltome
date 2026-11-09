@@ -202,6 +202,24 @@ async function readOperation() {
   return operation
 }
 
+// moves the start of the outage the run recorded back, as if V1 had been failing it that long
+async function backdateSourceDown(weekStarting: string, hours: number): Promise<void> {
+  await database.sql`
+    UPDATE clans.weekly_snapshot_runs
+    SET source_down_since = clock_timestamp() - make_interval(hours => ${hours})
+    WHERE week_starting = ${weekStarting}
+  `
+}
+
+async function readSourceDownMinutes(weekStarting: string): Promise<number | null> {
+  const [run] = await database.sql<{ minutes: number | null }[]>`
+    SELECT (extract(epoch FROM clock_timestamp() - source_down_since) / 60)::float8 AS minutes
+    FROM clans.weekly_snapshot_runs WHERE week_starting = ${weekStarting}
+  `
+
+  return run?.minutes ?? null
+}
+
 async function makeOperationDue(): Promise<void> {
   await database.sql`UPDATE queue.operations SET available_at = clock_timestamp() WHERE kind = 'clan-weekly-snapshot'`
 }
@@ -541,6 +559,73 @@ describe('clan weekly snapshot job', () => {
     expect(await readOperation()).toMatchObject({ attemptCount: 1, errorCode: 'clan_weekly_snapshot_failed' })
     expect(await readProfileCheck(741)).toBeNull()
 
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toHaveLength(clanIds.length)
+  })
+
+  test('skips the first of the failing guilds once they outlast the outage limit, then moves on', async () => {
+    const failingClanIds = Array.from({ length: clanWeeklySnapshotOutageGuilds }, (_, index) => 602 + index)
+    const lastClanId = 602 + clanWeeklySnapshotOutageGuilds
+
+    for (const clanId of [601, ...failingClanIds, lastClanId]) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>(failingClanIds.map((clanId) => [clanId, 'unavailable']))
+
+    answers.set(601, { guildPoints: '1' })
+    answers.set(lastClanId, { guildPoints: '2' })
+
+    const { job, queue, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'outage-outlasted')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(await readProfileCheck(602)).toBeNull()
+
+    await backdateSourceDown(week, 7)
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect((await readProfileCheck(602))?.checkProvenance).toMatchObject({ outcome: 'ambiguous-failure' })
+    expect(await readProfileCheck(603)).toBeNull()
+    expect(await readOperation()).toMatchObject({ attemptCount: 0 })
+
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+
+    expect(await readSnapshots(week)).toEqual([
+      { clanId: 601, guildPoints: '1' },
+      { clanId: lastClanId, guildPoints: '2' },
+    ])
+  })
+
+  test('starts the outage clock again once a guild answers', async () => {
+    const clanIds = Array.from({ length: clanWeeklySnapshotOutageGuilds + 2 }, (_, index) => 621 + index)
+
+    for (const clanId of clanIds) await storeGuild(clanId)
+
+    const answers = new Map<number, SourceAnswer>(clanIds.map((clanId) => [clanId, 'unavailable']))
+    const { job, queue, sourceAdmission } = createHarness(answers)
+
+    const week = await scheduleWeek(queue, 'outage-ended')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+
+    await backdateSourceDown(week, 7)
+    answers.set(621, { guildPoints: '1' })
+    await makeOperationDue()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('retry')
+    expect(await readProfileCheck(622)).toBeNull()
+    expect(await readSourceDownMinutes(week)).toBeLessThan(1)
+
+    for (const clanId of clanIds) answers.set(clanId, { guildPoints: `${clanId}` })
     await makeOperationDue()
 
     expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
