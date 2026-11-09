@@ -260,6 +260,68 @@ services:
         reservations:
           memory: 192M
 
+  site:
+    image: ghcr.io/nicktacke/brawltome-site:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
+    environment:
+      INTERNAL_API_URL: http://api:3000
+      NODE_ENV: production
+      PORT: "3000"
+    secrets:
+      - internal_api_secret
+    # Traefik reaches containers on dokploy-network. Dokploy only adds it, with its labels, to services that have a
+    # Dokploy domain, so site declares its own routing and it moves with the repo if the stack leaves Dokploy
+    networks:
+      - application
+      - dokploy-network
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - const r = await fetch('http://localhost:3000/health/live'); if (!r.ok) process.exit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+      start_interval: 2s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 20s
+    # everything else on brawltome.app falls through to Dokploy's Host rule for web, whose default priority is its
+    # length. only the .svg weapon icons move, web serves its own .png ones there. $$ is a literal $ in compose, and
+    # verify-rendered-topology.ts pins these labels exactly
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.brawltome-site.rule=Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || PathPrefix(`/images/flags/`) || PathRegexp(`^/images/weapons/[^/]+\.svg$$`))
+      - traefik.http.routers.brawltome-site.priority=1000
+      - traefik.http.routers.brawltome-site.entrypoints=websecure
+      - traefik.http.routers.brawltome-site.tls.certresolver=letsencrypt
+      - traefik.http.routers.brawltome-site.service=brawltome-site
+      - traefik.http.services.brawltome-site.loadbalancer.server.port=3000
+    restart: unless-stopped
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,uid=1000,gid=1000,mode=0750,size=32m
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 384M
+          pids: 128
+        reservations:
+          memory: 128M
+
   operations-worker:
     image: ghcr.io/nicktacke/brawltome-operations-worker:${BRAWLTOME_IMAGE_TAG:?Set the release commit}
     environment:
@@ -392,6 +454,9 @@ networks:
   observability:
     external: true
     name: brawltome-observability
+  dokploy-network:
+    external: true
+    name: dokploy-network
 
 secrets:
   brawlhalla_api_key:

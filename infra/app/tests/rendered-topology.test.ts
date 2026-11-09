@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { verifyAppRenderedTopology } from '../verify-rendered-topology'
 
@@ -37,12 +38,18 @@ function services(topology: Record<string, unknown>): Record<string, Record<stri
   return topology.services as Record<string, Record<string, unknown>>
 }
 
+function siteLabels(topology: Record<string, unknown>): Record<string, string> {
+  return services(topology).site.labels as Record<string, string>
+}
+
+const siteRuleLabel = 'traefik.http.routers.brawltome-site.rule'
+
 describe('rendered application topology', () => {
   beforeAll(() => {
     renderedTopology()
   }, 60_000)
 
-  test('accepts the exact internal-only four-unit rollout', () => {
+  test('accepts the exact rollout with site as the only service routed from compose', () => {
     expect(verifyAppRenderedTopology(renderedTopology())).toEqual([])
   })
 
@@ -141,6 +148,110 @@ describe('rendered application topology', () => {
     }
 
     expect(verifyAppRenderedTopology(topology)).toEqual([])
+  })
+
+  test('routes exactly the approved brawltome.app paths to site, above the Dokploy host rule', () => {
+    const labels = siteLabels(renderedTopology())
+
+    expect(labels).toEqual({
+      'traefik.docker.network': 'dokploy-network',
+      'traefik.enable': 'true',
+      'traefik.http.routers.brawltome-site.entrypoints': 'websecure',
+      'traefik.http.routers.brawltome-site.priority': '1000',
+      [siteRuleLabel]:
+        'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || ' +
+        'Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
+        'PathPrefix(`/images/flags/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))',
+      'traefik.http.routers.brawltome-site.service': 'brawltome-site',
+      'traefik.http.routers.brawltome-site.tls.certresolver': 'letsencrypt',
+      'traefik.http.services.brawltome-site.loadbalancer.server.port': '3000',
+    })
+  })
+
+  test('sends the site weapon icons to site and leaves every web weapon icon on web', () => {
+    // the rendered label keeps compose's $$ escape for the end anchor
+    const rule = siteLabels(renderedTopology())[siteRuleLabel].replaceAll('$$', '$')
+    const weaponPattern = new RegExp(/PathRegexp\(`([^`]+)`\)/.exec(rule)?.[1] ?? '$^')
+
+    const iconPaths = (app: string) =>
+      readdirSync(resolve(root, `apps/${app}/public/images/weapons`)).map((file) => `/images/weapons/${file}`)
+
+    expect(iconPaths('site').filter((path) => !weaponPattern.test(path))).toEqual([])
+    expect(iconPaths('web').filter((path) => weaponPattern.test(path))).toEqual([])
+  })
+
+  test.each([
+    ['a widened rule', siteRuleLabel, 'Host(`brawltome.app`)'],
+    ['a lower priority', 'traefik.http.routers.brawltome-site.priority', '1'],
+    ['a plain http entrypoint', 'traefik.http.routers.brawltome-site.entrypoints', 'web'],
+    ['an extra router', 'traefik.http.routers.brawltome-site-extra.rule', 'PathPrefix(`/`)'],
+    ['an extra middleware', 'traefik.http.middlewares.brawltome-site.headers.customrequestheaders.x', 'y'],
+  ])('rejects site routing drift: %s', (_drift, label, value) => {
+    const topology = renderedTopology()
+
+    services(topology).site.labels = { ...siteLabels(topology), [label]: value }
+
+    expect(verifyAppRenderedTopology(topology)).toContain('site labels must match the approved router exactly')
+  })
+
+  test('rejects a site without its router', () => {
+    const topology = renderedTopology()
+
+    delete services(topology).site.labels
+
+    expect(verifyAppRenderedTopology(topology)).toContain('site labels must match the approved router exactly')
+  })
+
+  test('keeps the Dokploy network on site only and external', () => {
+    const topology = renderedTopology()
+    const current = services(topology)
+    const networks = topology.networks as Record<string, Record<string, unknown>>
+
+    current.web.networks = { ...(current.web.networks as Record<string, unknown>), 'dokploy-network': null }
+    current.api.networks = { ...(current.api.networks as Record<string, unknown>), 'dokploy-network': null }
+    networks['dokploy-network'] = { name: 'dokploy-network' }
+
+    expect(verifyAppRenderedTopology(topology)).toEqual(
+      expect.arrayContaining([
+        'web networks must match the approved topology',
+        'api networks must match the approved topology',
+        'dokploy-network must be external network dokploy-network',
+      ]),
+    )
+  })
+
+  test('rejects site secret, network, health, hardening, and runtime drift', () => {
+    const topology = renderedTopology()
+    const site = services(topology).site
+    const environment = site.environment as Record<string, string>
+    const healthcheck = site.healthcheck as Record<string, unknown>
+
+    site.secrets = [{ source: 'runtime_database_url', target: '/run/secrets/runtime_database_url' }]
+    site.networks = { application: null, 'dokploy-network': null, observability: null }
+    healthcheck.test = ['CMD', 'bun', '-e', "await fetch('http://localhost:3000/privacy')"]
+    site.read_only = false
+    site.cap_drop = []
+    site.depends_on = {}
+    site.stop_grace_period = '1s'
+    environment.INTERNAL_API_URL = 'https://api.brawltome.app'
+    site.image = 'ghcr.io/nicktacke/brawltome-web:' + '0'.repeat(40)
+    site.deploy = { replicas: 2 }
+
+    expect(verifyAppRenderedTopology(topology)).toEqual(
+      expect.arrayContaining([
+        'site secrets must match approved attachments exactly',
+        'site networks must match the approved topology',
+        'site health check must use /health/live',
+        'site root filesystem must remain read-only',
+        'site must drop all capabilities',
+        'site dependencies must match the approved topology',
+        'site must retain stop grace period 20s',
+        'site must use the internal API origin for server calls',
+        'site must use image ghcr.io/nicktacke/brawltome-site tagged with the release commit',
+        'site must have exactly one replica',
+        'site must retain bounded memory and PID resources',
+      ]),
+    )
   })
 
   test('rejects quota, secret, image, and storage drift', () => {
