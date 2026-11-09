@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  clanWeeklySnapshotScheduleDefinition,
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
@@ -299,6 +300,24 @@ describe('operations worker configuration', () => {
       payload: { retentionHours: 24, maxGenerations: 20 },
       provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
     })
+  })
+
+  test('defines one weekly clan snapshot schedule, due on Thursdays after the reset', () => {
+    const definition = clanWeeklySnapshotScheduleDefinition()
+
+    expect(definition).toEqual({
+      kind: 'clan-weekly-snapshot',
+      scheduleKey: 'clans:weekly-snapshot:v1',
+      operationKeyPrefix: 'clans:weekly-snapshot',
+      workClass: 'maintenance',
+      intervalMs: 7 * 24 * 60 * 60 * 1000,
+      firstDueAt: '2026-11-19T10:30:00.000Z',
+      payload: {},
+      provenance: { source: 'clan-weekly-snapshot-schedule', requestedBy: 'guild-last-week' },
+      maxAttempts: 20,
+    })
+
+    expect(new Date(definition.firstDueAt).getUTCDay()).toBe(4)
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {

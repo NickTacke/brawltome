@@ -2,6 +2,7 @@ import { parseBoundedInteger, parsePositiveInteger } from '@brawltome/foundation
 import {
   type AdmissionConfig,
   type BackgroundWorkClass,
+  type CreateClanWeeklySnapshotSchedule,
   type CreateLeaderboardDeepCrawlSchedule,
   type CreateRankingRetentionSchedule,
   type LeaderboardDeepCrawlMode,
@@ -141,6 +142,33 @@ export function rankingRetentionScheduleDefinition(config: RankingRetentionConfi
     firstDueAt: config.firstDueAt,
     payload: { retentionHours: config.retentionHours, maxGenerations: config.maxGenerations },
     provenance: { source: 'ranking-retention-schedule', requestedBy: 'ranking-retention' },
+  }
+}
+
+// pause between two guilds: about 2 V1 calls a second, as gentle as a deep crawl, which leaves room for both under the
+// 1800 calls per 5 minutes; 30,000 guilds take about 4 hours
+export const clanWeeklySnapshotGuildDelayMs = 500
+
+const weekMs = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Once a week, half an hour after 10:00 UTC on Thursday. The in-game week turns over on Thursday with the daily reset,
+ * 5am Eastern: 09:00 UTC in summer and 10:00 UTC in winter. A fixed UTC time can't follow daylight saving, so it sits
+ * after the later of the two. The first run is a week after the release that adds it, so the old worker, which doesn't
+ * know the kind, is gone by then. Up to 20 attempts, since a run makes thousands of calls and every one that fails
+ * spends one.
+ */
+export function clanWeeklySnapshotScheduleDefinition(): CreateClanWeeklySnapshotSchedule {
+  return {
+    kind: 'clan-weekly-snapshot',
+    scheduleKey: 'clans:weekly-snapshot:v1',
+    operationKeyPrefix: 'clans:weekly-snapshot',
+    workClass: 'maintenance',
+    intervalMs: weekMs,
+    firstDueAt: '2026-11-19T10:30:00.000Z',
+    payload: {},
+    provenance: { source: 'clan-weekly-snapshot-schedule', requestedBy: 'guild-last-week' },
+    maxAttempts: 20,
   }
 }
 

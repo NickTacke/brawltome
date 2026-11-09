@@ -54,6 +54,14 @@ const idleAccounts: WorkerAccountsDependencies = {
   primaryMonitoring: { readSnapshot: async () => ({ observedAt: new Date(0), targets: [] }) },
 }
 
+export const idleClanWeeklySnapshotDependencies: WorkerClanDependencies['weeklySnapshot'] = {
+  snapshots: {} as WorkerClanDependencies['weeklySnapshot']['snapshots'],
+  sliceGuilds: 100,
+  guildDelayMs: 0,
+  waitBetweenGuilds: async () => {},
+  telemetry: idleTelemetry,
+}
+
 export const idlePlayerDependencies: WorkerPlayerDependencies = {
   rankedPlayers: {} as WorkerPlayerDependencies['rankedPlayers'],
   careerPlayers: {} as WorkerPlayerDependencies['careerPlayers'],
@@ -130,6 +138,7 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
     clan: {
       clans: {} as WorkerClanDependencies['clans'],
       createBrawlhallaClient: () => ({}) as ReturnType<WorkerClanDependencies['createBrawlhallaClient']>,
+      weeklySnapshot: idleClanWeeklySnapshotDependencies,
     },
     accounts: idleAccounts,
     player: idlePlayerDependencies,
