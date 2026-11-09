@@ -1,11 +1,12 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { PlayerPage as PlayerProfile } from '../components/player/PlayerPage'
+import { usePlayerView } from '../components/player/use-player-view'
 import { RefreshChallenge } from '../components/refresh/RefreshChallenge'
 import { isPlayerRefreshed, isPlayerStale } from '../components/refresh/staleness'
 import { useLiveRefresh } from '../components/refresh/use-live-refresh'
 import { fixEncoding, parseEntityId } from '../lib'
 import type { PlayerPage } from '../server/load-player'
-import { getIsUnarmedExcluded, getPlayer, refreshPlayer } from '../server/players'
+import { getIsUnarmedExcluded, getPlayer, recordPlayerView, refreshPlayer } from '../server/players'
 
 function pageTitle(playerName: string | undefined, status: string): string {
   if (playerName) return `${fixEncoding(playerName)} | BrawlTome`
@@ -58,10 +59,14 @@ function PlayerLoadError() {
   )
 }
 
+const countView = (playerId: number) => recordPlayerView({ data: playerId })
+
 type LivePlayerProps = PlayerPage & { isUnarmedExcluded: boolean }
 
 function LivePlayer({ isUnarmedExcluded, ...page }: LivePlayerProps) {
   const playerId = page.player.brawlhallaId
+
+  usePlayerView(playerId, countView)
 
   const live = useLiveRefresh({
     initial: page,

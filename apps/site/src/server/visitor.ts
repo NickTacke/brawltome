@@ -13,6 +13,7 @@ export function currentVisitor(): Visitor {
     realIp: getRequestHeader('x-real-ip'),
     cloudflareIp: getRequestHeader('cf-connecting-ip'),
     peerIp: getRequestIP(),
+    userAgent: getRequestHeader('user-agent'),
   })
 
   const keepRefreshTrust = (token: string) =>
