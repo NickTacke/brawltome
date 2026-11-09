@@ -49,17 +49,21 @@ Everything other packages may import is exported from `index.ts`, and only what 
 
 ## oRPC procedures
 
-| Procedure                   | HTTP                        | Returns                                    |
-| --------------------------- | --------------------------- | ------------------------------------------ |
-| `clan.byId`                 | `GET /v1/clans/{id}`        | the clan profile, or null if never fetched |
-| `clan.membershipByPlayerId` | `GET /v1/players/{id}/clan` | the player's clan id and name, or null     |
+| Procedure                   | HTTP                          | Returns                                                |
+| --------------------------- | ----------------------------- | ------------------------------------------------------ |
+| `clan.byId`                 | `GET /v1/clans/{id}`          | the clan profile, or null if never fetched             |
+| `clan.membershipByPlayerId` | `GET /v1/players/{id}/clan`   | the player's clan id and name, or null                 |
+| `clan.standingById`         | `GET /v1/clans/{id}/standing` | the clan's guild points and lifetime xp ranks, or null |
 
-Both are also served at `/rpc/clan/*`. Both use `internalProcedure` from `@brawltome/foundation`, so they need the
-internal secret.
+All three are also served at `/rpc/clan/*`. All three use `internalProcedure` from `@brawltome/foundation`, so they
+need the internal secret.
 
-Nothing calls the oRPC versions yet. The website's server (the clan page, and the player page for the membership) and
-the Discord bot's `/clan` command still call the tRPC versions in `apps/api/src/router/clan.router.ts`. Those call the
-same read functions, `readClanProfile` and `readPlayerClanMembership`, so both routes return the same data.
+`clan.standingById` has no tRPC version. It ranks on the stored `clan_lifetime_xp`, the number `clan.byId` shows.
+
+`apps/site` is the only caller of the oRPC versions so far, and it isn't serving traffic yet. The website's server
+(the clan page, and the player page for the membership) and the Discord bot's `/clan` command still call the tRPC
+versions in `apps/api/src/router/clan.router.ts`. Those call the same read functions, `readClanProfile` and
+`readPlayerClanMembership`, so both routes return the same data.
 
 ## Refresh
 
