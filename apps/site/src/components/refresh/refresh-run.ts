@@ -14,6 +14,10 @@ export type RefreshRun = {
   setStatus: (status: RefreshStatus) => void
 }
 
+// what asking for a refresh needs, and what reloading the data until it changes needs
+type AskingRun = Pick<RefreshRun, 'request' | 'solveChallenge' | 'wait' | 'isCancelled'>
+type PollingRun = Pick<RefreshRun, 'reload' | 'isRefreshed' | 'wait' | 'isCancelled'>
+
 type RetryableAnswer = Extract<RefreshAnswer, { kind: 'refused' | 'unavailable' }>
 
 // the refresh job retries the game's api for about a minute, so this leaves room for a few of its rounds
@@ -30,7 +34,7 @@ function isRetryable(answer: RefreshAnswer): answer is RetryableAnswer {
   return answer.retryAfterSeconds <= longestAutomaticRetrySeconds
 }
 
-async function ask(run: RefreshRun, turnstileToken?: string): Promise<RefreshAnswer> {
+async function ask(run: AskingRun, turnstileToken?: string): Promise<RefreshAnswer> {
   try {
     return await run.request(turnstileToken)
   } catch {
@@ -38,7 +42,7 @@ async function ask(run: RefreshRun, turnstileToken?: string): Promise<RefreshAns
   }
 }
 
-async function askWithChallenge(run: RefreshRun): Promise<RefreshAnswer> {
+async function askWithChallenge(run: AskingRun): Promise<RefreshAnswer> {
   const answer = await ask(run)
 
   if (answer.kind !== 'verify') return answer
@@ -50,7 +54,8 @@ async function askWithChallenge(run: RefreshRun): Promise<RefreshAnswer> {
   return ask(run, turnstileToken)
 }
 
-async function askUntilSettled(run: RefreshRun): Promise<RefreshAnswer> {
+/** Asks for a refresh, answering a challenge and retrying short refusals, until the api gives a lasting answer. */
+export async function askUntilSettled(run: AskingRun): Promise<RefreshAnswer> {
   let answer = await askWithChallenge(run)
 
   for (let retry = 0; retry < automaticRetries && isRetryable(answer); retry += 1) {
@@ -65,7 +70,7 @@ async function askUntilSettled(run: RefreshRun): Promise<RefreshAnswer> {
 }
 
 // a failed load keeps the data already on screen, the next look may work
-async function reload(run: RefreshRun): Promise<void> {
+export async function reload(run: Pick<RefreshRun, 'reload'>): Promise<void> {
   try {
     await run.reload()
   } catch {
@@ -74,7 +79,7 @@ async function reload(run: RefreshRun): Promise<void> {
 }
 
 // starts at the api's hint and backs off a second per look, so a slow refresh costs few reads
-async function pollUntilRefreshed(run: RefreshRun, firstDelaySeconds: number): Promise<boolean> {
+export async function pollUntilRefreshed(run: PollingRun, firstDelaySeconds: number): Promise<boolean> {
   let waitedMs = 0
 
   for (let look = 0; waitedMs < longestWaitMs; look += 1) {

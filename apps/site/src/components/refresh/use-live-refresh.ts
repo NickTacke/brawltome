@@ -23,11 +23,12 @@ type RunSetup<T> = {
   isCancelled: () => boolean
 }
 
-function waitFor(milliseconds: number): Promise<void> {
+export function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-function askForChallenge(siteKey: string | null, setChallenge: RunSetup<unknown>['setChallenge']) {
+/** Shows the challenge until the visitor settles it; without a site key there is nothing to show. */
+export function askForChallenge(siteKey: string | null, setChallenge: (challenge: Challenge | null) => void) {
   if (!siteKey) return Promise.resolve(null)
 
   return new Promise<string | null>((resolve) => {
