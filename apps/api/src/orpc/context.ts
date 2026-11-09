@@ -1,6 +1,6 @@
-import type { RequestContext } from '@brawltome/foundation'
+import { internalSecuritySchemeName, type RequestContext } from '@brawltome/foundation'
 import type { Telemetry } from '@brawltome/telemetry'
-import { os } from '@orpc/server'
+import { ORPCError, os } from '@orpc/server'
 import { internalSecretValid } from '../auth/internal-secret'
 import { readClientIp } from '../client-ip'
 
@@ -28,3 +28,14 @@ export function createOrpcContext(request: Request, options: OrpcContextOptions)
 }
 
 export const procedure = os.$context<OrpcContext>()
+
+/** The API's own procedures that only BrawlTome's services may call, guarded like foundation's internalProcedure. */
+export const internalApiProcedure = procedure
+  .$route({
+    spec: (operation) => ({ ...operation, security: [{ [internalSecuritySchemeName]: [] }] }),
+  })
+  .use(({ context, next }) => {
+    if (!context.isInternalCaller) throw new ORPCError('FORBIDDEN')
+
+    return next()
+  })

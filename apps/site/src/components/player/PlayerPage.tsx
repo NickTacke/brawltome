@@ -1,4 +1,5 @@
 import type { PlayerPage as PlayerPageData } from '../../server/load-player'
+import type { RefreshStatusProps } from '../refresh/RefreshStatus'
 import { Career } from './Career'
 import { Identity } from './Identity'
 import { LegendRoster } from './LegendRoster'
@@ -9,7 +10,7 @@ import { Teammates } from './Teammates'
 import { TwoVsTwo } from './TwoVsTwo'
 import { WeaponStrip } from './WeaponStrip'
 
-type PlayerPageProps = PlayerPageData & { isUnarmedExcluded: boolean }
+type PlayerPageProps = PlayerPageData & { isUnarmedExcluded: boolean; refresh: RefreshStatusProps }
 
 // wider than the shared page column, so the player page uses the space beside it on large screens
 const widePage =
@@ -31,7 +32,7 @@ const stackedSections =
   'divide-y divide-line/50 [&>*]:py-6 max-xl:[&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0'
 
 /** A profile: the player's identity and rank stay on the left while the stats scroll. */
-export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded }: PlayerPageProps) {
+export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded, refresh }: PlayerPageProps) {
   const standing = rankedStanding(player.currentSeason) ?? undefined
   const snapshot = player.currentSeason?.snapshot
   const legends = player.career?.snapshot?.legends ?? []
@@ -40,7 +41,7 @@ export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded }
   return (
     <div className={`${columns} ${widePage}`}>
       <aside className={`${sideLayout} ${sideSticky} ${sideSpacing}`}>
-        <Identity player={player} loadedAt={loadedAt} />
+        <Identity player={player} loadedAt={loadedAt} refresh={refresh} />
         <Career snapshot={player.career?.snapshot ?? null} />
         <Ranked standing={standing} />
         <TwoVsTwo

@@ -1,7 +1,11 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { PlayerPage as PlayerProfile } from '../components/player/PlayerPage'
+import { RefreshChallenge } from '../components/refresh/RefreshChallenge'
+import { isPlayerRefreshed, isPlayerStale } from '../components/refresh/staleness'
+import { useLiveRefresh } from '../components/refresh/use-live-refresh'
 import { fixEncoding, parseEntityId } from '../lib'
-import { getIsUnarmedExcluded, getPlayer } from '../server/players'
+import type { PlayerPage } from '../server/load-player'
+import { getIsUnarmedExcluded, getPlayer, refreshPlayer } from '../server/players'
 
 function pageTitle(playerName: string | undefined, status: string): string {
   if (playerName) return `${fixEncoding(playerName)} | BrawlTome`
@@ -54,8 +58,31 @@ function PlayerLoadError() {
   )
 }
 
+type LivePlayerProps = PlayerPage & { isUnarmedExcluded: boolean }
+
+function LivePlayer({ isUnarmedExcluded, ...page }: LivePlayerProps) {
+  const playerId = page.player.brawlhallaId
+
+  const live = useLiveRefresh({
+    initial: page,
+    isStale: (current) => isPlayerStale(current.player),
+    isRefreshed: (baseline, current) => isPlayerRefreshed(baseline.player, current.player),
+    load: () => getPlayer({ data: playerId }),
+    refresh: (turnstileToken) => refreshPlayer({ data: { id: playerId, turnstileToken } }),
+  })
+
+  const refresh = { status: live.status, onRetry: live.retry }
+
+  return (
+    <>
+      <PlayerProfile {...live.data} isUnarmedExcluded={isUnarmedExcluded} refresh={refresh} />
+      <RefreshChallenge challenge={live.challenge} />
+    </>
+  )
+}
+
 function PlayerRoute() {
   const page = Route.useLoaderData()
 
-  return <PlayerProfile key={page.player.brawlhallaId} {...page} />
+  return <LivePlayer key={page.player.brawlhallaId} {...page} />
 }

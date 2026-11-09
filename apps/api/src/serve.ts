@@ -36,6 +36,7 @@ import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
 import { createOrpcRoutes } from './orpc/mount'
 import { createOrpcRouter } from './orpc/router'
+import { createVisitorRefreshProcedures } from './orpc/visitor-refresh'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
@@ -104,7 +105,6 @@ const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
 const playerRefreshReservations = createPlayerRefreshReservations(database)
 const moduleRuntime: ModuleRuntime = { database }
-const orpcRouter = createOrpcRouter(apiModules, moduleRuntime)
 
 const postgresReadiness = createPostgresReadiness(
   database.sql,
@@ -152,6 +152,9 @@ const sharedCtx = {
   profileViews,
   leaderboardStandings,
 }
+
+const visitorRefresh = createVisitorRefreshProcedures({ ...sharedCtx, refreshTrustSecret })
+const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, { refresh: visitorRefresh })
 
 const app = new Hono()
 
@@ -305,6 +308,7 @@ const instrumentedFetch = instrumentHttpHandler(
     const verifiedRequest = requestWithVerifiedClientIp(
       request,
       server.current?.requestIP(request)?.address ?? '0.0.0.0',
+      process.env.INTERNAL_API_SECRET,
     )
 
     let pathname: string

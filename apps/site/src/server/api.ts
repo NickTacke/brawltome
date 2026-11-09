@@ -3,7 +3,8 @@ import type { ZodType } from 'zod'
 
 const defaultTimeoutMs = 10_000
 
-type RequestOptions = { timeoutMs?: number }
+// headers carry what the api needs to know about the visitor a call is made for
+type RequestOptions = { timeoutMs?: number; headers?: Record<string, string> }
 
 function readSetting(name: 'INTERNAL_API_URL' | 'INTERNAL_API_SECRET', description: string): string {
   const value = process.env[name]
@@ -47,12 +48,15 @@ async function requestApi<T>(
   init: RequestInit,
   schema: ZodType<T>,
   description: string,
-  { timeoutMs = defaultTimeoutMs }: RequestOptions,
+  { timeoutMs = defaultTimeoutMs, headers: extraHeaders = {} }: RequestOptions,
 ): Promise<T> {
   const apiUrl = readSetting('INTERNAL_API_URL', description)
   const internalSecret = readSetting('INTERNAL_API_SECRET', description)
 
-  const headers = new Headers(init.headers)
+  // the given headers go first, so they can never replace the secret or the content type
+  const headers = new Headers(extraHeaders)
+
+  for (const [name, value] of new Headers(init.headers)) headers.set(name, value)
 
   headers.set('x-internal-secret', internalSecret)
 

@@ -3,8 +3,11 @@ import { getCookie } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { excludeUnarmedCookie } from '../components/player/player-format'
 import { loadPlayer } from './load-player'
+import { requestRefresh } from './request-refresh'
+import { currentVisitor } from './visitor'
 
 const playerIdSchema = z.number().int().positive().max(2_147_483_647)
+const refreshRequestSchema = z.object({ id: playerIdSchema, turnstileToken: z.string().max(2_048).optional() })
 
 export const getPlayer = createServerFn({ method: 'GET' })
   .validator(playerIdSchema)
@@ -14,3 +17,8 @@ export const getPlayer = createServerFn({ method: 'GET' })
 export const getIsUnarmedExcluded = createServerFn({ method: 'GET' }).handler(
   () => getCookie(excludeUnarmedCookie) !== '0',
 )
+
+// a post, so a prefetch or a crawler following links never asks for one
+export const refreshPlayer = createServerFn({ method: 'POST' })
+  .validator(refreshRequestSchema)
+  .handler(({ data }) => requestRefresh('players', data, currentVisitor()))
