@@ -12,6 +12,8 @@ export type GuildPage = {
   clan: ClanProfileContract
   standing: ClanStandingContract | null
   summaries: PlayerRankedSummaryContract[]
+  // one clock for anything that depends on the time, so the server render and hydration can't disagree
+  loadedAt: string
 }
 
 // the most ids the ranked summaries read accepts in one request
@@ -86,5 +88,5 @@ export async function loadGuild(guildId: number): Promise<GuildPage | null> {
   const memberIds = clan.members.map((member) => member.brawlhallaId)
   const [standing, summaries] = await Promise.all([readStanding(guildId), readSummaries(guildId, memberIds)])
 
-  return { clan, standing, summaries }
+  return { clan, standing, summaries, loadedAt: new Date().toISOString() }
 }

@@ -134,6 +134,17 @@ describe('loadGuild', () => {
     expect(guild?.summaries.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1, 2])
   })
 
+  test('stamps the time the page was loaded', async () => {
+    stubApi((call) => healthyAnswer(2, call))
+
+    const before = Date.now()
+    const guild = await loadGuild(42)
+    const loadedAt = new Date(guild?.loadedAt ?? 0).getTime()
+
+    expect(loadedAt).toBeGreaterThanOrEqual(before)
+    expect(loadedAt).toBeLessThanOrEqual(Date.now())
+  })
+
   test('an unknown guild is null and makes no further calls', async () => {
     const calls = stubApi(() => ({ status: 200, body: null }))
 
