@@ -48,6 +48,6 @@ describe('valhallanEvidenceById', () => {
 
   test('is served under the ranking module', () => {
     expect(rankingModule.name).toBe('ranking')
-    expect(Object.keys(rankingModule.routes({ database }))).toEqual(['valhallanEvidenceById'])
+    expect(Object.keys(rankingModule.routes({ database }))).toEqual(['valhallanEvidenceById', 'leaderboardPage'])
   })
 })
