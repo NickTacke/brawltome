@@ -46,12 +46,13 @@ describe('oRPC router built from a module list', () => {
   test('puts the procedures of each module under its name', () => {
     const router = createOrpcRouter(apiModules, runtime)
 
-    expect(Object.keys(router).sort()).toEqual(['clan', 'status'])
+    expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'status'])
     expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId'])
+    expect(Object.keys(router.player)).toEqual(['rankedSummaries'])
   })
 
   test('types the router with exactly the served keys', () => {
-    const servedKeys: (keyof OrpcRouter)[] = ['status', 'clan']
+    const servedKeys: (keyof OrpcRouter)[] = ['status', 'clan', 'player']
 
     // @ts-expect-error a module name that widened to string would let any key through
     const unservedKey: keyof OrpcRouter = 'nothing'
@@ -69,7 +70,7 @@ describe('oRPC router built from a module list', () => {
     const response = await app.fetch(new Request('http://api.test/v1/status'))
 
     expect(router).not.toHaveProperty('clan')
-    expect(Object.keys(router)).toEqual(['status'])
+    expect(Object.keys(router).sort()).toEqual(['player', 'status'])
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ status: 'ready' })
   })
