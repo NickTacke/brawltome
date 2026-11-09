@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ClanIdRouteImport } from './routes/clan.$id'
 import { Route as GuildIdRouteImport } from './routes/guild.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClanIdRoute = ClanIdRouteImport.update({
+  id: '/clan/$id',
+  path: '/clan/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuildIdRoute = GuildIdRouteImport.update({
@@ -25,27 +31,31 @@ const GuildIdRoute = GuildIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/guild/$id'
+  fullPaths: '/' | '/clan/$id' | '/guild/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/guild/$id'
-  id: '__root__' | '/' | '/guild/$id'
+  to: '/' | '/clan/$id' | '/guild/$id'
+  id: '__root__' | '/' | '/clan/$id' | '/guild/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClanIdRoute: typeof ClanIdRoute
   GuildIdRoute: typeof GuildIdRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clan/$id': {
+      id: '/clan/$id'
+      path: '/clan/$id'
+      fullPath: '/clan/$id'
+      preLoaderRoute: typeof ClanIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/guild/$id': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClanIdRoute: ClanIdRoute,
   GuildIdRoute: GuildIdRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { isNotFound } from '@tanstack/react-router'
+import { isNotFound, isRedirect } from '@tanstack/react-router'
 import { parseGuildId } from '../src/components/guild/guild-id'
+import { Route as ClanRoute } from '../src/routes/clan.$id'
 import { Route as GuildRoute } from '../src/routes/guild.$id'
 
 type RouteHook = (context: { params: { id: string } }) => unknown
@@ -42,5 +43,14 @@ describe('guild route', () => {
 
     expect(isNotFound(await failureOf(GuildRoute.options.loader, id))).toBe(true)
     expect(fetchStub).not.toHaveBeenCalled()
+  })
+})
+
+describe('clan route', () => {
+  test('redirects permanently to the guild page', async () => {
+    const failure = await failureOf(ClanRoute.options.beforeLoad, '387803')
+
+    expect(isRedirect(failure)).toBe(true)
+    expect(failure).toMatchObject({ status: 301, options: { to: '/guild/$id', params: { id: '387803' } } })
   })
 })
