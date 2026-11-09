@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { BhApiHttpError } from '@brawltome/bhapi'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { type AdmissionConfig, queueModule } from '@brawltome/queue'
+import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createPostgresStatistics, createStatisticsReservations, statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
 import { reconcileStatisticsCohort } from '../src/statistics-cohort-reconciliation'
-import { collectStatisticsEvidence } from '../src/statistics-collection-source'
+import {
+  collectStatisticsEvidence,
+  createStatisticsCollection,
+  STATISTICS_COLLECTION_SPACING_MS,
+} from '../src/statistics-collection-source'
 import { createStatisticsTestJobs, createTestQueue, runOneWithJobs } from './fixtures/queue'
 
 const admission: AdmissionConfig = {
@@ -48,7 +53,7 @@ let sql: ReturnType<typeof postgres>
 beforeEach(async () => {
   database = await createTestDatabase({
     label: 'statistics_collection_retry',
-    modules: [queueModule, statisticsModule],
+    modules: [queueModule, requestAdmissionModule, statisticsModule],
   })
 
   sql = postgres(database.connectionString, { max: 1 })
@@ -59,21 +64,34 @@ afterEach(async () => {
   await database.drop()
 }, 30_000)
 
+type PlayerSource = Parameters<typeof collectStatisticsEvidence>[0]
+
+// every source call runs at once, for tests that drive one player through its retries
+function collectWithoutPace(source: PlayerSource) {
+  return {
+    collectionPace: { waitMsForTurn: () => 0 },
+    collectEvidence: (lease: Parameters<typeof collectStatisticsEvidence>[1]) =>
+      collectStatisticsEvidence(source, lease),
+  }
+}
+
 // one player, so the ranked collection is the only operation whose source calls are scripted to fail
-async function startCollection(rankedFailures: number) {
+async function startCollection(
+  rankedFailures: number,
+  wireCollection: (source: PlayerSource) => Pick<ReturnType<typeof createStatisticsCollection>, 'collectEvidence'> & {
+    collectionPace: { waitMsForTurn(operationId: string): number }
+  } = collectWithoutPace,
+) {
   const statistics = createPostgresStatistics(database)
   const operations = createTestQueue({ database })
-  const pausedSources: string[] = []
   const rankedCalls: number[] = []
 
-  const sourceAdmission = {
-    admitSource: async () => ({ outcome: 'admitted' as const }),
-    pauseSource: async (domain: string) => {
-      pausedSources.push(domain)
-    },
-  }
+  const sourceAdmission = createPostgresRequestAdmission(database, {
+    authenticatedIpLimit: 120,
+    sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 300 },
+  })
 
-  const source = {
+  const source: PlayerSource = {
     async getPlayerStatsV1Payload(id: number, mode: 'ranked_1v1' | 'all') {
       if (mode === 'all') throw new Error('this test only runs the ranked collection')
 
@@ -109,16 +127,15 @@ async function startCollection(rankedFailures: number) {
     WHERE kind = 'statistics-lifetime-collection'
   `
 
+  const collection = wireCollection(source)
+
   const runOne = () =>
     runOneWithJobs(operations, 'worker', {
       leaseMs: 5_000,
       retryDelayMs: 0,
       admission,
       sourceAdmission,
-      jobs: createStatisticsTestJobs(statistics, {
-        sourceAdmission,
-        collectEvidence: (lease) => collectStatisticsEvidence(source, lease),
-      }),
+      jobs: createStatisticsTestJobs(statistics, { sourceAdmission, ...collection }),
     })
 
   const readOperation = async () => {
@@ -151,7 +168,16 @@ async function startCollection(rankedFailures: number) {
     return rows.map(({ attempt_number }) => attempt_number)
   }
 
-  return { runOne, readOperation, makeOperationDue, readAttemptNumbers, rankedCalls, pausedSources, statistics }
+  return {
+    runOne,
+    readOperation,
+    makeOperationDue,
+    readAttemptNumbers,
+    rankedCalls,
+    sourceAdmission,
+    collectionPace: collection.collectionPace,
+    statistics,
+  }
 }
 
 describe('Statistics collection after an upstream 5xx', () => {
@@ -164,7 +190,6 @@ describe('Statistics collection after an upstream 5xx', () => {
 
     expect(waiting).toMatchObject({ status: 'pending', attempt_count: 1, error_code: 'source_unavailable' })
     expect(waiting.wait_ms).toBeGreaterThan(0)
-    expect(collection.pausedSources).toEqual(['brawlhalla-v1'])
 
     await collection.makeOperationDue()
     expect(await collection.runOne()).toBe(true)
@@ -176,6 +201,22 @@ describe('Statistics collection after an upstream 5xx', () => {
     const audit = await collection.statistics.getCohort()
 
     expect(audit?.members[0]).toMatchObject({ brawlhallaId: 42, rankedSucceededAt: expect.any(String) })
+  })
+
+  test('a 503 leaves V1 open for every other caller and holds back only the collector', async () => {
+    const collection = await startCollection(1, (source) => createStatisticsCollection(() => source))
+
+    expect(await collection.runOne()).toBe(true)
+
+    const otherCaller = await collection.sourceAdmission.admitSource({
+      domain: 'brawlhalla-v1',
+      reservationKey: 'leaderboard-page',
+      units: 1,
+      caller: 'background',
+    })
+
+    expect(otherCaller.outcome).toBe('admitted')
+    expect(collection.collectionPace.waitMsForTurn('next-collection')).toBeGreaterThan(STATISTICS_COLLECTION_SPACING_MS)
   })
 
   test('a player that keeps failing stops after three source calls with one dead letter', async () => {

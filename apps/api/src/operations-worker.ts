@@ -224,10 +224,6 @@ const workerJobs = createWorkerJobs({
     statistics,
     sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
     ...createStatisticsCollection((queue) => createWorkerBhApiClient(undefined, queue)),
-    retryTimings: {
-      retryDelayMs: workerConfig.retryDelayMs,
-      sourceUnavailableRetryMs: workerConfig.sourceUnavailableRetryMs,
-    },
   },
 })
 

@@ -33,6 +33,7 @@ export {
   createStatisticsRankedCollectionJob,
   type StatisticsCollectionJobDependencies,
   type StatisticsCollectionLease,
+  StatisticsSourceOutageError,
 } from './jobs/statistics-collection-job'
 export {
   statisticsCollectionContract,

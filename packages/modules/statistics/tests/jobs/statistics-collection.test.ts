@@ -33,7 +33,6 @@ function dependencies(
     sourceAdmission: { admitSource: async () => ({ outcome: 'admitted' }) },
     collectEvidence: async () => ({}) as never,
     collectionPace: { waitMsForTurn: () => 0 },
-    retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
     ...overrides,
   }
 }

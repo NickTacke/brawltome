@@ -1,13 +1,12 @@
 import {
   type AttemptOutcome,
-  decideCountedSourceOutage,
   defineJob,
   type FailureDecision,
+  failureDetails,
   type JobDefinition,
   type JobTools,
   type Lease,
   type LeaseOperations,
-  type RetryTimings,
   SourceAdmissionLimitedError,
   type SourceAdmissionPort,
   type StatisticsCollectionKind,
@@ -28,8 +27,10 @@ export type StatisticsCollectionJobDependencies = {
   sourceAdmission: Pick<SourceAdmissionPort, 'admitSource'>
   collectEvidence(lease: StatisticsCollectionLease): Promise<RankedEvidence | LifetimeEvidence>
   collectionPace: { waitMsForTurn(operationId: string): number }
-  retryTimings: RetryTimings
 }
+
+// raised by the source adapter, so this job can tell a V1 outage from a failed collection without knowing the client
+export class StatisticsSourceOutageError extends Error {}
 
 // the third failure ends the operation, so these keep a short outage from using up one player's three calls
 const sourceOutageRetryDelaysMs = [5 * 60_000, 30 * 60_000]
@@ -104,14 +105,15 @@ function commitEvidence(
 
 // a 5xx comes after the attempt is recorded, and handing the attempt back would make the retry look like a different
 // lease reusing that record. it spends the attempt instead, so a player gets three source calls and no more
-function decideCollectionFailure(
-  error: unknown,
-  lease: StatisticsCollectionLease,
-  retryTimings: RetryTimings,
-): FailureDecision | null {
-  const delayMs = sourceOutageRetryDelaysMs[lease.attemptNumber - 1] ?? 0
+function decideCollectionFailure(error: unknown, lease: StatisticsCollectionLease): FailureDecision | null {
+  if (!(error instanceof StatisticsSourceOutageError)) return null
 
-  return decideCountedSourceOutage(error, delayMs, retryTimings)
+  return {
+    action: 'fail',
+    failure: failureDetails(error, 'source_unavailable'),
+    delayMs: sourceOutageRetryDelaysMs[lease.attemptNumber - 1] ?? 0,
+    category: 'source_unavailable',
+  }
 }
 
 function collectionAuthorization(lease: StatisticsCollectionLease): CollectionAttemptAuthorization {
@@ -186,8 +188,7 @@ function createCollectionJob(
     ...statisticsCollectionContract(kind),
     failureCode: 'statistics_collection_failed',
     effectState: statisticsCollectionEffectState,
-    decideFailure: async (error, lease) =>
-      decideCollectionFailure(error, { ...lease, kind }, dependencies.retryTimings),
+    decideFailure: async (error, lease) => decideCollectionFailure(error, { ...lease, kind }),
     run: (lease, tools) => runCollection({ ...lease, kind }, tools, dependencies),
   })
 }

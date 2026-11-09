@@ -69,7 +69,6 @@ export const idleStatisticsDependencies: WorkerStatisticsDependencies = {
     throw new Error('this test never collects Statistics evidence')
   },
   collectionPace: { waitMsForTurn: () => 0 },
-  retryTimings: { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 },
 }
 
 export const idleLeaderboardDependencies: WorkerLeaderboardDependencies = {

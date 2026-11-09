@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { BhApiClient } from '@brawltome/bhapi'
+import { StatisticsSourceOutageError } from '@brawltome/statistics'
 import {
   createStatisticsCollection,
   createStatisticsCollectionPace,
@@ -64,6 +65,38 @@ describe('Statistics collection pace', () => {
     currentTime += 1_000
     expect(pace.waitMsForTurn('second')).toBe(5_000)
   })
+
+  test('holds the next slot back after an outage and rebooks jobs that had a slot', () => {
+    let currentTime = 1_000_000
+    const pace = createStatisticsCollectionPace(() => currentTime)
+
+    expect(pace.waitMsForTurn('first')).toBe(0)
+    expect(pace.waitMsForTurn('second')).toBe(6_000)
+
+    pace.holdBackForOutage()
+
+    expect(pace.waitMsForTurn('second')).toBe(15_000)
+    expect(pace.waitMsForTurn('third')).toBe(21_000)
+  })
+
+  test('doubles the hold while the outage lasts, up to five minutes, and starts over after a success', () => {
+    let currentTime = 1_000_000
+    const pace = createStatisticsCollectionPace(() => currentTime)
+
+    const holdAfterOutage = (operationId: string) => {
+      pace.holdBackForOutage()
+
+      return pace.waitMsForTurn(operationId)
+    }
+
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map((operation) => holdAfterOutage(`operation-${operation}`))).toEqual([
+      15_000, 30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000,
+    ])
+
+    pace.endOutageHold()
+
+    expect(holdAfterOutage('after-recovery')).toBe(15_000)
+  })
 })
 
 describe('Statistics collection worker wiring', () => {
@@ -77,6 +110,27 @@ describe('Statistics collection worker wiring', () => {
     region: 'EU',
     region_ranks: [],
     legends: [],
+  })
+
+  test('a V1 503 is reported as an outage and holds back only the next collection slot', async () => {
+    const server = Bun.serve({ port: 0, fetch: () => new Response('down', { status: 503 }) })
+
+    const collection = createStatisticsCollection(
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue }),
+    )
+
+    const lease = {
+      kind: 'statistics-ranked-collection' as const,
+      payload: { cohortId: '10000000-0000-4000-8000-000000000001', brawlhallaId: 42 },
+    }
+
+    try {
+      await expect(collection.collectEvidence(lease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
+
+      expect(collection.collectionPace.waitMsForTurn('next')).toBeGreaterThan(STATISTICS_COLLECTION_SPACING_MS)
+    } finally {
+      server.stop(true)
+    }
   })
 
   test('sends real client requests through the paced queue', async () => {
