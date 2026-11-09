@@ -35,6 +35,8 @@ The V2 import left `legacy_archive`, `legacy_import_progress`, `legacy_import_le
 - `jobs/`: `refresh-clan.ts` fetches a section from the source and publishes it. `clan-refresh-job.ts` is the queue
   job that runs it, section by section. `clan-refresh-reservation.ts` reserves and activates the queue operation.
   `clan-weekly-snapshot-job.ts` is the weekly snapshot job, and `clan-weekly-snapshot-schedule.ts` keeps its schedule.
+  `weekly-snapshot-fetch.ts` fetches one guild with its retries, and `weekly-snapshot-failure.ts` decides what a failed
+  attempt does.
 - `tests/`: domain, table, refresh, discovery source and read-during-refresh tests.
 
 ## Public surface
@@ -89,13 +91,21 @@ The `clan-weekly-snapshot` job runs once a week in the maintenance work class. I
 stats from V1, in clan id order with a pause between calls, and does two things with each answer:
 
 1. publishes the profile the same way a refresh does, so guild points and lifetime xp stay fresh for every clan
-2. saves the clan's guild points in `weekly_snapshots`, under the day the schedule window came due
+2. saves the clan's guild points in `weekly_snapshots`, under the day the schedule window came due, with the rank V1
+   sent alongside them so the Last week rank can be checked against the game's
+
+Both writes carry `trigger: 'weekly-snapshot'` in their provenance, so they can be told apart from a refresh.
 
 The run row in `weekly_snapshot_runs` remembers the last clan, so a yield, a failed attempt or a lost lease carries on
-after it. The job yields its slot after each slice of 100 clans. A clan the source answers with a 404, or with stats
-that don't parse, is skipped for that week. Once every clan is done the week gets a `completed_at`.
+after it. The job yields its slot after each slice of 100 clans. A failed call is retried in place twice, after 500 ms
+and 2 s. A clan that still fails, or that the source answers with a 404 or with stats that don't parse, is skipped for
+that week and gets a failed profile check, as a refresh records one.
 
-Last week is the difference between the two most recent completed weeks that are exactly seven days apart, so the
-first figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a
-week of earned points.
+When five clans in a row fail every retry, V1 is taken to be down: the run defers without spending an attempt and
+picks up at the first of them. It doesn't pause V1, since that would hold every other caller. A 429 or a source
+admission limit also defers. Once every clan is done the week gets a `completed_at`.
+
+Last week is the latest completed week's points minus the points of the week seven days before it, so the first
+figure appears a week after the second run. A clan whose points went down gets no figure, since that isn't a week of
+earned points. No clan gets one once the latest completed week is more than 14 days old.
 `clan.standingById` serves it as `lastWeekPoints`, with its rank among the clans that have a figure as `lastWeekRank`.
