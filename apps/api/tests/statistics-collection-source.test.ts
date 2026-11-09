@@ -112,11 +112,17 @@ describe('Statistics collection worker wiring', () => {
     legends: [],
   })
 
-  test('a V1 503 is reported as an outage and holds back only the next collection slot', async () => {
-    const server = Bun.serve({ port: 0, fetch: () => new Response('down', { status: 503 }) })
+  const outages: [string, () => Promise<Response> | Response][] = [
+    ['a 503', () => new Response('down', { status: 503 })],
+    ['a plain 500', () => new Response('broken', { status: 500 })],
+    ['a timeout', () => new Promise<Response>(() => {})],
+  ]
+
+  test.each(outages)('%s is reported as an outage and holds back only the next collection slot', async (_, respond) => {
+    const server = Bun.serve({ port: 0, fetch: respond })
 
     const collection = createStatisticsCollection(
-      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue }),
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue, fetchTimeoutMs: 50 }),
     )
 
     const lease = {
@@ -128,6 +134,27 @@ describe('Statistics collection worker wiring', () => {
       await expect(collection.collectEvidence(lease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
 
       expect(collection.collectionPace.waitMsForTurn('next')).toBeGreaterThan(STATISTICS_COLLECTION_SPACING_MS)
+    } finally {
+      server.stop(true)
+    }
+  })
+
+  test('a 404 for a missing player is not an outage and leaves the pace alone', async () => {
+    const server = Bun.serve({ port: 0, fetch: () => new Response('missing', { status: 404 }) })
+
+    const collection = createStatisticsCollection(
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue }),
+    )
+
+    const lease = {
+      kind: 'statistics-ranked-collection' as const,
+      payload: { cohortId: '10000000-0000-4000-8000-000000000001', brawlhallaId: 42 },
+    }
+
+    try {
+      await expect(collection.collectEvidence(lease)).rejects.not.toBeInstanceOf(StatisticsSourceOutageError)
+
+      expect(collection.collectionPace.waitMsForTurn('next')).toBe(0)
     } finally {
       server.stop(true)
     }

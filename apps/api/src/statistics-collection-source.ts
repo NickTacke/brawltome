@@ -108,8 +108,17 @@ export function createStatisticsCollection(createSource: (queue: RequestQueue) =
   }
 }
 
+function isTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error && error.cause instanceof Error && ['TimeoutError', 'AbortError'].includes(error.cause.name)
+  )
+}
+
+// any 5xx or timeout, not just the gateway codes, so a day of V1 hanging cannot use up the coverage floor
 function isV1Outage(error: unknown): boolean {
-  return error instanceof BhApiHttpError && [502, 503, 504].includes(error.status)
+  if (error instanceof BhApiHttpError) return error.status >= 500
+
+  return isTimeout(error)
 }
 
 async function fetchPlayerPayload(
