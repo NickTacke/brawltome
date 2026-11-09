@@ -9,8 +9,21 @@ export function fixEncoding(value: string | null | undefined): string {
   }
 }
 
+const missingNumber = '—'
+const unknownDate = 'Unknown'
+
 export function formatWhole(value: string | bigint | number): string {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? BigInt(Math.trunc(value)).toLocaleString('en-GB') : missingNumber
+  }
+
+  if (typeof value === 'string' && !/^-?\d+$/.test(value)) return missingNumber
+
   return BigInt(value).toLocaleString('en-GB')
+}
+
+function isValidDate(date: Date): boolean {
+  return !Number.isNaN(date.getTime())
 }
 
 const dayFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -21,11 +34,19 @@ const dayFormatter = new Intl.DateTimeFormat('en-GB', {
 })
 
 export function formatDay(value: string | null): string {
-  return value ? dayFormatter.format(new Date(value)) : 'Unknown'
+  if (!value) return unknownDate
+
+  const date = new Date(value)
+
+  return isValidDate(date) ? dayFormatter.format(date) : unknownDate
 }
 
 export function timeAgo(value: string, now = new Date()): string {
-  const seconds = Math.floor((now.getTime() - new Date(value).getTime()) / 1000)
+  const date = new Date(value)
+
+  if (!isValidDate(date)) return unknownDate
+
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
   if (seconds < 60) return 'just now'
 

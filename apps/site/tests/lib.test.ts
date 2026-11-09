@@ -58,3 +58,21 @@ describe('fixEncoding', () => {
     expect(fixEncoding(null)).toBe('')
   })
 })
+
+describe('formatters on bad input', () => {
+  test('formatWhole drops a fraction instead of throwing', () => {
+    expect(formatWhole(12.5)).toBe('12')
+  })
+
+  test('formatWhole shows a dash for anything that is not a whole number', () => {
+    expect(formatWhole('12.5')).toBe('—')
+    expect(formatWhole('abc')).toBe('—')
+    expect(formatWhole('')).toBe('—')
+    expect(formatWhole(Number.NaN)).toBe('—')
+  })
+
+  test('formatDay and timeAgo say unknown for a bad date', () => {
+    expect(formatDay('garbage')).toBe('Unknown')
+    expect(timeAgo('garbage')).toBe('Unknown')
+  })
+})
