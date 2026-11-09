@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClanIdRouteImport } from './routes/clan.$id'
 import { Route as GuildIdRouteImport } from './routes/guild.$id'
+import { Route as PlayerIdRouteImport } from './routes/player.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const GuildIdRoute = GuildIdRouteImport.update({
   path: '/guild/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlayerIdRoute = PlayerIdRouteImport.update({
+  id: '/player/$id',
+  path: '/player/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/player/$id': typeof PlayerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/player/$id': typeof PlayerIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/player/$id': typeof PlayerIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/clan/$id' | '/guild/$id'
+  fullPaths: '/' | '/clan/$id' | '/guild/$id' | '/player/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/clan/$id' | '/guild/$id'
-  id: '__root__' | '/' | '/clan/$id' | '/guild/$id'
+  to: '/' | '/clan/$id' | '/guild/$id' | '/player/$id'
+  id: '__root__' | '/' | '/clan/$id' | '/guild/$id' | '/player/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClanIdRoute: typeof ClanIdRoute
   GuildIdRoute: typeof GuildIdRoute
+  PlayerIdRoute: typeof PlayerIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/player/$id': {
+      id: '/player/$id'
+      path: '/player/$id'
+      fullPath: '/player/$id'
+      preLoaderRoute: typeof PlayerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClanIdRoute: ClanIdRoute,
   GuildIdRoute: GuildIdRoute,
+  PlayerIdRoute: PlayerIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

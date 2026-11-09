@@ -27,17 +27,13 @@ export function HoverReveal({ label, triggerClassName = '', trigger, children }:
   const openStyle = isOpen ? 'visible opacity-100' : 'invisible opacity-0'
 
   return (
-    <span
-      ref={rootRef}
-      data-reveal-trigger
-      onKeyDown={(event) => event.key === 'Escape' && setIsOpen(false)}
-      className="group/reveal relative inline-flex"
-    >
+    <span ref={rootRef} data-reveal-trigger className="group/reveal relative inline-flex">
       <button
         type="button"
         aria-expanded={isOpen}
         aria-label={label}
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(event) => event.key === 'Escape' && setIsOpen(false)}
         className={`inline-flex min-h-6 cursor-default items-center gap-1.5 ${triggerClassName}`}
       >
         {trigger}
