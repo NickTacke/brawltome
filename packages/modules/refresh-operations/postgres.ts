@@ -3,7 +3,7 @@ import { type AcceptOperationInput, acceptOperation } from './db/accept-operatio
 import { activateAdmitted } from './db/activate-operation'
 import { admissionLockId } from './db/admission-lock'
 import { type ClaimJob, createClaimJobs } from './db/claim-jobs'
-import { claimOperation } from './db/claim-operation'
+import { claimOperation, type InvalidRow } from './db/claim-operation'
 import { createSchedule } from './db/create-schedule'
 import type { DeadLetterHooks } from './db/dead-letter-hooks'
 import { disposeDeadLetter } from './db/dispose-dead-letter'
@@ -47,6 +47,8 @@ export function createPostgresRefreshOperations(
   options: {
     // every job the worker can run; claim needs them, so a queue built without them can only write
     jobs?: readonly ClaimJob[]
+    // an unknown kind has no dead-letter metric series, so this is the only signal one was settled
+    onInvalidRow?: (row: InvalidRow) => void
     proofEffects?: ProofEffectStore
     readAppliedLeaderboardEffects?: AppliedLeaderboardEffects
   } = {},
@@ -114,7 +116,14 @@ export function createPostgresRefreshOperations(
       // without them every due row would look like a kind no job runs
       if (!claimJobs) throw new Error(`claim operation for worker ${workerId}: queue was built without jobs`)
 
-      return claimOperation(database, { workerId, leaseMs, admission, kind, jobs: claimJobs })
+      return claimOperation(database, {
+        workerId,
+        leaseMs,
+        admission,
+        kind,
+        jobs: claimJobs,
+        onInvalidRow: options.onInvalidRow,
+      })
     },
 
     async listAwaitingInteractiveRefreshes(): Promise<string[]> {

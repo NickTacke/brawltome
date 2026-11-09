@@ -24,7 +24,10 @@ export type ClaimOperationInput = {
   admission: AdmissionConfig
   kind?: string
   jobs: ClaimJobs
+  onInvalidRow?: (row: InvalidRow) => void
 }
+
+export type InvalidRow = { operationId: string; kind: string; reason: string }
 
 type AdmissionPolicy = ReturnType<typeof admissionConfigHash>
 
@@ -337,6 +340,7 @@ async function claimOnce(sql: Sql, input: ClaimOperationInput, policy: Admission
 
   if (invalidReason) {
     await deadLetterInvalidCandidate(sql, candidate, invalidReason)
+    input.onInvalidRow?.({ operationId: candidate.id, kind: candidate.kind, reason: invalidReason })
 
     return { kind: 'retry' }
   }

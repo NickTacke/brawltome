@@ -232,6 +232,8 @@ const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
   {
     jobs: workerJobs,
+    onInvalidRow: ({ operationId, kind, reason }) =>
+      telemetry.logger.error('operation.claim.invalid_row', new Error(reason), { operationId, kind }),
     proofEffects: proofEffectStore,
     readAppliedLeaderboardEffects,
   },

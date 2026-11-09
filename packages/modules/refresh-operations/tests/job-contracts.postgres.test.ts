@@ -6,6 +6,7 @@ import {
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
   type DeadLetterHooks,
+  type InvalidRow,
   type JobContract,
   type OperationLease,
   reconcileFixedSchedule,
@@ -51,8 +52,11 @@ afterAll(async () => {
   await database?.drop()
 })
 
-function createQueue(jobs: readonly JobContract<unknown>[] = [testJobContract]) {
-  return createPostgresRefreshOperations({ database }, { jobs })
+function createQueue(
+  jobs: readonly JobContract<unknown>[] = [testJobContract],
+  onInvalidRow?: (row: InvalidRow) => void,
+) {
+  return createPostgresRefreshOperations({ database }, { jobs, onInvalidRow })
 }
 
 type RowOverrides = { kind?: string; workClass?: string; payload?: unknown; availableAt?: Date }
@@ -119,6 +123,23 @@ describe('claim on a row its release cannot run', () => {
       attempt_count: 0,
       last_error: { code: 'invalid_payload', retryable: false },
     })
+  })
+
+  test('a row claim dead-letters is reported with its kind and reason', async () => {
+    await drainDueOperations()
+
+    const unknown = await insertRow({ kind: 'kind-from-another-release' })
+    const reported: InvalidRow[] = []
+
+    await createQueue([testJobContract], (row) => reported.push(row)).claim('worker', 10_000, admission)
+
+    expect(reported).toEqual([
+      {
+        operationId: unknown,
+        kind: 'kind-from-another-release',
+        reason: 'No job is registered for kind kind-from-another-release',
+      },
+    ])
   })
 
   test("a payload that doesn't parse does the same", async () => {
