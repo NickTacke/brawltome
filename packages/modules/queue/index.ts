@@ -107,6 +107,7 @@ export type { Transaction } from './db/transaction'
 export { validateAdmissionConfig } from './domain/admission'
 export {
   type DeferCategory,
+  decideCountedSourceOutage,
   decideExecutionFailure,
   decideSourceFailure,
   type FailureDecision,

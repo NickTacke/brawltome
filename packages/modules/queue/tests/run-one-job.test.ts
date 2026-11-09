@@ -5,6 +5,7 @@ import {
   type AdmissionConfig,
   createJobRegistry,
   createPostgresRefreshOperations,
+  decideCountedSourceOutage,
   defineJob,
   type FailureDecision,
   type JobDefinition,
@@ -199,6 +200,24 @@ describe('runOneJob', () => {
 
     expect(paused).toHaveLength(1)
     expect((await readOperation(operationId)).status).toBe('pending')
+  })
+
+  test('runOneJob pauses the source and keeps the attempt spent for a counted source outage', async () => {
+    const { operations, operationId } = await acceptProofOperation()
+    const { paused, sourceAdmission } = createSourceAdmissionSpy()
+
+    const job = testJob({
+      run: async () => {
+        throw sourceOutage
+      },
+      decideFailure: async (error) =>
+        decideCountedSourceOutage(error, 300_000, { retryDelayMs: 1_000, sourceUnavailableRetryMs: 60_000 }),
+    })
+
+    await runOneJob(operations, 'worker-counted-outage', createJobRegistry([job]), { ...runOptions(), sourceAdmission })
+
+    expect(paused).toEqual([{ domain: 'brawlhalla-v1', seconds: 60 }])
+    expect(await readOperation(operationId)).toEqual({ status: 'pending', attempt_count: 1 })
   })
 
   test('runOneJob retries an applied effect for whichever kind asks, without spending the attempt', async () => {

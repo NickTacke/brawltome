@@ -29,7 +29,8 @@ export type FailureDecision =
       action: 'fail'
       failure: OperationFailure
       delayMs: number
-      category: 'execution' | 'source_rate_limited'
+      category: 'execution' | 'source_rate_limited' | 'source_unavailable'
+      pauseSource?: { domain: SourceDomain; seconds: number }
     }
 
 const minimumSourceWaitMs = 60_000
@@ -76,6 +77,25 @@ export function decideSourceFailure(error: unknown, retry: RetryTimings): Failur
     delayMs,
     category: 'source_unavailable',
     pauseSource: { domain, seconds: Math.ceil(delayMs / 1_000) },
+  }
+}
+
+// for a job that keeps its own record of each source call: the attempt stays spent, so the next call gets a new number
+export function decideCountedSourceOutage(
+  error: unknown,
+  delayMs: number,
+  retry: RetryTimings,
+): FailureDecision | null {
+  const domain = unavailableSourceDomain(error)
+
+  if (!domain) return null
+
+  return {
+    action: 'fail',
+    failure: failureDetails(error, 'source_unavailable'),
+    delayMs,
+    category: 'source_unavailable',
+    pauseSource: { domain, seconds: Math.ceil(sourceWaitMs(retry) / 1_000) },
   }
 }
 
