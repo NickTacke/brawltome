@@ -57,9 +57,9 @@ describe('Discovery player search', () => {
 
     await expect(playerResults(discovery, '  ALPHA  ')).resolves.toEqual([
       expect.objectContaining({ brawlhallaId: 40, matchedAlias: null }),
-      expect.objectContaining({ brawlhallaId: 30, matchedAlias: 'Alpha' }),
       expect.objectContaining({ brawlhallaId: 20, matchedAlias: null }),
       expect.objectContaining({ brawlhallaId: 90, matchedAlias: null }),
+      expect.objectContaining({ brawlhallaId: 30, matchedAlias: 'Alpha' }),
     ])
 
     await expect(playerResults(discovery, ' %_\\ ')).resolves.toEqual([])
@@ -106,13 +106,13 @@ describe('Discovery player search', () => {
         ), winners AS (
           SELECT DISTINCT ON (entity_id) *
           FROM candidates
-          ORDER BY entity_id, exact_match DESC, word_rank, alias_rank, stable_term_rank,
+          ORDER BY entity_id, alias_rank, exact_match DESC, word_rank, stable_term_rank,
                    normalized_term, display_term
         )
         SELECT entity_id, canonical_name, region, rating, view_count,
                best_legend_name_key, term_kind, display_term
         FROM winners
-        ORDER BY exact_match DESC, word_rank, alias_rank, (rating IS NULL),
+        ORDER BY alias_rank, exact_match DESC, word_rank, (rating IS NULL),
                  (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
         LIMIT 40
       `
@@ -161,16 +161,15 @@ describe('Discovery player search', () => {
       eventId,
       brawlhallaId: 999,
       sourceVersion: 4,
-      fact: fact(999, 'Replay Target', 2100, 70, ['Prefix', 'Prefix Previous']),
+      fact: fact(999, 'Replay Target', 2100, 70, ['Prefixed', 'Prefixed Previous']),
     }
 
     await expect(discovery.applyPlayerEvents([event, event])).resolves.toEqual({ appliedEvents: 1 })
     await expect(discovery.applyPlayerEvents([event])).resolves.toEqual({ appliedEvents: 0 })
 
-    const prefixHits = await playerResults(discovery, 'prefix')
-
-    expect(prefixHits.filter(({ brawlhallaId }) => brawlhallaId === 999)).toHaveLength(1)
-    expect(prefixHits.find(({ brawlhallaId }) => brawlhallaId === 999)?.matchedAlias).toBe('Prefix')
+    await expect(playerResults(discovery, 'prefixed')).resolves.toEqual([
+      expect.objectContaining({ brawlhallaId: 999, matchedAlias: 'Prefixed' }),
+    ])
 
     await discovery.rebuildPlayers({ sourceVersion: 5, facts: [fact(777, 'Replacement', null, 0)] })
     await expect(playerResults(discovery, 'prefix')).resolves.toEqual([])
@@ -262,7 +261,7 @@ describe('Discovery player search', () => {
     }
   })
 
-  test('finds a player from any word of their name on, below every name and alias match', async () => {
+  test('finds a player from any word of their name on, below every full name match', async () => {
     const discovery = createPostgresDiscovery(database)
 
     await discovery.rebuildPlayers({
@@ -326,5 +325,63 @@ describe('Discovery player search', () => {
 
     expect((await playerResults(discovery, 'sparrow')).map(({ brawlhallaId }) => brawlhallaId)).toEqual([720])
     await expect(playerResults(discovery, 'name')).resolves.toEqual([])
+  })
+
+  test('lists every current name before any old name, however the ratings compare', async () => {
+    const discovery = createPostgresDiscovery(database)
+
+    await discovery.rebuildPlayers({
+      sourceVersion: 40,
+      facts: [
+        fact(800, 'Former Prefix', 3100, 0, ['Lumen Old']),
+        fact(801, 'Former Exact', 3000, 0, ['Lumen']),
+        fact(802, 'Gamma Lumen', 1200, 0),
+        fact(803, 'Lumen Two', 1100, 0),
+        fact(804, 'Lumen', 1000, 0),
+      ],
+    })
+
+    const hits = await playerResults(discovery, 'lumen')
+
+    expect(hits.map(({ brawlhallaId }) => brawlhallaId)).toEqual([804, 803, 802, 801, 800])
+    expect(hits.map(({ matchedAlias }) => matchedAlias)).toEqual([null, null, null, 'Lumen', 'Lumen Old'])
+  })
+
+  test('keeps current names when more than 40 exact old names would fill the list', async () => {
+    const discovery = createPostgresDiscovery(database)
+
+    const renamedPlayers = Array.from({ length: 45 }, (_, index) =>
+      fact(900 + index, `Renamed ${index}`, 3000, 100, ['Needle']),
+    )
+
+    await discovery.rebuildPlayers({
+      sourceVersion: 41,
+      facts: [...renamedPlayers, fact(810, 'Needle Prefix', 1000, 0), fact(811, 'Some Needle', 900, 0)],
+    })
+
+    const hits = await playerResults(discovery, 'needle')
+
+    expect(hits).toHaveLength(40)
+    expect(hits.slice(0, 2).map(({ brawlhallaId }) => brawlhallaId)).toEqual([810, 811])
+    expect(hits.slice(2).every(({ matchedAlias }) => matchedAlias === 'Needle')).toBe(true)
+  })
+
+  test('ranks a player by their current name when an old name also matches', async () => {
+    const discovery = createPostgresDiscovery(database)
+
+    await discovery.rebuildPlayers({
+      sourceVersion: 42,
+      facts: [
+        fact(820, 'Other Name', 3000, 0, ['Beacon']),
+        fact(821, 'Zed Beacon', 1900, 0, ['Beacon Old']),
+        fact(822, 'Beacon Two', 2000, 0, ['Beacon']),
+      ],
+    })
+
+    await expect(playerResults(discovery, 'beacon')).resolves.toEqual([
+      expect.objectContaining({ brawlhallaId: 822, matchedAlias: null }),
+      expect.objectContaining({ brawlhallaId: 821, matchedAlias: null }),
+      expect.objectContaining({ brawlhallaId: 820, matchedAlias: 'Beacon' }),
+    ])
   })
 })

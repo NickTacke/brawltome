@@ -248,14 +248,16 @@ export function createPostgresDiscovery(database: Database): DiscoveryQueries & 
       ), winners AS (
         SELECT DISTINCT ON (entity_id) *
         FROM candidates
-        ORDER BY entity_id, exact_match DESC, word_rank, alias_rank, stable_term_rank,
+        -- A current name that matches wins over an old one, even an exact old one, so that player ranks by their name.
+        ORDER BY entity_id, alias_rank, exact_match DESC, word_rank, stable_term_rank,
                  normalized_term, display_term
       )
       SELECT entity_id, canonical_name, region, rating, view_count,
              best_legend_name_key, term_kind, display_term
       FROM winners
-      -- A word inside a name ranks below every name and alias match, so "alpha" lists "Alpha" before "Alpha Two".
-      ORDER BY exact_match DESC, word_rank, alias_rank, (rating IS NULL),
+      -- Old names rank below every current name, so the limit can't drop one. Within those, a word inside a name ranks
+      -- below every full name match.
+      ORDER BY alias_rank, exact_match DESC, word_rank, (rating IS NULL),
                (best_legend_name_key IS NULL), rating DESC NULLS LAST, view_count DESC, entity_id
       LIMIT 40
     `
