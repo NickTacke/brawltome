@@ -1,13 +1,78 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, notFound } from '@tanstack/react-router'
+import { GuildHeader } from '../components/guild/GuildHeader'
+import { GuildOverview } from '../components/guild/GuildOverview'
+import { parseGuildId } from '../components/guild/guild-id'
+import { MemberTable } from '../components/guild/MemberTable'
+import { rankMembers } from '../components/guild/roster'
+import { fixEncoding } from '../lib'
 import { getGuild } from '../server/guilds'
 
+function pageTitle(guildName: string | undefined, status: string): string {
+  if (guildName) return `${fixEncoding(guildName)} | BrawlTome`
+
+  return status === 'error' ? 'Guild unavailable | BrawlTome' : 'Guild not found | BrawlTome'
+}
+
 export const Route = createFileRoute('/guild/$id')({
-  loader: ({ params }) => getGuild({ data: Number(params.id) }),
-  component: GuildPlaceholder,
+  loader: async ({ params }) => {
+    const guildId = parseGuildId(params.id)
+
+    if (guildId === null) throw notFound()
+
+    const guild = await getGuild({ data: guildId })
+
+    if (!guild) throw notFound()
+
+    return guild
+  },
+  head: ({ loaderData, match }) => ({ meta: [{ title: pageTitle(loaderData?.clan.clanName, match.status) }] }),
+  notFoundComponent: GuildNotFound,
+  errorComponent: GuildLoadError,
+  component: GuildPage,
 })
 
-function GuildPlaceholder() {
-  const guild = Route.useLoaderData()
+function GuildNotFound() {
+  return (
+    <div className="py-16">
+      <h1 className="text-heading font-semibold">Guild not found</h1>
+      <p className="mt-2 text-soft">Check the guild id, or search for the guild by a member's name.</p>
+    </div>
+  )
+}
 
-  return <h1 className="text-heading font-semibold">{guild?.clanName ?? 'Guild not found'}</h1>
+// a fixed message, the error itself is for the server log
+function GuildLoadError() {
+  const { id } = Route.useParams()
+
+  return (
+    <div className="py-16">
+      <h1 className="text-heading font-semibold">This guild couldn't be loaded</h1>
+      <p className="mt-2 text-soft">Something went wrong on our side. It's usually back in a moment.</p>
+      <a
+        href={`/guild/${encodeURIComponent(id)}`}
+        className="mt-4 inline-block text-primary underline underline-offset-4"
+      >
+        Try again
+      </a>
+    </div>
+  )
+}
+
+function GuildPage() {
+  const { clan, standing, summaries } = Route.useLoaderData()
+  const members = rankMembers(clan.members, summaries)
+
+  return (
+    <div className="divide-y divide-line/50 [--gutter:max(4rem,calc((100vw-57px-1080px-380px)/3))] md:px-[max(0px,calc(40px-max(0px,(100vw-1209px)/2)))] max-xl:[&>*]:py-7 max-xl:[&>*:first-child]:pt-0 max-xl:[&>*:first-child]:pb-10 max-xl:[&>*:last-child]:pt-4 max-xl:[&>*:last-child]:pb-0 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-57px)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_380px] xl:grid-rows-[auto_1fr] xl:divide-y-0 xl:px-(--gutter)">
+      <div className="min-w-0 xl:col-start-1 xl:row-start-1 xl:pr-(--gutter) xl:pb-8">
+        <GuildHeader clan={clan} />
+      </div>
+      <aside className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1 xl:mt-9 xl:border-l xl:border-line/50 xl:pl-12">
+        <GuildOverview clan={clan} standing={standing} members={members} />
+      </aside>
+      <div className="min-w-0 xl:col-start-1 xl:row-start-2 xl:mr-(--gutter) xl:border-t xl:border-line/50 xl:pt-4">
+        <MemberTable key={clan.clanId} members={members} />
+      </div>
+    </div>
+  )
 }

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun", "vite/client"]
   },
-  "include": ["."]
+  "include": [".", "../src/routeTree.gen.ts"]
 }
