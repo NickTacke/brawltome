@@ -7,6 +7,7 @@ import {
   type LeaderboardGenerationCandidate,
   type LeaderboardMode,
   type LeaderboardScope,
+  leaderboardCollectionContract,
   leaderboardModes,
   type PublishedLeaderboardRow,
   type RankingPublicationAuthorization,
@@ -246,7 +247,7 @@ async function leaseOperation(
   const kind = operationKind(mode)
 
   const accepted = await operations.accept({
-    kind,
+    job: leaderboardCollectionContract(kind),
     dedupeKey: `ranking:${label}:${randomUUID()}`,
     operationKey: options.operationKey ?? `ranking-effect:${label}:${randomUUID()}`,
     workClass: 'leaderboard',
@@ -1645,7 +1646,7 @@ describe('durable multi-mode collection operations', () => {
     })
 
     const accepted = await operations.accept({
-      kind: 'leaderboard-solo-2v2',
+      job: leaderboardCollectionContract('leaderboard-solo-2v2'),
       dedupeKey: `source-admission:${randomUUID()}`,
       operationKey: `source-admission:${randomUUID()}`,
       workClass: 'leaderboard',
@@ -1708,7 +1709,7 @@ describe('durable multi-mode collection operations', () => {
     const control = postgres(connectionString, { max: 1 })
 
     const accepted = await operations.accept({
-      kind: 'leaderboard-1v1',
+      job: leaderboardCollectionContract('leaderboard-1v1'),
       dedupeKey: `lease-replacement:${randomUUID()}`,
       operationKey: `lease-replacement:${randomUUID()}`,
       workClass: 'leaderboard',

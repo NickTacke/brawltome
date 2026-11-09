@@ -6,12 +6,13 @@ import {
   type PlayerNameVerificationPayload,
   type PostgresPlayerNameVerifications,
   type PostgresRankedPlayers,
+  playerNameVerificationContract,
   refreshCanonicalRankedPlayer,
   type V0RankedSource,
 } from '@brawltome/player'
 import {
+  type AcceptOperationInput,
   type AcceptOperationResult,
-  type AcceptPlayerNameVerificationOperation,
   type Lease,
   SourceAdmissionLimitedError,
 } from '@brawltome/refresh-operations'
@@ -100,7 +101,7 @@ export function createPlayerNameVerificationPlanner(deps: {
   readSourceUsage: () => Promise<SourceUsage>
   readDemandIds?: () => Promise<number[]>
   verifications: Pick<PostgresPlayerNameVerifications, 'claim' | 'release'>
-  operations: { accept(input: AcceptPlayerNameVerificationOperation): Promise<AcceptOperationResult> }
+  operations: { accept(input: AcceptOperationInput<PlayerNameVerificationPayload>): Promise<AcceptOperationResult> }
   telemetry?: Telemetry
   now?: () => number
 }) {
@@ -148,7 +149,7 @@ export function createPlayerNameVerificationPlanner(deps: {
       try {
         // An operation already in flight for this player keeps the claim; its preparation re-checks the pair.
         const accepted = await deps.operations.accept({
-          kind: 'player-name-verification',
+          job: playerNameVerificationContract,
           dedupeKey: `player-name-verification:${brawlhallaId}`,
           operationKey: `player-name-verification:${brawlhallaId}:${randomUUID()}`,
           workClass: 'maintenance',

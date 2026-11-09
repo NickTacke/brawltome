@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { interactivePlayerRefreshContract } from '@brawltome/player'
 import {
   createPostgresRefreshOperations,
   interactiveRefreshMaxAttempts,
+  proofContract,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
@@ -26,7 +28,7 @@ beforeAll(async () => {
     modules: [refreshOperationsModule, playerModule],
   })
 
-  queue = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  queue = createPostgresRefreshOperations({ database }, { jobs: [interactivePlayerRefreshContract, proofContract] })
 })
 
 afterAll(async () => {
@@ -58,7 +60,7 @@ async function reserveOtherKind() {
   const key = randomUUID()
 
   const reserved = await reserveForAdmission(database, {
-    kind: 'proof',
+    job: proofContract,
     dedupeKey: `proof:${key}`,
     operationKey: `proof:${key}`,
     workClass: 'interactive',

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { proofEffectStore } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, proofContract, refreshOperationsModule } from '@brawltome/refresh-operations'
 import postgres from 'postgres'
 import {
   allocatePort,
@@ -199,23 +199,18 @@ describe('real production runtime lifecycle', () => {
       const dedupeKey = `rolling-overlap:${randomUUID()}`
       const operationKey = `rolling-overlap-effect:${randomUUID()}`
 
-      const responses = await Promise.all(
-        [apiPortOne, apiPortTwo].map((port) =>
-          fetch(`http://127.0.0.1:${port}/internal/operations/proof`, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-internal-secret': apiEnvironment(port).INTERNAL_API_SECRET,
-            },
-            body: JSON.stringify({ dedupeKey, operationKey, value: 'completed-once', requestedBy: 'issue-220' }),
-          }),
-        ),
-      )
+      const write = {
+        job: proofContract,
+        dedupeKey,
+        operationKey,
+        workClass: 'interactive' as const,
+        payload: { value: 'completed-once' },
+        provenance: { source: 'internal-api', requestedBy: 'issue-220' },
+      }
 
-      expect(responses.map(({ status }) => status).sort()).toEqual([200, 202])
-      const accepted = (await responses[0].json()) as { operationId: string }
-      const duplicate = (await responses[1].json()) as { operationId: string }
+      const [accepted, duplicate] = await Promise.all([operations.accept(write), operations.accept(write)])
 
+      expect([accepted.outcome, duplicate.outcome].sort()).toEqual(['accepted', 'already-active'])
       expect(duplicate.operationId).toBe(accepted.operationId)
       await Bun.sleep(200)
       expect((await operations.inspect(accepted.operationId)).operation.status).toBe('pending')
@@ -268,6 +263,7 @@ describe('real production runtime lifecycle', () => {
     await installEffectDelay(control, 1.2)
 
     const accepted = await operations.accept({
+      job: proofContract,
       dedupeKey: `process-drain:${randomUUID()}`,
       operationKey: `process-drain-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -341,6 +337,7 @@ describe('real production runtime lifecycle', () => {
     await installEffectDelay(control, 3)
 
     const accepted = await operations.accept({
+      job: proofContract,
       dedupeKey: `process-recovery:${randomUUID()}`,
       operationKey: `process-recovery-effect:${randomUUID()}`,
       workClass: 'interactive',

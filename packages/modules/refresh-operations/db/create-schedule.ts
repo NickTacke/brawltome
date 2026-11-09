@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { validateSchedule } from '../domain/schedule-definition'
-import type { CreateSchedule, CreateScheduleResult } from '../model'
+import { assertValidJobInput } from '../jobs/job-input'
+import type { CreateSchedule, CreateScheduleResult, OperationLease } from '../model'
 import { type ScheduleDefinition, scheduleDefinitionMatches } from './schedule-definition-matches'
 import { schedules } from './tables'
 
@@ -10,15 +11,17 @@ const defaultMaxAttempts = 3
 
 /** Adds a schedule, or reports the existing one when the same key already holds the same definition. */
 export async function createSchedule(database: Database, input: CreateSchedule): Promise<CreateScheduleResult> {
-  const firstDueAt = validateSchedule(input)
+  assertValidJobInput(input.job, input.workClass, input.payload)
+
+  const firstDueAt = validateSchedule({ ...input, kind: input.job.kind })
 
   const definition: ScheduleDefinition = {
-    kind: input.kind ?? 'proof',
+    kind: input.job.kind,
     workClass: input.workClass,
     intervalMs: input.intervalMs,
     firstDueAt,
     operationKeyPrefix: input.operationKeyPrefix,
-    payload: input.payload,
+    payload: input.payload as OperationLease['payload'],
     provenance: input.provenance,
     maxAttempts: input.maxAttempts ?? defaultMaxAttempts,
   }

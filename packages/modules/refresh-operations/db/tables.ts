@@ -20,7 +20,7 @@ export const refreshOperationsSchema = pgSchema('refresh_operations')
 export const operations = refreshOperationsSchema.table('operations', {
   id: uuid('id').primaryKey(),
   effectOperationId: uuid('effect_operation_id').notNull(),
-  kind: text('kind').$type<OperationLease['kind']>().notNull(),
+  kind: text('kind').notNull(),
   dedupeKey: text('dedupe_key').notNull(),
   operationKey: text('operation_key').notNull(),
   resourceKey: text('resource_key'),
@@ -73,7 +73,7 @@ export const deadLetterActions = refreshOperationsSchema.table('dead_letter_acti
 export const schedules = refreshOperationsSchema.table('schedules', {
   id: uuid('id').primaryKey(),
   scheduleKey: text('schedule_key').notNull().unique(),
-  kind: text('kind').$type<OperationLease['kind']>().notNull(),
+  kind: text('kind').notNull(),
   resourceKey: text('resource_key'),
   workClass: text('work_class').$type<WorkClass>().notNull(),
   intervalMs: bigint('interval_ms', { mode: 'number' }).notNull(),

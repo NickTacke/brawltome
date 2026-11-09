@@ -8,7 +8,6 @@ import {
 } from '@brawltome/ranking'
 import {
   type AppliedLeaderboardEffects,
-  createEffectStates,
   createJobRegistry,
   createPostgresDeadLetterOperations,
   createPostgresRefreshOperations,
@@ -25,6 +24,7 @@ import {
   type SourceAdmitter,
   waitForRenewal,
 } from '@brawltome/refresh-operations'
+import { testJobContract } from '@brawltome/refresh-operations/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import { sql } from 'drizzle-orm'
 import { createDeadLetterHooks } from '../../src/dead-letter-hooks'
@@ -136,6 +136,17 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
   })
 }
 
+// a job no module owns, for tests where any queued work will do
+export const testJob = defineJob({
+  ...testJobContract,
+  failureCode: 'test_job_failed',
+  async run(lease, tools) {
+    const transition = await tools.queue.complete(lease)
+
+    return transition === 'lease-lost' ? 'lease_lost' : 'succeeded'
+  },
+})
+
 // the worker's proof job, with its effect write swapped so a test can make it throw or run long
 export function createProofJob(commitEffect?: QueueWorker['commitProofEffect']): JobDefinition<unknown> {
   const proof = createIdleWorkerJobs(noDiscoveryEffects).find((job) => job.kind === 'proof') as JobDefinition<unknown>
@@ -172,7 +183,7 @@ const testProofEffectStore: ProofEffectStore = {
 // built the way the worker builds it, so expired leases read the same effect tables
 export function createTestQueue(databases: RefreshOperationsDatabases, discovery = noDiscoveryEffects) {
   return createPostgresRefreshOperations(databases, {
-    effectStates: createEffectStates(createIdleWorkerJobs(discovery)),
+    jobs: [...createIdleWorkerJobs(discovery), testJob],
     proofEffects: testProofEffectStore,
     readAppliedLeaderboardEffects: testReadAppliedLeaderboardEffects,
   })
@@ -185,7 +196,7 @@ export function createTestDeadLetters(database: Database) {
 
 // the worker's job list with no dependencies wired, for tests about which jobs exist rather than what they do
 export function createTestJobs(): JobDefinition<unknown>[] {
-  return createIdleWorkerJobs(noDiscoveryEffects)
+  return [...createIdleWorkerJobs(noDiscoveryEffects), testJob]
 }
 
 // the worker's dispatch, claiming the next due operation and running the job of its kind from the given list

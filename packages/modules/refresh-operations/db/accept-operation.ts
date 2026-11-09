@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from '@brawltome/foundation'
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import type { OperationKind } from '../domain/operation-kinds'
+import type { JobContract } from '../jobs/job-definition'
+import { assertValidJobInput } from '../jobs/job-input'
 import type { AcceptOperationResult, OperationLease, OperationProvenance, WorkClass } from '../model'
 import { readActiveOperation } from './find-operations'
 import { operations } from './tables'
@@ -12,7 +13,7 @@ const defaultMaxAttempts = 3
 
 // an operation with a resource conflicts with any unique index, including the one allowing one active operation per
 // resource; one without conflicts only on its dedupe key
-function conflictTarget(input: AcceptOperationInput) {
+function conflictTarget<Payload>(input: AcceptOperationInput<Payload>) {
   if (input.resourceKey !== undefined) return undefined
 
   return {
@@ -21,9 +22,16 @@ function conflictTarget(input: AcceptOperationInput) {
   }
 }
 
-async function readHolder(transaction: Transaction, input: AcceptOperationInput): Promise<string | null> {
+async function readHolder<Payload>(
+  transaction: Transaction,
+  input: AcceptOperationInput<Payload>,
+): Promise<string | null> {
   if (input.resourceKey !== undefined) {
-    const holder = await readActiveOperation(transaction, input)
+    const holder = await readActiveOperation(transaction, {
+      kind: input.job.kind,
+      dedupeKey: input.dedupeKey,
+      resourceKey: input.resourceKey,
+    })
 
     return holder?.operationId ?? null
   }
@@ -33,7 +41,7 @@ async function readHolder(transaction: Transaction, input: AcceptOperationInput)
     .from(operations)
     .where(
       and(
-        eq(operations.kind, input.kind),
+        eq(operations.kind, input.job.kind),
         eq(operations.dedupeKey, input.dedupeKey),
         inArray(operations.status, ['pending', 'leased']),
       ),
@@ -42,20 +50,25 @@ async function readHolder(transaction: Transaction, input: AcceptOperationInput)
   return active?.id ?? null
 }
 
-export type AcceptOperationInput = {
-  kind: OperationKind
+export type AcceptOperationInput<Payload> = {
+  job: JobContract<Payload>
   dedupeKey: string
   operationKey: string
   // when present the operation holds this resource, and any active operation on it stands in for this one
   resourceKey?: string
   workClass: WorkClass
-  payload: OperationLease['payload']
+  payload: Payload
   provenance: OperationProvenance
   maxAttempts?: number
 }
 
 /** Queues an operation as pending, or reports the active one that already holds this dedupe or resource key. */
-export async function acceptOperation(database: Database, input: AcceptOperationInput): Promise<AcceptOperationResult> {
+export async function acceptOperation<Payload>(
+  database: Database,
+  input: AcceptOperationInput<Payload>,
+): Promise<AcceptOperationResult> {
+  assertValidJobInput(input.job, input.workClass, input.payload)
+
   for (;;) {
     const result = await database.db.transaction(async (transaction) => {
       const operationId = randomUUID()
@@ -65,12 +78,12 @@ export async function acceptOperation(database: Database, input: AcceptOperation
         .values({
           id: operationId,
           effectOperationId: operationId,
-          kind: input.kind,
+          kind: input.job.kind,
           dedupeKey: input.dedupeKey,
           operationKey: input.operationKey,
           resourceKey: input.resourceKey,
           workClass: input.workClass,
-          payload: input.payload,
+          payload: input.payload as OperationLease['payload'],
           provenance: input.provenance,
           maxAttempts: input.maxAttempts ?? defaultMaxAttempts,
         })

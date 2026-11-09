@@ -4,10 +4,12 @@ import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/tes
 import {
   createPostgresRefreshOperations,
   interactiveRefreshMaxAttempts,
+  proofContract,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
 import { clanModule } from '../../index'
+import { clanRefreshContract } from '../../jobs/clan-refresh-contract'
 import {
   activateClanRefresh,
   findActiveClanRefresh,
@@ -24,7 +26,7 @@ beforeAll(async () => {
     modules: [refreshOperationsModule, clanModule],
   })
 
-  queue = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  queue = createPostgresRefreshOperations({ database }, { jobs: [clanRefreshContract, proofContract] })
 })
 
 afterAll(async () => {
@@ -54,7 +56,7 @@ async function reserveOtherKind() {
   const key = randomUUID()
 
   const reserved = await reserveForAdmission(database, {
-    kind: 'proof',
+    job: proofContract,
     dedupeKey: `proof:${key}`,
     operationKey: `proof:${key}`,
     workClass: 'interactive',

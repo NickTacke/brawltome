@@ -118,7 +118,7 @@ describe('player name verification planner', () => {
 
     expect(calls.accept).toEqual([
       expect.objectContaining({
-        kind: 'player-name-verification',
+        job: expect.objectContaining({ kind: 'player-name-verification' }),
         workClass: 'maintenance',
         dedupeKey: 'player-name-verification:7',
         payload: { brawlhallaId: 7, playerName: 'New' },

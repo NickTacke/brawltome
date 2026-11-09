@@ -1,11 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  createEffectStates,
-  createPostgresRefreshOperations,
-  refreshOperationsModule,
-} from '@brawltome/refresh-operations'
+import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
 import { runJobOnce } from '@brawltome/refresh-operations/testing'
 import { clanModule, createPostgresClans } from '../../index'
 import { createClanRefreshJob } from '../../jobs/clan-refresh-job'
@@ -54,7 +50,7 @@ describe('clan refresh job on the real queue', () => {
       }),
     })
 
-    const queue = createPostgresRefreshOperations({ database }, { effectStates: createEffectStates([job]) })
+    const queue = createPostgresRefreshOperations({ database }, { jobs: [job] })
     const dedupeKey = `clan:${randomUUID()}`
 
     const reserved = await reserveClanRefresh(database, {

@@ -38,7 +38,7 @@ import {
   type Lease,
   leaderboardOperationKinds,
   type ProofEffectPayload,
-  workClasses,
+  proofContract,
 } from '@brawltome/refresh-operations'
 import {
   createStatisticsLegendMetaPublicationJob,
@@ -207,11 +207,8 @@ function createProofJob(
   primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
 ): JobDefinition<ProofEffectPayload> {
   return defineJob<ProofEffectPayload>({
-    kind: 'proof',
-    workClasses,
+    ...proofContract,
     failureCode: 'proof_execution_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as ProofEffectPayload,
     effectState: proofEffectState,
     run(lease, tools) {
       if (lease.operationKey.startsWith('primary-player:')) return primaryPlayerVerification.run(lease, tools)

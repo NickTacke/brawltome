@@ -4,6 +4,7 @@ import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/tes
 import {
   createLeaderboardDeepCrawlProgress,
   disableLeaderboardDeepCrawlSchedule,
+  leaderboardDeepCrawlContract,
   rankingModule,
   reconcileLeaderboardDeepCrawlSchedule,
 } from '@brawltome/ranking'
@@ -49,7 +50,7 @@ afterAll(async () => {
 
 describe('Leaderboard deep crawl operations', () => {
   test('reconciles, materializes, and claims one crawl per region schedule', async () => {
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations({ database }, { jobs: [leaderboardDeepCrawlContract] })
 
     const definitions = leaderboardDeepCrawlScheduleDefinitions({
       enabled: true,
@@ -97,42 +98,17 @@ describe('Leaderboard deep crawl operations', () => {
     })
   })
 
-  test('rejects deep crawl rows outside the regional scopes or with extra fields', async () => {
-    const control = postgres(connectionString, { max: 1 })
+  test('the deep crawl payload is limited to its region, interval and mode', () => {
+    const parse = (payload: unknown) => leaderboardDeepCrawlContract.parsePayload(payload, 'leaderboard')
 
-    try {
-      const insert = async (payload: Record<string, postgres.JSONValue>) => {
-        const id = randomUUID()
+    expect(() => parse({ region: 'EU', intervalMs: 10_800_000 })).not.toThrow()
+    expect(() => parse({ mode: 'solo2v2', region: 'EU', intervalMs: 10_800_000 })).not.toThrow()
 
-        await control`
-          INSERT INTO refresh_operations.operations
-            (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
-          VALUES
-            (${id}, ${id}, 'leaderboard-deep-crawl', ${`crawl:${id}`}, ${`crawl:${id}`}, 'leaderboard',
-             ${control.json(payload)}, ${control.json({ source: 'test' })}, 3)
-        `
-      }
-
-      await insert({ region: 'EU', intervalMs: 10_800_000 })
-      await expect(insert({ region: 'all', intervalMs: 10_800_000 })).rejects.toThrow('operations_payload_by_kind')
-      await expect(insert({ region: 'EU', intervalMs: 60_000 })).rejects.toThrow('operations_payload_by_kind')
-
-      await expect(insert({ region: 'EU', intervalMs: 10_800_000, page: 3 })).rejects.toThrow(
-        'operations_payload_by_kind',
-      )
-
-      await insert({ mode: 'solo2v2', region: 'EU', intervalMs: 10_800_000 })
-
-      await expect(insert({ mode: '3v3', region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
-        'operations_payload_by_kind',
-      )
-
-      await expect(insert({ mode: null, region: 'EU', intervalMs: 10_800_000 })).rejects.toThrow(
-        'operations_payload_by_kind',
-      )
-    } finally {
-      await control.end()
-    }
+    expect(() => parse({ region: 'all', intervalMs: 10_800_000 })).toThrow()
+    expect(() => parse({ region: 'EU', intervalMs: 60_000 })).toThrow()
+    expect(() => parse({ region: 'EU', intervalMs: 10_800_000, page: 3 })).toThrow()
+    expect(() => parse({ mode: '3v3', region: 'EU', intervalMs: 10_800_000 })).toThrow()
+    expect(() => parse({ mode: null, region: 'EU', intervalMs: 10_800_000 })).toThrow()
   })
 
   test('saves and replaces crawl progress per region', async () => {

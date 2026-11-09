@@ -8,8 +8,10 @@ import {
   createPostgresPlayerNameVerifications,
   createPostgresRankedPlayers,
   playerModule,
+  playerNameVerificationContract,
 } from '@brawltome/player'
 import { createPostgresRefreshOperations, refreshOperationsModule } from '@brawltome/refresh-operations'
+import { testJobContract } from '@brawltome/refresh-operations/testing'
 import { createPostgresRequestAdmission, requestAdmissionModule } from '@brawltome/request-admission'
 import { createTelemetry } from '@brawltome/telemetry'
 import postgres from 'postgres'
@@ -110,7 +112,12 @@ describe('Player name verification through durable operations', () => {
 
     await accounts.accounts.pinPlayer(signedIn.account.id, 502)
     const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+
+    const operations = createPostgresRefreshOperations(
+      { database },
+      { jobs: [playerNameVerificationContract, testJobContract] },
+    )
+
     const verifications = createPostgresPlayerNameVerifications(database)
     const rankedPlayers = createPostgresRankedPlayers(database)
     const discovery = createPostgresPlayerDiscoverySource(database)
@@ -145,6 +152,7 @@ describe('Player name verification through durable operations', () => {
 
     // Interactive work keeps its reserved slot ahead of queued verifications.
     await operations.accept({
+      job: testJobContract,
       dedupeKey: `interactive:${randomUUID()}`,
       operationKey: `interactive:${randomUUID()}`,
       workClass: 'interactive',

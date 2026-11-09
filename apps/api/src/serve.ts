@@ -41,7 +41,6 @@ import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
-import { createRefreshOperationRoutes } from './routes/refresh-operations.routes'
 import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
@@ -199,11 +198,6 @@ app.route(
     playerRefreshReservations,
     requestAdmission,
   }),
-)
-
-app.route(
-  '/internal/operations',
-  createRefreshOperationRoutes(refreshOperations, process.env.INTERNAL_API_SECRET, telemetry),
 )
 
 app.route('/events', createRefreshEventRoutes(refreshEvents))

@@ -9,6 +9,7 @@ import {
 import { statisticsPublicationEffectState } from '../db/effects'
 import type { PublicationAuthorization, StatisticsTracer } from '../index'
 import { completeAttempt, deadLetterAttempt, deferAttempt } from './job-outcomes'
+import { statisticsPublicationContract } from './statistics-job-contracts'
 
 export type StatisticsPublicationJobDependencies = {
   statistics: Pick<StatisticsTracer, 'preflightPublication' | 'validateAndPublish'>
@@ -77,11 +78,8 @@ export function createStatisticsPublicationJob(
   dependencies: StatisticsPublicationJobDependencies,
 ): JobDefinition<StatisticsPublicationPayload> {
   return defineJob<StatisticsPublicationPayload>({
-    kind: 'statistics-publication',
-    workClasses: ['global-statistics'],
+    ...statisticsPublicationContract,
     failureCode: 'statistics_publication_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as StatisticsPublicationPayload,
     effectState: statisticsPublicationEffectState,
     run: (lease, tools) => runPublication(lease, tools, dependencies),
   })

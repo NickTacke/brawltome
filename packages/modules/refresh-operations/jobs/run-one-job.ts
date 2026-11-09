@@ -174,7 +174,7 @@ function createSourceAdmitter(
 }
 
 function withParsedPayload(claimed: Lease<unknown>, job: JobDefinition<unknown>): Lease<unknown> {
-  const payload = job.parsePayload(claimed.payload)
+  const payload = job.parsePayload(claimed.payload, claimed.workClass)
 
   return payload === claimed.payload ? claimed : { ...claimed, payload }
 }

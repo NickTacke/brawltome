@@ -3,7 +3,7 @@ import type { OperationLease, OperationProvenance, WorkClass } from '../model'
 import { schedules } from './tables'
 
 export type ScheduleDefinition = {
-  kind: OperationLease['kind']
+  kind: string
   workClass: WorkClass
   intervalMs: number
   firstDueAt: Date

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { Database, Sql } from '@brawltome/foundation'
-import type { OperationKind } from '../domain/operation-kinds'
 import { validateScheduleIdentity } from '../domain/schedule-definition'
+import type { JobContract } from '../jobs/job-definition'
+import { assertValidJobInput } from '../jobs/job-input'
 import type { OperationProvenance, WorkClass } from '../model'
 
 // one set has been reconciled through this function so far, so it shares primary monitoring's lock
@@ -15,7 +16,7 @@ export type ReconcileObservationWatermark = {
 }
 
 export type ResourceSchedule = {
-  kind: OperationKind
+  job: JobContract<unknown>
   scheduleKey: string
   operationKeyPrefix: string
   resourceKey: string
@@ -88,7 +89,7 @@ async function insertSchedule(sql: Sql, schedule: ResourceSchedule): Promise<voi
       (id, schedule_key, kind, resource_key, work_class, interval_ms, first_due_at, next_due_at,
        operation_key_prefix, payload, provenance, max_attempts)
     VALUES
-      (${randomUUID()}, ${schedule.scheduleKey}, ${schedule.kind}, ${schedule.resourceKey},
+      (${randomUUID()}, ${schedule.scheduleKey}, ${schedule.job.kind}, ${schedule.resourceKey},
        ${schedule.workClass}, ${schedule.intervalMs}, ${schedule.firstDueAt}, ${schedule.firstDueAt},
        ${schedule.operationKeyPrefix}, ${sql.json(schedule.payload as never)},
        ${sql.json(schedule.provenance)}, ${schedule.maxAttempts})
@@ -128,7 +129,10 @@ export async function reconcileResourceSchedules(
   database: Database,
   input: ReconcileResourceSchedulesInput,
 ): Promise<ReconcileResourceSchedulesResult> {
-  for (const schedule of input.schedules) validateScheduleIdentity(schedule)
+  for (const schedule of input.schedules) {
+    assertValidJobInput(schedule.job, schedule.workClass, schedule.payload)
+    validateScheduleIdentity(schedule)
+  }
 
   return database.sql.begin(async (transaction) => {
     const sql = transaction as unknown as Sql

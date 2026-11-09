@@ -37,7 +37,6 @@ import {
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
 import {
-  createEffectStates,
   createJobRegistry,
   createPostgresRefreshOperations,
   type Lease,
@@ -232,7 +231,7 @@ const jobRegistry = createJobRegistry(workerJobs)
 const operations = createPostgresRefreshOperations(
   { database: databases.main, renewals: databases.renewals },
   {
-    effectStates: createEffectStates(workerJobs),
+    jobs: workerJobs,
     proofEffects: proofEffectStore,
     readAppliedLeaderboardEffects,
   },

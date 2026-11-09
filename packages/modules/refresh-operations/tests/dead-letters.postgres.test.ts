@@ -10,17 +10,31 @@ import {
   type EffectDescriber,
   interactiveRefreshMaxAttempts,
   type OperationLease,
+  proofContract,
   type ReplayGuard,
   reconcileResourceSchedules,
   refreshOperationsModule,
   reserveForAdmission,
 } from '@brawltome/refresh-operations'
+import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
 import { readTestProofEffects, testProofEffects } from './test-proof-effects'
 import { testWatermark } from './test-watermark'
 
 let database: TestDatabase
 let connectionString = ''
 let deadLetters: DeadLetterOperations
+
+// proof effects are real here; the other kinds' modules aren't loaded in a queue-only database
+const queueOnlyJobs = [
+  proofContract,
+  ...[
+    'clan-refresh',
+    'interactive-player-refresh',
+    'leaderboard-1v1',
+    'player-discovery-projection',
+    'ranked-player-pulse',
+  ].map(createPassthroughJobContract),
+]
 
 const noHooks: DeadLetterHooks = { replayGuards: new Map(), describeEffects: new Map() }
 
@@ -61,9 +75,13 @@ afterAll(async () => {
 })
 
 async function createDeadLetter(value = 'sensitive-payload') {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {}, proofEffects: testProofEffects })
+  const operations = createPostgresRefreshOperations(
+    { database },
+    { jobs: queueOnlyJobs, proofEffects: testProofEffects },
+  )
 
   const accepted = await operations.accept({
+    job: proofContract,
     dedupeKey: `dead-letter:${randomUUID()}`,
     operationKey: `effect:${randomUUID()}`,
     workClass: 'maintenance',
@@ -192,12 +210,13 @@ describe('dead-letter operations', () => {
   test('replay preserves scheduled provenance and stable interactive section effects', async () => {
     const operations = createPostgresRefreshOperations(
       { database },
-      { effectStates: {}, proofEffects: testProofEffects },
+      { jobs: queueOnlyJobs, proofEffects: testProofEffects },
     )
 
     const firstDueAt = new Date(Date.now() - 1_000).toISOString()
 
     const schedule = await operations.createSchedule({
+      job: proofContract,
       scheduleKey: `dead-letter-schedule:${randomUUID()}`,
       operationKeyPrefix: `scheduled-effect:${randomUUID()}`,
       workClass: 'projection',
@@ -255,7 +274,7 @@ describe('dead-letter operations', () => {
     await operations.complete(scheduledReplay)
 
     const reserved = await reserveForAdmission(database, {
-      kind: 'interactive-player-refresh',
+      job: createPassthroughJobContract('interactive-player-refresh'),
       dedupeKey: `interactive-dead-letter:${randomUUID()}`,
       operationKey: `interactive-effect:${randomUUID()}`,
       resourceKey: 'player:42',
@@ -306,11 +325,11 @@ describe('dead-letter operations', () => {
   test('preserves clan, leaderboard, and projection kinds, payloads, and effect identity on replay', async () => {
     const operations = createPostgresRefreshOperations(
       { database },
-      { effectStates: {}, proofEffects: testProofEffects },
+      { jobs: queueOnlyJobs, proofEffects: testProofEffects },
     )
 
     const leaderboard = await operations.accept({
-      kind: 'leaderboard-1v1',
+      job: createPassthroughJobContract('leaderboard-1v1'),
       dedupeKey: `leaderboard-dead-letter:${randomUUID()}`,
       operationKey: `leaderboard-effect:${randomUUID()}`,
       workClass: 'leaderboard',
@@ -357,7 +376,7 @@ describe('dead-letter operations', () => {
     await operations.complete(leaderboardSuccessor)
 
     const clan = await reserveForAdmission(database, {
-      kind: 'clan-refresh',
+      job: createPassthroughJobContract('clan-refresh'),
       dedupeKey: `clan-dead-letter:${randomUUID()}`,
       operationKey: `clan-effect:${randomUUID()}`,
       workClass: 'interactive',
@@ -403,7 +422,7 @@ describe('dead-letter operations', () => {
     await operations.complete(clanSuccessor)
 
     const projection = await operations.accept({
-      kind: 'player-discovery-projection',
+      job: createPassthroughJobContract('player-discovery-projection'),
       dedupeKey: `player-discovery-dead-letter:${randomUUID()}`,
       operationKey: `player-discovery-effect:${randomUUID()}`,
       workClass: 'projection',
@@ -450,7 +469,7 @@ describe('dead-letter operations', () => {
     await operations.complete(projectionSuccessor)
 
     await operations.accept({
-      kind: 'ranked-player-pulse',
+      job: createPassthroughJobContract('ranked-player-pulse'),
       dedupeKey: `pulse-dead-letter:${randomUUID()}`,
       operationKey: `pulse-effect:${randomUUID()}`,
       workClass: 'primary-monitoring',
@@ -500,7 +519,7 @@ describe('dead-letter operations', () => {
       identityPayloadFields: ['assignmentId', 'brawlhallaId'],
       schedules: [
         {
-          kind: 'interactive-player-refresh',
+          job: createPassthroughJobContract('interactive-player-refresh'),
           scheduleKey: `primary-player:${monitoringTarget.brawlhallaId}:${monitoringTarget.assignmentId}`,
           operationKeyPrefix: `primary-player:${monitoringTarget.brawlhallaId}`,
           resourceKey: `player:${monitoringTarget.brawlhallaId}`,

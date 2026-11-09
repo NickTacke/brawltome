@@ -57,11 +57,6 @@ export {
   readEffectLineage,
 } from './db/effect-lineage'
 export {
-  createEffectStates,
-  type EffectStateEntry,
-  type EffectStates,
-} from './db/effect-states'
-export {
   type ActiveOperation,
   type CountActiveInput,
   countActive,
@@ -118,6 +113,13 @@ export {
   sourceRetryAfterMs,
 } from './domain/job-errors'
 export {
+  hasOnlyFields,
+  isPositive32BitInteger,
+  isPositiveInteger,
+  isSectionList,
+  readPayloadObject,
+} from './domain/payload-fields'
+export {
   completeWithProofEffect,
   type ProofEffectPayload,
   type ProofEffectStore,
@@ -128,6 +130,7 @@ export {
   type AttemptOutcome,
   defineJob,
   type EffectState,
+  type JobContract,
   type JobDefinition,
   type JobTools,
   type Lease,
@@ -137,8 +140,10 @@ export {
   type SourceAdmissionPort,
   type SourceAdmitter,
 } from './jobs/job-definition'
+export { assertValidJobInput } from './jobs/job-input'
 export { createJobRegistry, type JobRegistry } from './jobs/job-registry'
 export { waitForRenewal } from './jobs/lease-renewal'
+export { parseProofEffectPayload, proofContract } from './jobs/proof-contract'
 export { type RetryBackoff, type RunOneJobOptions, runOneJob } from './jobs/run-one-job'
 export { type RunSectionsOptions, runSections, type SectionRun } from './jobs/run-sections'
 export {

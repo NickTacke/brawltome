@@ -3,11 +3,8 @@ import type { Lease, OperationFailure, QueueWorker, SourceAdmissionPort } from '
 import { runJobOnce } from '@brawltome/refresh-operations/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import type { ClanRefreshEffect } from '../../domain/refresh-effect'
-import {
-  type ClanRefreshJobDependencies,
-  type ClanRefreshPayload,
-  createClanRefreshJob,
-} from '../../jobs/clan-refresh-job'
+import type { ClanRefreshPayload } from '../../jobs/clan-refresh-contract'
+import { type ClanRefreshJobDependencies, createClanRefreshJob } from '../../jobs/clan-refresh-job'
 
 type Renewal = { outcome: 'renewed'; leaseExpiresAt: Date } | { outcome: 'lease-lost' }
 

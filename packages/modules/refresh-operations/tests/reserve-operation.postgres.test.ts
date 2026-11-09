@@ -13,6 +13,7 @@ import {
   reserveForAdmission,
   reserveForBinding,
 } from '@brawltome/refresh-operations'
+import { createPassthroughJobContract, testJobContract } from '@brawltome/refresh-operations/testing'
 
 let database: TestDatabase
 
@@ -30,7 +31,7 @@ function admissionInput(overrides: { dedupeKey?: string; reservationTtlSeconds?:
   const key = randomUUID()
 
   return {
-    kind: 'proof' as const,
+    job: testJobContract,
     dedupeKey: overrides.dedupeKey ?? `reserve:${key}`,
     operationKey: `effect:${key}`,
     workClass: 'interactive' as const,
@@ -45,7 +46,7 @@ function bindingInput(overrides: { payload?: { value: string } } = {}) {
   const key = randomUUID()
 
   return {
-    kind: 'proof' as const,
+    job: testJobContract,
     lockNamespace: 209,
     dedupeKey: `binding:${key}`,
     operationKey: `binding:${key}`,
@@ -93,7 +94,7 @@ describe('acceptOperation', () => {
     const dedupeKey = `accept:${randomUUID()}`
 
     const input = {
-      kind: 'proof' as const,
+      job: testJobContract,
       dedupeKey,
       operationKey: `effect:${randomUUID()}`,
       workClass: 'maintenance' as const,
@@ -117,7 +118,7 @@ describe('acceptOperation', () => {
 
     const wakeups = await collectWakeups(async () => {
       const result = await acceptOperation(database, {
-        kind: 'proof',
+        job: testJobContract,
         dedupeKey: `accept:${randomUUID()}`,
         operationKey: `effect:${randomUUID()}`,
         workClass: 'maintenance',
@@ -146,7 +147,7 @@ describe('reserveForAdmission', () => {
     const wrongToken = await activateReserved(database, {
       operationId: reserved.operationId,
       reservationToken: randomUUID(),
-      kinds: ['proof'],
+      kinds: ['test-job'],
     })
 
     expect(wrongToken).toBe('lease-lost')
@@ -155,7 +156,7 @@ describe('reserveForAdmission', () => {
       const activated = await activateReserved(database, {
         operationId: reserved.operationId,
         reservationToken: reserved.reservationToken,
-        kinds: ['proof'],
+        kinds: ['test-job'],
       })
 
       expect(activated).toBe('transitioned')
@@ -207,7 +208,7 @@ describe('reserveForAdmission', () => {
     const resourceKey = `proof-resource:${randomUUID()}`
 
     const queued = await acceptOperation(database, {
-      kind: 'proof',
+      job: testJobContract,
       dedupeKey: `queued:${randomUUID()}`,
       operationKey: `effect:${randomUUID()}`,
       resourceKey,
@@ -222,7 +223,7 @@ describe('reserveForAdmission', () => {
       {
         beforeInsert: (transaction) =>
           promotePendingWorkClass(transaction, {
-            kind: 'proof',
+            kind: 'test-job',
             resourceKey,
             from: 'maintenance',
             to: 'interactive',
@@ -246,7 +247,7 @@ describe('reserveForAdmission', () => {
       reservationToken: reserved.reservationToken,
       reason: 'actor_rate_limited',
       message: 'Admission rejected',
-      kinds: ['proof'] as const,
+      kinds: ['test-job'] as const,
     }
 
     expect(await rejectReserved(database, { ...rejection, reservationToken: randomUUID() })).toBe('lease-lost')
@@ -262,10 +263,10 @@ describe('reserveForAdmission', () => {
     const input = admissionInput()
     const reserved = await reserveForAdmission(database, input)
 
-    const found = await findActiveOperation(database, { kind: 'proof', dedupeKey: input.dedupeKey })
+    const found = await findActiveOperation(database, { kind: 'test-job', dedupeKey: input.dedupeKey })
 
     expect(found).toEqual({ operationId: reserved.operationId, awaitingAdmission: true, reservationExpired: false })
-    expect(await findActiveOperation(database, { kind: 'proof', dedupeKey: `absent:${randomUUID()}` })).toBeNull()
+    expect(await findActiveOperation(database, { kind: 'test-job', dedupeKey: `absent:${randomUUID()}` })).toBeNull()
   })
 })
 
@@ -279,18 +280,18 @@ describe('reserveForBinding', () => {
     expect(second).toEqual({ outcome: 'already-active', operationId: first.operationId })
     expect((await readRow(first.operationId)).status).toBe('awaiting_binding')
 
-    const awaiting = await listAwaiting(database, { kinds: ['proof'], status: 'awaiting_binding', limit: 500 })
+    const awaiting = await listAwaiting(database, { kinds: ['test-job'], status: 'awaiting_binding', limit: 500 })
 
     expect(awaiting).toContain(first.operationId)
 
     const wakeups = await collectWakeups(async () => {
-      expect(await activateBound(database, first.operationId, { kinds: ['proof'] })).toBe('transitioned')
+      expect(await activateBound(database, first.operationId, { kinds: ['test-job'] })).toBe('transitioned')
     })
 
     expect(wakeups).toEqual([first.operationId])
     expect((await readRow(first.operationId)).status).toBe('pending')
-    expect(await activateBound(database, first.operationId, { kinds: ['proof'] })).toBe('transitioned')
-    expect(await activateBound(database, randomUUID(), { kinds: ['proof'] })).toBe('lease-lost')
+    expect(await activateBound(database, first.operationId, { kinds: ['test-job'] })).toBe('transitioned')
+    expect(await activateBound(database, randomUUID(), { kinds: ['test-job'] })).toBe('lease-lost')
   })
 
   test('throws when the operation key is reserved again with a changed payload', async () => {
@@ -307,7 +308,7 @@ describe('reserveForBinding', () => {
     await reserveForBinding(database, bindingInput())
     await reserveForBinding(database, bindingInput())
 
-    const awaiting = await listAwaiting(database, { kinds: ['proof'], status: 'awaiting_binding', limit: 1 })
+    const awaiting = await listAwaiting(database, { kinds: ['test-job'], status: 'awaiting_binding', limit: 1 })
 
     expect(awaiting).toHaveLength(1)
   })
@@ -318,7 +319,7 @@ describe('acceptOperation with a resource', () => {
     const key = randomUUID()
 
     return {
-      kind: 'interactive-player-refresh' as const,
+      job: createPassthroughJobContract('interactive-player-refresh'),
       dedupeKey: `freshness:${brawlhallaId}:${key}`,
       operationKey: `freshness:${brawlhallaId}:${key}`,
       resourceKey: `player:${brawlhallaId}`,
@@ -345,7 +346,7 @@ describe('acceptOperation with a resource', () => {
     const key = randomUUID()
 
     const reserved = await reserveForAdmission(database, {
-      kind: 'interactive-player-refresh',
+      job: createPassthroughJobContract('interactive-player-refresh'),
       dedupeKey: `held:${key}`,
       operationKey: `held:${key}`,
       resourceKey: 'player:3002',

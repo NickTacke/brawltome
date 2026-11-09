@@ -9,6 +9,7 @@ export {
   type ClanDiscoveryProjectionJobDependencies,
   createClanDiscoveryProjectionJob,
 } from './jobs/clan-discovery-projection-job'
+export { discoveryReconciliationContract } from './jobs/discovery-reconciliation-contract'
 export {
   createDiscoveryReconciliationJob,
   type DiscoveryReconciliationJobDependencies,
@@ -17,6 +18,7 @@ export {
   createPlayerDiscoveryProjectionJob,
   type PlayerDiscoveryProjectionJobDependencies,
 } from './jobs/player-discovery-projection-job'
+export { clanDiscoveryProjectionContract, playerDiscoveryProjectionContract } from './jobs/projection-contract'
 export * from './model'
 export { createPostgresDiscovery, type PostgresDiscovery } from './postgres'
 

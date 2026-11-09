@@ -13,7 +13,7 @@ import {
   runOneJob,
   type WorkClass,
 } from '@brawltome/refresh-operations'
-import { runJobOnce } from '@brawltome/refresh-operations/testing'
+import { runJobOnce, testJobContract } from '@brawltome/refresh-operations/testing'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 4,
@@ -42,10 +42,9 @@ const sourceOutage = Object.assign(new Error('Brawlhalla is in maintenance'), {
 
 type TestJob = Omit<JobDefinition<unknown>, 'kind' | 'workClasses' | 'failureCode' | 'parsePayload'>
 
-// the kind check on the operations table only accepts real kinds until the table's constraints go
 function testJob(job: TestJob): JobDefinition<unknown> {
   return defineJob({
-    kind: 'proof',
+    kind: testJobContract.kind,
     workClasses: ['maintenance'],
     failureCode: 'test_job_failed',
     parsePayload: (value) => value,
@@ -91,10 +90,11 @@ async function acceptProofOperation(): Promise<{
   operations: ReturnType<typeof createPostgresRefreshOperations>
   operationId: string
 }> {
-  const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+  const operations = createPostgresRefreshOperations({ database }, { jobs: [testJobContract] })
   const key = randomUUID()
 
   const accepted = await operations.accept({
+    job: testJobContract,
     dedupeKey: key,
     operationKey: key,
     workClass: 'maintenance',
@@ -121,7 +121,7 @@ describe('createJobRegistry', () => {
   test('createJobRegistry throws on a duplicate kind', () => {
     const job = testJob({ run: async () => 'succeeded' })
 
-    expect(() => createJobRegistry([job, job])).toThrow('proof')
+    expect(() => createJobRegistry([job, job])).toThrow('test-job')
   })
 
   test('createJobRegistry throws on an unknown work class', () => {
@@ -136,7 +136,7 @@ describe('createJobRegistry', () => {
   test('a registry names the kind it has no job for', () => {
     const registry = createJobRegistry([])
 
-    expect(() => registry.get('proof')).toThrow('proof')
+    expect(() => registry.get('test-job')).toThrow('test-job')
   })
 })
 

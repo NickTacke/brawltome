@@ -143,6 +143,35 @@ function createProofQueueSpy() {
 }
 
 describe('worker job list', () => {
+  test('a job exists for every kind the queue has ever held', () => {
+    // a kind that drops off this list would have its live rows dead-lettered at the next claim
+    const kindsInProduction = [
+      'proof',
+      'primary-player-verification',
+      'interactive-player-refresh',
+      'clan-refresh',
+      'ranked-player-pulse',
+      'player-name-verification',
+      'leaderboard-1v1',
+      'leaderboard-2v2',
+      'leaderboard-solo-2v2',
+      'leaderboard-3v3',
+      'leaderboard-deep-crawl',
+      'ranking-retention',
+      'player-discovery-projection',
+      'clan-discovery-projection',
+      'discovery-reconciliation',
+      'statistics-ranked-collection',
+      'statistics-lifetime-collection',
+      'statistics-publication',
+      'statistics-legend-meta-publication',
+    ]
+
+    const jobKinds = createRecordingJobs().jobs.map((job) => job.kind)
+
+    expect(jobKinds.toSorted()).toEqual(kindsInProduction.toSorted())
+  })
+
   test('player and clan projections deliver from their own owner source', async () => {
     const { calls, jobs } = createRecordingJobs()
 

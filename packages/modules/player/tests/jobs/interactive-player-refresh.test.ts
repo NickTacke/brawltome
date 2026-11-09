@@ -251,13 +251,13 @@ describe('interactive player refresh job', () => {
     const lease = refreshLease('primary-monitoring', {
       assignmentId: crypto.randomUUID(),
       brawlhallaId: 42,
-      staleSections: ['ranked'],
+      staleSections: ['ranked', 'stats'],
     })
 
-    const { queue, failed, committed } = createQueueSpy(lease)
+    const { queue, failed, committed, completions } = createQueueSpy(lease)
     let targetChecks = 0
 
-    const { dependencies } = createDependencies({
+    const { dependencies, record } = createDependencies({
       isPrimaryMonitoringTarget: async () => {
         targetChecks++
 
@@ -273,7 +273,9 @@ describe('interactive player refresh job', () => {
     })
 
     expect(committed).toEqual([])
-    expect(failed.map(({ failure }) => failure.message)).toEqual(['Primary Player assignment is no longer current'])
+    expect(record.domains).toEqual([])
+    expect(failed).toEqual([])
+    expect(completions()).toBe(1)
   })
 
   test('runs an interactive refresh on demand, section by section', async () => {

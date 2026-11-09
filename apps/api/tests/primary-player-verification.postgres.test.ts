@@ -1,8 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { accountsModule } from '@brawltome/accounts'
+import { accountsModule, primaryPlayerVerificationContract } from '@brawltome/accounts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { acceptOperation, type JobDefinition, refreshOperationsModule } from '@brawltome/refresh-operations'
+import {
+  acceptOperation,
+  assertValidJobInput,
+  type JobDefinition,
+  proofContract,
+  refreshOperationsModule,
+  type WorkClass,
+} from '@brawltome/refresh-operations'
 import { runJobOnce } from '@brawltome/refresh-operations/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import {
@@ -77,9 +84,13 @@ function createVerificationJobs(verify: Verify) {
   }
 }
 
+function contractFor(kind: 'proof' | 'primary-player-verification') {
+  return kind === 'proof' ? proofContract : primaryPlayerVerificationContract
+}
+
 function acceptAttempt(kind: 'proof' | 'primary-player-verification', attemptId: string, maxAttempts = 3) {
   return acceptOperation(database, {
-    kind,
+    job: contractFor(kind),
     dedupeKey: `primary-player:${attemptId}:${kind}`,
     operationKey: `primary-player:${attemptId}:${kind}`,
     workClass: 'interactive',
@@ -190,7 +201,7 @@ describe('primary player verification on the real queue', () => {
 
     const accept = (kind: 'proof' | 'primary-player-verification') =>
       queue.accept({
-        kind,
+        job: contractFor(kind),
         dedupeKey: operationKey,
         operationKey,
         workClass: 'interactive',
@@ -224,38 +235,13 @@ describe('primary player verification on the real queue', () => {
     expect(accountWrites).toBe(1)
   })
 
-  test('the queue checks accept the new kind only on the interactive work class with a string value', async () => {
-    const insertRow = async (workClass: string, payload: Record<string, unknown>) => {
-      const operationId = randomUUID()
+  test('the kind runs only on the interactive work class with a string value', () => {
+    const check = (workClass: WorkClass, payload: Record<string, unknown>) =>
+      assertValidJobInput(primaryPlayerVerificationContract, workClass, payload)
 
-      await database.sql`
-        INSERT INTO refresh_operations.operations
-          (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
-        VALUES (${operationId}, ${operationId}, 'primary-player-verification', ${operationId}, ${operationId},
-                ${workClass}, ${database.sql.json(payload as never)}, ${database.sql.json({ source: 'test' })}, 3)
-      `
-
-      // nothing later in this file should claim it
-      await database.sql`DELETE FROM refresh_operations.operations WHERE id = ${operationId}`
-    }
-
-    await expect(insertRow('interactive', { value: 'attempt' })).resolves.toBeUndefined()
-    await expect(insertRow('maintenance', { value: 'attempt' })).rejects.toThrow('operations_payload_by_kind')
-    await expect(insertRow('interactive', { value: 42 })).rejects.toThrow('operations_payload_by_kind')
-    await expect(insertRow('interactive', {})).rejects.toThrow('operations_payload_by_kind')
-  })
-
-  test('both kind checks are validated once every migration has run', async () => {
-    const constraints = await database.sql<{ conname: string; convalidated: boolean }[]>`
-      SELECT conname, convalidated
-      FROM pg_constraint
-      WHERE conrelid = 'refresh_operations.operations'::regclass
-        AND conname IN ('operations_kind_check', 'operations_payload_by_kind')
-    `
-
-    expect(constraints.toSorted((a, b) => a.conname.localeCompare(b.conname))).toEqual([
-      { conname: 'operations_kind_check', convalidated: true },
-      { conname: 'operations_payload_by_kind', convalidated: true },
-    ])
+    expect(() => check('interactive', { value: 'attempt' })).not.toThrow()
+    expect(() => check('maintenance', { value: 'attempt' })).toThrow('work class maintenance')
+    expect(() => check('interactive', { value: 42 })).toThrow('proof value must be a string')
+    expect(() => check('interactive', {})).toThrow('proof value must be a string')
   })
 })

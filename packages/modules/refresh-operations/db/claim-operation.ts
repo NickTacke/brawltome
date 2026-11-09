@@ -5,7 +5,6 @@ import {
   chooseBackgroundClass,
   validateAdmissionConfig,
 } from '../domain/admission'
-import type { OperationKind } from '../domain/operation-kinds'
 import type { EffectState } from '../jobs/job-definition'
 import {
   type AdmissionConfig,
@@ -15,15 +14,15 @@ import {
   type WorkClass,
 } from '../model'
 import { admissionLockId } from './admission-lock'
-import type { EffectStateEntry, EffectStates } from './effect-states'
+import type { ClaimJob, ClaimJobs } from './claim-jobs'
 import { type OperationRow, toLease } from './operation-row'
 
 export type ClaimOperationInput = {
   workerId: string
   leaseMs: number
   admission: AdmissionConfig
-  kind?: OperationKind
-  effectStates: EffectStates
+  kind?: string
+  jobs: ClaimJobs
 }
 
 type AdmissionPolicy = ReturnType<typeof admissionConfigHash>
@@ -64,7 +63,7 @@ async function readActiveCounts(sql: Sql): Promise<ActiveCounts> {
   }
 }
 
-async function readDueClasses(sql: Sql, kind: OperationKind | undefined): Promise<Set<WorkClass>> {
+async function readDueClasses(sql: Sql, kind: string | undefined): Promise<Set<WorkClass>> {
   const kindFilter = kind ? sql`AND kind = ${kind}` : sql``
 
   const rows = await sql<{ work_class: WorkClass }[]>`
@@ -135,7 +134,7 @@ async function selectWorkClass(
 async function pickCandidate(
   sql: Sql,
   workClass: WorkClass,
-  kind: OperationKind | undefined,
+  kind: string | undefined,
 ): Promise<OperationRow | undefined> {
   const kindFilter = kind ? sql`AND operation.kind = ${kind}` : sql``
 
@@ -166,8 +165,8 @@ async function pickCandidate(
   return candidate
 }
 
-async function takeClaimLock(sql: Sql, effects: EffectStateEntry | undefined, candidate: OperationRow): Promise<void> {
-  const claimLockKey = effects?.claimLockKey?.(candidate.effect_operation_id)
+async function takeClaimLock(sql: Sql, job: ClaimJob | undefined, candidate: OperationRow): Promise<void> {
+  const claimLockKey = job?.claimLockKey?.(candidate.effect_operation_id)
 
   if (!claimLockKey) return
 
@@ -178,14 +177,10 @@ async function takeClaimLock(sql: Sql, effects: EffectStateEntry | undefined, ca
   `
 }
 
-function readEffectState(
-  effects: EffectStateEntry | undefined,
-  sql: Sql,
-  candidate: OperationRow,
-): Promise<EffectState> {
-  if (!effects?.effectState) return Promise.resolve('none')
+function readEffectState(job: ClaimJob | undefined, sql: Sql, candidate: OperationRow): Promise<EffectState> {
+  if (!job?.effectState) return Promise.resolve('none')
 
-  return effects.effectState(sql, {
+  return job.effectState(sql, {
     operationId: candidate.id,
     effectOperationId: candidate.effect_operation_id,
     payload: candidate.payload,
@@ -229,12 +224,8 @@ async function deadLetterExhausted(sql: Sql, candidate: OperationRow): Promise<v
 }
 
 // true when the expired lease ended the operation, so this candidate must not be leased again
-async function finishOrExpireLease(
-  sql: Sql,
-  effects: EffectStateEntry | undefined,
-  candidate: OperationRow,
-): Promise<boolean> {
-  const effectState = await readEffectState(effects, sql, candidate)
+async function finishOrExpireLease(sql: Sql, job: ClaimJob | undefined, candidate: OperationRow): Promise<boolean> {
+  const effectState = await readEffectState(job, sql, candidate)
 
   if (effectState === 'acknowledged') {
     await finishAcknowledged(sql, candidate)
@@ -307,11 +298,11 @@ async function claimOnce(sql: Sql, input: ClaimOperationInput, policy: Admission
 
   if (!candidate) return { kind: 'retry' }
 
-  const effects = input.effectStates[candidate.kind]
+  const job = input.jobs.get(candidate.kind)
 
-  await takeClaimLock(sql, effects, candidate)
+  await takeClaimLock(sql, job, candidate)
 
-  const isSettled = candidate.status === 'leased' && (await finishOrExpireLease(sql, effects, candidate))
+  const isSettled = candidate.status === 'leased' && (await finishOrExpireLease(sql, job, candidate))
 
   if (isSettled) return { kind: 'retry' }
 

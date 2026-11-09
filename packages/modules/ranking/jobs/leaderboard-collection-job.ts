@@ -17,6 +17,7 @@ import {
 } from '../leaderboard'
 import { type AdmittedPageFetchDependencies, createAdmittedPageFetch } from './admitted-page-fetch'
 import { decideLeaderboardFailure } from './leaderboard-failure'
+import { leaderboardCollectionContract } from './leaderboard-job-contracts'
 import { type PlayerPropagationDependencies, withPlayerPropagation } from './player-propagation'
 
 type LeaderboardCollectionLease = Lease<LeaderboardOperationPayload> & { kind: LeaderboardOperationKind }
@@ -63,11 +64,8 @@ export function createLeaderboardCollectionJob(
   dependencies: LeaderboardCollectionJobDependencies,
 ): JobDefinition<LeaderboardOperationPayload> {
   return defineJob<LeaderboardOperationPayload>({
-    kind,
-    workClasses: ['leaderboard'],
+    ...leaderboardCollectionContract(kind),
     failureCode: 'leaderboard_collection_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as LeaderboardOperationPayload,
     effectState: leaderboardEffectState,
     decideFailure: async (error) => decideLeaderboardFailure(error, dependencies.retryTimings),
     run: (lease, tools) => runCollection({ ...lease, kind }, tools, dependencies),

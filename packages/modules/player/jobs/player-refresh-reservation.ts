@@ -14,6 +14,7 @@ import {
   reserveForAdmission,
   type TransitionResult,
 } from '@brawltome/refresh-operations'
+import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const
 
@@ -49,7 +50,7 @@ export function reserveInteractivePlayerRefresh(
   const resourceKey = playerResourceKey(input.brawlhallaId)
 
   const reservation = {
-    kind: 'interactive-player-refresh' as const,
+    job: interactivePlayerRefreshContract,
     dedupeKey: input.dedupeKey,
     operationKey: input.operationKey,
     resourceKey,

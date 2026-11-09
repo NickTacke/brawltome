@@ -11,6 +11,7 @@ import {
   type TransitionResult,
 } from '@brawltome/refresh-operations'
 import type { ClanRefreshSection } from '../domain/refresh-section'
+import { clanRefreshContract } from './clan-refresh-contract'
 
 const clanRefreshKinds = ['clan-refresh'] as const
 
@@ -32,7 +33,7 @@ export function reserveClanRefresh(
   input: ClanRefreshReservation,
 ): Promise<ReserveInteractiveRefreshResult> {
   return reserveForAdmission(database, {
-    kind: 'clan-refresh',
+    job: clanRefreshContract,
     dedupeKey: input.dedupeKey,
     operationKey: input.operationKey,
     workClass: 'interactive',

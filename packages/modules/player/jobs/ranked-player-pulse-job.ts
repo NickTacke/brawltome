@@ -9,8 +9,7 @@ import {
 } from '@brawltome/refresh-operations'
 import type { PostgresRankedPlayers } from '../ranked/postgres'
 import { refreshRankedPlayerPulse, type V1RankedPulseSource } from '../ranked/refresh'
-
-export type RankedPlayerPulsePayload = { brawlhallaId: number }
+import { type RankedPlayerPulsePayload, rankedPlayerPulseContract } from './ranked-player-pulse-contract'
 
 export type RankedPlayerPulseJobDependencies = {
   rankedPlayers: PostgresRankedPlayers
@@ -49,11 +48,8 @@ export function createRankedPlayerPulseJob(
   dependencies: RankedPlayerPulseJobDependencies,
 ): JobDefinition<RankedPlayerPulsePayload> {
   return defineJob<RankedPlayerPulsePayload>({
-    kind: 'ranked-player-pulse',
-    workClasses: ['primary-monitoring'],
+    ...rankedPlayerPulseContract,
     failureCode: 'ranked_player_pulse_failed',
-    // claim already shapes this payload
-    parsePayload: (value) => value as RankedPlayerPulsePayload,
     effectState: (transaction, lease) => sectionCommitted(transaction, lease, 'ranked'),
     run: (lease, tools) => runRankedPulse(dependencies, lease, tools),
   })

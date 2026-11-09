@@ -6,6 +6,7 @@ import {
   reconcileFixedSchedule,
   refreshOperationsModule,
 } from '@brawltome/refresh-operations'
+import { createPassthroughJobContract } from '@brawltome/refresh-operations/testing'
 
 let database: TestDatabase
 
@@ -17,11 +18,14 @@ afterAll(async () => {
   await database?.drop()
 }, 20_000)
 
+const leaderboardContract = createPassthroughJobContract('leaderboard-1v1')
+
 describe('materializeDueSchedules', () => {
   test('refuses to supersede a leaderboard window without the applied effect reader', async () => {
     const intervalMs = 60_000
 
     await reconcileFixedSchedule(database, {
+      job: leaderboardContract,
       schedule: {
         scheduleKey: `guard:${randomUUID()}`,
         operationKeyPrefix: `guard:${randomUUID()}`,
@@ -34,7 +38,7 @@ describe('materializeDueSchedules', () => {
       },
     })
 
-    const operations = createPostgresRefreshOperations({ database }, { effectStates: {} })
+    const operations = createPostgresRefreshOperations({ database }, { jobs: [leaderboardContract] })
 
     await expect(operations.materializeDueSchedules()).rejects.toThrow('no applied effect reader was configured')
   })

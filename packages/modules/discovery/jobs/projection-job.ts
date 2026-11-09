@@ -3,12 +3,14 @@ import {
   type EffectState,
   type FailureDecision,
   isSourceFailure,
+  type JobContract,
   type JobDefinition,
   type Lease,
 } from '@brawltome/refresh-operations'
 import { discoveryClaimLockKey } from './claim-lock-key'
+import type { ProjectionPayload } from './projection-contract'
 
-export type ProjectionPayload = { batchSize: number }
+export type { ProjectionPayload }
 
 export type ProjectionJobDependencies = {
   deliverPending(batchSize: number, effectOperationId: string, isLeaseActive: () => Promise<boolean>): Promise<unknown>
@@ -38,17 +40,14 @@ async function decideAppliedEffectFailure(
 // delivers a bounded batch of pending events to the discovery projection; an effect that landed before a failure must
 // not be dead-lettered or retried from scratch
 export function createProjectionJob(
-  identity: { kind: string; failureCode: string },
+  identity: { contract: JobContract<ProjectionPayload>; failureCode: string },
   dependencies: ProjectionJobDependencies,
 ): JobDefinition<ProjectionPayload> {
   const { deliverPending, projectionEffectState, leaseActive } = dependencies
 
   return defineJob<ProjectionPayload>({
-    kind: identity.kind,
-    workClasses: ['projection'],
+    ...identity.contract,
     failureCode: identity.failureCode,
-    // claim already shapes this payload
-    parsePayload: (value) => value as ProjectionPayload,
     claimLockKey: discoveryClaimLockKey,
     effectState: (_transaction, lease) => projectionEffectState(lease.effectOperationId),
     async run(lease, tools) {

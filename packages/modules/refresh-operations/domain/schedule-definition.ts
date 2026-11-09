@@ -1,9 +1,9 @@
 import {
-  type CreateSchedule,
   type LeaderboardDeepCrawlPayload,
   validateLeaderboardDeepCrawlPayload,
   validateLeaderboardOperationPayload,
   validateRankingRetentionPayload,
+  type WorkClass,
 } from '../model'
 import { isLeaderboardKind } from './operation-kinds'
 
@@ -47,9 +47,19 @@ export function validateScheduleIdentity(input: {
   return parseFirstDueAt(input.firstDueAt)
 }
 
-export function validateSchedule(input: CreateSchedule): Date {
+export type ScheduleToValidate = {
+  kind: string
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: WorkClass
+  intervalMs: number
+  firstDueAt: string
+  payload: unknown
+}
+
+export function validateSchedule(input: ScheduleToValidate): Date {
   const firstDueAt = validateScheduleIdentity(input)
-  const kind = input.kind ?? 'proof'
+  const { kind } = input
 
   if (isLeaderboardKind(kind)) {
     const payload = validateLeaderboardOperationPayload(input.payload as { pageDepth: number; intervalMs: number })

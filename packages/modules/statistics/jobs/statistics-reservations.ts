@@ -13,10 +13,15 @@ import {
   type TransitionResult,
 } from '@brawltome/refresh-operations'
 
+import {
+  statisticsCollectionContract,
+  statisticsLegendMetaPublicationContract,
+  statisticsPublicationContract,
+  uuidPattern,
+} from './statistics-job-contracts'
+
 const publicationKinds = ['statistics-publication'] as const
 const legendMetaPublicationKinds = ['statistics-legend-meta-publication'] as const
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type StatisticsReservation = {
   dedupeKey: string
@@ -73,8 +78,11 @@ function reserveStatisticsCollection(
     throw new Error('statistics collection brawlhallaId must be a positive safe integer')
   }
 
+  const { kind, ...reservation } = input
+
   return reserveForBinding(database, {
-    ...input,
+    ...reservation,
+    job: statisticsCollectionContract(kind),
     operationKeyKinds: statisticsCollectionKinds,
     lockNamespace: 209,
     mismatchMessage: 'statistics collection operation key has a different definition',
@@ -101,8 +109,11 @@ function reserveStatisticsPublication(
     throw new Error('statistics publication product is unsupported')
   }
 
+  const { kind: _kind, ...reservation } = input
+
   return reserveForBinding(database, {
-    ...input,
+    ...reservation,
+    job: statisticsPublicationContract,
     lockNamespace: 210,
     mismatchMessage: 'statistics publication operation key has a different definition',
   })
@@ -124,8 +135,11 @@ function reserveStatisticsLegendMetaPublication(
     throw new Error('Statistics Legend Meta publication generationId must be a UUID')
   }
 
+  const { kind: _kind, ...reservation } = input
+
   return reserveForBinding(database, {
-    ...input,
+    ...reservation,
+    job: statisticsLegendMetaPublicationContract,
     lockNamespace: 211,
     mismatchMessage: 'Statistics Legend Meta operation key has a different definition',
   })

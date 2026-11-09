@@ -8,6 +8,7 @@ import {
   type LeaderboardMode,
   type LeaderboardScope,
   rankingModule,
+  rankingRetentionContract,
   reconcileRankingRetentionSchedule,
 } from '@brawltome/ranking'
 import { refreshOperationsModule } from '@brawltome/refresh-operations'
@@ -1420,7 +1421,7 @@ describe('Ranking snapshot retention', () => {
     }
   }, 30_000)
 
-  test('rejects ranking retention payloads outside the safe bounds before and inside the database', async () => {
+  test('rejects ranking retention payloads outside the safe bounds', async () => {
     const { sql, database } = await migratedDatabase()
     const operations = createTestQueue({ database })
 
@@ -1447,33 +1448,7 @@ describe('Ranking snapshot retention', () => {
         { retentionHours: 24, maxGenerations: 201 },
         { retentionHours: 24, maxGenerations: 20, extra: true },
       ]) {
-        expect(
-          await errorMessage(
-            () => sql`
-              INSERT INTO refresh_operations.schedules
-                (id, schedule_key, kind, work_class, interval_ms, first_due_at, next_due_at, operation_key_prefix,
-                 payload, provenance, max_attempts)
-              VALUES
-                (${randomUUID()}, ${`retention-check:${randomUUID()}`}, 'ranking-retention', 'maintenance', 900000,
-                 now(), now(), 'retention-check', ${sql.json(payload)}, ${sql.json({ source: 'test' })}, 3)
-            `,
-          ),
-        ).toContain('schedules_payload_by_kind')
-
-        const operationId = randomUUID()
-
-        expect(
-          await errorMessage(
-            () => sql`
-              INSERT INTO refresh_operations.operations
-                (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
-                 max_attempts)
-              VALUES
-                (${operationId}, ${operationId}, 'ranking-retention', ${randomUUID()}, ${randomUUID()}, 'maintenance',
-                 ${sql.json(payload)}, ${sql.json({ source: 'test' })}, 3)
-            `,
-          ),
-        ).toContain('operations_payload_by_kind')
+        expect(() => rankingRetentionContract.parsePayload(payload, 'maintenance')).toThrow('ranking retention')
       }
     } finally {
       await sql.end()
