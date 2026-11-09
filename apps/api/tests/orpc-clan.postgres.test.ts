@@ -163,6 +163,42 @@ describe('clan.membershipByPlayerId over oRPC', () => {
   })
 })
 
+describe('clan.standingById over oRPC', () => {
+  test('returns the standing of a stored clan at /rpc and at GET /v1/clans/{id}/standing', async () => {
+    const client = createRpcClient()
+    const topStanding = { guildPointsRank: 1, lifetimeXpRank: 1 }
+
+    expect(await client.clan.standingById({ id: completeClan.clan.clanId })).toEqual(topStanding)
+
+    expect(await fetchJson(`/v1/clans/${completeClan.clan.clanId}/standing`)).toEqual({
+      status: 200,
+      body: topStanding,
+    })
+  })
+
+  test('has no guild points rank for a clan with no guild points', async () => {
+    const client = createRpcClient()
+
+    expect(await client.clan.standingById({ id: legacyClan.clan.clanId })).toEqual({
+      guildPointsRank: null,
+      lifetimeXpRank: 4,
+    })
+  })
+
+  test('returns null where clan.byId returns null', async () => {
+    const client = createRpcClient()
+
+    for (const clanId of [...nullScenarios.map(({ clan }) => clan.clanId), unknownClanId]) {
+      expect(await client.clan.standingById({ id: clanId })).toBeNull()
+      expect(await fetchJson(`/v1/clans/${clanId}/standing`)).toEqual({ status: 200, body: null })
+    }
+  })
+
+  test('rejects an id the contract does not accept', async () => {
+    expect((await fetchJson('/v1/clans/0/standing')).status).toBe(400)
+  })
+})
+
 describe('the internal secret on the oRPC clan reads', () => {
   for (const { caller, headers } of refusedCallers) {
     test(`refuses ${caller} over /rpc with FORBIDDEN`, async () => {
@@ -171,14 +207,17 @@ describe('the internal secret on the oRPC clan reads', () => {
 
       await expect(client.clan.byId({ id: completeClan.clan.clanId })).rejects.toMatchObject(forbidden)
       await expect(client.clan.membershipByPlayerId({ id: 30 })).rejects.toMatchObject(forbidden)
+      await expect(client.clan.standingById({ id: completeClan.clan.clanId })).rejects.toMatchObject(forbidden)
     })
 
     test(`refuses ${caller} over /v1 with 403`, async () => {
       const clan = await fetchJson(`/v1/clans/${completeClan.clan.clanId}`, headers)
       const membership = await fetchJson('/v1/players/30/clan', headers)
+      const standing = await fetchJson(`/v1/clans/${completeClan.clan.clanId}/standing`, headers)
 
       expect(clan).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
       expect(membership).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
+      expect(standing).toMatchObject({ status: 403, body: { code: 'FORBIDDEN' } })
     })
   }
 
@@ -188,12 +227,19 @@ describe('the internal secret on the oRPC clan reads', () => {
 })
 
 describe('the OpenAPI document with the clan module loaded', () => {
-  test('lists both clan reads next to status', async () => {
+  test('lists the clan reads next to status', async () => {
     const { body } = await fetchJson('/openapi.json', {})
     const document = body as { paths: Record<string, Record<string, { operationId?: string }>> }
 
-    expect(Object.keys(document.paths).sort()).toEqual(['/clans/{id}', '/players/{id}/clan', '/status'])
+    expect(Object.keys(document.paths).sort()).toEqual([
+      '/clans/{id}',
+      '/clans/{id}/standing',
+      '/players/{id}/clan',
+      '/status',
+    ])
+
     expect(document.paths['/clans/{id}'].get.operationId).toBe('clan.byId')
+    expect(document.paths['/clans/{id}/standing'].get.operationId).toBe('clan.standingById')
     expect(document.paths['/players/{id}/clan'].get.operationId).toBe('clan.membershipByPlayerId')
   })
 
@@ -210,6 +256,7 @@ describe('the OpenAPI document with the clan module loaded', () => {
     })
 
     expect(document.paths['/clans/{id}'].get.security).toEqual([{ internalSecret: [] }])
+    expect(document.paths['/clans/{id}/standing'].get.security).toEqual([{ internalSecret: [] }])
     expect(document.paths['/players/{id}/clan'].get.security).toEqual([{ internalSecret: [] }])
     expect(document.paths['/status'].get.security).toBeUndefined()
   })

@@ -186,3 +186,20 @@ const leaderboardStandingSchema = z
   .strict()
 
 export const nullableLeaderboardStandingSchema = leaderboardStandingSchema.nullable()
+
+export const playerRankedSummariesInputSchema = z.object({ ids: z.array(brawlhallaIdSchema).min(1).max(250) }).strict()
+
+const playerRankedSummarySchema = z
+  .object({
+    brawlhallaId: brawlhallaIdSchema,
+    rating: positiveInt32.nullable(),
+    wins: int32,
+    games: int32,
+    // not visibleText: the column has no format check, and one odd stored key must not fail a whole guild's read
+    mainLegend: z.string().nullable(),
+    updatedAt: utcDateTime.nullable(),
+  })
+  .strict()
+
+export const playerRankedSummariesSchema = z.array(playerRankedSummarySchema)
+export type PlayerRankedSummaryContract = z.infer<typeof playerRankedSummarySchema>

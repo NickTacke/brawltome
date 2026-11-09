@@ -26,19 +26,17 @@ function isValidDate(date: Date): boolean {
   return !Number.isNaN(date.getTime())
 }
 
-const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
+// not Intl: bun says Sep and chrome says Sept, and a date that differs breaks hydration
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function formatDay(value: string | null): string {
   if (!value) return unknownDate
 
   const date = new Date(value)
 
-  return isValidDate(date) ? dayFormatter.format(date) : unknownDate
+  if (!isValidDate(date)) return unknownDate
+
+  return `${date.getUTCDate()} ${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`
 }
 
 export function timeAgo(value: string, now = new Date()): string {

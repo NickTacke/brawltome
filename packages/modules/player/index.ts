@@ -1,4 +1,5 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
+import { createPlayerProcedures } from './api/procedures'
 import { initializePlayersSchema } from './migrations/0001-initialize-schema'
 import { addInteractiveRefreshEffects } from './migrations/0002-add-interactive-refresh-effects'
 import { addCanonicalRankedState } from './migrations/0003-add-canonical-ranked-state'
@@ -160,7 +161,9 @@ const migrations = [
 ] as const
 
 export const playerModule = {
-  name: 'player',
+  // a literal, so the API router can serve the procedures under this name with their types
+  name: 'player' as const,
   dependsOn: ['queue'],
   migrations,
+  routes: createPlayerProcedures,
 } satisfies BrawltomeModule

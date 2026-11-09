@@ -1,0 +1,225 @@
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { queueModule } from '@brawltome/queue'
+import { call } from '@orpc/server'
+import { createPlayerProcedures } from '../api/procedures'
+import { playerModule } from '../index'
+
+const internalCaller = { context: { isInternalCaller: true } }
+const outsideCaller = { context: { isInternalCaller: false } }
+const lastSuccessAt = '2026-11-01T12:30:00.000Z'
+
+const ratedPlayerId = 101
+const zeroRatedPlayerId = 102
+const neverSucceededPlayerId = 103
+const noMainLegendPlayerId = 104
+const unknownPlayerId = 999_999
+const newerPulsePlayerId = 105
+const olderPulsePlayerId = 106
+const partialPulsePlayerId = 107
+const pulseLastSuccessAt = '2026-11-06T09:00:00.000Z'
+
+type RatedProfile = {
+  brawlhallaId: number
+  rating: number
+  mainLegend: { id: number; nameKey: string } | null
+}
+
+let database: TestDatabase
+
+async function insertRatedProfile({ brawlhallaId, rating, mainLegend }: RatedProfile) {
+  await database.sql`
+    INSERT INTO players.ranked_profiles (
+      brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games,
+      ranked_main_legend_id, ranked_main_legend_name_key
+    )
+    VALUES (
+      ${brawlhallaId}, 'Rated Player', ${lastSuccessAt}, ${lastSuccessAt}, 'EU', ${rating}, ${rating + 50}, 'Gold 3',
+      40, 90, ${mainLegend?.id ?? null}, ${mainLegend?.nameKey ?? null}
+    )
+  `
+}
+
+async function setProfileEffect(brawlhallaId: number, effectCreatedAt: string) {
+  await database.sql`
+    UPDATE players.ranked_profiles
+    SET v0_effect_created_at = ${effectCreatedAt}, v0_effect_operation_id = ${crypto.randomUUID()}
+    WHERE brawlhalla_id = ${brawlhallaId}
+  `
+}
+
+async function insertPulse(brawlhallaId: number, effectCreatedAt: string, rating: number | null = 2222) {
+  await database.sql`
+    INSERT INTO players.ranked_v1_pulse_state (
+      brawlhalla_id, checked_at, last_success_at, rating, peak_rating, wins, games,
+      one_vs_one_effect_created_at, one_vs_one_effect_operation_id
+    )
+    VALUES (
+      ${brawlhallaId}, ${pulseLastSuccessAt}, ${pulseLastSuccessAt}, ${rating}, ${rating}, 99, 199,
+      ${effectCreatedAt}, ${crypto.randomUUID()}
+    )
+  `
+}
+
+// a player the refresh checked but never got a ranked snapshot for: every snapshot column is null
+async function insertNeverSucceededProfile(brawlhallaId: number) {
+  await database.sql`
+    INSERT INTO players.ranked_profiles (brawlhalla_id, checked_at)
+    VALUES (${brawlhallaId}, ${lastSuccessAt})
+  `
+}
+
+function createProcedures() {
+  return createPlayerProcedures({ database })
+}
+
+function readSummaries(ids: number[]) {
+  return call(createProcedures().rankedSummaries, { ids }, internalCaller)
+}
+
+beforeAll(async () => {
+  database = await createTestDatabase({ label: 'player_ranked_summaries', modules: [queueModule, playerModule] })
+
+  await insertRatedProfile({
+    brawlhallaId: ratedPlayerId,
+    rating: 1750,
+    mainLegend: { id: 3, nameKey: 'bodvar' },
+  })
+
+  await insertRatedProfile({ brawlhallaId: zeroRatedPlayerId, rating: 0, mainLegend: null })
+  await insertRatedProfile({ brawlhallaId: noMainLegendPlayerId, rating: 1200, mainLegend: null })
+  await insertNeverSucceededProfile(neverSucceededPlayerId)
+}, 20_000)
+
+afterAll(async () => {
+  await database?.drop()
+})
+
+describe('player.rankedSummaries', () => {
+  test('returns the stored summary of a player', async () => {
+    const summaries = await call(createProcedures().rankedSummaries, { ids: [ratedPlayerId] }, internalCaller)
+
+    expect(summaries).toEqual([
+      {
+        brawlhallaId: ratedPlayerId,
+        rating: 1750,
+        wins: 40,
+        games: 90,
+        mainLegend: 'bodvar',
+        updatedAt: lastSuccessAt,
+      },
+    ])
+  })
+
+  test('a stored rating of 0 comes back as null', async () => {
+    const [summary] = await call(createProcedures().rankedSummaries, { ids: [zeroRatedPlayerId] }, internalCaller)
+
+    expect(summary.rating).toBeNull()
+    expect(summary.games).toBe(90)
+  })
+
+  test('ids with no row are left out', async () => {
+    const summaries = await call(
+      createProcedures().rankedSummaries,
+      { ids: [ratedPlayerId, unknownPlayerId] },
+      internalCaller,
+    )
+
+    expect(summaries.map(({ brawlhallaId }) => brawlhallaId)).toEqual([ratedPlayerId])
+  })
+
+  test('an id list with no rows returns an empty list', async () => {
+    const summaries = await call(createProcedures().rankedSummaries, { ids: [unknownPlayerId] }, internalCaller)
+
+    expect(summaries).toEqual([])
+  })
+
+  test('duplicate ids return one row', async () => {
+    const summaries = await call(
+      createProcedures().rankedSummaries,
+      { ids: [ratedPlayerId, ratedPlayerId, ratedPlayerId] },
+      internalCaller,
+    )
+
+    expect(summaries).toHaveLength(1)
+  })
+
+  test('a row with null wins, games and main legend does not throw', async () => {
+    const summaries = await call(createProcedures().rankedSummaries, { ids: [neverSucceededPlayerId] }, internalCaller)
+
+    expect(summaries).toEqual([
+      { brawlhallaId: neverSucceededPlayerId, rating: null, wins: 0, games: 0, mainLegend: null, updatedAt: null },
+    ])
+  })
+
+  test('a rated player without a main legend has a null main legend', async () => {
+    const [summary] = await call(createProcedures().rankedSummaries, { ids: [noMainLegendPlayerId] }, internalCaller)
+
+    expect(summary.mainLegend).toBeNull()
+    expect(summary.rating).toBe(1200)
+  })
+
+  test('a pulse newer than the stored profile overrides its record', async () => {
+    await insertRatedProfile({ brawlhallaId: newerPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(newerPulsePlayerId, '2026-11-01T00:00:00.000Z')
+    await insertPulse(newerPulsePlayerId, '2026-11-05T00:00:00.000Z')
+
+    const [summary] = await readSummaries([newerPulsePlayerId])
+
+    expect(summary).toMatchObject({ rating: 2222, wins: 99, games: 199, updatedAt: pulseLastSuccessAt })
+  })
+
+  test('a pulse older than the stored profile is ignored', async () => {
+    await insertRatedProfile({ brawlhallaId: olderPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(olderPulsePlayerId, '2026-11-05T00:00:00.000Z')
+    await insertPulse(olderPulsePlayerId, '2026-11-01T00:00:00.000Z')
+
+    const [summary] = await readSummaries([olderPulsePlayerId])
+
+    expect(summary).toMatchObject({ rating: 1000, wins: 40, games: 90, updatedAt: lastSuccessAt })
+  })
+
+  test('a pulse with no rating keeps the stored one', async () => {
+    await insertRatedProfile({ brawlhallaId: partialPulsePlayerId, rating: 1000, mainLegend: null })
+    await setProfileEffect(partialPulsePlayerId, '2026-11-01T00:00:00.000Z')
+    await insertPulse(partialPulsePlayerId, '2026-11-05T00:00:00.000Z', null)
+
+    const [summary] = await readSummaries([partialPulsePlayerId])
+
+    expect(summary?.rating).toBe(1000)
+  })
+
+  test('250 ids are accepted', async () => {
+    const ids = Array.from({ length: 250 }, (_, index) => index + 1)
+
+    await expect(call(createProcedures().rankedSummaries, { ids }, internalCaller)).resolves.toBeArray()
+  })
+
+  test('251 ids are rejected', async () => {
+    const ids = Array.from({ length: 251 }, (_, index) => index + 1)
+
+    const refused = call(createProcedures().rankedSummaries, { ids }, internalCaller)
+
+    await expect(refused).rejects.toMatchObject({ code: 'BAD_REQUEST', status: 400 })
+  })
+
+  test('an empty id list is rejected', async () => {
+    const refused = call(createProcedures().rankedSummaries, { ids: [] }, internalCaller)
+
+    await expect(refused).rejects.toMatchObject({ code: 'BAD_REQUEST', status: 400 })
+  })
+
+  test('an id that is not a valid Brawlhalla id is rejected', async () => {
+    for (const id of [0, -1, 1.5, 2_147_483_648]) {
+      const refused = call(createProcedures().rankedSummaries, { ids: [id] }, internalCaller)
+
+      await expect(refused, `id ${id}`).rejects.toMatchObject({ code: 'BAD_REQUEST', status: 400 })
+    }
+  })
+
+  test('the read is internal only', async () => {
+    const refused = call(createProcedures().rankedSummaries, { ids: [ratedPlayerId] }, outsideCaller)
+
+    await expect(refused).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 })
+  })
+})

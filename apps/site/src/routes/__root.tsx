@@ -26,7 +26,8 @@ function RootComponent() {
     <RootDocument>
       <AppRail />
       <MobileMenu />
-      <div className="flex min-h-dvh flex-col md:pl-[57px]">
+      {/* clip, not hidden, so sticky columns keep working: full-width pages use 100vw, which counts the scrollbar */}
+      <div className="flex min-h-dvh flex-col overflow-x-clip md:pl-[57px]">
         <main className="mx-auto w-full max-w-6xl flex-1 px-6 pt-7 pb-10 md:pt-10">
           <Outlet />
         </main>

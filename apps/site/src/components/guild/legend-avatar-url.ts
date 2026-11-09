@@ -1,0 +1,86 @@
+const unknownLegendUrl = '/images/legends/random.svg'
+const avatarDirectory = '/images/legends/avatars'
+
+// an & in a file name 404s once it is percent-encoded
+const avatarFileOverrides: Record<string, string> = { 'qinghua & baobao': 'qinghua-and-baobao' }
+
+export const knownLegendKeys: ReadonlySet<string> = new Set([
+  'ada',
+  'arcadia',
+  'artemis',
+  'asuri',
+  'aurus',
+  'azoth',
+  'barraza',
+  'bodvar',
+  'brynn',
+  'caspian',
+  'cassidy',
+  'cross',
+  'diana',
+  'dusk',
+  'ember',
+  'ezio',
+  'fait',
+  'gnash',
+  'hattori',
+  'imugi',
+  'isaiah',
+  'jaeyun',
+  'jhala',
+  'jiro',
+  'kaya',
+  'king zuva',
+  'koji',
+  'kor',
+  'lady vera',
+  'lin fei',
+  'loki',
+  'lord vraxx',
+  'lucien',
+  'magyar',
+  'mako',
+  'mirage',
+  'mordex',
+  'munin',
+  'nix',
+  'onyx',
+  'orion',
+  'petra',
+  'priya',
+  'qinghua & baobao',
+  'queen nai',
+  'ragnir',
+  'ransom',
+  'rayman',
+  'redraptor',
+  'reno',
+  'rupture',
+  'scarlet',
+  'sentinel',
+  'seven',
+  'sidra',
+  'sir roland',
+  'teros',
+  'tezca',
+  'thatch',
+  'thea',
+  'thor',
+  'ulgrim',
+  'val',
+  'vector',
+  'vivi',
+  'volkov',
+  'wu shang',
+  'xull',
+  'yumiko',
+  'zariel',
+])
+
+export function legendAvatarUrl(legendKey: string | null): string {
+  if (legendKey === null || !knownLegendKeys.has(legendKey)) return unknownLegendUrl
+
+  const fileName = avatarFileOverrides[legendKey] ?? legendKey
+
+  return `${avatarDirectory}/${encodeURIComponent(fileName)}.png`
+}
