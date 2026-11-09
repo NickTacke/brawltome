@@ -1,10 +1,12 @@
 import type { PlayerPage as PlayerPageData } from '../../server/load-player'
 import { Career } from './Career'
 import { Identity } from './Identity'
+import { LegendRoster } from './LegendRoster'
 import { Ranked } from './Ranked'
 import { RatingHistory } from './RatingHistory'
 import { rankedStanding } from './side-summary'
 import { TwoVsTwo } from './TwoVsTwo'
+import { WeaponStrip } from './WeaponStrip'
 
 type PlayerPageProps = PlayerPageData & { isUnarmedExcluded: boolean }
 
@@ -28,9 +30,11 @@ const stackedSections =
   'divide-y divide-line/50 [&>*]:py-6 max-xl:[&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0'
 
 /** A profile: the player's identity and rank stay on the left while the stats scroll. */
-export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded: _isUnarmedExcluded }: PlayerPageProps) {
+export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded }: PlayerPageProps) {
   const standing = rankedStanding(player.currentSeason) ?? undefined
   const snapshot = player.currentSeason?.snapshot
+  const legends = player.career?.snapshot?.legends ?? []
+  const rankedLegends = snapshot?.rankedLegends ?? []
 
   return (
     <div className={`${columns} ${widePage}`}>
@@ -46,6 +50,8 @@ export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded: 
       </aside>
       <div className={`min-w-0 ${stackedSections} xl:border-l xl:border-line/50 xl:pl-14`}>
         <RatingHistory history={snapshot?.ratingHistory ?? []} seasonStarts={seasonStarts} />
+        <LegendRoster legends={legends} rankedLegends={rankedLegends} />
+        <WeaponStrip legends={legends} rankedLegends={rankedLegends} isUnarmedExcludedAtStart={isUnarmedExcluded} />
       </div>
     </div>
   )

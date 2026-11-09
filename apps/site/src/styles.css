@@ -61,3 +61,47 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes tile-detail-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@keyframes tile-detail-close {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.tile-detail-opening {
+  grid-template-rows: 1fr;
+  animation: tile-detail-open 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tile-detail-closing {
+  grid-template-rows: 0fr;
+  animation: tile-detail-close 180ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-detail-opening {
+    animation: none;
+  }
+
+  .tile-detail-closing {
+    display: none;
+  }
+}
