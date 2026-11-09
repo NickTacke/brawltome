@@ -4,6 +4,7 @@ import {
   combinedRecord,
   hasSoloQueue,
   rankedStanding,
+  sortTeams,
   teammateOf,
 } from '../src/components/player/side-summary'
 
@@ -70,5 +71,33 @@ describe('rankedStanding', () => {
     }
 
     expect(rankedStanding(profile)).toBeNull()
+  })
+})
+
+describe('sortTeams', () => {
+  const teams = [
+    { ...fixedTeam(1800, 10, 20), peakRating: 1850 },
+    { ...fixedTeam(1700, 30, 40), peakRating: 2000 },
+    { ...fixedTeam(1600, 5, 60), peakRating: 1590 },
+  ]
+
+  function ratings(sorted: ReturnType<typeof sortTeams>): number[] {
+    return sorted.map((team) => team.rating)
+  }
+
+  test.each([
+    ['elo', [1800, 1700, 1600]],
+    ['peak', [1700, 1800, 1600]],
+    ['games', [1600, 1700, 1800]],
+    ['winRate', [1700, 1800, 1600]],
+  ] as const)('%s', (sort, expected) => {
+    expect(ratings(sortTeams(teams, sort))).toEqual([...expected])
+  })
+
+  test('peak uses the rating when the stored peak is below it', () => {
+    const lagging = { ...fixedTeam(1900), peakRating: 1800 }
+    const higherPeak = { ...fixedTeam(1500), peakRating: 1850 }
+
+    expect(ratings(sortTeams([higherPeak, lagging], 'peak'))).toEqual([1900, 1500])
   })
 })

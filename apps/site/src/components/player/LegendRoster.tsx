@@ -91,7 +91,7 @@ export function LegendRoster({ legends, rankedLegends }: LegendRosterProps) {
 
   const rankedById = new Map(rankedLegends.map((ranked) => [ranked.legendId, ranked]))
   const rankedOf = (legend: CareerLegend) => rankedById.get(legend.legendId)
-  const valueOf = (legend: CareerLegend) => legendSorts[sort].value(legend, rankedOf(legend) as RankedLegend)
+  const tileValue = (legend: CareerLegend) => legendSorts[sort].value(legend, rankedOf(legend) as RankedLegend)
   const sorted = sortLegends(legends, rankedById, sort)
   const maxedCount = legends.filter((legend) => legend.level >= maximumLevel).length
 
@@ -123,7 +123,7 @@ export function LegendRoster({ legends, rankedLegends }: LegendRosterProps) {
           minimumTileRem={legendTileRem}
           collapsedRows={legendCollapsedRows}
           renderTile={(legend, isSelected) => (
-            <LegendTile legend={legend} ranked={rankedOf(legend)} value={valueOf(legend)} isSelected={isSelected} />
+            <LegendTile legend={legend} ranked={rankedOf(legend)} value={tileValue(legend)} isSelected={isSelected} />
           )}
           renderCard={(legend) => <LegendCard legend={legend} ranked={rankedOf(legend)} />}
           renderDetail={(legend, close) => <LegendExpanded legend={legend} ranked={rankedOf(legend)} onClose={close} />}

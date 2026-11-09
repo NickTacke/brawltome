@@ -1,7 +1,7 @@
 import { type CareerLegend, emptyWeaponStats, type WeaponStats } from './weapon-stats'
 
-function sum(legends: CareerLegend[], valueOf: (legend: CareerLegend) => number): number {
-  return legends.reduce((total, legend) => total + valueOf(legend), 0)
+function sum(legends: CareerLegend[], amountOf: (legend: CareerLegend) => number): number {
+  return legends.reduce((total, legend) => total + amountOf(legend), 0)
 }
 
 // the api has no unarmed time, so it's whatever match time no weapon was held for

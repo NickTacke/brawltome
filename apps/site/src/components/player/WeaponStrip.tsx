@@ -66,6 +66,7 @@ function UnarmedToggle({ isExcluded, onChange }: { isExcluded: boolean; onChange
       <input
         type="checkbox"
         role="switch"
+        aria-checked={isExcluded}
         checked={isExcluded}
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"

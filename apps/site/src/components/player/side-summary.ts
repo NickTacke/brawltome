@@ -1,5 +1,6 @@
 import type { PlayerRankedProfileContract } from '@brawltome/contracts'
 import { fixEncoding } from '../../lib'
+import { bestRating, winPercent } from './player-format'
 
 type RankedSnapshot = NonNullable<PlayerRankedProfileContract['snapshot']>
 
@@ -40,4 +41,25 @@ export function hasSoloQueue(entries: SoloQueueEntry[]): boolean {
 
 export function rankedStanding(profile: PlayerRankedProfileContract | null): OneVsOne | null {
   return profile?.snapshot?.oneVsOne ?? null
+}
+
+function bestPeak(team: FixedTeam): number {
+  return bestRating(team.rating, team.peakRating)
+}
+
+export const teamSorts = {
+  elo: { label: 'Elo', score: (team: FixedTeam) => team.rating },
+  peak: { label: 'Peak', score: bestPeak },
+  games: { label: 'Games', score: (team: FixedTeam) => team.games },
+  winRate: { label: 'Win rate', score: (team: FixedTeam) => winPercent(team.wins, team.games) },
+}
+
+export type TeamSortKey = keyof typeof teamSorts
+
+export const teamSortOptions = Object.entries(teamSorts).map(([value, { label }]) => ({ value, label }))
+
+export function sortTeams(teams: FixedTeam[], sort: TeamSortKey): FixedTeam[] {
+  const { score } = teamSorts[sort]
+
+  return [...teams].sort((left, right) => score(right) - score(left))
 }

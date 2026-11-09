@@ -5,6 +5,7 @@ import { LegendRoster } from './LegendRoster'
 import { Ranked } from './Ranked'
 import { RatingHistory } from './RatingHistory'
 import { rankedStanding } from './side-summary'
+import { Teammates } from './Teammates'
 import { TwoVsTwo } from './TwoVsTwo'
 import { WeaponStrip } from './WeaponStrip'
 
@@ -52,6 +53,7 @@ export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded }
         <RatingHistory history={snapshot?.ratingHistory ?? []} seasonStarts={seasonStarts} />
         <LegendRoster legends={legends} rankedLegends={rankedLegends} />
         <WeaponStrip legends={legends} rankedLegends={rankedLegends} isUnarmedExcludedAtStart={isUnarmedExcluded} />
+        <Teammates teams={snapshot?.fixedTeams ?? []} playerId={player.brawlhallaId} />
       </div>
     </div>
   )
