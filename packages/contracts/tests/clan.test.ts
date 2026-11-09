@@ -5,6 +5,8 @@ import {
   clanRefreshResponseSchema,
   clanStandingSchema,
   playerClanMembershipSchema,
+  rankedClanListInputSchema,
+  rankedClanListSchema,
 } from '../src/clan'
 
 const profile = {
@@ -88,5 +90,44 @@ describe('clan standing contract', () => {
     expect(() => clanStandingSchema.parse({ guildPointsRank: 0, lifetimeXpRank: 1 })).toThrow()
     expect(() => clanStandingSchema.parse({ guildPointsRank: 1.5, lifetimeXpRank: 1 })).toThrow()
     expect(() => clanStandingSchema.parse({ guildPointsRank: 1, lifetimeXpRank: 1, extra: true })).toThrow()
+  })
+})
+
+describe('ranked clan list contract', () => {
+  const entry = {
+    rank: 1,
+    clanId: 77,
+    clanName: 'Exact',
+    guildPoints: '900719925474099312345',
+    lifetimeXp: '1801439850948198711110',
+    memberCount: 3,
+  }
+
+  const list = { page: 1, pageSize: 30, hasMore: false, totalRows: 1, entries: [entry] }
+
+  test('accepts a page of entries, and a guild with no guild points or rank', () => {
+    expect(rankedClanListSchema.parse(list)).toEqual(list)
+
+    const unranked = { ...entry, rank: null, guildPoints: null }
+
+    expect(rankedClanListSchema.parse({ ...list, entries: [unranked] }).entries[0]).toEqual(unranked)
+  })
+
+  test('accepts an empty list', () => {
+    const empty = { page: 1, pageSize: 30, hasMore: false, totalRows: 0, entries: [] }
+
+    expect(rankedClanListSchema.parse(empty)).toEqual(empty)
+  })
+
+  test('rejects a negative member count and an unknown field', () => {
+    expect(() => rankedClanListSchema.parse({ ...list, entries: [{ ...entry, memberCount: -1 }] })).toThrow()
+    expect(() => rankedClanListSchema.parse({ ...list, entries: [{ ...entry, extra: true }] })).toThrow()
+  })
+
+  test('takes a page from 1 up, and no other input', () => {
+    expect(rankedClanListInputSchema.parse({ page: 2 })).toEqual({ page: 2 })
+    expect(() => rankedClanListInputSchema.parse({ page: 0 })).toThrow()
+    expect(() => rankedClanListInputSchema.parse({ page: 1.5 })).toThrow()
+    expect(() => rankedClanListInputSchema.parse({ page: 1, pageSize: 100 })).toThrow()
   })
 })

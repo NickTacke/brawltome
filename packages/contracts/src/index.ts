@@ -46,6 +46,9 @@ export {
   type DiscordClanRefreshInputContract,
   discordClanRefreshInputSchema,
   playerClanMembershipSchema,
+  type RankedClanListContract,
+  rankedClanListInputSchema,
+  rankedClanListSchema,
 } from './clan'
 export {
   type DesktopRankedLookupContract,
@@ -61,9 +64,13 @@ export {
 export {
   type LeaderboardEntry,
   type LeaderboardIdentity,
+  type LeaderboardOutput,
   type LeaderboardRecentActivityEntry,
   type LeaderboardRecentActivityOutput,
   leaderboardInputSchema,
+  leaderboardOutputSchema,
+  leaderboardPageInputSchema,
+  leaderboardPageSize,
   leaderboardRecentActivityInputSchema,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,

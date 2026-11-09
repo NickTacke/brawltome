@@ -12,6 +12,8 @@
 
   --color-primary: hsl(212 92% 65%);
   --color-primary-ink: hsl(224 30% 12%);
+  /* stays the same on every theme, a red or orange accent must never make a good win rate look bad */
+  --color-win: hsl(212 92% 65%);
 
   --color-gold: var(--color-yellow-500);
   --color-silver: var(--color-slate-300);

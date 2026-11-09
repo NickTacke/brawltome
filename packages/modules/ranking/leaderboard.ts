@@ -413,7 +413,8 @@ function validateRegionRows(
     }
   }
 
-  return [...rowsByIdentity.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  // brawlhalla lists visiting players by more than rating, so its order and rank are the regional board
+  return [...rowsByIdentity.values()].sort((left, right) => left.sourceRank - right.sourceRank)
 }
 
 const regionOrder = new Map(regionalLeaderboardScopes.map((region, index) => [region, index]))

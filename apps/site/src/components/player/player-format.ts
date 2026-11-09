@@ -21,7 +21,7 @@ export function winPercent(wins: number, games: number): number {
 export function winRateColour(percent: number): string {
   if (percent >= 60) return 'text-emerald-400'
 
-  return percent >= 50 ? 'text-primary' : 'text-soft'
+  return percent >= 50 ? 'text-win' : 'text-soft'
 }
 
 export function rankBanner(tier: string | null | undefined): string {

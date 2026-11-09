@@ -37,6 +37,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/discord-bot/package.json apps/discord-bot/
 COPY apps/replay-bridge/package.json apps/replay-bridge/
+COPY apps/site/package.json apps/site/
 COPY apps/web/package.json apps/web/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/telemetry/package.json packages/telemetry/
@@ -123,3 +124,24 @@ USER node
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["web"]
+
+FROM build AS site-build
+RUN bun run --filter @brawltome/site build
+# vite leaves the npm imports in the server output, bundling them keeps node_modules out of the runtime image
+RUN bun build apps/site/dist/server/server.js \
+      --target=bun \
+      --splitting \
+      --define 'process.env.NODE_ENV="production"' \
+      --outdir=apps/site/dist/server-bundle
+
+FROM base AS site
+ENV NODE_ENV=production
+ENV PORT=3000
+COPY --from=site-build --chown=bun:bun /app/apps/site/dist/client ./apps/site/dist/client
+COPY --from=site-build --chown=bun:bun /app/apps/site/dist/server-bundle ./apps/site/dist/server
+COPY --from=site-build --chown=bun:bun /app/infra/app/run-with-secrets.sh ./infra/app/run-with-secrets.sh
+COPY --from=site-build --chown=bun:bun /app/infra/app/site-server.ts ./infra/app/site-server.ts
+USER bun
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
+CMD ["site"]

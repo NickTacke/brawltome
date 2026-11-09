@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
+import { playerModule } from '@brawltome/player'
 import { type LeaderboardOperationKind, type OperationLease, queueModule } from '@brawltome/queue'
 import {
   collectAndPublishLeaderboardGeneration,
@@ -52,7 +53,7 @@ const admission = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'ranking_snapshots',
-    modules: [queueModule, requestAdmissionModule, rankingModule],
+    modules: [queueModule, requestAdmissionModule, playerModule, rankingModule],
   })
 
   connectionString = database.connectionString
@@ -60,7 +61,7 @@ beforeAll(async () => {
 
   adminUrl.pathname = '/postgres'
   admin = postgres(adminUrl.toString(), { max: 1 })
-})
+}, 30_000)
 
 afterAll(async () => {
   await database?.drop()

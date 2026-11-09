@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { playerModule } from '@brawltome/player'
 import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import {
   createLeaderboardDeepCrawlProgress,
@@ -38,7 +39,7 @@ const admission = {
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'deep_crawl_operations',
-    modules: [queueModule, rankingModule],
+    modules: [queueModule, playerModule, rankingModule],
   })
 
   connectionString = database.connectionString

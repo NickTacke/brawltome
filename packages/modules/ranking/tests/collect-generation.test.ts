@@ -120,7 +120,7 @@ describe('collectAndPublishLeaderboardGeneration', () => {
   }
 
   for (const mode of ['1v1', '2v2', 'solo2v2', '3v3'] as const) {
-    test(`orders regional ${mode} rows by current rating then wins and resolves missing tiers`, async () => {
+    test(`keeps the source order and rank of regional ${mode} boards and resolves missing tiers`, async () => {
       const recorder = publicationRecorder()
 
       await collectAndPublishLeaderboardGeneration({
@@ -148,12 +148,89 @@ describe('collectAndPublishLeaderboardGeneration', () => {
       })
 
       expect(recorder.published[0].snapshots.get('EU')).toMatchObject([
-        { standing: 1, sourceRank: 3, rating: 2_400, wins: 30, tier: 'Diamond' },
+        { standing: 1, sourceRank: 1, rating: 1_900, wins: 120, peakRating: 2_300, tier: 'Diamond' },
         { standing: 2, sourceRank: 2, rating: 2_400, wins: 20, tier: 'Diamond' },
-        { standing: 3, sourceRank: 1, rating: 1_900, wins: 120, peakRating: 2_300, tier: 'Diamond' },
+        { standing: 3, sourceRank: 3, rating: 2_400, wins: 30, tier: 'Diamond' },
       ])
     })
   }
+
+  test('leaves a visiting player where the source ranks them on a regional board', async () => {
+    const recorder = publicationRecorder()
+
+    await collectAndPublishLeaderboardGeneration({
+      mode: '1v1',
+      authorization: auth('1v1'),
+      source: {
+        async fetchPage({ region }) {
+          const offset = regionalLeaderboardScopes.indexOf(region) * 10_000
+          const visitor = { ...row(region, '1v1', offset + 3, 166, 2_700), region: 'US-E' as const }
+
+          return {
+            rankings: [row(region, '1v1', offset + 1, 1, 2_711), row(region, '1v1', offset + 2, 2, 2_615), visitor],
+            totalPages: 1,
+          }
+        },
+      },
+      publication: recorder.publication,
+    })
+
+    expect(recorder.published[0].snapshots.get('EU')).toMatchObject([
+      { standing: 1, sourceRank: 1, rating: 2_711 },
+      { standing: 2, sourceRank: 2, rating: 2_615 },
+      { standing: 166, sourceRank: 166, rating: 2_700, region: 'US-E' },
+    ])
+  })
+
+  test('keeps a regional row seen twice at the rank of the stronger row', async () => {
+    const recorder = publicationRecorder()
+
+    await collectAndPublishLeaderboardGeneration({
+      mode: '1v1',
+      authorization: auth('1v1'),
+      source: {
+        async fetchPage({ region }) {
+          const offset = regionalLeaderboardScopes.indexOf(region) * 10_000
+
+          return {
+            rankings: [
+              row(region, '1v1', offset + 1, 1, 2_000),
+              row(region, '1v1', offset + 2, 2, 1_990),
+              row(region, '1v1', offset + 1, 3, 2_010),
+            ],
+            totalPages: 1,
+          }
+        },
+      },
+      publication: recorder.publication,
+    })
+
+    expect(recorder.published[0].snapshots.get('EU')).toMatchObject([
+      { standing: 2, sourceRank: 2, rating: 1_990 },
+      { standing: 3, sourceRank: 3, rating: 2_010 },
+    ])
+  })
+
+  test('still orders the global board by rating and numbers it from one', async () => {
+    const recorder = publicationRecorder()
+
+    await collectAndPublishLeaderboardGeneration({
+      mode: '1v1',
+      authorization: auth('1v1'),
+      source: {
+        async fetchPage({ region }) {
+          const index = regionalLeaderboardScopes.indexOf(region)
+
+          return { rankings: [row(region, '1v1', index + 1, 1, 2_000 + index)], totalPages: 1 }
+        },
+      },
+      publication: recorder.publication,
+    })
+
+    const lastRegionRating = 2_000 + regionalLeaderboardScopes.length - 1
+
+    expect(recorder.published[0].snapshots.get('all')?.[0]).toMatchObject({ standing: 1, rating: lastRegionRating })
+  })
 
   for (const mode of ['1v1', '3v3'] as const) {
     test(`publishes an empty ${mode} region as an empty regional snapshot`, async () => {
@@ -307,10 +384,10 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     expect(calls).toHaveLength(regionalLeaderboardScopes.length * 5)
     expect(recorder.published[0].pageDepth).toBe(5)
 
-    expect(recorder.published[0].snapshots.get('EU')?.slice(0, 3)).toMatchObject([
-      { standing: 1, sourceRank: 101, rating: 2_400, wins: 30, tier: 'Diamond' },
-      { standing: 2, sourceRank: 102, rating: 2_400, wins: 20, tier: 'Diamond' },
-      { standing: 3, sourceRank: 103, rating: 2_400, wins: 20, tier: 'Diamond' },
+    expect(recorder.published[0].snapshots.get('EU')?.slice(100, 103)).toMatchObject([
+      { standing: 101, sourceRank: 101, rating: 2_400, wins: 30, tier: 'Diamond' },
+      { standing: 102, sourceRank: 102, rating: 2_400, wins: 20, tier: 'Diamond' },
+      { standing: 103, sourceRank: 103, rating: 2_400, wins: 20, tier: 'Diamond' },
     ])
 
     expect(recorder.published[0].snapshots.get('EU')?.find(({ sourceRank }) => sourceRank === 51)).toMatchObject({
@@ -378,12 +455,13 @@ describe('collectAndPublishLeaderboardGeneration', () => {
 
     expect(recorder.published[0].snapshots.get('EU')).toHaveLength(99)
 
-    expect(recorder.published[0].snapshots.get('EU')?.[0]).toMatchObject({
-      standing: 1,
-      sourceRank: 51,
+    expect(recorder.published[0].snapshots.get('EU')?.find(({ sourceRank }) => sourceRank === 51)).toMatchObject({
+      standing: 51,
       rating: 2_400,
       wins: 30,
     })
+
+    expect(recorder.published[0].snapshots.get('EU')?.[0]).toMatchObject({ standing: 2, sourceRank: 2 })
   })
 
   test('preserves requested rosters and chooses the Global duplicate by wins before peak rating', async () => {
