@@ -96,9 +96,19 @@ export function useLiveRefresh<T>(options: LiveRefreshOptions<T>) {
 
   optionsRef.current = options
 
+  const { initial } = options
+
+  // a new load of the page, such as navigating to it again, replaces what a run loaded before and starts over
+  useEffect(() => {
+    dataRef.current = initial
+    setData(initial)
+    setStatus('idle')
+    setChallenge(null)
+  }, [initial])
+
   useEffect(() => {
     // a retry always asks, the api knows best whether the data is still stale
-    if (attempt === 0 && !optionsRef.current.isStale(dataRef.current)) return
+    if (attempt === 0 && !optionsRef.current.isStale(initial)) return
 
     let isCancelled = false
 
@@ -116,7 +126,7 @@ export function useLiveRefresh<T>(options: LiveRefreshOptions<T>) {
     return () => {
       isCancelled = true
     }
-  }, [attempt])
+  }, [attempt, initial])
 
   return { data, status, challenge, retry: () => setAttempt((count) => count + 1) }
 }
