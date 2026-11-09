@@ -11,7 +11,8 @@ export function PlayerLink({
   children: ReactNode
 }) {
   return (
-    <Link to="/player/$id" params={{ id: String(playerId) }} className={className}>
+    // a roster has dozens of rows, and each preloaded player page is six internal reads
+    <Link to="/player/$id" params={{ id: String(playerId) }} preload={false} className={className}>
       {children}
     </Link>
   )

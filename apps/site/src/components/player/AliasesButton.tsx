@@ -2,10 +2,15 @@ import { History } from 'lucide-react'
 import { fixEncoding } from '../../lib'
 import { HoverReveal } from './HoverReveal'
 
+// a fixed locale, the visitor's own could order names differently from the server and break hydration
+export function sortedAliases(aliases: string[]): string[] {
+  return aliases.map(fixEncoding).sort((left, right) => left.localeCompare(right, 'en'))
+}
+
 export function AliasesButton({ aliases }: { aliases: string[] }) {
   if (aliases.length === 0) return null
 
-  const names = aliases.map(fixEncoding).sort((left, right) => left.localeCompare(right))
+  const names = sortedAliases(aliases)
 
   const trigger = (
     <>
