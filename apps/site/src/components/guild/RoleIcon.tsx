@@ -19,7 +19,7 @@ export function RoleIcon({ group }: { group: RoleGroup }) {
 
   if (group === 'member') {
     return (
-      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3.5 fill-current text-text">
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3.5 fill-current text-green-500">
         <circle cx="8" cy="5" r="3" />
         <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5z" />
       </svg>
