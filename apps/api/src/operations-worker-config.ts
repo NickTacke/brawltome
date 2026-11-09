@@ -145,9 +145,10 @@ export function rankingRetentionScheduleDefinition(config: RankingRetentionConfi
   }
 }
 
-// pause between two guilds: about 2 V1 calls a second, as gentle as a deep crawl, which leaves room for both under the
-// 1800 calls per 5 minutes; 30,000 guilds take about 4 hours
-export const clanWeeklySnapshotGuildDelayMs = 500
+// pause between two guilds, the deep crawl's page delay. The job is one call at a time, so the call itself paces it:
+// at about 1 s a guild it makes some 300 V1 calls per 5 minutes, which with the deep crawl's ~600 stays well under the
+// background budget, and 30,000 guilds take 8 to 9 hours
+export const clanWeeklySnapshotGuildDelayMs = 150
 
 const weekMs = 7 * 24 * 60 * 60 * 1000
 
@@ -155,8 +156,8 @@ const weekMs = 7 * 24 * 60 * 60 * 1000
  * Once a week, half an hour after 10:00 UTC on Thursday. The in-game week turns over on Thursday with the daily reset,
  * 5am Eastern: 09:00 UTC in summer and 10:00 UTC in winter. A fixed UTC time can't follow daylight saving, so it sits
  * after the later of the two. The first run is a week after the release that adds it, so the old worker, which doesn't
- * know the kind, is gone by then. Up to 20 attempts, since a run makes thousands of calls and every one that fails
- * spends one.
+ * know the kind, is gone by then. A failing guild or a V1 outage spends no attempt, so the 20 are for database errors
+ * over a run that takes hours.
  */
 export function clanWeeklySnapshotScheduleDefinition(): CreateClanWeeklySnapshotSchedule {
   return {

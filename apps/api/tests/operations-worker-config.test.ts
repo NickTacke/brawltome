@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  clanWeeklySnapshotGuildDelayMs,
   clanWeeklySnapshotScheduleDefinition,
   leaderboardDeepCrawlScheduleDefinitions,
   leaderboardScheduleDefinitions,
@@ -318,6 +319,10 @@ describe('operations worker configuration', () => {
     })
 
     expect(new Date(definition.firstDueAt).getUTCDay()).toBe(4)
+  })
+
+  test('pauses between weekly snapshot guilds as long as the deep crawl pauses between pages', () => {
+    expect(clanWeeklySnapshotGuildDelayMs).toBe(readOperationsWorkerConfig({}).deepCrawl.pageDelayMs)
   })
 
   test('validates reservation, class limits, and weights as one policy', () => {
