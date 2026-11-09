@@ -270,6 +270,7 @@
         "@brawltome/contracts": "workspace:*",
         "@brawltome/foundation": "workspace:*",
         "@brawltome/game-data": "workspace:*",
+        "@brawltome/player": "workspace:*",
         "@brawltome/queue": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
         "drizzle-orm": "0.45.4",

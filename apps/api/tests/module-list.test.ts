@@ -57,6 +57,8 @@ describe('oRPC router built from a module list', () => {
       'careerById',
       'seasonStarts',
     ])
+
+    expect(Object.keys(router.ranking)).toEqual(['valhallanEvidenceById', 'leaderboardPage'])
   })
 
   test('types the router with exactly the served keys', () => {

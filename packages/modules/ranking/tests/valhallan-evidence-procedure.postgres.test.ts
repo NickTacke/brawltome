@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { nullablePlayerValhallanEvidenceSchema } from '@brawltome/contracts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
 import { call } from '@orpc/server'
 import { createRankingProcedures } from '../api/procedures'
@@ -12,7 +13,10 @@ const outsideCaller = { context: { isInternalCaller: false } }
 let database: TestDatabase
 
 beforeAll(async () => {
-  database = await createTestDatabase({ label: 'valhallan_evidence_procedure', modules: [queueModule, rankingModule] })
+  database = await createTestDatabase({
+    label: 'valhallan_evidence_procedure',
+    modules: [queueModule, playerModule, rankingModule],
+  })
 }, 20_000)
 
 afterAll(async () => {
@@ -44,6 +48,6 @@ describe('valhallanEvidenceById', () => {
 
   test('is served under the ranking module', () => {
     expect(rankingModule.name).toBe('ranking')
-    expect(Object.keys(rankingModule.routes({ database }))).toEqual(['valhallanEvidenceById'])
+    expect(Object.keys(rankingModule.routes({ database }))).toEqual(['valhallanEvidenceById', 'leaderboardPage'])
   })
 })

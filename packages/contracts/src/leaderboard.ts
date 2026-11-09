@@ -73,6 +73,9 @@ export const leaderboardInputSchema = z
 
 export const leaderboardRecentActivityInputSchema = leaderboardInputSchema
 
+export const leaderboardPageSize = 30
+export const leaderboardPageInputSchema = leaderboardInputSchema.pick({ mode: true, region: true, page: true })
+
 const entryMetrics = {
   standing: positiveInt32,
   sourceRank: positiveInt32,
@@ -254,7 +257,7 @@ export const leaderboardRecentActivityOutputSchema = z.union([activityAvailableO
 
 export type LeaderboardIdentity = z.infer<typeof leaderboardIdentitySchema>
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>
-type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
+export type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
 export type LeaderboardRecentActivityEntry = z.infer<typeof leaderboardRecentActivityEntrySchema>
 export type LeaderboardRecentActivityOutput = z.infer<typeof leaderboardRecentActivityOutputSchema>
 
