@@ -3,7 +3,8 @@ import type { SeasonStartContract } from '@brawltome/contracts'
 export type DailyGameCountDrops = { day: string; drops: number; points: number }
 
 const firstKnownSeason: SeasonStartContract = { season: 39, startsAt: new Date(0).toISOString() }
-const firstDetectedSeason = 40
+
+export const firstDetectedSeason = 40
 
 // measured on production history: 5 to 14% of points late in a season, 27 to 36% on the day of a reset
 const minimumDrops = 30
