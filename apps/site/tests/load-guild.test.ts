@@ -75,7 +75,8 @@ function stubApi(answer: (call: Call) => Answer): Call[] {
 function healthyAnswer(memberCount: number, call: Call): Answer {
   if (call.path === '/clans/42') return { status: 200, body: profile(memberCount) }
 
-  if (call.path === '/clans/42/standing') return { status: 200, body: { guildPointsRank: 3, lifetimeXpRank: 9 } }
+  if (call.path === '/clans/42/standing')
+    return { status: 200, body: { guildPointsRank: 3, lifetimeXpRank: 9, lastWeekPoints: null, lastWeekRank: null } }
 
   return { status: 200, body: (call.body?.ids ?? []).map(summaryFor) }
 }
@@ -130,7 +131,7 @@ describe('loadGuild', () => {
     const guild = await loadGuild(42)
 
     expect(guild?.clan.clanName).toBe('Valhalla')
-    expect(guild?.standing).toEqual({ guildPointsRank: 3, lifetimeXpRank: 9 })
+    expect(guild?.standing).toEqual({ guildPointsRank: 3, lifetimeXpRank: 9, lastWeekPoints: null, lastWeekRank: null })
     expect(guild?.summaries.map(({ brawlhallaId }) => brawlhallaId)).toEqual([1, 2])
   })
 
@@ -208,7 +209,7 @@ describe('loadGuild', () => {
 
     expect(guild?.clan.members).toHaveLength(2)
     expect(guild?.summaries).toEqual([])
-    expect(guild?.standing).toEqual({ guildPointsRank: 3, lifetimeXpRank: 9 })
+    expect(guild?.standing).toEqual({ guildPointsRank: 3, lifetimeXpRank: 9, lastWeekPoints: null, lastWeekRank: null })
   })
 
   test('keeps the batches that answered when one fails', async () => {
