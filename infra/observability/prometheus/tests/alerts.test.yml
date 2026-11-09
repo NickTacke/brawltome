@@ -697,3 +697,23 @@ tests:
               summary: "statistics-ranked-collection produced new dead letters"
               description: "At least one global-statistics operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
               runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"
+
+  - name: a statistics publication dead letter still fires at once
+    interval: 1m
+    input_series:
+      - series: 'operation_attempts_total{work_class="maintenance",kind="statistics-publication",outcome="dead_letter"}'
+        values: "0 0 1 1x38"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: NewDeadLetters
+        exp_alerts:
+          - exp_labels:
+              work_class: maintenance
+              kind: statistics-publication
+              severity: warning
+              service: brawltome
+              signal: dead-letters
+            exp_annotations:
+              summary: "statistics-publication produced new dead letters"
+              description: "At least one maintenance operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"
