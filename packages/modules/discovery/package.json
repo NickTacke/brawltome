@@ -9,12 +9,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@brawltome/contracts": "workspace:*",
     "@brawltome/foundation": "workspace:*",
     "@brawltome/queue": "workspace:*",
     "postgres": "^3.4.0"
   },
   "devDependencies": {
     "@brawltome/telemetry": "workspace:*",
+    "@orpc/server": "1.16.2",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   }
