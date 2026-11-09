@@ -5,7 +5,12 @@ import { call } from '@orpc/server'
 import { mapPlayerCareerProfile } from '../api/map-career-profile'
 import { mapPlayerRankedProfile } from '../api/map-ranked-profile'
 import { createPlayerProcedures } from '../api/procedures'
-import { createPostgresCareerPlayers, createPostgresPlayerReferences, createPostgresRankedPlayers, playerModule } from '../index'
+import {
+  createPostgresCareerPlayers,
+  createPostgresPlayerReferences,
+  createPostgresRankedPlayers,
+  playerModule,
+} from '../index'
 
 const internalCaller = { context: { isInternalCaller: true } }
 const outsideCaller = { context: { isInternalCaller: false } }
@@ -93,5 +98,36 @@ describe('player profile procedures', () => {
     expect(call(referenceById, input, outsideCaller)).rejects.toThrow()
     expect(call(rankedById, input, outsideCaller)).rejects.toThrow()
     expect(call(careerById, input, outsideCaller)).rejects.toThrow()
+  })
+})
+
+describe('seasonStarts', () => {
+  test('finds a reset from stored rating history', async () => {
+    const resetDay = '2026-06-24T15:00:00.000Z'
+    const lastWeek = '2026-06-17T15:00:00.000Z'
+
+    for (let brawlhallaId = 1000; brawlhallaId < 1030; brawlhallaId += 1) {
+      await database.sql`
+        INSERT INTO players.ranked_profiles
+          (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
+        VALUES (${brawlhallaId}, 'Reset Player', ${resetDay}, ${resetDay}, 'EU', 1500, 1500, 'Gold 1', 1, 2)
+      `
+
+      await database.sql`
+        INSERT INTO players.ranked_rating_history
+          (brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at)
+        SELECT ${brawlhallaId}, 1500, 1500, 'Gold 1', 1, games, recorded_at::timestamptz
+        FROM (VALUES (40, ${lastWeek}), (2, ${resetDay})) AS points (games, recorded_at)
+      `
+    }
+
+    expect(await call(procedures().seasonStarts, undefined, internalCaller)).toEqual([
+      { season: 39, startsAt: '1970-01-01T00:00:00.000Z' },
+      { season: 40, startsAt: '2026-06-24T14:00:00.000Z' },
+    ])
+  })
+
+  test('rejects callers from outside', () => {
+    expect(call(procedures().seasonStarts, undefined, outsideCaller)).rejects.toThrow()
   })
 })

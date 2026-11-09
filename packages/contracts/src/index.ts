@@ -110,6 +110,7 @@ export {
   replayJobFailureSchema,
   replayJobSummarySchema,
 } from './replay-analysis'
+export { type SeasonStartContract, seasonStartsSchema } from './season-starts'
 export {
   type LegendMetaHistoryOutput,
   type LegendMetaInput,

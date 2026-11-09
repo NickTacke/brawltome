@@ -5,12 +5,15 @@ import {
   playerRankedSummariesInputSchema,
   playerRankedSummariesSchema,
   playerReferenceByIdInputSchema,
+  seasonStartsSchema,
 } from '@brawltome/contracts'
 import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
 import { createPostgresCareerPlayers } from '../career/postgres'
 import { readRankedSummaries } from '../db/read-ranked-summaries'
+import { readSeasonStarts } from '../db/read-season-starts'
 import { createPostgresPlayerReferences } from '../player-references'
 import { createPostgresRankedPlayers } from '../ranked/postgres'
+import { createSeasonStartsCache } from '../ranked/season-starts-cache'
 import { mapPlayerCareerProfile } from './map-career-profile'
 import { mapPlayerRankedProfile } from './map-ranked-profile'
 
@@ -23,6 +26,8 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
   const ranked = createPostgresRankedPlayers(database, {
     resolveCareerMainLegend: (brawlhallaId) => career.mainLegendById(brawlhallaId),
   })
+
+  const cachedSeasonStarts = createSeasonStartsCache(() => readSeasonStarts(database))
 
   const rankedSummaries = internalProcedure
     .route({
@@ -72,5 +77,16 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
     .output(nullablePlayerCareerProfileSchema)
     .handler(async ({ input }) => mapPlayerCareerProfile(await career.byId(input.id)))
 
-  return { rankedSummaries, referenceById, rankedById, careerById }
+  const seasonStarts = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/seasons',
+      operationId: 'player.seasonStarts',
+      summary: 'Start of every known ranked season',
+      tags: ['player'],
+    })
+    .output(seasonStartsSchema)
+    .handler(() => cachedSeasonStarts())
+
+  return { rankedSummaries, referenceById, rankedById, careerById, seasonStarts }
 }

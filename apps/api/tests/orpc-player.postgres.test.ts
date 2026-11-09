@@ -97,6 +97,7 @@ describe('player.rankedSummaries over oRPC', () => {
       '/players/{id}/career',
       '/players/{id}/ranked',
       '/players/{id}/reference',
+      '/seasons',
       '/status',
     ])
 
