@@ -5,7 +5,9 @@ failing as dead letters. It doesn't know what a job does: each job lives in the 
 
 Table, metric and failure names still use the old wording, as do the two `pg_notify` channels
 (`refresh_operations_wakeup` and `refresh_operations_player_refresh_settled`). Migration ids keep their
-`refresh-operations/` prefix for good, because every migrated database has them on record. New migrations in this module use that prefix too. It doesn't have to match the module's name.
+`refresh-operations/` prefix for good, because every migrated database has them on record. New migrations in this module
+use that prefix too. It doesn't have to match the module's name. A migration from another module that names `queue.`
+needs `requires: ['refresh-operations/0032']`, so it runs after the rename on an empty database.
 
 ## What it owns
 
