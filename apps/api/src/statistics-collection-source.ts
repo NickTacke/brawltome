@@ -1,4 +1,4 @@
-import { BhApiHttpError, RequestQueue } from '@brawltome/bhapi'
+import { BhApiHttpError, RateLimitError, RequestQueue } from '@brawltome/bhapi'
 import {
   decodeLifetimeEvidence,
   decodeRankedEvidence,
@@ -108,17 +108,14 @@ export function createStatisticsCollection(createSource: (queue: RequestQueue) =
   }
 }
 
-function isTimeout(error: unknown): boolean {
-  return (
-    error instanceof Error && error.cause instanceof Error && ['TimeoutError', 'AbortError'].includes(error.cause.name)
-  )
-}
-
-// any 5xx or timeout, not just the gateway codes, so a day of V1 hanging cannot use up the coverage floor
+// anything but a status or a 429 means no usable answer came back: a timeout, a network failure or a maintenance page.
+// a host that stays unreachable would otherwise spend every player's three calls within seconds and sink coverage
 function isV1Outage(error: unknown): boolean {
+  if (error instanceof RateLimitError) return false
+
   if (error instanceof BhApiHttpError) return error.status >= 500
 
-  return isTimeout(error)
+  return error instanceof Error
 }
 
 async function fetchPlayerPayload(

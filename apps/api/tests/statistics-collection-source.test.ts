@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BhApiClient } from '@brawltome/bhapi'
+import { BhApiClient, BhApiHttpError, RateLimitError } from '@brawltome/bhapi'
 import { StatisticsSourceOutageError } from '@brawltome/statistics'
 import {
   createStatisticsCollection,
@@ -116,6 +116,7 @@ describe('Statistics collection worker wiring', () => {
     ['a 503', () => new Response('down', { status: 503 })],
     ['a plain 500', () => new Response('broken', { status: 500 })],
     ['a timeout', () => new Promise<Response>(() => {})],
+    ['a maintenance page', () => new Response('<html>down</html>', { status: 200 })],
   ]
 
   test.each(outages)('%s is reported as an outage and holds back only the next collection slot', async (_, respond) => {
@@ -137,6 +138,45 @@ describe('Statistics collection worker wiring', () => {
     } finally {
       server.stop(true)
     }
+  })
+
+  const collectionLease = {
+    kind: 'statistics-ranked-collection' as const,
+    payload: { cohortId: '10000000-0000-4000-8000-000000000001', brawlhallaId: 42 },
+  }
+
+  function collectionFrom(respond: () => Promise<unknown>) {
+    return createStatisticsCollection(() => ({ getPlayerStatsV1Payload: respond }))
+  }
+
+  test('an unreachable host is reported as an outage', async () => {
+    const collection = createStatisticsCollection(
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: 'http://127.0.0.1:1', queue }),
+    )
+
+    await expect(collection.collectEvidence(collectionLease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
+  })
+
+  test.each([
+    ['a 403', new BhApiHttpError('forbidden', 403)],
+    ['a 429', new RateLimitError('slow down', 5_000)],
+  ])('%s is not an outage and leaves the pace alone', async (_, failure) => {
+    const collection = collectionFrom(() => Promise.reject(failure))
+
+    await expect(collection.collectEvidence(collectionLease)).rejects.toBe(failure)
+
+    expect(collection.collectionPace.waitMsForTurn('next')).toBe(0)
+  })
+
+  test('a success between outages starts the hold over', async () => {
+    const responses = [() => Promise.reject(new BhApiHttpError('down', 503)), () => Promise.resolve(rankedPayload(42))]
+    const collection = collectionFrom(() => responses.shift()?.() ?? Promise.reject(new BhApiHttpError('down', 503)))
+
+    await expect(collection.collectEvidence(collectionLease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
+    await collection.collectEvidence(collectionLease)
+    await expect(collection.collectEvidence(collectionLease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
+
+    expect(collection.collectionPace.waitMsForTurn('next')).toBeLessThanOrEqual(15_000)
   })
 
   test('a 404 for a missing player is not an outage and leaves the pace alone', async () => {
