@@ -123,3 +123,9 @@ export {
 } from './statistics'
 export { apiStatusSchema } from './status'
 export type { AppRouter } from './trpc'
+export {
+  type VisitorRefreshInputContract,
+  type VisitorRefreshResponseContract,
+  visitorRefreshInputSchema,
+  visitorRefreshResponseSchema,
+} from './visitor-refresh'
