@@ -27,14 +27,29 @@ function waitFor(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-function askForChallenge(siteKey: string | null, setChallenge: RunSetup<unknown>['setChallenge']) {
+// the invisible challenge answers in seconds, a script that never loads must not leave the page on "updating"
+const challengeTimeoutMs = 30_000
+
+export function askForChallenge(
+  siteKey: string | null,
+  setChallenge: RunSetup<unknown>['setChallenge'],
+  timeoutMs = challengeTimeoutMs,
+): Promise<string | null> {
   if (!siteKey) return Promise.resolve(null)
 
   return new Promise<string | null>((resolve) => {
+    let isSettled = false
+
     const settle = (turnstileToken: string | null) => {
+      if (isSettled) return
+
+      isSettled = true
+      clearTimeout(timer)
       setChallenge(null)
       resolve(turnstileToken)
     }
+
+    const timer = setTimeout(() => settle(null), timeoutMs)
 
     setChallenge({ siteKey, settle })
   })
