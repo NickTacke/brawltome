@@ -35,10 +35,10 @@ describe('refresh operations drizzle tables', () => {
     await expectTablesMatchDatabase(database, tables)
   })
 
-  test('cover every refresh_operations table', async () => {
+  test('cover every queue table', async () => {
     const rows = await database.sql<{ name: string }[]>`
       SELECT table_name AS name FROM information_schema.tables
-      WHERE table_schema = 'refresh_operations' AND table_type = 'BASE TABLE'
+      WHERE table_schema = 'queue' AND table_type = 'BASE TABLE'
       ORDER BY table_name
     `
 

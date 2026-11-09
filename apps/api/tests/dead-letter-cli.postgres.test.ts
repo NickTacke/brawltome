@@ -255,12 +255,12 @@ describe('dead-letter CLI', () => {
       const restricted = postgres(operatorUrl.toString(), { max: 1 })
 
       try {
-        await expect((async () => restricted`DELETE FROM refresh_operations.operations`)()).rejects.toMatchObject({
+        await expect((async () => restricted`DELETE FROM queue.operations`)()).rejects.toMatchObject({
           code: '42501',
         })
 
         await expect(
-          (async () => restricted`UPDATE refresh_operations.dead_letter_actions SET reason = 'tampered'`)(),
+          (async () => restricted`UPDATE queue.dead_letter_actions SET reason = 'tampered'`)(),
         ).rejects.toMatchObject({ code: '42501' })
       } finally {
         await restricted.end()
@@ -363,10 +363,10 @@ describe('dead-letter CLI', () => {
       for (const secret of [rawToken, tokenHash]) {
         const [stored] = await control<{ found: boolean }[]>`
           SELECT EXISTS (
-            SELECT 1 FROM refresh_operations.operations
+            SELECT 1 FROM queue.operations
             WHERE payload::text LIKE ${`%${secret}%`} OR provenance::text LIKE ${`%${secret}%`}
             UNION ALL
-            SELECT 1 FROM refresh_operations.dead_letter_actions
+            SELECT 1 FROM queue.dead_letter_actions
             WHERE actor_id LIKE ${`%${secret}%`} OR reason LIKE ${`%${secret}%`}
           ) AS found
         `

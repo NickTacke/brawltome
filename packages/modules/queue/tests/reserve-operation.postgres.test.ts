@@ -68,7 +68,7 @@ async function readRow(operationId: string) {
     }[]
   >`
     SELECT status, work_class, reservation_token, reservation_expires_at, last_error
-    FROM refresh_operations.operations WHERE id = ${operationId}
+    FROM queue.operations WHERE id = ${operationId}
   `
 
   return row

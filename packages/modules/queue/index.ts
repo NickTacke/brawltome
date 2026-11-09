@@ -30,6 +30,7 @@ import { validatePrimaryPlayerVerificationKind } from './migrations/0028-validat
 import { dropKindConstraints } from './migrations/0029-drop-kind-constraints'
 import { dropScheduleKindConstraints } from './migrations/0030-drop-schedule-kind-constraints'
 import { dropInteractiveSectionCheck } from './migrations/0031-drop-interactive-section-check'
+import { renameSchemaToQueue } from './migrations/0032-rename-schema-to-queue'
 
 export { type AcceptOperationInput, acceptOperation } from './db/accept-operation'
 export {
@@ -200,6 +201,7 @@ const migrations = [
   dropKindConstraints,
   dropScheduleKindConstraints,
   dropInteractiveSectionCheck,
+  renameSchemaToQueue,
 ] as const
 
 export type { InvalidRow } from './db/claim-operation'

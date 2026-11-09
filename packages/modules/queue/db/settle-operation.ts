@@ -12,7 +12,7 @@ export function retryAppliedEffect(
     const sql = transaction as unknown as Sql
 
     const [updated] = await sql<{ id: string }[]>`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
           available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
           last_error = ${sql.json({
@@ -29,7 +29,7 @@ export function retryAppliedEffect(
     if (!updated) return 'lease-lost' as const
 
     await sql`
-      UPDATE refresh_operations.attempts
+      UPDATE queue.attempts
       SET finished_at = clock_timestamp(), outcome = 'retry',
           error = ${sql.json({
             code: 'discovery_projection_acknowledgment_pending',
@@ -57,7 +57,7 @@ export async function deferOperation(
     const sql = transaction as unknown as Sql
 
     const [owned] = await sql<{ attempt_count: number }[]>`
-      SELECT attempt_count FROM refresh_operations.operations
+      SELECT attempt_count FROM queue.operations
       WHERE id = ${lease.operationId} AND status = 'leased'
         AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
         AND lease_expires_at > clock_timestamp()
@@ -67,7 +67,7 @@ export async function deferOperation(
     if (!owned || owned.attempt_count !== lease.attemptNumber) return 'lease-lost' as const
 
     const [removed] = await sql<{ operation_id: string }[]>`
-      DELETE FROM refresh_operations.attempts
+      DELETE FROM queue.attempts
       WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
         AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
       RETURNING operation_id
@@ -76,7 +76,7 @@ export async function deferOperation(
     if (!removed) return 'lease-lost' as const
 
     await sql`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'pending', attempt_count = attempt_count - 1,
           lease_owner = NULL, lease_expires_at = NULL,
           available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
@@ -94,7 +94,7 @@ export function completeOperation(database: Database, lease: Lease<unknown>): Pr
     const sql = transaction as unknown as Sql
 
     const updated = await sql<{ id: string }[]>`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
           completed_at = clock_timestamp(), updated_at = clock_timestamp()
       WHERE id = ${lease.operationId} AND status = 'leased'
@@ -106,7 +106,7 @@ export function completeOperation(database: Database, lease: Lease<unknown>): Pr
     if (!updated[0]) return 'lease-lost' as const
 
     await sql`
-      UPDATE refresh_operations.attempts
+      UPDATE queue.attempts
       SET finished_at = clock_timestamp(), outcome = 'succeeded'
       WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
     `
@@ -126,7 +126,7 @@ export function failOperation(
     const sql = transaction as unknown as Sql
 
     const [owned] = await sql<{ attempt_count: number; max_attempts: number }[]>`
-      SELECT attempt_count, max_attempts FROM refresh_operations.operations
+      SELECT attempt_count, max_attempts FROM queue.operations
       WHERE id = ${lease.operationId} AND status = 'leased'
         AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
         AND lease_expires_at > clock_timestamp()
@@ -138,14 +138,14 @@ export function failOperation(
     const retry = failure.retryable && owned.attempt_count < owned.max_attempts
 
     await sql`
-      UPDATE refresh_operations.attempts
+      UPDATE queue.attempts
       SET finished_at = clock_timestamp(), outcome = ${retry ? 'retry' : 'dead_letter'},
           error = ${sql.json(failure)}
       WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
     `
 
     await sql`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = ${retry ? 'pending' : 'dead_letter'}, lease_owner = NULL, lease_expires_at = NULL,
           available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
           completed_at = ${retry ? null : sql`clock_timestamp()`},

@@ -76,8 +76,8 @@ describe('Leaderboard deep crawl operations', () => {
     try {
       const keys = await control<{ dedupe_key: string; schedule_id: string }[]>`
         SELECT operation.dedupe_key, occurrence.schedule_id
-        FROM refresh_operations.operations operation
-        JOIN refresh_operations.schedule_occurrences occurrence
+        FROM queue.operations operation
+        JOIN queue.schedule_occurrences occurrence
           ON occurrence.id = operation.origin_schedule_occurrence_id
         WHERE operation.kind = 'leaderboard-deep-crawl'
       `

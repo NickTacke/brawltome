@@ -15,7 +15,7 @@ type InteractiveSection = 'ranked' | 'stats' | 'profile' | 'roster'
 
 const clockTimestamp = sql`clock_timestamp()`
 
-export const refreshOperationsSchema = pgSchema('refresh_operations')
+export const refreshOperationsSchema = pgSchema('queue')
 
 export const operations = refreshOperationsSchema.table('operations', {
   id: uuid('id').primaryKey(),

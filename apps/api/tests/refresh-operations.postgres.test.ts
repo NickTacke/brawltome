@@ -100,7 +100,7 @@ async function expire(operationId: string) {
 
   try {
     await control`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${operationId}
     `
@@ -150,7 +150,7 @@ describe('durable Refresh Operations', () => {
       })
 
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET status = 'dead_letter', completed_at = clock_timestamp(),
             last_error = ${control.json({ code: 'test_failure', message: 'safe', retryable: false })}
         WHERE id = ${dead.operationId}
@@ -166,7 +166,7 @@ describe('durable Refresh Operations', () => {
       })
 
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET status = 'dead_letter', completed_at = clock_timestamp(),
             last_error = ${control.json({ code: 'actor_rate_limited', message: 'Interactive refresh admission rejected' })}
         WHERE id = ${rejected.operationId}
@@ -232,12 +232,12 @@ describe('durable Refresh Operations', () => {
       expect(pending.operationId).toBeTruthy()
     } finally {
       await control`
-        DELETE FROM refresh_operations.schedules
+        DELETE FROM queue.schedules
         WHERE provenance ->> 'source' = 'telemetry-test'
       `
 
       await control`
-        DELETE FROM refresh_operations.operations
+        DELETE FROM queue.operations
         WHERE provenance ->> 'source' = 'telemetry-test'
           AND status <> 'dead_letter'
       `
@@ -263,7 +263,7 @@ describe('durable Refresh Operations', () => {
 
       // A long crawl created two hours ago that just yielded a slice and is runnable again.
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET created_at = clock_timestamp() - interval '2 hours', available_at = clock_timestamp() - interval '1 second'
         WHERE id = ${yielded.operationId}
       `
@@ -275,7 +275,7 @@ describe('durable Refresh Operations', () => {
       expect(ageMs).toBeLessThan(60 * 60 * 1000)
     } finally {
       // Later tests lease leaderboard work from this shared database; leave nothing pending behind.
-      if (yielded) await control`DELETE FROM refresh_operations.operations WHERE id = ${yielded.operationId}`
+      if (yielded) await control`DELETE FROM queue.operations WHERE id = ${yielded.operationId}`
 
       await control.end()
     }
@@ -897,7 +897,7 @@ describe('durable Refresh Operations', () => {
         settleWithin(
           'reject unknown operation kind',
           control`
-            INSERT INTO refresh_operations.operations
+            INSERT INTO queue.operations
               (id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts)
             VALUES
               (${randomUUID()}, 'unknown-refresh', ${randomUUID()}, ${randomUUID()}, 'interactive',
@@ -1028,7 +1028,7 @@ describe('durable Refresh Operations', () => {
       expect(state.attempts).toHaveLength(0)
     } finally {
       await control`
-        DELETE FROM refresh_operations.operations
+        DELETE FROM queue.operations
         WHERE id = ${deferred.operationId}
       `
 
@@ -1067,7 +1067,7 @@ describe('durable Refresh Operations', () => {
       `
 
       await control`
-        UPDATE refresh_operations.schedules
+        UPDATE queue.schedules
         SET next_due_at = clock_timestamp() - interval '1 second'
         WHERE id = ${schedule.scheduleId}
       `
@@ -1121,7 +1121,7 @@ describe('durable Refresh Operations', () => {
       expect(obsoleteLease.operationId).toBe(firstOperationId)
 
       await control`
-        UPDATE refresh_operations.schedules
+        UPDATE queue.schedules
         SET next_due_at = clock_timestamp() - interval '1 second'
         WHERE id = ${schedule.scheduleId}
       `
@@ -1311,7 +1311,7 @@ describe('durable Refresh Operations', () => {
 
     const [schedule] = await control`
       SELECT id, provenance, enabled
-      FROM refresh_operations.schedules
+      FROM queue.schedules
       WHERE schedule_key = ${`primary-player:4242:${assignmentId}`}
     `
 
@@ -1342,7 +1342,7 @@ describe('durable Refresh Operations', () => {
     ).toEqual({ created: 0, retired: 1 })
 
     const [retired] = await control`
-      SELECT enabled FROM refresh_operations.schedules WHERE id = ${schedule.id}
+      SELECT enabled FROM queue.schedules WHERE id = ${schedule.id}
     `
 
     expect(retired.enabled).toBe(false)
@@ -1383,7 +1383,7 @@ describe('durable Refresh Operations', () => {
     expect(await restarted.materializeDueSchedules()).toMatchObject({ occurrencesCreated: 0 })
 
     const [reassignedSchedule] = await control`
-      SELECT id FROM refresh_operations.schedules
+      SELECT id FROM queue.schedules
       WHERE resource_key = 'player:4343' AND enabled
     `
 
@@ -1486,7 +1486,7 @@ describe('durable Refresh Operations', () => {
     if (abandoned.outcome !== 'reserved') throw new Error('Expected abandoned reservation')
 
     await control`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET reservation_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${abandoned.operationId}
     `
@@ -1538,9 +1538,9 @@ describe('durable Refresh Operations', () => {
 
     for (let attempt = 0; watermarked === 0 && attempt < 1_000; attempt += 1) {
       const updated = await control`
-        UPDATE refresh_operations.schedules schedule
+        UPDATE queue.schedules schedule
         SET first_due_at = clock.watermark, next_due_at = clock.watermark
-        FROM refresh_operations.interactive_refresh_effects ranked,
+        FROM queue.interactive_refresh_effects ranked,
              (SELECT date_trunc('milliseconds', clock_timestamp()) AS watermark) clock
         WHERE ranked.operation_id = ${splitLease.effectOperationId} AND ranked.section = 'ranked'
           AND clock.watermark > ranked.completed_at
@@ -2048,7 +2048,7 @@ async function recordInteractiveSection(
   section: 'ranked' | 'profile',
 ): Promise<void> {
   await control`
-    INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
+    INSERT INTO queue.interactive_refresh_effects (operation_id, section, lease_token)
     VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
   `
 }
@@ -2151,7 +2151,7 @@ async function insertProofRow(
   row: { key: string; id: string; availableAt: Date; createdAt: Date },
 ): Promise<void> {
   await control`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts,
        available_at, created_at)
     VALUES

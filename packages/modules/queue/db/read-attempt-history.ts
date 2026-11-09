@@ -40,7 +40,7 @@ export async function readAttemptHistory(
            count(DISTINCT (created_at AT TIME ZONE 'UTC')::date)::integer AS created_days,
            max(created_at) AS last_created_at,
            max(created_at) FILTER (WHERE status = 'dead_letter') AS last_dead_lettered_at
-    FROM refresh_operations.operations
+    FROM queue.operations
     WHERE kind = ${input.kind}
       AND created_at > clock_timestamp() - make_interval(days => ${input.windowDays})
       AND provenance->>'source' = ANY (${[...input.provenanceSources]}::text[])

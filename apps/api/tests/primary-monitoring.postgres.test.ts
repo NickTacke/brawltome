@@ -140,7 +140,7 @@ describe('Primary Player monitoring', () => {
     const control = postgres(connectionString, { max: 1 })
 
     await control`
-      UPDATE refresh_operations.schedules
+      UPDATE queue.schedules
       SET next_due_at = clock_timestamp() - interval '2 seconds',
           first_due_at = clock_timestamp() - interval '2 seconds'
       WHERE resource_key = ${`player:${brawlhallaId}`} AND enabled
@@ -253,7 +253,7 @@ describe('Primary Player monitoring', () => {
 
     const [enabled] = await restartedControl`
       SELECT count(*)::int AS count
-      FROM refresh_operations.schedules
+      FROM queue.schedules
       WHERE enabled AND provenance ->> 'source' = 'primary-player-monitoring'
     `
 

@@ -483,7 +483,7 @@ const migrations = [
   dropEffectTableCompatibility,
 ] as const
 
-// statistics tables reference refresh_operations.operations, and its writes are fenced by lease functions
+// statistics tables reference queue.operations, and its writes are fenced by lease functions
 export const statisticsModule = {
   name: 'statistics',
   dependsOn: ['queue'],

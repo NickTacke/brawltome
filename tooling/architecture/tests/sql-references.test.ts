@@ -4,20 +4,20 @@ import { findSchemaReferences } from '../src/sql-references'
 import type { TemporaryArchitectureException } from '../src/types'
 import { policy, validFixture } from './fixtures'
 
-const schemas = ['accounts', 'players', 'rankings', 'refresh_operations']
+const schemas = ['accounts', 'players', 'rankings', 'queue']
 const reachingIntoPlayers = 'export const query = "SELECT * FROM players.profiles"'
 
 describe('findSchemaReferences', () => {
   it('finds schema-qualified names in strings and template literals with source line numbers', () => {
     const source = [
-      'const claim = "SELECT refresh_operations.claim_lease($1)"',
+      'const claim = "SELECT queue.claim_lease($1)"',
       'const aliases = `',
       '  SELECT * FROM players.discovery_aliases',
       '`',
     ].join('\n')
 
     expect(findSchemaReferences(source, schemas)).toEqual([
-      { schema: 'refresh_operations', line: 1 },
+      { schema: 'queue', line: 1 },
       { schema: 'players', line: 3 },
     ])
   })
@@ -261,14 +261,12 @@ describe('cross-module-sql rule', () => {
   })
 
   it('does not let an exception for one schema cover another', () => {
-    const source = `${reachingIntoPlayers}\nconst other = "refresh_operations.claim_lease()"`
+    const source = `${reachingIntoPlayers}\nconst other = "queue.claim_lease()"`
     const fixture = withRankingsFile('packages/rankings/src/leaderboard.ts', source)
 
     const result = checkArchitecture(fixture, { ...policy, exceptions: [sqlException] })
 
-    expect(result.violations).toEqual([
-      expect.objectContaining({ rule: 'cross-module-sql', importPath: 'refresh_operations' }),
-    ])
+    expect(result.violations).toEqual([expect.objectContaining({ rule: 'cross-module-sql', importPath: 'queue' })])
   })
 
   it('reports an exception stale once the reference is gone', () => {

@@ -6,7 +6,7 @@ import { sql as sqlFragment } from 'drizzle-orm'
 
 async function testWriteProofEffect(sql: Sql, effect: ProofEffectWrite) {
   const inserted = await sql<{ operation_key: string }[]>`
-    INSERT INTO refresh_operations.proof_effects (operation_key, operation_id, lease_token, effect_value)
+    INSERT INTO queue.proof_effects (operation_key, operation_id, lease_token, effect_value)
     VALUES (${effect.operationKey}, ${effect.effectOperationId}, ${effect.leaseToken}, ${sql.json(effect.payload)})
     ON CONFLICT (operation_key) DO NOTHING
     RETURNING operation_key
@@ -16,7 +16,7 @@ async function testWriteProofEffect(sql: Sql, effect: ProofEffectWrite) {
 }
 
 async function readTestRows(database: Database, operationId: string) {
-  return database.sql`SELECT * FROM refresh_operations.proof_effects WHERE operation_id = ${operationId}`
+  return database.sql`SELECT * FROM queue.proof_effects WHERE operation_id = ${operationId}`
 }
 
 export const testProofEffects: ProofEffectStore = { write: testWriteProofEffect, readRows: readTestRows }
@@ -30,7 +30,7 @@ export async function readTestProofEffects(
     effect_value: { value: string }
     created_at: Date
   }>(sqlFragment`
-    SELECT operation_key, effect_value, created_at FROM refresh_operations.proof_effects
+    SELECT operation_key, effect_value, created_at FROM queue.proof_effects
     WHERE operation_id = ${effectOperationId}
     ORDER BY created_at
   `)

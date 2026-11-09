@@ -55,7 +55,7 @@ async function insertVisitorRefresh(
   const id = randomUUID()
 
   await sql`
-    INSERT INTO refresh_operations.operations
+    INSERT INTO queue.operations
       (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance, max_attempts, created_at)
     VALUES
       (${id}, ${id}, 'interactive-player-refresh', ${`visit:${id}`}, ${`visit:${id}`}, 'interactive',
@@ -65,13 +65,13 @@ async function insertVisitorRefresh(
 
   if (errorCode) {
     await sql`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'dead_letter', completed_at = clock_timestamp(), last_error = ${sql.json({ code: errorCode })}
       WHERE id = ${id}
     `
   } else if (settled) {
     await sql`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'succeeded', completed_at = clock_timestamp()
       WHERE id = ${id}
     `
@@ -94,7 +94,7 @@ describe('Recently viewed freshness operations', () => {
       await enqueueRecentlyViewedRefreshes(database, [11])
 
       await control`
-        UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
+        UPDATE queue.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE provenance->>'source' = 'freshness-planner'
       `
 
@@ -126,7 +126,7 @@ describe('Recently viewed freshness operations', () => {
       expect(await activeRecentlyViewedRefreshes(database)).toBe(2)
 
       const [row] = await control<{ work_class: string; payload: unknown; resource_key: string }[]>`
-        SELECT work_class, payload, resource_key FROM refresh_operations.operations
+        SELECT work_class, payload, resource_key FROM queue.operations
         WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '20'
       `
 
@@ -138,7 +138,7 @@ describe('Recently viewed freshness operations', () => {
 
       // Interactive work is claimed first, so settle the visitor's refresh to reach the background one.
       await control`
-        UPDATE refresh_operations.operations SET status = 'succeeded', completed_at = clock_timestamp()
+        UPDATE queue.operations SET status = 'succeeded', completed_at = clock_timestamp()
         WHERE work_class = 'interactive'
       `
 
@@ -180,7 +180,7 @@ describe('Recently viewed freshness operations', () => {
       })
 
       const [background] = await control<{ id: string; work_class: string }[]>`
-        SELECT id, work_class FROM refresh_operations.operations
+        SELECT id, work_class FROM queue.operations
         WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '50'
       `
 

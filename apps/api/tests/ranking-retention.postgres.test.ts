@@ -1135,7 +1135,7 @@ describe('Ranking snapshot retention', () => {
       expect(
         await errorMessage(
           () => sql`
-            SELECT refresh_operations.complete_ranking_retention_lease(
+            SELECT queue.complete_ranking_retention_lease(
               ${lease.operationId}, ${lease.leaseOwner}, ${lease.leaseToken}
             )
           `,
@@ -1145,7 +1145,7 @@ describe('Ranking snapshot retention', () => {
       expect(await operations.operationStatus(lease.operationId)).toBe('leased')
 
       await sql`
-        UPDATE refresh_operations.operations SET lease_expires_at = clock_timestamp() - interval '1 second'
+        UPDATE queue.operations SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${lease.operationId}
       `
 
@@ -1223,7 +1223,7 @@ describe('Ranking snapshot retention', () => {
       })
 
       await sql`
-        UPDATE refresh_operations.schedules SET next_due_at = clock_timestamp() - interval '1 hour'
+        UPDATE queue.schedules SET next_due_at = clock_timestamp() - interval '1 hour'
         WHERE id = ${schedule.scheduleId}
       `
 
@@ -1244,7 +1244,7 @@ describe('Ranking snapshot retention', () => {
       ).toBe('succeeded')
 
       const [operation] = await sql<{ id: string; status: string }[]>`
-        SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
+        SELECT id, status FROM queue.operations WHERE kind = 'ranking-retention'
       `
 
       expect(operation?.status).toBe('succeeded')
@@ -1261,7 +1261,7 @@ describe('Ranking snapshot retention', () => {
       expect((await reconcileRankingRetentionSchedule(database, definition)).outcome).toBe('reconciled')
 
       const [enabled] = await sql<{ enabled: boolean }[]>`
-        SELECT enabled FROM refresh_operations.schedules WHERE id = ${schedule.scheduleId}
+        SELECT enabled FROM queue.schedules WHERE id = ${schedule.scheduleId}
       `
 
       expect(enabled?.enabled).toBe(true)
@@ -1328,13 +1328,13 @@ describe('Ranking snapshot retention', () => {
       expect(await run).toBe('succeeded')
 
       const [operation] = await sql<{ id: string; status: string }[]>`
-        SELECT id, status FROM refresh_operations.operations WHERE kind = 'ranking-retention'
+        SELECT id, status FROM queue.operations WHERE kind = 'ranking-retention'
       `
 
       expect(operation?.status).toBe('succeeded')
 
       const attempts = await sql<{ outcome: string | null }[]>`
-        SELECT outcome FROM refresh_operations.attempts WHERE operation_id = ${operation?.id as string}
+        SELECT outcome FROM queue.attempts WHERE operation_id = ${operation?.id as string}
       `
 
       expect([...attempts]).toEqual([{ outcome: 'succeeded' }])

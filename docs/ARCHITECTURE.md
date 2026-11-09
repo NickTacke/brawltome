@@ -20,7 +20,7 @@ one Postgres schema and the migrations that create it, and exposes one `index.ts
 | `clan` | `clans` | Clan profiles and refreshes |
 | `discovery` | `discovery` | Finding players and clans worth tracking |
 | `player` | `players` | Profiles, career and ranked stats, freshness, name verification |
-| `queue` | `refresh_operations` | The job queue: leases, scheduling, dead letters |
+| `queue` | `queue` | The job queue: leases, scheduling, dead letters |
 | `ranking` | `rankings` | Leaderboard snapshots and their retention |
 | `replay-analysis` | `replay_analysis` | Replay analysis jobs |
 | `request-admission` | `request_admission` | Rate limits for visitors and for the Brawlhalla API budget |

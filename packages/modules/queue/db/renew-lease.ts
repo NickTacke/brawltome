@@ -5,7 +5,7 @@ import type { LeaseAuthorityResult, RenewResult } from '../model'
 /** Extends a lease the worker still holds. Run on the renewals pool, so a busy main pool cannot let it expire. */
 export async function renewLease(renewals: Database, lease: Lease<unknown>, leaseMs: number): Promise<RenewResult> {
   const renewed = await renewals.sql<{ id: string }[]>`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
         updated_at = clock_timestamp()
     WHERE id = ${lease.operationId} AND status = 'leased'
@@ -24,7 +24,7 @@ export async function renewLeaseWithAuthority(
   leaseMs: number,
 ): Promise<LeaseAuthorityResult> {
   const [renewed] = await renewals.sql<{ lease_expires_at: Date }[]>`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
         updated_at = clock_timestamp()
     WHERE id = ${lease.operationId} AND status = 'leased'

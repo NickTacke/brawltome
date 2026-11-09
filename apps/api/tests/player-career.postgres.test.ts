@@ -151,7 +151,7 @@ async function expireLease(operationId: string) {
 
   try {
     await control`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${operationId}
     `

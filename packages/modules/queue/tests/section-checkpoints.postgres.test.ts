@@ -35,7 +35,7 @@ async function reserveEffectOperation(): Promise<string> {
 
 async function recordCheckpoint(effectOperationId: string, section: string): Promise<void> {
   await database.sql`
-    INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
+    INSERT INTO queue.interactive_refresh_effects (operation_id, section, lease_token)
     VALUES (${effectOperationId}, ${section}, 1)
   `
 }

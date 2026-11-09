@@ -29,7 +29,7 @@ export async function commitProofEffect(
         payload: { value: string }
       }[]
     >`
-      SELECT id, effect_operation_id, operation_key, payload FROM refresh_operations.operations
+      SELECT id, effect_operation_id, operation_key, payload FROM queue.operations
       WHERE id = ${lease.operationId} AND kind = ${lease.kind} AND status = 'leased'
         AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
         AND lease_expires_at > clock_timestamp()

@@ -18,7 +18,7 @@ export type LeaderboardEffectResult = 'applied' | 'already-applied' | 'effect-co
 
 export async function acquireActiveLease(transaction: Sql, lease: HeldLease): Promise<boolean> {
   const [result] = await transaction<{ active: boolean }[]>`
-    SELECT refresh_operations.acquire_active_lease(
+    SELECT queue.acquire_active_lease(
       ${lease.operationId}::uuid,
       ${lease.leaseOwner},
       ${lease.leaseToken}
@@ -33,7 +33,7 @@ export async function commitInteractiveSection(
   lease: HeldLease & { section: 'ranked' | 'stats' },
 ): Promise<boolean> {
   const [result] = await transaction<{ committed: boolean }[]>`
-    SELECT refresh_operations.commit_interactive_section_if_owned(
+    SELECT queue.commit_interactive_section_if_owned(
       ${lease.operationId}::uuid,
       ${lease.leaseOwner},
       ${lease.leaseToken},
@@ -46,7 +46,7 @@ export async function commitInteractiveSection(
 
 export async function lockActiveLeaderboardLease(transaction: Sql, lease: HeldLeaderboardLease): Promise<boolean> {
   const [result] = await transaction<{ active: boolean }[]>`
-    SELECT refresh_operations.lock_active_leaderboard_lease(
+    SELECT queue.lock_active_leaderboard_lease(
       ${lease.operationId},
       ${lease.operationKey},
       ${lease.operationKind},
@@ -60,7 +60,7 @@ export async function lockActiveLeaderboardLease(transaction: Sql, lease: HeldLe
 
 export async function lockActiveRankingRetentionLease(transaction: Sql, lease: HeldLease): Promise<boolean> {
   const [result] = await transaction<{ active: boolean }[]>`
-    SELECT refresh_operations.lock_active_ranking_retention_lease(
+    SELECT queue.lock_active_ranking_retention_lease(
       ${lease.operationId},
       ${lease.leaseOwner},
       ${lease.leaseToken}
@@ -72,7 +72,7 @@ export async function lockActiveRankingRetentionLease(transaction: Sql, lease: H
 
 export async function completeRankingRetentionLease(transaction: Sql, lease: HeldLease): Promise<boolean> {
   const [result] = await transaction<{ completed: boolean }[]>`
-    SELECT refresh_operations.complete_ranking_retention_lease(
+    SELECT queue.complete_ranking_retention_lease(
       ${lease.operationId},
       ${lease.leaseOwner},
       ${lease.leaseToken}

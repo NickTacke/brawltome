@@ -4,7 +4,7 @@ export async function listAwaitingInteractiveRefreshes(database: Database): Prom
   const client = database.sql
 
   const rows = await client<{ id: string }[]>`
-    SELECT id FROM refresh_operations.operations
+    SELECT id FROM queue.operations
     WHERE kind IN ('interactive-player-refresh', 'clan-refresh') AND status = 'awaiting_admission'
     ORDER BY created_at, id
     LIMIT 100

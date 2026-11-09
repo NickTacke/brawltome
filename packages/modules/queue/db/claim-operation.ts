@@ -39,13 +39,13 @@ type ClaimOutcome = { kind: 'leased'; lease: OperationLease } | { kind: 'empty' 
 
 async function checkAdmissionPolicy(sql: Sql, policy: AdmissionPolicy): Promise<void> {
   await sql`
-    INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
+    INSERT INTO queue.admission_policy (singleton, config_hash, config)
     VALUES (true, ${policy.hash}, ${sql.json(policy.document)})
     ON CONFLICT (singleton) DO NOTHING
   `
 
   const [storedPolicy] = await sql<{ config_hash: string }[]>`
-    SELECT config_hash FROM refresh_operations.admission_policy WHERE singleton FOR UPDATE
+    SELECT config_hash FROM queue.admission_policy WHERE singleton FOR UPDATE
   `
 
   if (storedPolicy.config_hash !== policy.hash) {
@@ -56,7 +56,7 @@ async function checkAdmissionPolicy(sql: Sql, policy: AdmissionPolicy): Promise<
 async function readActiveCounts(sql: Sql): Promise<ActiveCounts> {
   const rows = await sql<{ work_class: WorkClass; count: string | number }[]>`
     SELECT work_class, count(*)::bigint AS count
-    FROM refresh_operations.operations
+    FROM queue.operations
     WHERE status = 'leased' AND lease_expires_at > clock_timestamp()
     GROUP BY work_class
   `
@@ -72,7 +72,7 @@ async function readDueClasses(sql: Sql, kind: string | undefined): Promise<Set<W
 
   const rows = await sql<{ work_class: WorkClass }[]>`
     SELECT DISTINCT work_class
-    FROM refresh_operations.operations
+    FROM queue.operations
     WHERE ((status = 'pending' AND available_at <= clock_timestamp())
        OR (status = 'leased' AND lease_expires_at <= clock_timestamp()))
       ${kindFilter}
@@ -88,7 +88,7 @@ async function selectBackgroundClass(
 ): Promise<WorkClassSelection> {
   for (const workClass of eligible) {
     await sql`
-      INSERT INTO refresh_operations.admission_classes (work_class)
+      INSERT INTO queue.admission_classes (work_class)
       VALUES (${workClass})
       ON CONFLICT (work_class) DO NOTHING
     `
@@ -96,7 +96,7 @@ async function selectBackgroundClass(
 
   const credits = await sql<AdmissionCreditRow[]>`
     SELECT work_class, credit
-    FROM refresh_operations.admission_classes
+    FROM queue.admission_classes
     WHERE work_class IN ${sql(eligible)}
     FOR UPDATE
   `
@@ -151,12 +151,12 @@ async function pickCandidate(
            (
              SELECT occurrence.window_due_at
                + (occurrence.missed_window_count * schedule.interval_ms) * interval '1 millisecond'
-             FROM refresh_operations.schedule_occurrences occurrence
-             JOIN refresh_operations.schedules schedule ON schedule.id = occurrence.schedule_id
+             FROM queue.schedule_occurrences occurrence
+             JOIN queue.schedules schedule ON schedule.id = occurrence.schedule_id
              WHERE occurrence.id = operation.origin_schedule_occurrence_id
            ) AS scheduled_window_at
-    FROM refresh_operations.operations operation
-    JOIN refresh_operations.operations effect ON effect.id = operation.effect_operation_id
+    FROM queue.operations operation
+    JOIN queue.operations effect ON effect.id = operation.effect_operation_id
     WHERE operation.work_class = ${workClass}
       AND ((operation.status = 'pending' AND operation.available_at <= clock_timestamp())
         OR (operation.status = 'leased' AND operation.lease_expires_at <= clock_timestamp()))
@@ -193,14 +193,14 @@ function readEffectState(job: ClaimJob | undefined, sql: Sql, candidate: Operati
 
 async function finishAcknowledged(sql: Sql, candidate: OperationRow): Promise<void> {
   await sql`
-    UPDATE refresh_operations.attempts
+    UPDATE queue.attempts
     SET finished_at = clock_timestamp(), outcome = 'succeeded'
     WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
       AND finished_at IS NULL
   `
 
   await sql`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET status = 'succeeded', lease_owner = NULL, lease_expires_at = NULL,
         completed_at = clock_timestamp(), updated_at = clock_timestamp()
     WHERE id = ${candidate.id}
@@ -209,7 +209,7 @@ async function finishAcknowledged(sql: Sql, candidate: OperationRow): Promise<vo
 
 async function expireAttempt(sql: Sql, candidate: OperationRow): Promise<void> {
   await sql`
-    UPDATE refresh_operations.attempts
+    UPDATE queue.attempts
     SET finished_at = clock_timestamp(), outcome = 'lease_expired',
         error = ${sql.json({ code: 'lease_expired', message: 'Worker lease expired' })}
     WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
@@ -219,7 +219,7 @@ async function expireAttempt(sql: Sql, candidate: OperationRow): Promise<void> {
 
 async function deadLetterExhausted(sql: Sql, candidate: OperationRow): Promise<void> {
   await sql`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
         completed_at = clock_timestamp(), updated_at = clock_timestamp(),
         last_error = ${sql.json({ code: 'lease_expired', message: 'Maximum attempts exhausted' })}
@@ -245,14 +245,14 @@ async function deadLetterInvalidCandidate(sql: Sql, candidate: OperationRow, mes
   const failure = { code: 'invalid_payload', message, retryable: false }
 
   await sql`
-    UPDATE refresh_operations.attempts
+    UPDATE queue.attempts
     SET finished_at = clock_timestamp(), outcome = 'dead_letter', error = ${sql.json(failure)}
     WHERE operation_id = ${candidate.id} AND attempt_number = ${candidate.attempt_count}
       AND finished_at IS NULL
   `
 
   await sql`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
         completed_at = clock_timestamp(), updated_at = clock_timestamp(),
         last_error = ${sql.json(failure)}
@@ -287,7 +287,7 @@ async function leaseCandidate(
   { workerId, leaseMs }: ClaimOperationInput,
 ): Promise<OperationRow> {
   const [leased] = await sql<OperationRow[]>`
-    UPDATE refresh_operations.operations
+    UPDATE queue.operations
     SET status = 'leased', lease_owner = ${workerId},
         lease_expires_at = clock_timestamp() + (${leaseMs} * interval '1 millisecond'),
         lease_token = lease_token + 1, attempt_count = attempt_count + 1,
@@ -298,7 +298,7 @@ async function leaseCandidate(
   `
 
   await sql`
-    INSERT INTO refresh_operations.attempts
+    INSERT INTO queue.attempts
       (operation_id, attempt_number, lease_token, lease_owner)
     VALUES (${leased.id}, ${leased.attempt_count}, ${leased.lease_token}, ${workerId})
   `
@@ -311,7 +311,7 @@ async function saveNextCredits(sql: Sql, nextCredits: WorkClassSelection['nextCr
 
   for (const [workClass, credit] of nextCredits) {
     await sql`
-      UPDATE refresh_operations.admission_classes
+      UPDATE queue.admission_classes
       SET credit = ${credit}, updated_at = clock_timestamp()
       WHERE work_class = ${workClass}
     `

@@ -1576,7 +1576,7 @@ describe('durable multi-mode collection operations', () => {
     const control = postgres(connectionString, { max: 1 })
 
     const rows = await control<{ kind: string; work_class: string; first_due_at: Date }[]>`
-      SELECT kind, work_class, first_due_at FROM refresh_operations.schedules
+      SELECT kind, work_class, first_due_at FROM queue.schedules
       WHERE schedule_key LIKE 'test-schedule:%'
     `
 
@@ -1733,7 +1733,7 @@ describe('durable multi-mode collection operations', () => {
 
                 if (admissionCalls === 2) {
                   await control`
-                UPDATE refresh_operations.operations
+                UPDATE queue.operations
                 SET lease_expires_at = clock_timestamp() - interval '1 second'
                 WHERE id = ${accepted.operationId}
               `

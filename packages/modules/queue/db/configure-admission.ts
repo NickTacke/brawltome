@@ -16,12 +16,12 @@ export async function configureAdmission(database: Database, admission: Admissio
 
     const [active] = await sql<{ count: string | number }[]>`
       SELECT count(*)::bigint AS count
-      FROM refresh_operations.operations
+      FROM queue.operations
       WHERE status = 'leased' AND lease_expires_at > clock_timestamp()
     `
 
     const [existing] = await sql<{ config_hash: string }[]>`
-      SELECT config_hash FROM refresh_operations.admission_policy WHERE singleton FOR UPDATE
+      SELECT config_hash FROM queue.admission_policy WHERE singleton FOR UPDATE
     `
 
     if (existing && existing.config_hash !== policy.hash && Number(active.count) > 0) {
@@ -29,14 +29,14 @@ export async function configureAdmission(database: Database, admission: Admissio
     }
 
     await sql`
-      INSERT INTO refresh_operations.admission_policy (singleton, config_hash, config)
+      INSERT INTO queue.admission_policy (singleton, config_hash, config)
       VALUES (true, ${policy.hash}, ${sql.json(policy.document)})
       ON CONFLICT (singleton) DO UPDATE
       SET config_hash = EXCLUDED.config_hash, config = EXCLUDED.config, updated_at = clock_timestamp()
     `
 
     if (existing && existing.config_hash !== policy.hash) {
-      await sql`UPDATE refresh_operations.admission_classes SET credit = 0, updated_at = clock_timestamp()`
+      await sql`UPDATE queue.admission_classes SET credit = 0, updated_at = clock_timestamp()`
     }
   })
 }

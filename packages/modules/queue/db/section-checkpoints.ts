@@ -10,10 +10,10 @@ export async function beginSection(
 ): Promise<SectionCheckpointResult> {
   const [owned] = await database.sql<{ completed: boolean }[]>`
     SELECT EXISTS (
-      SELECT 1 FROM refresh_operations.interactive_refresh_effects
+      SELECT 1 FROM queue.interactive_refresh_effects
       WHERE operation_id = ${lease.effectOperationId} AND section = ${section}
     ) AS completed
-    FROM refresh_operations.operations
+    FROM queue.operations
     WHERE id = ${lease.operationId} AND status = 'leased'
       AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
       AND lease_expires_at > clock_timestamp()
@@ -30,7 +30,7 @@ export function commitSection(database: Database, lease: Lease<unknown>, section
     const sql = transaction as unknown as Sql
 
     const [owned] = await sql<{ id: string }[]>`
-      SELECT id FROM refresh_operations.operations
+      SELECT id FROM queue.operations
       WHERE id = ${lease.operationId} AND status = 'leased'
         AND lease_owner = ${lease.leaseOwner} AND lease_token = ${lease.leaseToken}
         AND lease_expires_at > clock_timestamp()
@@ -40,7 +40,7 @@ export function commitSection(database: Database, lease: Lease<unknown>, section
     if (!owned) return 'lease-lost' as const
 
     await sql`
-      INSERT INTO refresh_operations.interactive_refresh_effects (operation_id, section, lease_token)
+      INSERT INTO queue.interactive_refresh_effects (operation_id, section, lease_token)
       VALUES (${lease.effectOperationId}, ${section}, ${lease.leaseToken})
       ON CONFLICT (operation_id, section) DO NOTHING
     `
@@ -61,7 +61,7 @@ export async function allSectionsCommitted(
       FROM unnest(${[...sections]}::text[]) AS required(section)
       WHERE NOT EXISTS (
         SELECT 1
-        FROM refresh_operations.interactive_refresh_effects effect
+        FROM queue.interactive_refresh_effects effect
         WHERE effect.operation_id = ${lease.effectOperationId} AND effect.section = required.section
       )
     ) AS complete

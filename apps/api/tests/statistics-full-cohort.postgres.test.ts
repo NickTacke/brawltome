@@ -91,7 +91,7 @@ async function seedTerminalProduct(
         JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
         WHERE cohort.generation_id = ${generation.generationId}
       )
-      INSERT INTO refresh_operations.operations
+      INSERT INTO queue.operations
         (id, effect_operation_id, kind, dedupe_key, operation_key, work_class, payload, provenance,
          status, attempt_count, max_attempts, lease_token, completed_at, created_at, updated_at)
       SELECT operation_id, operation_id, ${kind}, operation_key, operation_key, 'global-statistics',
@@ -108,7 +108,7 @@ async function seedTerminalProduct(
       SELECT cohort.id, member.brawlhalla_id, ${product}, operation.id
       FROM statistics.cohorts cohort
       JOIN statistics.cohort_members member ON member.cohort_id = cohort.id
-      JOIN refresh_operations.operations operation
+      JOIN queue.operations operation
         ON operation.operation_key = 'statistics:' || cohort.id::text || ':' || member.brawlhalla_id::text || ':' || ${product}
       WHERE cohort.generation_id = ${generation.generationId}
     `
@@ -123,7 +123,7 @@ async function seedTerminalProduct(
       FROM statistics.collection_operations collection
       JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
       JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
-      JOIN refresh_operations.operations operation ON operation.id = collection.operation_id
+      JOIN queue.operations operation ON operation.id = collection.operation_id
       WHERE cohort.generation_id = ${generation.generationId} AND collection.product = ${product}
     `
 
@@ -178,7 +178,7 @@ async function seedTerminalProduct(
       JOIN statistics.cohort_members member
         ON member.cohort_id = collection.cohort_id AND member.brawlhalla_id = collection.brawlhalla_id
       JOIN statistics.cohort_generations generation ON generation.id = cohort.generation_id
-      JOIN refresh_operations.operations operation ON operation.id = collection.operation_id
+      JOIN queue.operations operation ON operation.id = collection.operation_id
       WHERE cohort.generation_id = ${generation.generationId} AND collection.product = ${product}
         AND member.ordinal <= ${successesPerCell}
     `
@@ -480,7 +480,7 @@ describe('Statistics full launch cohort publication', () => {
 
       const [rankedRoot] = await replayControl<{ id: string }[]>`
         SELECT operation.id
-        FROM refresh_operations.operations operation
+        FROM queue.operations operation
         JOIN statistics.collection_operations collection ON collection.operation_id = operation.effect_operation_id
         JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
         WHERE cohort.generation_id = ${first.generationId}
@@ -498,12 +498,12 @@ describe('Statistics full launch cohort publication', () => {
       if (!firstReplay.replayOperationId) throw new Error('first replay operation missing')
 
       await replayControl`
-        UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
+        UPDATE queue.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE id = ${firstReplay.replayOperationId}
       `
 
       await replayControl.unsafe(`
-        CREATE FUNCTION refresh_operations.pause_statistics_descendant_replay() RETURNS trigger
+        CREATE FUNCTION queue.pause_statistics_descendant_replay() RETURNS trigger
         LANGUAGE plpgsql AS $$
         BEGIN
           IF NEW.replayed_from_operation_id IS NOT NULL THEN PERFORM pg_sleep(0.2); END IF;
@@ -511,8 +511,8 @@ describe('Statistics full launch cohort publication', () => {
         END;
         $$;
         CREATE TRIGGER pause_statistics_descendant_replay
-        BEFORE INSERT ON refresh_operations.operations
-        FOR EACH ROW EXECUTE FUNCTION refresh_operations.pause_statistics_descendant_replay();
+        BEFORE INSERT ON queue.operations
+        FOR EACH ROW EXECUTE FUNCTION queue.pause_statistics_descendant_replay();
       `)
 
       const rankedIntent = (await statistics.publicationIntents()).find(({ product }) => product === 'ranked')
@@ -546,13 +546,13 @@ describe('Statistics full launch cohort publication', () => {
       if (!replayed.replayOperationId) throw new Error('descendant replay operation missing')
 
       await replayControl`
-        UPDATE refresh_operations.operations SET status = 'dead_letter', completed_at = clock_timestamp()
+        UPDATE queue.operations SET status = 'dead_letter', completed_at = clock_timestamp()
         WHERE id = ${replayed.replayOperationId}
       `
     } finally {
       await replayControl.unsafe(`
-        DROP TRIGGER IF EXISTS pause_statistics_descendant_replay ON refresh_operations.operations;
-        DROP FUNCTION IF EXISTS refresh_operations.pause_statistics_descendant_replay();
+        DROP TRIGGER IF EXISTS pause_statistics_descendant_replay ON queue.operations;
+        DROP FUNCTION IF EXISTS queue.pause_statistics_descendant_replay();
       `)
 
       await replayControl.end()
@@ -581,7 +581,7 @@ describe('Statistics full launch cohort publication', () => {
 
     const [sealedCollection] = await sealedControl<{ id: string }[]>`
       SELECT operation.id
-      FROM refresh_operations.operations operation
+      FROM queue.operations operation
       JOIN statistics.collection_operations collection ON collection.operation_id = operation.effect_operation_id
       JOIN statistics.cohorts cohort ON cohort.id = collection.cohort_id
       WHERE cohort.generation_id = ${first.generationId}
@@ -717,7 +717,7 @@ describe('Statistics full launch cohort publication', () => {
     const recoveryControl = postgres(connectionString, { max: 1 })
 
     await recoveryControl`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET lease_expires_at = clock_timestamp() - interval '1 millisecond'
       WHERE id = ${legendMetaOperationId}
     `
@@ -1086,7 +1086,7 @@ describe('Statistics full launch cohort publication', () => {
     const control = postgres(connectionString, { max: 1 })
 
     await control`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET status = 'dead_letter', lease_owner = NULL, lease_expires_at = NULL,
           completed_at = clock_timestamp()
       WHERE id = ${rejectedOperationId}

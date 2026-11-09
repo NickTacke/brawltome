@@ -53,13 +53,13 @@ function reconcile(schedules: ResourceSchedule[], observedAt: Date) {
 
 function enabledCount() {
   return database.sql<{ count: number }[]>`
-    SELECT count(*)::integer AS count FROM refresh_operations.schedules
+    SELECT count(*)::integer AS count FROM queue.schedules
     WHERE enabled AND provenance->>'source' = ${provenanceSource}
   `.then(([row]) => row.count)
 }
 
 async function clearWatermark(): Promise<void> {
-  await database.sql`DELETE FROM refresh_operations.primary_monitoring_reconciliation`
+  await database.sql`DELETE FROM queue.primary_monitoring_reconciliation`
 }
 
 describe('reconcileResourceSchedules', () => {

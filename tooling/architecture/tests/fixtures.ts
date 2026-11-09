@@ -12,7 +12,7 @@ export const policy: ArchitecturePolicy = {
   moduleSchemas: {
     players: '@fixture/players',
     rankings: '@fixture/rankings',
-    refresh_operations: '@fixture/refresh-operations',
+    queue: '@fixture/refresh-operations',
   },
   allowedExports: {
     '@fixture/api': ['.'],

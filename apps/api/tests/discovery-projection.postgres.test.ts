@@ -295,7 +295,7 @@ describe('Players to Discovery projection delivery', () => {
       await discovery.deliverPendingPlayers(source, lease.payload.batchSize, lease.operationId)
 
       await control`
-        UPDATE refresh_operations.operations
+        UPDATE queue.operations
         SET lease_expires_at = clock_timestamp() - interval '1 second'
         WHERE id = ${lease.operationId}
       `

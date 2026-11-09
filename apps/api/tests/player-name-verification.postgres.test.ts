@@ -210,7 +210,7 @@ describe('Player name verification through durable operations', () => {
     ])
 
     const statuses = await control<{ status: string }[]>`
-      SELECT status FROM refresh_operations.operations WHERE kind = 'player-name-verification'
+      SELECT status FROM queue.operations WHERE kind = 'player-name-verification'
     `
 
     expect(statuses.map(({ status }) => status)).toEqual(['succeeded', 'succeeded', 'succeeded'])

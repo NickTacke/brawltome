@@ -314,7 +314,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const retryControl = postgres(connectionString, { max: 1 })
 
     await retryControl`
-      UPDATE refresh_operations.operations SET available_at = 'infinity'
+      UPDATE queue.operations SET available_at = 'infinity'
       WHERE kind = 'statistics-lifetime-collection' AND id <> ${lifetime.operationId} AND status = 'pending'
     `
 
@@ -327,7 +327,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     await operations.fail(retry, { code: 'source_failed', message: 'still broken', retryable: true }, 0)
 
     await retryControl`
-      UPDATE refresh_operations.operations SET available_at = clock_timestamp()
+      UPDATE queue.operations SET available_at = clock_timestamp()
       WHERE kind = 'statistics-lifetime-collection' AND available_at = 'infinity'
     `
 
@@ -343,7 +343,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     try {
       const [failed] = await sql<{ status: string; attempt_count: number }[]>`
-        SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${retry.operationId}
+        SELECT status, attempt_count FROM queue.operations WHERE id = ${retry.operationId}
       `
 
       expect(failed).toEqual({ status: 'dead_letter', attempt_count: 2 })
@@ -534,11 +534,11 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     const [finalAttempt] = await setup<{ id: string }[]>`
       WITH selected AS (
-        SELECT id FROM refresh_operations.operations
+        SELECT id FROM queue.operations
         WHERE kind = 'statistics-ranked-collection' AND status = 'pending'
         ORDER BY created_at, id LIMIT 1
       )
-      UPDATE refresh_operations.operations operation
+      UPDATE queue.operations operation
       SET max_attempts = 1
       FROM selected
       WHERE operation.id = selected.id
@@ -546,7 +546,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     `
 
     await setup`
-      UPDATE refresh_operations.operations SET available_at = 'infinity'
+      UPDATE queue.operations SET available_at = 'infinity'
       WHERE kind = 'statistics-ranked-collection' AND id <> ${finalAttempt.id} AND status = 'pending'
     `
 
@@ -567,7 +567,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
     const expire = postgres(connectionString, { max: 1 })
 
     await expire`
-      UPDATE refresh_operations.operations
+      UPDATE queue.operations
       SET lease_expires_at = clock_timestamp() - interval '1 second'
       WHERE id = ${lease.operationId}
     `
@@ -579,7 +579,7 @@ describe('Statistics EU Diamond+ production tracer', () => {
 
     try {
       const [operation] = await sql<{ status: string; attempt_count: number }[]>`
-        SELECT status, attempt_count FROM refresh_operations.operations WHERE id = ${lease.operationId}
+        SELECT status, attempt_count FROM queue.operations WHERE id = ${lease.operationId}
       `
 
       const [count] = await sql<{ count: string }[]>`
