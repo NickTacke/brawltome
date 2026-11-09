@@ -9,3 +9,5 @@ export const stripedRowStyle = `h-14 sm:h-12 ${stripedRowBase}`
 export const stripedTallRowStyle = `h-14 ${stripedRowBase}`
 
 export const skeletonBarStyle = 'block h-3 animate-pulse rounded-sm bg-white/[0.06]'
+
+export const skeletonAvatarStyle = 'block size-9 shrink-0 animate-pulse rounded-md bg-white/[0.06]'

@@ -1,0 +1,27 @@
+import { createServerFn } from '@tanstack/react-start'
+import { getCookie } from '@tanstack/react-start/server'
+import { type BoardMode, type BoardRegion, parseMode, parseRegion } from '../components/home/home-filters'
+import { pickRegion, regionCookieName } from '../components/home/region-cookie'
+import { loadPatches } from './load-patches'
+import { loadTopGuilds } from './load-top-guilds'
+import { loadTopPlayers } from './load-top-players'
+
+type BoardQuery = { mode: BoardMode; region?: BoardRegion }
+
+function parseBoardQuery(query: BoardQuery): BoardQuery {
+  return { mode: parseMode(query.mode), region: parseRegion(query.region) }
+}
+
+// the remembered region is read here, so the first html already shows the visitor's board
+export const getTopPlayers = createServerFn({ method: 'GET' })
+  .validator(parseBoardQuery)
+  .handler(async ({ data }) => {
+    const region = pickRegion(data.region, getCookie(regionCookieName))
+    const entries = await loadTopPlayers(data.mode, region)
+
+    return { region, entries }
+  })
+
+export const getTopGuilds = createServerFn({ method: 'GET' }).handler(() => loadTopGuilds())
+
+export const getPatches = createServerFn({ method: 'GET' }).handler(() => loadPatches())

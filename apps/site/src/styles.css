@@ -107,3 +107,22 @@
     display: none;
   }
 }
+
+/* search on Home dims everything behind its field, see use-page-dim.ts */
+[data-search-dim] {
+  transition:
+    filter 200ms ease-out,
+    opacity 200ms ease-out;
+}
+
+body[data-searching="true"] [data-search-dim] {
+  filter: blur(4px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-search-dim] {
+    transition: none;
+  }
+}
