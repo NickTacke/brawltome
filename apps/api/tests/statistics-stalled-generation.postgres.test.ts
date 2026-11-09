@@ -57,6 +57,7 @@ describe('a Statistics generation that never reaches its publication decisions',
 
     // the replacement holds its own window, so a stall repeats at most once a week
     expect((await atDay(13).reconciliationState()).launch?.isNextGenerationDue).toBe(false)
+
     expect(await atDay(13).reconcileLaunchCohort(snapshots(3))).toMatchObject({
       generationId: replacement.generationId,
     })

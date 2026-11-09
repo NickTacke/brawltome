@@ -153,7 +153,7 @@ describe('Legend Meta history coverage', () => {
     index === 0 ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 } : cell,
   )
 
-  const historyWith = (previousCells: typeof cohortCells, comparison: unknown) => ({
+  const historyWith = (previousCells: typeof leftOutCells, comparison: unknown) => ({
     status: 'available',
     filter: historySnapshot.scope,
     entries: [

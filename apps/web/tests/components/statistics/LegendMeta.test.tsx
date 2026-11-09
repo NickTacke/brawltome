@@ -156,6 +156,7 @@ describe('Current Season Legend Meta view', () => {
     }
 
     expect(render()).toContain('Covers all 18 region and bracket cells.')
+
     expect(render(partial)).toContain(
       'Covers 17 of 18 region and bracket cells. Left out for too few players: EU Platinum.',
     )
