@@ -1,6 +1,8 @@
 import { leaderboardRegions } from './leaderboard'
 import {
+  cohortCellsSchema,
   directionFor,
+  nonnegativeSafeInteger,
   statisticsHistoryCompatibilityReasonSchema,
   statisticsHistoryDirectionSchema,
   validateExactHistoryDeltaKeys,
@@ -26,7 +28,6 @@ const utcDateTimeSchema = z.iso
   .regex(/Z$/, 'date-time must use the UTC Z suffix')
   .meta({ format: 'date-time' })
 
-const nonnegativeSafeInteger = z.int().min(0).max(Number.MAX_SAFE_INTEGER)
 const basisPointsSchema = z.int().min(0).max(10_000)
 
 const exactRatioSchema = z
@@ -220,23 +221,6 @@ const filterSchema = z
     bracket: legendMetaBracketSchema,
   })
   .strict()
-
-const cohortCellsSchema = z
-  .array(
-    z
-      .object({
-        region: z.enum(leaderboardRegions),
-        bracket: z.enum(['Platinum', 'Diamond+']),
-        status: z.enum(['covered', 'left-out']),
-        eligiblePlayers: nonnegativeSafeInteger,
-        selectedPlayers: nonnegativeSafeInteger,
-      })
-      .strict()
-      .refine(({ status, selectedPlayers }) => (status === 'covered') === selectedPlayers > 0, {
-        message: 'a covered cell must have selected players and a left-out cell none',
-      }),
-  )
-  .length(18)
 
 const availableFields = {
   snapshotId: z.uuid(),

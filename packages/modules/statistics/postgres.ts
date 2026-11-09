@@ -374,6 +374,10 @@ const legendMetaReferences = referenceLegends
     slug: legendSlug(heroId, displayName),
   }))
 
+function coveredCellKeys(cells: readonly LegendMetaCohortCell[]): string[] {
+  return cells.filter(({ status }) => status === 'covered').map(({ region, bracket }) => `${region}/${bracket}`)
+}
+
 function legendMetaBuildFailure(error: unknown): LegendMetaPublicationReason {
   if (error instanceof LegendMetaBuildError) {
     return error.code === 'unknown-legend'
@@ -1800,6 +1804,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: artifact.cohortMethodologyVersion,
             metricMethodologyVersion: artifact.methodologyVersion,
             scope: input,
+            coveredCells: coveredCellKeys(artifact.cohortCells),
           },
           rows: slice.rows.map((row) => ({
             legend: row.legend,
@@ -1881,12 +1886,20 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
     getLaunchCohort: (generationId) => auditLaunch(client, generationId),
 
     async getCareerWeaponUsageHistory(filters): Promise<CareerWeaponUsageHistoryView> {
-      const snapshots = await client<CareerSnapshotRow[]>`
+      const snapshots = await client<(CareerSnapshotRow & { cohort_cells: LegendMetaCohortCell[] })[]>`
         SELECT snapshot.id AS snapshot_id, snapshot.generation_id,
                snapshot.cohort_methodology_version, snapshot.methodology_version,
                generation.observation_window_starts_at, generation.observation_window_ends_at,
                snapshot.published_at, scope.selected_players, scope.successful_observations,
-               scope.total_held_seconds
+               scope.total_held_seconds,
+               (SELECT jsonb_agg(jsonb_build_object(
+                         'region', cohort.region, 'bracket', cohort.bracket,
+                         'status', CASE WHEN cohort.selected_players > 0 THEN 'covered' ELSE 'left-out' END,
+                         'eligiblePlayers', cohort.eligible_players,
+                         'selectedPlayers', cohort.selected_players
+                       ) ORDER BY array_position(${launchCohortRegions}::text[], cohort.region),
+                                  array_position(${launchCohortBrackets}::text[], cohort.bracket))
+                FROM statistics.cohorts cohort WHERE cohort.generation_id = snapshot.generation_id) AS cohort_cells
         FROM statistics.career_weapon_usage_snapshots snapshot
         JOIN statistics.cohort_generations generation ON generation.id = snapshot.generation_id
         JOIN statistics.career_weapon_usage_scopes scope ON scope.snapshot_id = snapshot.id
@@ -1948,6 +1961,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
         return {
           snapshotId: snapshot.snapshot_id,
           generationId: snapshot.generation_id,
+          cohortCells: snapshot.cohort_cells,
           publishedAt: snapshot.published_at.toISOString(),
           observationWindow: {
             startsAt: snapshot.observation_window_starts_at.toISOString(),
@@ -1958,6 +1972,7 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             cohortMethodologyVersion: snapshot.cohort_methodology_version,
             metricMethodologyVersion: snapshot.methodology_version,
             scope: filters,
+            coveredCells: coveredCellKeys(snapshot.cohort_cells),
           },
           rows: aggregate.rows.map((row) => ({
             weapon: row.weapon,
@@ -1968,7 +1983,11 @@ export function createPostgresStatistics(database: Database, options: { now?: ()
             medianKosPerHour: row.medianKosPerHour,
           })),
           data: aggregate,
-        } satisfies CareerWeaponHistorySnapshot & { generationId: string; data: CareerWeaponUsageAggregate }
+        } satisfies CareerWeaponHistorySnapshot & {
+          generationId: string
+          cohortCells: LegendMetaCohortCell[]
+          data: CareerWeaponUsageAggregate
+        }
       })
 
       return { status: 'available', filters, entries: buildCareerWeaponUsageHistory(historySnapshots) }

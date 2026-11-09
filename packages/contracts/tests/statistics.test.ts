@@ -129,6 +129,44 @@ const previousHistorySnapshot = {
   publishedAt: '2026-08-05T00:00:00.000Z',
 }
 
+describe('Legend Meta history coverage', () => {
+  const coverageBreak = {
+    status: 'incompatible',
+    previousSnapshotId: previousHistorySnapshot.snapshotId,
+    reasons: [
+      {
+        code: 'season_identity_unavailable',
+        explanation: 'Adjacent Legend snapshots need the same non-null authoritative season identity.',
+      },
+      {
+        code: 'cohort_coverage_mismatch',
+        explanation: 'The covered region and bracket cells changed between adjacent snapshots.',
+      },
+    ],
+  }
+
+  const leftOutCells = cohortCells.map((cell, index) =>
+    index === 0 ? { ...cell, status: 'left-out' as const, selectedPlayers: 0 } : cell,
+  )
+
+  const historyWith = (previousCells: typeof cohortCells, comparison: unknown) => ({
+    status: 'available',
+    filter: historySnapshot.scope,
+    entries: [
+      { snapshot: historySnapshot, comparisonToPrevious: comparison },
+      { snapshot: { ...previousHistorySnapshot, cohortCells: previousCells }, comparisonToPrevious: null },
+    ],
+  })
+
+  test('requires a series break when the covered cells change', () => {
+    expect(() => legendMetaHistoryOutputSchema.parse(historyWith(leftOutCells, coverageBreak))).not.toThrow()
+
+    const continued = { status: 'available', previousSnapshotId: previousHistorySnapshot.snapshotId, deltas: [] }
+
+    expect(() => legendMetaHistoryOutputSchema.parse(historyWith(leftOutCells, continued))).toThrow()
+  })
+})
+
 describe('Current Season Legend Meta contract', () => {
   test('accepts only independent launch region and current 1v1 bracket filters', () => {
     expect(legendMetaInputSchema.parse({ region: 'all', bracket: 'all' })).toEqual({ region: 'all', bracket: 'all' })

@@ -47,6 +47,7 @@ function legendSnapshot(snapshotId: string, generationId: string, publishedAt: s
       season: { applicability: 'required', identity: null },
       cohortMethodologyVersion: 'full-launch-cohort-v1',
       metricMethodologyVersion: 'current-season-legend-meta-v2',
+      coveredCells: [],
       scope: { region: 'all', bracket: 'all' },
     },
     rows: [
@@ -100,11 +101,13 @@ function careerSnapshot(
     snapshotId,
     generationId,
     publishedAt,
+    cohortCells,
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     compatibility: {
       season: { applicability: 'not-applicable' },
       cohortMethodologyVersion: 'full-launch-cohort-v1',
       metricMethodologyVersion: 'career-weapon-usage-v1',
+      coveredCells: [],
       scope: { region: 'all', bracket: 'all' },
     },
     rows: [

@@ -16,6 +16,7 @@ export type StatisticsSnapshotCompatibility = {
   cohortMethodologyVersion: string
   metricMethodologyVersion: string
   scope: StatisticsHistoryScope
+  coveredCells: readonly string[]
 }
 
 export type StatisticsHistoryCompatibilityReason =
@@ -30,6 +31,10 @@ export type StatisticsHistoryCompatibilityReason =
   | {
       code: 'cohort_methodology_mismatch'
       explanation: 'The cohort methodology changed between adjacent snapshots.'
+    }
+  | {
+      code: 'cohort_coverage_mismatch'
+      explanation: 'The covered region and bracket cells changed between adjacent snapshots.'
     }
   | {
       code: 'metric_methodology_mismatch'
@@ -57,6 +62,10 @@ const compatibilityReasons = {
     code: 'cohort_methodology_mismatch',
     explanation: 'The cohort methodology changed between adjacent snapshots.',
   },
+  cohort_coverage_mismatch: {
+    code: 'cohort_coverage_mismatch',
+    explanation: 'The covered region and bracket cells changed between adjacent snapshots.',
+  },
   metric_methodology_mismatch: {
     code: 'metric_methodology_mismatch',
     explanation: 'The product metric methodology changed between adjacent snapshots.',
@@ -66,6 +75,10 @@ const compatibilityReasons = {
     explanation: 'The region or bracket scope changed between adjacent snapshots.',
   },
 } as const satisfies Record<string, StatisticsHistoryCompatibilityReason>
+
+function hasSameCoveredCells(newer: readonly string[], older: readonly string[]): boolean {
+  return [...newer].sort().join(',') === [...older].sort().join(',')
+}
 
 export function classifyAdjacentSnapshots(
   newer: StatisticsSnapshotCompatibility,
@@ -85,6 +98,10 @@ export function classifyAdjacentSnapshots(
 
   if (newer.cohortMethodologyVersion !== older.cohortMethodologyVersion) {
     reasons.push(compatibilityReasons.cohort_methodology_mismatch)
+  }
+
+  if (!hasSameCoveredCells(newer.coveredCells, older.coveredCells)) {
+    reasons.push(compatibilityReasons.cohort_coverage_mismatch)
   }
 
   if (newer.metricMethodologyVersion !== older.metricMethodologyVersion) {

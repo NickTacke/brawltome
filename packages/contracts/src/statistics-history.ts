@@ -1,3 +1,4 @@
+import { leaderboardRegions } from './leaderboard'
 import { z } from './zod'
 
 export const statisticsHistoryDirectionSchema = z.enum(['increase', 'decrease', 'unchanged'])
@@ -23,6 +24,12 @@ export const statisticsHistoryCompatibilityReasonSchema = z.union([
     .strict(),
   z
     .object({
+      code: z.literal('cohort_coverage_mismatch'),
+      explanation: z.literal('The covered region and bracket cells changed between adjacent snapshots.'),
+    })
+    .strict(),
+  z
+    .object({
       code: z.literal('metric_methodology_mismatch'),
       explanation: z.literal('The product metric methodology changed between adjacent snapshots.'),
     })
@@ -35,6 +42,25 @@ export const statisticsHistoryCompatibilityReasonSchema = z.union([
     .strict(),
 ])
 
+export const nonnegativeSafeInteger = z.int().min(0).max(Number.MAX_SAFE_INTEGER)
+
+export const cohortCellsSchema = z
+  .array(
+    z
+      .object({
+        region: z.enum(leaderboardRegions),
+        bracket: z.enum(['Platinum', 'Diamond+']),
+        status: z.enum(['covered', 'left-out']),
+        eligiblePlayers: nonnegativeSafeInteger,
+        selectedPlayers: nonnegativeSafeInteger,
+      })
+      .strict()
+      .refine(({ status, selectedPlayers }) => (status === 'covered') === selectedPlayers > 0, {
+        message: 'a covered cell must have selected players and a left-out cell none',
+      }),
+  )
+  .length(18)
+
 export type StatisticsHistoryCompatibilityReasonContract = z.infer<typeof statisticsHistoryCompatibilityReasonSchema>
 
 export type StatisticsHistoryContractSnapshot = {
@@ -43,6 +69,16 @@ export type StatisticsHistoryContractSnapshot = {
   methodologyVersion: string
   season: { identity: string | null } | null
   scope: { region: string; bracket: string }
+  cohortCells: ReadonlyArray<{ region: string; bracket: string; status: 'covered' | 'left-out' }>
+}
+
+function coveredCellsKey(cells: StatisticsHistoryContractSnapshot['cohortCells']): string {
+  const covered = cells.filter(({ status }) => status === 'covered')
+
+  return covered
+    .map(({ region, bracket }) => `${region}/${bracket}`)
+    .sort()
+    .join(',')
 }
 
 export function expectedCompatibilityReasonCodes(
@@ -63,6 +99,10 @@ export function expectedCompatibilityReasonCodes(
 
   if (newer.cohortMethodologyVersion !== older.cohortMethodologyVersion) {
     reasons.push('cohort_methodology_mismatch')
+  }
+
+  if (coveredCellsKey(newer.cohortCells) !== coveredCellsKey(older.cohortCells)) {
+    reasons.push('cohort_coverage_mismatch')
   }
 
   if (newer.methodologyVersion !== older.methodologyVersion) {

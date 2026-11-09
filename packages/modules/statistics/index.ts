@@ -370,6 +370,7 @@ export type LegendMetaHistoryView =
     }
 
 export type CareerWeaponHistoryViewSnapshot = CareerWeaponHistorySnapshot & {
+  cohortCells: LegendMetaCohortCell[]
   generationId: string
   data: CareerWeaponUsageAggregate
 }

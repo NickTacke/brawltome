@@ -17,6 +17,7 @@ function compatibility(
     cohortMethodologyVersion: 'full-launch-cohort-v1',
     metricMethodologyVersion: 'current-season-legend-meta-v1',
     scope,
+    coveredCells: ['EU/Diamond+', 'EU/Platinum'],
     ...overrides,
   }
 }
@@ -60,6 +61,7 @@ function careerSnapshot(
       cohortMethodologyVersion: 'full-launch-cohort-v1',
       metricMethodologyVersion: 'career-weapon-usage-v1',
       scope,
+      coveredCells: ['EU/Diamond+', 'EU/Platinum'],
     },
     rows: [
       {
@@ -76,6 +78,24 @@ function careerSnapshot(
 }
 
 describe('adjacent statistics snapshot compatibility', () => {
+  test('treats a change in the covered cells as a series break, in any order', () => {
+    const fewerCells = compatibility({ coveredCells: ['EU/Diamond+'] })
+
+    expect(classifyAdjacentSnapshots(compatibility(), fewerCells)).toEqual({
+      status: 'incompatible',
+      reasons: [
+        {
+          code: 'cohort_coverage_mismatch',
+          explanation: 'The covered region and bracket cells changed between adjacent snapshots.',
+        },
+      ],
+    })
+
+    const reordered = compatibility({ coveredCells: ['EU/Platinum', 'EU/Diamond+'] })
+
+    expect(classifyAdjacentSnapshots(reordered, compatibility())).toMatchObject({ status: 'compatible' })
+  })
+
   test('requires the same non-null authoritative Legend season identity', () => {
     expect(
       classifyAdjacentSnapshots(

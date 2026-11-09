@@ -138,6 +138,7 @@ function careerSnapshot(snapshotId: string, generationId: string, publishedAt: s
     observationWindow: { startsAt: '2026-08-01T00:00:00.000Z', endsAt: '2026-08-08T00:00:00.000Z' },
     publishedAt,
     scope: { region: 'all', bracket: 'all' },
+    cohortCells,
     selectedPlayers: 30,
     successfulObservations: 30,
     coverage: { numerator: '1', denominator: '1' },
