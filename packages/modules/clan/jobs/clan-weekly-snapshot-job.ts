@@ -13,7 +13,7 @@ import type { Telemetry } from '@brawltome/telemetry'
 import type { PostgresClans } from '../db/postgres-clans'
 import type { PostgresWeeklySnapshots } from '../db/postgres-weekly-snapshots'
 import { type ClanProfileWrite, parseGuildStats } from '../domain/guild-stats'
-import { failedCheckProvenance, successProvenance } from '../domain/provenance'
+import { failedCheckProvenance, successProvenance, weeklySnapshotProvenance } from '../domain/provenance'
 import { classifySourceFailure } from '../domain/source-failure'
 import { clanWeeklySnapshotContract } from './clan-weekly-snapshot-contract'
 import type { ClanSource } from './refresh-clan'
@@ -73,7 +73,7 @@ function readProfile(payload: unknown | null, clanId: number): { profile: ClanPr
 // records the failed check the way a refresh does and moves the run past the guild, which misses this week
 async function skipGuild(slice: SnapshotSlice, clanId: number, error: unknown): Promise<void> {
   const { weekStarting, dependencies } = slice
-  const provenance = failedCheckProvenance('profile', classifySourceFailure(error))
+  const provenance = weeklySnapshotProvenance(failedCheckProvenance('profile', classifySourceFailure(error)))
 
   await dependencies.clans.recordProfileCheck(clanId, new Date(), provenance)
   await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null })
@@ -90,7 +90,7 @@ async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown 
   }
 
   const { profile } = read
-  const provenance = successProvenance('profile')
+  const provenance = weeklySnapshotProvenance(successProvenance('profile'))
 
   await dependencies.clans.publishProfile(profile, new Date(), provenance)
   await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: profile.guildPoints })

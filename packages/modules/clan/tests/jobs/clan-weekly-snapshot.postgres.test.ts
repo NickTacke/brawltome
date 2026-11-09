@@ -274,6 +274,21 @@ describe('clan weekly snapshot job', () => {
     expect(await isWeekCompleted(week)).toBe(true)
   })
 
+  test('marks the profiles it publishes as coming from the weekly snapshot', async () => {
+    await storeGuild(121)
+
+    const { job, queue, sourceAdmission } = createHarness(new Map([[121, { guildPoints: '5' }]]))
+
+    await scheduleWeek(queue, 'provenance')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+
+    expect(await readProfileCheck(121)).toEqual({
+      checkProvenance: { source: 'v1-guild-stats', outcome: 'success', trigger: 'weekly-snapshot' },
+      lastSuccessProvenance: { source: 'v1-guild-stats', outcome: 'success', trigger: 'weekly-snapshot' },
+    })
+  })
+
   test('gives the slot back after a slice and resumes after the last stored guild', async () => {
     for (const clanId of [201, 202, 203]) await storeGuild(clanId)
 
@@ -314,7 +329,7 @@ describe('clan weekly snapshot job', () => {
     expect(await readSnapshots(week)).toEqual([{ clanId: 303, guildPoints: '9' }])
     expect(await isWeekCompleted(week)).toBe(true)
 
-    const failedCheck = { source: 'v1-guild-stats', outcome: 'ambiguous-failure' }
+    const failedCheck = { source: 'v1-guild-stats', outcome: 'ambiguous-failure', trigger: 'weekly-snapshot' }
 
     expect((await readProfileCheck(301))?.checkProvenance).toEqual(failedCheck)
     expect((await readProfileCheck(302))?.checkProvenance).toEqual(failedCheck)
@@ -364,6 +379,7 @@ describe('clan weekly snapshot job', () => {
     expect((await readProfileCheck(411))?.checkProvenance).toEqual({
       source: 'v1-guild-stats',
       outcome: 'ambiguous-failure',
+      trigger: 'weekly-snapshot',
     })
   })
 
