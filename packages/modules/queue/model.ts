@@ -165,6 +165,10 @@ export function validateRankingRetentionPayload(payload: RankingRetentionPayload
   return payload
 }
 
+// stores every stored clan's guild points once a week; the week comes from the schedule window, so it has no payload
+export const clanWeeklySnapshotKind = 'clan-weekly-snapshot'
+export type ClanWeeklySnapshotPayload = Record<string, never>
+
 export type PlayerNameVerificationPayload = { brawlhallaId: number; playerName: string }
 
 export type AcceptOperationResult = {
@@ -192,6 +196,18 @@ export type CreateRankingRetentionSchedule = {
   intervalMs: number
   firstDueAt: string
   payload: RankingRetentionPayload
+  provenance: OperationProvenance
+  maxAttempts?: number
+}
+
+export type CreateClanWeeklySnapshotSchedule = {
+  kind: typeof clanWeeklySnapshotKind
+  scheduleKey: string
+  operationKeyPrefix: string
+  workClass: 'maintenance'
+  intervalMs: number
+  firstDueAt: string
+  payload: ClanWeeklySnapshotPayload
   provenance: OperationProvenance
   maxAttempts?: number
 }
@@ -351,6 +367,11 @@ export type OperationLease =
       kind: 'clan-refresh'
       workClass: 'interactive'
       payload: { clanId: number; staleSections: ('profile' | 'roster')[] }
+    })
+  | (LeaseFields & {
+      kind: typeof clanWeeklySnapshotKind
+      workClass: 'maintenance'
+      payload: ClanWeeklySnapshotPayload
     })
   | (LeaseFields & {
       kind: 'ranked-player-pulse'

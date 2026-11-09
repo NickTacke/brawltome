@@ -22,6 +22,7 @@ const allOperationKinds: OperationKind[] = [
   'primary-player-verification',
   'interactive-player-refresh',
   'clan-refresh',
+  'clan-weekly-snapshot',
   'player-discovery-projection',
   'clan-discovery-projection',
   'discovery-reconciliation',
@@ -41,6 +42,7 @@ const scheduledKinds: OperationKind[] = [
   ...leaderboardOperationKinds,
   'ranking-retention',
   'leaderboard-deep-crawl',
+  'clan-weekly-snapshot',
 ]
 
 function isAdmissionSeriesKept(kind: OperationKind, hasAdmissionRejections: boolean): boolean {
