@@ -76,8 +76,10 @@ export {
 export {
   nullableLeaderboardStandingSchema,
   nullablePlayerRankedProfileSchema,
+  nullablePlayerValhallanEvidenceSchema,
   type PlayerRankedProfileContract,
   type PlayerRankedSummaryContract,
+  type PlayerValhallanEvidenceContract,
   parsePlayerRankedProfileOutput,
   playerRankedSummariesInputSchema,
   playerRankedSummariesSchema,

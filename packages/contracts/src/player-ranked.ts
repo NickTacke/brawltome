@@ -164,6 +164,19 @@ export const playerRankedProfileSchema = z
   .meta({ id: 'PlayerRankedProfile' })
 
 export const nullablePlayerRankedProfileSchema = playerRankedProfileSchema.nullable()
+
+export const playerValhallanEvidenceSchema = z
+  .object({
+    oneVsOne: z.boolean(),
+    fixedTwoVsTwoTeams: z.array(
+      z.object({ brawlhallaIdOne: brawlhallaIdSchema, brawlhallaIdTwo: brawlhallaIdSchema }).strict(),
+    ),
+    soloTwoVsTwo: z.boolean(),
+  })
+  .strict()
+
+export const nullablePlayerValhallanEvidenceSchema = playerValhallanEvidenceSchema.nullable()
+export type PlayerValhallanEvidenceContract = z.infer<typeof playerValhallanEvidenceSchema>
 export type PlayerRankedProfileContract = z.infer<typeof playerRankedProfileSchema>
 
 export function parsePlayerRankedProfileOutput(value: unknown): PlayerRankedProfileContract | null {

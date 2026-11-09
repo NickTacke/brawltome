@@ -1,4 +1,5 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
+import { createRankingProcedures } from './api/procedures'
 import { initializeImmutable1v1Snapshots } from './migrations/0001-immutable-1v1-snapshots'
 import { addSupportedLeaderboardModes } from './migrations/0002-add-supported-modes'
 import { addV2LegacyRankingImport } from './migrations/0003-add-v2-legacy-import'
@@ -96,7 +97,9 @@ const migrations = [
 ] as const
 
 export const rankingModule = {
-  name: 'ranking',
+  // a literal, so the API router can serve the procedures under this name with their types
+  name: 'ranking' as const,
   dependsOn: ['queue'],
   migrations,
+  routes: createRankingProcedures,
 } satisfies BrawltomeModule

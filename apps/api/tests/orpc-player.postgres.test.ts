@@ -99,6 +99,7 @@ describe('player.rankedSummaries over oRPC', () => {
       '/players/{id}/reference',
       '/status',
     ])
+
     expect(document.paths['/players/ranked-summaries'].post.operationId).toBe('player.rankedSummaries')
     expect(document.paths['/players/ranked-summaries'].post.security).toEqual([{ internalSecret: [] }])
   })
