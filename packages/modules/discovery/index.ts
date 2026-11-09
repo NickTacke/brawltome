@@ -1,4 +1,5 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
+import { createDiscoveryProcedures } from './api/procedures'
 import { initializeDiscovery } from './migrations/0001-initialize-discovery'
 import { generalizeDiscovery } from './migrations/0002-generalize-discovery'
 import { addSemanticMigrationEvidence } from './migrations/0003-add-semantic-migration-evidence'
@@ -31,7 +32,9 @@ const migrations = [
 ] as const
 
 export const discoveryModule = {
-  name: 'discovery',
+  // a literal, so the API router can serve the procedures under this name with their types
+  name: 'discovery' as const,
   dependsOn: ['queue'],
   migrations,
+  routes: createDiscoveryProcedures,
 } satisfies BrawltomeModule

@@ -64,9 +64,13 @@ export {
 export {
   type LeaderboardEntry,
   type LeaderboardIdentity,
+  type LeaderboardOutput,
   type LeaderboardRecentActivityEntry,
   type LeaderboardRecentActivityOutput,
   leaderboardInputSchema,
+  leaderboardOutputSchema,
+  leaderboardPageInputSchema,
+  leaderboardPageSize,
   leaderboardRecentActivityInputSchema,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,

@@ -15,6 +15,8 @@ import { statementLevelRowImmutability } from './migrations/0012-statement-level
 import { moveEffectTables } from './migrations/0013-move-effect-tables'
 import { dropEffectTableCompatibility } from './migrations/0014-drop-effect-table-compatibility'
 
+export { enrichLeaderboardEntries } from './api/enrich-leaderboard-entries'
+export { readNamedLeaderboard } from './api/read-named-leaderboard'
 export { readAppliedLeaderboardEffects } from './db/leaderboard-effects'
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
@@ -99,7 +101,7 @@ const migrations = [
 export const rankingModule = {
   // a literal, so the API router can serve the procedures under this name with their types
   name: 'ranking' as const,
-  dependsOn: ['queue'],
+  dependsOn: ['queue', 'player'],
   migrations,
   routes: createRankingProcedures,
 } satisfies BrawltomeModule

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   leaderboardInputSchema,
   leaderboardOutputSchema,
+  leaderboardPageInputSchema,
+  leaderboardPageSize,
   leaderboardRecentActivityOutputSchema,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,
@@ -76,6 +78,25 @@ const entries = {
   solo2v2: [{ ...metrics, identity: { type: 'solo-two-vs-two-player' as const, player } }],
   '3v3': [{ ...metrics, identity: { type: 'three-vs-three-player' as const, player } }],
 }
+
+describe('leaderboard page input', () => {
+  test('takes a mode, a board and a page, at a fixed page size', () => {
+    expect(leaderboardPageInputSchema.parse({ mode: 'solo2v2', region: 'US-E', page: 2 })).toEqual({
+      mode: 'solo2v2',
+      region: 'US-E',
+      page: 2,
+    })
+
+    expect(leaderboardPageSize).toBe(30)
+  })
+
+  test('rejects a page size, an unknown board and a page out of range', () => {
+    expect(() => leaderboardPageInputSchema.parse({ mode: '1v1', region: 'all', page: 1, pageSize: 5 })).toThrow()
+    expect(() => leaderboardPageInputSchema.parse({ mode: '1v1', region: 'MOON', page: 1 })).toThrow()
+    expect(() => leaderboardPageInputSchema.parse({ mode: '1v1', region: 'all', page: 0 })).toThrow()
+    expect(() => leaderboardPageInputSchema.parse({ mode: '1v1', region: 'all', page: 501 })).toThrow()
+  })
+})
 
 describe('leaderboard contract', () => {
   test('accepts every canonical mode input and rejects legacy or unknown fields', () => {
