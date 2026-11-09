@@ -10,8 +10,8 @@ const iconButtonStyle =
 
 function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose: () => void }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const { to, label, icon: Icon, wip } = item
-  const isActive = to === pathname
+  const { to, label, icon: Icon, wip, exact } = item
+  const isActive = pathname === to || (!exact && pathname.startsWith(`${to}/`))
 
   return (
     <li className="border-b border-line/40 last:border-b-0">
@@ -81,11 +81,16 @@ function MenuPanel({ onClose }: { onClose: () => void }) {
       ref={dialogRef}
       aria-label="Main menu"
       onClose={onClose}
-      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-ink p-0 text-text md:hidden"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-ink p-0 text-text"
     >
       <div className="flex h-full flex-col px-4 pt-6.5 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="flex justify-end">
-          <button type="button" onClick={onClose} aria-label="Close menu" className={iconButtonStyle}>
+          <button
+            type="button"
+            onClick={() => dialogRef.current?.close()}
+            aria-label="Close menu"
+            className={iconButtonStyle}
+          >
             <X className="size-6" aria-hidden="true" />
           </button>
         </div>
