@@ -74,6 +74,32 @@ async function writeSuccessfulCheck(transaction: Transaction, publication: Profi
     })
 }
 
+/** publishProfile inside the caller's transaction, for a job that writes more alongside the profile. */
+export async function writeProfilePublication(
+  transaction: Transaction,
+  publication: ProfilePublication,
+): Promise<ClanPublicationResult> {
+  const { profile, checkedAt, effect } = publication
+  const preparation = await checkRefreshEffect(transaction, effect)
+
+  if (preparation !== 'execute') return preparation
+
+  await ensureClanIdentity(transaction, profile.clanId)
+  const lastSuccessAt = await lockLastSuccessAt(transaction, profile.clanId)
+
+  if (isOlderThanLastSuccess(checkedAt, lastSuccessAt)) {
+    await requireRefreshEffectApplied(transaction, effect)
+
+    return 'superseded'
+  }
+
+  await writeProfile(transaction, profile)
+  await writeSuccessfulCheck(transaction, publication)
+  await requireRefreshEffectApplied(transaction, effect)
+
+  return 'applied'
+}
+
 /**
  * Stores a fetched clan profile, unless the lease was lost or a newer success is already stored. The lease check,
  * the writes and marking the lease applied share one transaction.
@@ -82,26 +108,5 @@ export async function publishProfile(
   database: Database,
   publication: ProfilePublication,
 ): Promise<ClanPublicationResult> {
-  const { profile, checkedAt, effect } = publication
-
-  return database.db.transaction(async (transaction) => {
-    const preparation = await checkRefreshEffect(transaction, effect)
-
-    if (preparation !== 'execute') return preparation
-
-    await ensureClanIdentity(transaction, profile.clanId)
-    const lastSuccessAt = await lockLastSuccessAt(transaction, profile.clanId)
-
-    if (isOlderThanLastSuccess(checkedAt, lastSuccessAt)) {
-      await requireRefreshEffectApplied(transaction, effect)
-
-      return 'superseded'
-    }
-
-    await writeProfile(transaction, profile)
-    await writeSuccessfulCheck(transaction, publication)
-    await requireRefreshEffectApplied(transaction, effect)
-
-    return 'applied'
-  })
+  return database.db.transaction((transaction) => writeProfilePublication(transaction, publication))
 }

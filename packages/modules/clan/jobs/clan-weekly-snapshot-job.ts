@@ -10,8 +10,8 @@ import {
   type SourceAdmitter,
 } from '@brawltome/queue'
 import type { Telemetry } from '@brawltome/telemetry'
-import type { PostgresClans } from '../db/postgres-clans'
 import type { PostgresWeeklySnapshots } from '../db/postgres-weekly-snapshots'
+import type { WeeklySnapshotWriteResult } from '../db/weekly-snapshot-lease'
 import { type ClanProfileWrite, parseGuildRank, parseGuildStats } from '../domain/guild-stats'
 import { failedCheckProvenance, successProvenance, weeklySnapshotProvenance } from '../domain/provenance'
 import { classifySourceFailure } from '../domain/source-failure'
@@ -33,7 +33,6 @@ export const clanWeeklySnapshotOutageGuilds = 5
 export const clanWeeklySnapshotOutageLimitMs = 6 * 60 * 60 * 1000
 
 export type ClanWeeklySnapshotJobDependencies = {
-  clans: Pick<PostgresClans, 'publishProfile' | 'recordProfileCheck'>
   snapshots: PostgresWeeklySnapshots
   // the Brawlhalla client, with every call going through this attempt's admission
   createAdmittedSource(admitSource: SourceAdmitter): Pick<ClanSource, 'getGuildStatsV1'>
@@ -49,6 +48,7 @@ type WeeklySnapshotLease = Lease<ClanWeeklySnapshotPayload>
 
 type SnapshotSlice = {
   weekStarting: string
+  lease: WeeklySnapshotLease
   dependencies: ClanWeeklySnapshotJobDependencies
   fetcher: GuildStatsFetcher
   tools: JobTools
@@ -70,6 +70,13 @@ function weekStartingOf(lease: WeeklySnapshotLease): string {
   return windowAt.toISOString().slice(0, 10)
 }
 
+// every write checks the lease in its own transaction; a worker that lost it stops before writing anything more
+function requireLease<Result>(result: WeeklySnapshotWriteResult<Result>): Result {
+  if (result === 'lease-lost') throw new JobLeaseLostError()
+
+  return result
+}
+
 // a 404 can't be told from a hiccup and a payload that doesn't parse won't parse on a retry, so such a guild
 // misses this week instead of holding up the others
 function readProfile(payload: unknown | null, clanId: number): { profile: ClanProfileWrite } | { error: unknown } {
@@ -84,15 +91,15 @@ function readProfile(payload: unknown | null, clanId: number): { profile: ClanPr
 
 // records the failed check the way a refresh does and moves the run past the guild, which misses this week
 async function skipGuild(slice: SnapshotSlice, clanId: number, error: unknown): Promise<void> {
-  const { weekStarting, dependencies } = slice
+  const { weekStarting, lease, dependencies } = slice
   const provenance = weeklySnapshotProvenance(failedCheckProvenance('profile', classifySourceFailure(error)))
+  const skipped = { weekStarting, clanId, checkedAt: new Date(), provenance }
 
-  await dependencies.clans.recordProfileCheck(clanId, new Date(), provenance)
-  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: null, sourceRank: null })
+  requireLease(await dependencies.snapshots.skipGuild(lease, skipped))
 }
 
 async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown | null): Promise<boolean> {
-  const { weekStarting, dependencies } = slice
+  const { weekStarting, lease, dependencies } = slice
   const read = readProfile(payload, clanId)
 
   if ('error' in read) {
@@ -103,10 +110,9 @@ async function saveGuild(slice: SnapshotSlice, clanId: number, payload: unknown 
 
   const { profile } = read
   const provenance = weeklySnapshotProvenance(successProvenance('profile'))
-  const sourceRank = parseGuildRank(payload)
+  const stored = { weekStarting, profile, sourceRank: parseGuildRank(payload), checkedAt: new Date(), provenance }
 
-  await dependencies.clans.publishProfile(profile, new Date(), provenance)
-  await dependencies.snapshots.record({ weekStarting, clanId, guildPoints: profile.guildPoints, sourceRank })
+  requireLease(await dependencies.snapshots.storeGuild(lease, stored))
 
   return true
 }
@@ -148,7 +154,7 @@ async function deferIfSourceDown(slice: SnapshotSlice, progress: SliceProgress):
 
   if (failedGuilds.length < clanWeeklySnapshotOutageGuilds) return
 
-  const downForMs = await slice.dependencies.snapshots.markSourceDown(slice.weekStarting)
+  const downForMs = requireLease(await slice.dependencies.snapshots.markSourceDown(slice.lease, slice.weekStarting))
 
   if (downForMs >= clanWeeklySnapshotOutageLimitMs) await skipFirstFailedGuild(slice, progress)
 
@@ -161,7 +167,7 @@ async function deferIfSourceDown(slice: SnapshotSlice, progress: SliceProgress):
 async function clearSourceDown(slice: SnapshotSlice, progress: SliceProgress): Promise<void> {
   if (!progress.isSourceDown) return
 
-  await slice.dependencies.snapshots.clearSourceDown(slice.weekStarting)
+  requireLease(await slice.dependencies.snapshots.clearSourceDown(slice.lease, slice.weekStarting))
   progress.isSourceDown = false
 }
 
@@ -232,7 +238,7 @@ function createSlice(
     signal: tools.signal,
   }
 
-  return { weekStarting, dependencies, fetcher, tools }
+  return { weekStarting, lease, dependencies, fetcher, tools }
 }
 
 // stores one slice of guilds per attempt and resumes after the last stored or skipped guild, so a yield, a failure
@@ -255,7 +261,7 @@ async function runWeeklySnapshot(
 
   if (clanIds.length === dependencies.sliceGuilds) throw new ClanWeeklySnapshotYield(weekStarting)
 
-  await dependencies.snapshots.complete(weekStarting)
+  requireLease(await dependencies.snapshots.complete(lease, weekStarting))
 
   return completeOperation(lease, tools)
 }

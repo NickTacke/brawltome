@@ -9,7 +9,7 @@ import {
 import { runJobOnce } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 import { createPostgresWeeklySnapshots } from '../../db/postgres-weekly-snapshots'
-import { clanModule, createPostgresClans } from '../../index'
+import { clanModule } from '../../index'
 import { clanWeeklySnapshotOutageGuilds, createClanWeeklySnapshotJob } from '../../jobs/clan-weekly-snapshot-job'
 import { reconcileClanWeeklySnapshotSchedule } from '../../jobs/clan-weekly-snapshot-schedule'
 
@@ -31,6 +31,8 @@ type Harness = {
   waits: number[]
   retryWaits: number[]
   pauses: string[]
+  // runs after the source answers and before the job writes, the window in which a lease can be lost
+  hooks: { afterSourceCall(clanId: number): Promise<void> }
   sourceAdmission: { admitSource(): Promise<{ outcome: 'admitted' }>; pauseSource(domain: string): Promise<void> }
 }
 
@@ -102,15 +104,19 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
   const retryWaits: number[] = []
   const pauses: string[] = []
   const failedCalls = new Map<number, number>()
+  const hooks: Harness['hooks'] = { afterSourceCall: async () => {} }
 
   const getGuildStatsV1 = async (clanId: number) => {
     sourceCalls.push(clanId)
 
-    return answerFor(answers, clanId, failedCalls)
+    const answer = answerFor(answers, clanId, failedCalls)
+
+    await hooks.afterSourceCall(clanId)
+
+    return answer
   }
 
   const job = createClanWeeklySnapshotJob({
-    clans: createPostgresClans(database),
     snapshots: createPostgresWeeklySnapshots(database),
     createAdmittedSource: (admitSource) => ({
       getGuildStatsV1: async (clanId: number) => {
@@ -140,7 +146,7 @@ function createHarness(answers: Map<number, SourceAnswer>, sliceGuilds = 100): H
     },
   }
 
-  return { job, queue, sourceCalls, waits, retryWaits, pauses, sourceAdmission }
+  return { job, queue, sourceCalls, waits, retryWaits, pauses, hooks, sourceAdmission }
 }
 
 // a window that came due a minute ago is the only one the schedule owes, so the run's week is the day it is due
@@ -218,6 +224,38 @@ async function readSourceDownMinutes(weekStarting: string): Promise<number | nul
   `
 
   return run?.minutes ?? null
+}
+
+// another worker claims the operation, as it does once this worker's lease has run out
+async function takeLeaseOver(): Promise<void> {
+  await database.sql`
+    UPDATE queue.operations SET lease_owner = 'replacement-worker', lease_token = lease_token + 1
+    WHERE kind = 'clan-weekly-snapshot' AND status = 'leased'
+  `
+}
+
+// the replacement worker stops without settling, so the next claim takes the operation over again
+async function expireLease(): Promise<void> {
+  await database.sql`
+    UPDATE queue.operations SET lease_expires_at = clock_timestamp()
+    WHERE kind = 'clan-weekly-snapshot' AND status = 'leased'
+  `
+}
+
+async function readStoredGuildPoints(clanId: number): Promise<string | null> {
+  const [profile] = await database.sql<{ guildPoints: string | null }[]>`
+    SELECT guild_points::text AS "guildPoints" FROM clans.profiles WHERE clan_id = ${clanId}
+  `
+
+  return profile?.guildPoints ?? null
+}
+
+async function readLastClanId(weekStarting: string): Promise<number | null> {
+  const [run] = await database.sql<{ lastClanId: number }[]>`
+    SELECT last_clan_id AS "lastClanId" FROM clans.weekly_snapshot_runs WHERE week_starting = ${weekStarting}
+  `
+
+  return run?.lastClanId ?? null
 }
 
 async function makeOperationDue(): Promise<void> {
@@ -660,6 +698,50 @@ describe('clan weekly snapshot job', () => {
 
     expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
     expect(await isWeekCompleted(latestWindow)).toBe(true)
+  })
+
+  test('writes nothing for a guild it fetched after another worker took the lease over', async () => {
+    await storeGuild(811)
+
+    const { job, queue, hooks, sourceAdmission } = createHarness(new Map([[811, { guildPoints: '999' }]]))
+
+    hooks.afterSourceCall = takeLeaseOver
+
+    const week = await scheduleWeek(queue, 'lease-lost-store')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('lease_lost')
+    expect(await readSnapshots(week)).toEqual([])
+    expect(await readStoredGuildPoints(811)).toBe('1')
+    expect(await readProfileCheck(811)).toBeNull()
+    expect(await readLastClanId(week)).toBe(0)
+    expect(await isWeekCompleted(week)).toBe(false)
+
+    hooks.afterSourceCall = async () => {}
+    await expireLease()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await readSnapshots(week)).toEqual([{ clanId: 811, guildPoints: '999' }])
+  })
+
+  test('skips no guild it fetched after another worker took the lease over', async () => {
+    await storeGuild(821)
+
+    const { job, queue, hooks, sourceAdmission } = createHarness(new Map([[821, 'not-found']]))
+
+    hooks.afterSourceCall = takeLeaseOver
+
+    const week = await scheduleWeek(queue, 'lease-lost-skip')
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('lease_lost')
+    expect(await readProfileCheck(821)).toBeNull()
+    expect(await readLastClanId(week)).toBe(0)
+    expect(await isWeekCompleted(week)).toBe(false)
+
+    hooks.afterSourceCall = async () => {}
+    await expireLease()
+
+    expect(await runJobOnce(queue, job, { sourceAdmission })).toBe('succeeded')
+    expect(await isWeekCompleted(week)).toBe(true)
   })
 
   test('does not touch the source for a week that already finished', async () => {

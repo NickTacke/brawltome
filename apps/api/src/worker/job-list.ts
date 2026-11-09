@@ -157,7 +157,7 @@ function createClanJobs(clan: WorkerClanDependencies): JobDefinition<unknown>[] 
     createBrawlhallaClient(({ domain }) => admitSource(domain))
 
   const clanRefresh = createClanRefreshJob({ clans, createAdmittedSource })
-  const clanWeeklySnapshot = createClanWeeklySnapshotJob({ ...weeklySnapshot, clans, createAdmittedSource })
+  const clanWeeklySnapshot = createClanWeeklySnapshotJob({ ...weeklySnapshot, createAdmittedSource })
 
   return [clanRefresh, clanWeeklySnapshot]
 }

@@ -1,7 +1,7 @@
-import type { Database } from '@brawltome/foundation'
 import { eq, sql } from 'drizzle-orm'
 import { excluded } from './excluded'
 import { weeklySnapshotRuns, weeklySnapshots } from './tables'
+import type { Transaction } from './transaction'
 
 export type WeeklySnapshotRecord = {
   weekStarting: string
@@ -11,24 +11,22 @@ export type WeeklySnapshotRecord = {
   sourceRank: number | null
 }
 
-/** Saves a clan's points for the week and moves the run past it, together, so a retry can't lose or repeat a clan. */
-export async function recordWeeklySnapshot(database: Database, record: WeeklySnapshotRecord): Promise<void> {
+/** Saves a clan's points for the week and moves the run past it, in the caller's transaction. */
+export async function recordWeeklySnapshot(transaction: Transaction, record: WeeklySnapshotRecord): Promise<void> {
   const { weekStarting, clanId, guildPoints, sourceRank } = record
 
-  await database.db.transaction(async (transaction) => {
-    if (guildPoints !== null) {
-      await transaction
-        .insert(weeklySnapshots)
-        .values({ weekStarting, clanId, guildPoints, sourceRank })
-        .onConflictDoUpdate({
-          target: [weeklySnapshots.weekStarting, weeklySnapshots.clanId],
-          set: { guildPoints: excluded(weeklySnapshots.guildPoints), sourceRank: excluded(weeklySnapshots.sourceRank) },
-        })
-    }
-
+  if (guildPoints !== null) {
     await transaction
-      .update(weeklySnapshotRuns)
-      .set({ lastClanId: sql`GREATEST(${weeklySnapshotRuns.lastClanId}, ${clanId})` })
-      .where(eq(weeklySnapshotRuns.weekStarting, weekStarting))
-  })
+      .insert(weeklySnapshots)
+      .values({ weekStarting, clanId, guildPoints, sourceRank })
+      .onConflictDoUpdate({
+        target: [weeklySnapshots.weekStarting, weeklySnapshots.clanId],
+        set: { guildPoints: excluded(weeklySnapshots.guildPoints), sourceRank: excluded(weeklySnapshots.sourceRank) },
+      })
+  }
+
+  await transaction
+    .update(weeklySnapshotRuns)
+    .set({ lastClanId: sql`GREATEST(${weeklySnapshotRuns.lastClanId}, ${clanId})` })
+    .where(eq(weeklySnapshotRuns.weekStarting, weekStarting))
 }

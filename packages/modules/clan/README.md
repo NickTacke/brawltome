@@ -94,7 +94,10 @@ stats from V1, in clan id order with a pause between calls, and does two things 
 2. saves the clan's guild points in `weekly_snapshots`, under the day the schedule window came due, with the rank V1
    sent alongside them so the Last week rank can be checked against the game's
 
-Both writes carry `trigger: 'weekly-snapshot'` in their provenance, so they can be told apart from a refresh.
+Both writes carry `trigger: 'weekly-snapshot'` in their provenance, so they can be told apart from a refresh. They
+share one transaction with moving the run past the clan, and that transaction first checks the operation's lease with
+the queue's `acquire_active_lease` fence. Marking or clearing an outage and finishing the week check it the same way. A
+worker whose lease ran out while it waited on V1 writes nothing, so it can't overwrite the worker that took over.
 
 The run row in `weekly_snapshot_runs` remembers the last clan, so a yield, a failed attempt or a lost lease carries on
 after it. The job yields its slot after each slice of 100 clans. A failed call is retried in place twice, after 500 ms
