@@ -255,7 +255,8 @@ Worker logs, filtered by the `kind` label, show what that schedule is doing.
 **Severity:** warning. A dead letter is kept for replay, so no data is lost and nobody is blocked.
 
 **Meaning:** at least one operation of the named kind was dead-lettered in the last 30 minutes after exhausting its
-retries. Admission rejections are expected outcomes and are not counted.
+retries. Admission rejections are expected outcomes and are not counted. Statistics collection loses a few players to
+upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes.
 
 **Likely causes:** a bug in that operation kind (consistent failures); a payload Brawlhalla changed shape on; a long
 outage that outlasted the retry budget. A row with the code `invalid_payload` never ran: its payload doesn't parse, or
@@ -307,7 +308,8 @@ once by [BrawlhallaSourceUnavailable](#brawlhallasourceunavailable).
 
 **Meaning:** refreshes have kept failing with `source_unavailable` across operation kinds for about 15 minutes. The
 Brawlhalla API is down or in maintenance. One line covers the whole outage, however many kinds are affected. Deep crawl
-deferrals are not counted: the crawl waits out the outage and resumes the same page.
+deferrals are not counted: the crawl waits out the outage and resumes the same page. Statistics collection is not
+counted either: it backs off on its own and retries.
 
 **First steps:** usually none. Confirm it is Brawlhalla, not us, with a direct request from the host:
 

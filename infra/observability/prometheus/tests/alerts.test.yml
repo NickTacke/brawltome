@@ -660,3 +660,40 @@ tests:
       - eval_time: 18m
         alertname: FilesystemSpaceCritical
         exp_alerts: []
+
+  - name: routine statistics collection failures stay quiet
+    interval: 1m
+    input_series:
+      - series: 'refresh_failures_total{kind="statistics-ranked-collection",failure_category="source_unavailable"}'
+        values: "0+1x40"
+      - series: 'operation_attempts_total{work_class="global-statistics",kind="statistics-lifetime-collection",outcome="dead_letter"}'
+        values: "0 0 0 1 1 1 2 2 2 3x31"
+      - series: 'operation_dead_letters{job="api",work_class="global-statistics",kind="statistics-ranked-collection",reason="execution"}'
+        values: "3 3 4 4x40"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: BrawlhallaSourceUnavailable
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: NewDeadLetters
+        exp_alerts: []
+
+  - name: a burst of statistics collection dead letters still fires
+    interval: 1m
+    input_series:
+      - series: 'operation_attempts_total{work_class="global-statistics",kind="statistics-ranked-collection",outcome="dead_letter"}'
+        values: "0+1x40"
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: NewDeadLetters
+        exp_alerts:
+          - exp_labels:
+              work_class: global-statistics
+              kind: statistics-ranked-collection
+              severity: warning
+              service: brawltome
+              signal: dead-letters
+            exp_annotations:
+              summary: "statistics-ranked-collection produced new dead letters"
+              description: "At least one global-statistics operation was dead-lettered in the last 30 minutes. Inspect it with the operations:dead-letters CLI."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#newdeadletters"

@@ -80,10 +80,12 @@ groups:
       # level paged continuously; admission rejections (reason="admission_rejected") are expected user outcomes.
       # The gauge delta also covers dead letters that bypass the worker attempt counter (expired leases, restarts).
       # Warning, not critical: a dead letter is retained for replay, so no data is lost and no user is blocked.
+      # a collection loses a few players to upstream errors by design, so only a burst that threatens coverage counts
       - alert: NewDeadLetters
         expr: |
-          sum by (work_class, kind) (increase(operation_attempts_total{outcome="dead_letter"}[30m])) > 0
-          or max by (work_class, kind) (delta(operation_dead_letters{reason="execution"}[30m])) > 0
+          sum by (work_class, kind) (increase(operation_attempts_total{outcome="dead_letter",kind!~"statistics-(ranked|lifetime)-collection"}[30m])) > 0
+          or max by (work_class, kind) (delta(operation_dead_letters{reason="execution",kind!~"statistics-(ranked|lifetime)-collection"}[30m])) > 0
+          or sum by (work_class, kind) (increase(operation_attempts_total{outcome="dead_letter",kind=~"statistics-(ranked|lifetime)-collection"}[30m])) > 10
         for: 1m
         labels:
           severity: warning
@@ -117,7 +119,7 @@ groups:
       - alert: BrawlhallaSourceUnavailable
         expr: |
           sum(
-            increase(refresh_failures_total{failure_category="source_unavailable",kind!="leaderboard-deep-crawl"}[5m])
+            increase(refresh_failures_total{failure_category="source_unavailable",kind!~"leaderboard-deep-crawl|statistics-(ranked|lifetime)-collection"}[5m])
           ) > 2
         for: 15m
         labels:
