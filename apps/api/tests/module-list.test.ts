@@ -64,9 +64,10 @@ describe('oRPC router built from a module list', () => {
   })
 
   test("puts the api's own procedures beside the modules", () => {
+    const moduleKeys = Object.keys(createOrpcRouter(apiModules, runtime))
     const router = createOrpcRouter(apiModules, runtime, { refresh, views })
 
-    expect(Object.keys(router).sort()).toEqual(['clan', 'player', 'ranking', 'refresh', 'status', 'views'])
+    expect(Object.keys(router).sort()).toEqual([...moduleKeys, 'refresh', 'views'].sort())
     expect(Object.keys(router.refresh)).toEqual(['player', 'clan'])
     expect(Object.keys(router.views)).toEqual(['player'])
   })
