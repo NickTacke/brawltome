@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { MobileCollapse } from './MobileCollapse'
-import { formatGrouped, rankBanner, winPercent, winRateColour } from './player-format'
+import { formatGrouped, rankBanner, tierName, winPercent, winRateColour } from './player-format'
 import { sectionBody, sectionTitle } from './player-styles'
 import { RatingAndPeak } from './RatingAndPeak'
 import { SplitRecord } from './SplitRecord'
@@ -39,7 +39,7 @@ function NamedRow({ heading, name, standing }: Omit<Entry, 'key'>) {
       <div className="min-w-0 flex-1">
         {name && <div className="truncate text-xs font-bold text-soft">{heading}</div>}
         <div className="truncate text-lg leading-snug font-bold text-text">{name ?? heading}</div>
-        <div className="truncate text-sm font-semibold text-soft">{standing.tier ?? 'Unranked'}</div>
+        <div className="truncate text-sm font-semibold text-soft">{tierName(standing.tier)}</div>
       </div>
       <div className="shrink-0 text-right">
         <RatingAndPeak

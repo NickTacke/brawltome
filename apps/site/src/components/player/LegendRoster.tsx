@@ -9,6 +9,7 @@ import {
   legendName,
   rankBanner,
   tierColour,
+  tierName,
   winPercent,
   winRateColour,
 } from './player-format'
@@ -51,7 +52,7 @@ function LegendCard({ legend, ranked }: { legend: CareerLegend; ranked: RankedLe
       {ranked && (
         <div className="mt-2.5 flex items-center gap-2.5 border-t border-line/50 pt-2.5">
           <img src={rankBanner(ranked.tier)} alt="" className="h-9 w-6 shrink-0 object-contain" />
-          <div className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{ranked.tier}</div>
+          <div className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{tierName(ranked.tier)}</div>
           <div className="font-mono text-sm font-bold text-strong">{formatGrouped(ranked.rating)}</div>
         </div>
       )}

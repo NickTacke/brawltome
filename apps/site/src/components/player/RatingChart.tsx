@@ -2,7 +2,7 @@ import { type MouseEvent, useId, useState } from 'react'
 import { formatDay } from '../../lib'
 import { ActivityBars } from './ActivityBars'
 import { axisDates, ratingAxisTicks, ratingRange, smoothPath } from './chart-geometry'
-import { formatGrouped, ratingBands, tierColour } from './player-format'
+import { formatGrouped, ratingBands, tierColour, tierName } from './player-format'
 import { type ChartPoint, highestPoint } from './rating-seasons'
 
 const lowestTierLabelPercent = 92
@@ -188,7 +188,7 @@ function HoverReadout({ hovered, previous, xPercent, yPercent }: HoverReadoutPro
           {formatGrouped(hovered.rating)} <ChangeSincePrevious hovered={hovered} previous={previous} />
         </div>
         <div className="text-xs text-soft">
-          {hovered.tier} · {formatDay(hovered.recordedAt)}
+          {tierName(hovered.tier)} · {formatDay(hovered.recordedAt)}
         </div>
         <div className="font-mono text-xs text-soft">
           {formatGrouped(hovered.wins)}W {formatGrouped(hovered.games - hovered.wins)}L

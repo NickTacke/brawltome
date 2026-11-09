@@ -8,6 +8,7 @@ import {
   legendName,
   rankBanner,
   tierColour,
+  tierName,
   virtualLevel,
   winPercent,
   winRateColour,
@@ -79,6 +80,17 @@ describe('tierColour', () => {
     [null, '#3b4252'],
   ])('%p is %p', (tier, expected) => {
     expect(tierColour(tier)).toBe(expected)
+  })
+})
+
+describe('tierName', () => {
+  test.each([
+    ['Gold 3', 'Gold 3'],
+    ['Valhallan', 'Valhallan'],
+    ['none', 'Unranked'],
+    [null, 'Unranked'],
+  ])('%p reads as %p', (tier, expected) => {
+    expect(tierName(tier)).toBe(expected)
   })
 })
 

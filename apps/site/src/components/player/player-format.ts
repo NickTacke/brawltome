@@ -34,6 +34,11 @@ export function rankBanner(tier: string | null | undefined): string {
   return subdivision === undefined ? `/images/banners/${base}.png` : `/images/banners/${base}%20${subdivision}.png`
 }
 
+// the game reports a player with no ranked games as the tier "none"
+export function tierName(tier: string | null | undefined): string {
+  return !tier || tier === 'none' ? 'Unranked' : tier
+}
+
 export function eloReset(rating: number): number {
   return rating < 1400 ? rating : Math.floor(1400 + (rating - 1400) / (3 - (3000 - rating) / 800))
 }

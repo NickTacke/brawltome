@@ -1,4 +1,4 @@
-import { bestRating, eloReset, formatGrouped, rankBanner } from './player-format'
+import { bestRating, eloReset, formatGrouped, rankBanner, tierName } from './player-format'
 import { sectionBody, sectionTitle, statLabel } from './player-styles'
 import { SplitRecord } from './SplitRecord'
 import { noStanding, type Standing } from './side-summary'
@@ -44,7 +44,7 @@ export function Ranked({ standing = noStanding }: { standing?: Standing }) {
         <div className="flex items-center gap-4">
           <img src={rankBanner(standing.tier)} alt="" className={banner} />
           <div className="min-w-0 flex-1">
-            <div className="truncate font-bold text-text">{standing.tier ?? 'Unranked'}</div>
+            <div className="truncate font-bold text-text">{tierName(standing.tier)}</div>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5">
               <span className={bigRating}>{formatGrouped(standing.rating)}</span>
               <PeakNote standing={standing} />

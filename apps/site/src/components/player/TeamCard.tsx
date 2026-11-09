@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { formatGrouped, rankBanner, winPercent, winRateColour } from './player-format'
+import { formatGrouped, rankBanner, tierName, winPercent, winRateColour } from './player-format'
 import { RatingAndPeak } from './RatingAndPeak'
 import { type FixedTeam, teammateOf } from './side-summary'
 
@@ -24,7 +24,7 @@ export function TeamCard({ team, ownId }: { team: FixedTeam; ownId: number }) {
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-4 text-sm font-semibold text-soft">
           <span className="min-w-0 truncate">
-            {team.tier}
+            {tierName(team.tier)}
             <span className="font-mono font-normal @max-sm:hidden">
               {' · '}
               {formatGrouped(team.wins)}W {formatGrouped(team.games - team.wins)}L

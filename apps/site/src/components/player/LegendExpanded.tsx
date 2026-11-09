@@ -8,6 +8,7 @@ import {
   formatHours,
   legendName,
   rankBanner,
+  tierName,
   winPercent,
   winRateColour,
 } from './player-format'
@@ -67,7 +68,7 @@ function RankedSummary({ ranked }: { ranked: RankedLegend }) {
       <div className="flex items-center gap-3">
         <img src={rankBanner(ranked.tier)} alt="" className="h-16 w-12 shrink-0 object-contain" />
         <div className="min-w-0">
-          <div className="truncate font-bold text-text">{ranked.tier}</div>
+          <div className="truncate font-bold text-text">{tierName(ranked.tier)}</div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl leading-none font-black tracking-tight text-strong">
               {formatGrouped(ranked.rating)}
