@@ -64,6 +64,7 @@ function legendSnapshot(snapshotId: string, generationId: string, publishedAt: s
     data: {
       region: 'all',
       bracket: 'all',
+      sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
       selectedPlayers: 30,
       observedPlayers: 30,
       observedLegendGames: 200,

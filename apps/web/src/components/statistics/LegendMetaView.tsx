@@ -5,6 +5,7 @@ import {
   legendMetaRegions,
 } from '@brawltome/contracts'
 import { legendAvatarUrl } from '@brawltome/game-data'
+import { SliceCoverageLabel } from './SliceCoverageLabel'
 
 const regionLabels: Record<(typeof legendMetaRegions)[number], string> = {
   all: 'All regions',
@@ -172,7 +173,7 @@ export function LegendMetaView({
             </output>
           )}
 
-          <p className="text-sm text-muted-foreground">{cohortCoverageNote(data.cohortCells)}</p>
+          <SliceCoverageLabel coverage={data.sliceCoverage} />
 
           <dl className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-card/60 p-4">
@@ -292,6 +293,7 @@ export function LegendMetaView({
             </summary>
             <div className="mt-4 space-y-4 text-sm leading-6 text-muted-foreground">
               <p>{data.methodology.seasonalScope}</p>
+              <p>{cohortCoverageNote(data.cohortCells)}</p>
               <dl className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <dt className="font-semibold text-foreground">Pick share</dt>

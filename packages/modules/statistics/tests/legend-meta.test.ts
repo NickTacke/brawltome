@@ -384,6 +384,37 @@ describe('Current Season Legend Meta formulas', () => {
     const allSlice = artifact.slices.find(({ region, bracket }) => region === 'all' && bracket === 'all')
 
     expect(allSlice?.selectedPlayers).toBe(17)
+
+    const coverageOf = (region: string, bracket: string) =>
+      artifact.slices.find((slice) => slice.region === region && slice.bracket === bracket)?.sliceCoverage
+
+    expect(coverageOf('all', 'Platinum')).toEqual({
+      filterCells: 9,
+      coveredCells: 8,
+      leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+      includesPlatinumBoardTop: true,
+    })
+
+    expect(coverageOf('EU', 'all')).toEqual({
+      filterCells: 2,
+      coveredCells: 1,
+      leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+      includesPlatinumBoardTop: false,
+    })
+
+    expect(coverageOf('AUS', 'Platinum')).toEqual({
+      filterCells: 1,
+      coveredCells: 1,
+      leftOutCells: [],
+      includesPlatinumBoardTop: true,
+    })
+
+    expect(coverageOf('all', 'Diamond+')).toEqual({
+      filterCells: 9,
+      coveredCells: 9,
+      leftOutCells: [],
+      includesPlatinumBoardTop: false,
+    })
   })
 
   test('averages legend rating over players with games and leaves never-played legends out', () => {

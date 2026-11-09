@@ -28,6 +28,8 @@ const LEGEND_META_COMMON_CAVEATS = [
   'BrawlTome-observed values are not exhaustive or live.',
   'Missing source observations reduce coverage and are not counted as zero games.',
   'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+  'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+  "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
 ] as const
 
 export const LEGEND_META_METHODOLOGY_DISCLOSURE = {
@@ -133,9 +135,18 @@ export type LegendMetaCohortCell = {
 export type LegendMetaFilterRegion = 'all' | LaunchCohortRegion
 export type LegendMetaFilterBracket = 'all' | LaunchCohortBracket
 
+// what the numbers in this view stand for, so a pooled view can say what it is missing
+export type LegendMetaSliceCoverage = {
+  filterCells: number
+  coveredCells: number
+  leftOutCells: Array<{ region: LaunchCohortRegion; bracket: LaunchCohortBracket }>
+  includesPlatinumBoardTop: boolean
+}
+
 export type LegendMetaArtifactSlice = LegendMetaSlice & {
   region: LegendMetaFilterRegion
   bracket: LegendMetaFilterBracket
+  sliceCoverage: LegendMetaSliceCoverage
 }
 
 export type LegendMetaArtifact = {
@@ -377,6 +388,18 @@ function cohortCellCoverage(cellsByKey: ReadonlyMap<string, LegendMetaCell>): Le
   )
 }
 
+function sliceCoverage(included: readonly LegendMetaCell[]): LegendMetaSliceCoverage {
+  const covered = included.filter(({ selectedPlayers }) => selectedPlayers > 0)
+  const leftOut = included.filter(({ selectedPlayers }) => selectedPlayers === 0)
+
+  return {
+    filterCells: included.length,
+    coveredCells: covered.length,
+    leftOutCells: leftOut.map(({ region, bracket }) => ({ region, bracket })),
+    includesPlatinumBoardTop: covered.some(({ bracket }) => bracket === 'Platinum'),
+  }
+}
+
 export function buildLegendMetaArtifact(input: {
   snapshotId: string
   generationId: string
@@ -444,7 +467,7 @@ export function buildLegendMetaArtifact(input: {
         observations: included.flatMap((cell) => cell.observations),
       })
 
-      return { region, bracket, ...aggregated }
+      return { region, bracket, sliceCoverage: sliceCoverage(included), ...aggregated }
     }),
   )
 

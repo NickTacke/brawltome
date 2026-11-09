@@ -2,6 +2,7 @@ import { leaderboardRegions } from './leaderboard'
 import {
   cohortCellsSchema,
   directionFor,
+  legendMetaSliceCoverageSchema,
   nonnegativeSafeInteger,
   statisticsHistoryCompatibilityReasonSchema,
   statisticsHistoryDirectionSchema,
@@ -186,6 +187,12 @@ const methodologySchema = z.union([
         z.literal(
           'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
         ),
+        z.literal(
+          'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+        ),
+        z.literal(
+          "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
+        ),
         z.literal('The source does not expose a stable season identity, so cross-publication trends are unavailable.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
       ]),
@@ -207,6 +214,12 @@ const methodologySchema = z.union([
         z.literal('Missing source observations reduce coverage and are not counted as zero games.'),
         z.literal(
           'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+        ),
+        z.literal(
+          'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+        ),
+        z.literal(
+          "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
         ),
         z.literal('Cross-publication trends stop at the first incompatible adjacent snapshot.'),
         z.literal('Observed win rate describes this cohort and does not establish legend strength or causation.'),
@@ -246,6 +259,7 @@ const availableFields = {
     .strict(),
   filter: filterSchema,
   cohortCells: cohortCellsSchema,
+  sliceCoverage: legendMetaSliceCoverageSchema,
   selectedPlayers: nonnegativeSafeInteger,
   observedPlayers: nonnegativeSafeInteger,
   observedLegendGames: nonnegativeSafeInteger,
@@ -326,6 +340,7 @@ const historySnapshotSchema = z
       .strict(),
     scope: filterSchema,
     cohortCells: cohortCellsSchema,
+    sliceCoverage: legendMetaSliceCoverageSchema,
     selectedPlayers: nonnegativeSafeInteger,
     observedPlayers: nonnegativeSafeInteger,
     observedLegendGames: nonnegativeSafeInteger,

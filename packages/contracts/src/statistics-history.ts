@@ -61,6 +61,20 @@ export const cohortCellsSchema = z
   )
   .length(18)
 
+export const legendMetaSliceCoverageSchema = z
+  .object({
+    filterCells: nonnegativeSafeInteger,
+    coveredCells: nonnegativeSafeInteger,
+    leftOutCells: z
+      .array(z.object({ region: z.enum(leaderboardRegions), bracket: z.enum(['Platinum', 'Diamond+']) }).strict())
+      .max(18),
+    includesPlatinumBoardTop: z.boolean(),
+  })
+  .strict()
+  .refine(({ filterCells, coveredCells, leftOutCells }) => filterCells === coveredCells + leftOutCells.length, {
+    message: 'a slice filter must be its covered and left-out cells',
+  })
+
 export type StatisticsHistoryCompatibilityReasonContract = z.infer<typeof statisticsHistoryCompatibilityReasonSchema>
 
 export type StatisticsHistoryContractSnapshot = {

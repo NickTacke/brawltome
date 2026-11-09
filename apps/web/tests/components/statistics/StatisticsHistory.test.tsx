@@ -41,6 +41,7 @@ function legendSnapshot(snapshotId: string, generationId: string, publishedAt: s
     season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
     scope: { region: 'all', bracket: 'all' },
     cohortCells,
+    sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
     selectedPlayers: 30,
     observedPlayers: 30,
     observedLegendGames: 200,
@@ -216,6 +217,7 @@ describe('statistics history sections', () => {
     expect(html).toContain('+0.5 (increase)')
     expect(html).toContain('30 of 30 selected players observed')
     expect(html).toContain('Counts and coverage are snapshot values, not changes.')
+    expect(html).toContain('Platinum here is only the top of each region')
     expect(html).not.toContain('Rank movement')
     expect(html).not.toContain('improved')
     expect(html).not.toContain('declined')

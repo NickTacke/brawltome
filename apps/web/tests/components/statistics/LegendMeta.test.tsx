@@ -40,6 +40,8 @@ const methodology: AvailableLegendMeta['methodology'] = {
     'BrawlTome-observed values are not exhaustive or live.',
     'Missing source observations reduce coverage and are not counted as zero games.',
     'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+    'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+    "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
     'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
     'Observed win rate describes this cohort and does not establish legend strength or causation.',
   ],
@@ -60,6 +62,7 @@ const fresh: AvailableLegendMeta = {
   season: { scope: 'current-season', identity: null, source: 'brawlhalla-v1-ranked-1v1' },
   filter: { region: 'all', bracket: 'all' },
   cohortCells,
+  sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
   selectedPlayers: 40,
   observedPlayers: 40,
   observedLegendGames: 200,
@@ -117,9 +120,32 @@ describe('Current Season Legend Meta view', () => {
     expect(html).toContain('Not ranked')
   })
 
-  test('says how many cells are covered and names the ones left out', () => {
-    expect(render()).toContain('Covers all 18 region and bracket cells.')
+  test('labels a partial view with the cells it is missing and that Platinum is only the top', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: {
+        filterCells: 18,
+        coveredCells: 14,
+        leftOutCells: [{ region: 'EU', bracket: 'Platinum' }],
+        includesPlatinumBoardTop: true,
+      },
+    })
 
+    expect(html).toContain('Covers 14 of the 18 cells in this view. Left out for too few players: EU Platinum.')
+    expect(html).toContain('Platinum here is only the top of each region')
+  })
+
+  test('shows no label on a view with every region and no Platinum', () => {
+    const html = render({
+      ...fresh,
+      sliceCoverage: { filterCells: 9, coveredCells: 9, leftOutCells: [], includesPlatinumBoardTop: false },
+    })
+
+    expect(html).not.toContain('cells in this view')
+    expect(html).not.toContain('Platinum here is only')
+  })
+
+  test('keeps the whole-cohort cell count in the methodology', () => {
     const partial = {
       ...fresh,
       cohortCells: cohortCells.map((cell) =>
@@ -129,9 +155,10 @@ describe('Current Season Legend Meta view', () => {
       ),
     }
 
-    const html = render(partial)
-
-    expect(html).toContain('Covers 17 of 18 region and bracket cells. Left out for too few players: EU Platinum.')
+    expect(render()).toContain('Covers all 18 region and bracket cells.')
+    expect(render(partial)).toContain(
+      'Covers 17 of 18 region and bracket cells. Left out for too few players: EU Platinum.',
+    )
   })
 
   test('uses labeled native filters, semantic table structure, and responsive overflow', () => {

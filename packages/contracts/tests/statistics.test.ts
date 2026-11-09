@@ -41,6 +41,7 @@ const available: LegendMetaOutput = {
   },
   filter: { region: 'all', bracket: 'Platinum' },
   cohortCells,
+  sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
   selectedPlayers: 125,
   observedPlayers: 119,
   observedLegendGames: 1_190,
@@ -69,6 +70,8 @@ const available: LegendMetaOutput = {
       'BrawlTome-observed values are not exhaustive or live.',
       'Missing source observations reduce coverage and are not counted as zero games.',
       'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+      'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+      "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
       'The source does not expose a stable season identity, so cross-publication trends are unavailable.',
       'Observed win rate describes this cohort and does not establish legend strength or causation.',
     ],
@@ -115,6 +118,7 @@ const historySnapshot = {
   season: available.season,
   scope: available.filter,
   cohortCells,
+  sliceCoverage: { filterCells: 18, coveredCells: 18, leftOutCells: [], includesPlatinumBoardTop: true },
   selectedPlayers: available.selectedPlayers,
   observedPlayers: available.observedPlayers,
   observedLegendGames: available.observedLegendGames,
@@ -199,6 +203,8 @@ describe('Current Season Legend Meta contract', () => {
           'BrawlTome-observed values are not exhaustive or live.',
           'Missing source observations reduce coverage and are not counted as zero games.',
           'Region and bracket cells below the 125-player minimum are left out; cohortCells lists every cell and its status.',
+          'Every observed player counts once with no reweighting, so a pooled view leans toward the cells with the most players.',
+          "Platinum values cover only the top of each region's stored leaderboard, which holds about 1,000 players across Diamond+ and Platinum.",
           'Cross-publication trends stop at the first incompatible adjacent snapshot.',
           'Observed win rate describes this cohort and does not establish legend strength or causation.',
         ],
@@ -238,6 +244,10 @@ describe('Current Season Legend Meta contract', () => {
 
   test('requires all 18 cells and a status that matches the selected players', () => {
     expect(() => legendMetaOutputSchema.parse({ ...available, cohortCells: cohortCells.slice(1) })).toThrow()
+
+    const unbalancedCoverage = { filterCells: 18, coveredCells: 17, leftOutCells: [], includesPlatinumBoardTop: true }
+
+    expect(() => legendMetaOutputSchema.parse({ ...available, sliceCoverage: unbalancedCoverage })).toThrow()
 
     const mislabelled = cohortCells.map((cell, index) => (index === 0 ? { ...cell, status: 'left-out' } : cell))
 
