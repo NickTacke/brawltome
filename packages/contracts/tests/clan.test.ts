@@ -76,17 +76,21 @@ describe('canonical Clan contract', () => {
 
 describe('clan standing contract', () => {
   test('accepts two ranks, or null for a rank the clan has no value for', () => {
-    expect(clanStandingSchema.parse({ guildPointsRank: 3, lifetimeXpRank: 1 })).toEqual({
-      guildPointsRank: 3,
-      lifetimeXpRank: 1,
-    })
+    const standing = { guildPointsRank: 3, lifetimeXpRank: 1, lastWeekPoints: '1250', lastWeekRank: 2 }
 
-    expect(clanStandingSchema.parse({ guildPointsRank: null, lifetimeXpRank: 1 }).guildPointsRank).toBeNull()
+    expect(clanStandingSchema.parse(standing)).toEqual(standing)
+
+    const unranked = { guildPointsRank: null, lifetimeXpRank: 1, lastWeekPoints: null, lastWeekRank: null }
+
+    expect(clanStandingSchema.parse(unranked)).toEqual(unranked)
   })
 
-  test('rejects a rank below 1, a fractional rank and an unknown field', () => {
-    expect(() => clanStandingSchema.parse({ guildPointsRank: 0, lifetimeXpRank: 1 })).toThrow()
-    expect(() => clanStandingSchema.parse({ guildPointsRank: 1.5, lifetimeXpRank: 1 })).toThrow()
-    expect(() => clanStandingSchema.parse({ guildPointsRank: 1, lifetimeXpRank: 1, extra: true })).toThrow()
+  test('rejects a rank below 1, a fractional rank, negative points and an unknown field', () => {
+    const standing = { guildPointsRank: 1, lifetimeXpRank: 1, lastWeekPoints: '0', lastWeekRank: 1 }
+
+    expect(() => clanStandingSchema.parse({ ...standing, guildPointsRank: 0 })).toThrow()
+    expect(() => clanStandingSchema.parse({ ...standing, lastWeekRank: 1.5 })).toThrow()
+    expect(() => clanStandingSchema.parse({ ...standing, lastWeekPoints: '-5' })).toThrow()
+    expect(() => clanStandingSchema.parse({ ...standing, extra: true })).toThrow()
   })
 })
