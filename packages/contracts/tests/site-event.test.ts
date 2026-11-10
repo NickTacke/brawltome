@@ -7,6 +7,7 @@ const search = { ...tab, name: 'search.performed', source: 'bar', ...found }
 const failed = { ...tab, name: 'search.failed', source: 'bar', latencyMs: 5_000 }
 const selected = { ...tab, name: 'search.selected', source: 'bar', position: 2, viaAlias: true }
 const vital = { ...tab, name: 'vitals', metric: 'LCP', value: 1834.5, viewportWidth: 390 }
+const clientError = { ...tab, name: 'error.client', kind: 'unhandled', message: 'x is not a function' }
 
 describe('site event', () => {
   test('takes a search, a failed search and a picked result', () => {
@@ -32,6 +33,26 @@ describe('site event', () => {
       { ...vital, viewportWidth: 390.5 },
       { ...vital, viewportWidth: 20_001 },
       { ...tab, name: 'vitals', metric: 'LCP', value: 1834.5 },
+    ]) {
+      expect(siteEventInputSchema.safeParse(event).success).toBe(false)
+    }
+  })
+
+  test('takes an error in the browser of each kind the dashboards show', () => {
+    for (const kind of ['render', 'unhandled', 'rejection']) {
+      const event = { ...clientError, kind }
+
+      expect<unknown>(siteEventInputSchema.parse(event)).toEqual(event)
+    }
+  })
+
+  test('refuses an error of an unknown kind, with a message that is too long or with more than a message', () => {
+    for (const event of [
+      { ...clientError, kind: 'network' },
+      { ...clientError, message: 'm'.repeat(1001) },
+      { ...clientError, message: undefined },
+      { ...clientError, stack: 'at render (app.js:1:1)' },
+      { ...clientError, userAgent: 'Mozilla/5.0' },
     ]) {
       expect(siteEventInputSchema.safeParse(event).success).toBe(false)
     }

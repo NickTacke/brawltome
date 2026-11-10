@@ -1,5 +1,6 @@
 import type { SiteEventInputContract } from '@brawltome/contracts'
 import { admitVisitor, type SiteVisitor } from './admit-visitor'
+import { recordClientError } from './client-errors'
 import type { SiteVisitDependencies } from './record-site-visit'
 import { type EventTab, recordSearchFailed, recordSearchPerformed, recordSearchSelected } from './search-events'
 import { routeOf } from './visit-labels'
@@ -18,6 +19,9 @@ function recordEvent({ telemetry }: SiteVisitor, tab: EventTab, event: SiteEvent
       break
     case 'vitals':
       recordWebVital(telemetry, tab, event)
+      break
+    case 'error.client':
+      recordClientError(telemetry, tab, event)
       break
   }
 }
