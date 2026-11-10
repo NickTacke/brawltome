@@ -137,12 +137,12 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     prom(`sum by (route) (increase(analytics_pageviews_total[${w}]))`),
     prom(`sum by (feature) (increase(analytics_feature_use_total[${w}]))`),
     loki(
-      `topk(20, sum by (attributes_referrerDomain) (count_over_time({service_name="web"} | json | event="analytics.pageview" | attributes_referrerDomain!="" [${w}])))`,
+      `topk(20, sum by (attributes_referrerDomain) (count_over_time({service_name=~"web|api"} |= "analytics.pageview" | json | event="analytics.pageview" | attributes_referrerDomain!="" [${w}])))`,
     ),
     Promise.all(
       dayEnds.map(async (time) => {
         const [sample] = await api.lokiInstant(
-          `count(sum by (attributes_visitorKey) (count_over_time({service_name="web"} | json | event="analytics.pageview" [1d])))`,
+          `count(sum by (attributes_visitorKey) (count_over_time({service_name=~"web|api"} |= "analytics.pageview" | json | event="analytics.pageview" [1d])))`,
           time,
         )
 
