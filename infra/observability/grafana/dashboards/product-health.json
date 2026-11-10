@@ -911,13 +911,14 @@
       "options": {},
       "targets": [
         {
-          "expr": "count(sum by (attributes_visitorKey) (count_over_time({service_name=\"web\"} | json | event=\"analytics.pageview\" [1d])))",
+          "expr": "count by (attributes_day) (sum by (attributes_day, attributes_visitorKey) (count_over_time({service_name=~\"web|api\"} |= \"analytics.pageview\" | json | event=\"analytics.pageview\" | attributes_day!=\"\" [$__range])))",
           "refId": "A",
+          "legendFormat": "{{attributes_day}}",
           "queryType": "instant",
           "instant": true
         }
       ],
-      "title": "Daily unique visitors",
+      "title": "Unique visitors per UTC day",
       "type": "stat"
     },
     {
@@ -939,7 +940,7 @@
       "options": {},
       "targets": [
         {
-          "expr": "topk(20, sum by (attributes_referrerDomain) (count_over_time({service_name=\"web\"} | json | event=\"analytics.pageview\" | attributes_referrerDomain!=\"\" [$__range])))",
+          "expr": "topk(20, sum by (attributes_referrerDomain) (count_over_time({service_name=~\"web|api\"} |= \"analytics.pageview\" | json | event=\"analytics.pageview\" | attributes_referrerDomain!=\"\" [$__range])))",
           "refId": "A",
           "queryType": "instant",
           "instant": true,
