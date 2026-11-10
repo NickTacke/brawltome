@@ -1,8 +1,8 @@
 import { useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { reorderAccountPins, unpinAccountPlayer } from '../../server/account'
 import type { PinnedPlayerRow, PinWriteAnswer } from './account-model'
-import { movePin, orderRows } from './pin-order'
+import { isStaleSnapshot, movePin, orderRows } from './pin-order'
 
 type PinsFromPage = { pins: PinnedPlayerRow[]; pinOrder: number[] }
 
@@ -15,9 +15,17 @@ export function usePins(page: PinsFromPage, verifiedId: number | null) {
   const [pinOrder, setPinOrder] = useState(page.pinOrder)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [hasFailed, setHasFailed] = useState(false)
+  const savedOrder = useRef<number[] | null>(null)
 
-  // a reload of the page, after a sign-in elsewhere or a finished verification, brings new pins
+  // a reload of the page, after a sign-in elsewhere or a finished verification, brings new pins. a verification poll
+  // that started before a save can land after it, so one load that doesn't show the save yet is skipped
   useEffect(() => {
+    const isStale = isStaleSnapshot(savedOrder.current, page.pinOrder)
+
+    savedOrder.current = null
+
+    if (isStale) return
+
     setPins(page.pins)
     setPinOrder(page.pinOrder)
   }, [page.pins, page.pinOrder])
@@ -42,8 +50,10 @@ export function usePins(page: PinsFromPage, verifiedId: number | null) {
       return
     }
 
+    savedOrder.current = answer.pinOrder
     setPinOrder(answer.pinOrder)
     setPins((current) => orderRows(current, answer.pinOrder))
+    await router.invalidate()
   }
 
   function move(brawlhallaId: number, step: -1 | 1) {

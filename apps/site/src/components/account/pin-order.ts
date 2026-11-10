@@ -27,3 +27,10 @@ export function orderRows<T extends { brawlhallaId: number }>(rows: T[], pinOrde
 
   return pinOrder.flatMap((brawlhallaId) => rowsById.get(brawlhallaId) ?? [])
 }
+
+/** Whether a page load predates the last save: it still shows another order than the one the api took. */
+export function isStaleSnapshot(savedOrder: number[] | null, pageOrder: number[]): boolean {
+  if (savedOrder === null) return false
+
+  return savedOrder.length !== pageOrder.length || savedOrder.some((id, index) => id !== pageOrder[index])
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { movePin, orderRows } from '../src/components/account/pin-order'
+import { isStaleSnapshot, movePin, orderRows } from '../src/components/account/pin-order'
 
 describe('movePin', () => {
   test('moves a pin up and down', () => {
@@ -49,5 +49,19 @@ describe('orderRows', () => {
   // the verified account is in the stored order but shown apart, so it has no row here
   test('skips an id without a row', () => {
     expect(orderRows(rows, [7, 2, 1, 3]).map(({ brawlhallaId }) => brawlhallaId)).toEqual([2, 1, 3])
+  })
+})
+
+describe('isStaleSnapshot', () => {
+  test('a page loaded with no save since is never stale', () => {
+    expect(isStaleSnapshot(null, [3, 1, 2])).toBe(false)
+  })
+
+  test('a page that already shows the saved order is current', () => {
+    expect(isStaleSnapshot([3, 1, 2], [3, 1, 2])).toBe(false)
+  })
+
+  test('a page read before the save finished is stale', () => {
+    expect(isStaleSnapshot([3, 1], [3, 1, 2])).toBe(true)
   })
 })
