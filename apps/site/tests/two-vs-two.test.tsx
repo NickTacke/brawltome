@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TwoVsTwo } from '../src/components/player/TwoVsTwo'
 import type { SoloQueueEntry } from '../src/components/player/side-summary'
+import { TwoVsTwo } from '../src/components/player/TwoVsTwo'
 
 const playedSolo: SoloQueueEntry = {
   rating: 1313,
