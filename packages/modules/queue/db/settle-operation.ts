@@ -1,6 +1,7 @@
 import type { Database, Sql } from '@brawltome/foundation'
 import type { Lease } from '../jobs/job-definition'
 import type { OperationFailure, TransitionResult } from '../model'
+import { replaceNulInJson } from './storable-text'
 
 /** Puts an operation whose effect landed back in the queue, to wait for its owner to acknowledge the effect. */
 export function retryAppliedEffect(
@@ -75,12 +76,14 @@ export async function deferOperation(
 
     if (!removed) return 'lease-lost' as const
 
+    const storedFailure = replaceNulInJson(failure)
+
     await sql`
       UPDATE queue.operations
       SET status = 'pending', attempt_count = attempt_count - 1,
           lease_owner = NULL, lease_expires_at = NULL,
           available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
-          last_error = ${sql.json(failure)},
+          last_error = ${sql.json(storedFailure)},
           updated_at = clock_timestamp()
       WHERE id = ${lease.operationId}
     `
@@ -136,11 +139,12 @@ export function failOperation(
     if (!owned) return 'lease-lost' as const
 
     const retry = failure.retryable && owned.attempt_count < owned.max_attempts
+    const storedFailure = replaceNulInJson(failure)
 
     await sql`
       UPDATE queue.attempts
       SET finished_at = clock_timestamp(), outcome = ${retry ? 'retry' : 'dead_letter'},
-          error = ${sql.json(failure)}
+          error = ${sql.json(storedFailure)}
       WHERE operation_id = ${lease.operationId} AND attempt_number = ${lease.attemptNumber}
     `
 
@@ -149,7 +153,7 @@ export function failOperation(
       SET status = ${retry ? 'pending' : 'dead_letter'}, lease_owner = NULL, lease_expires_at = NULL,
           available_at = clock_timestamp() + (${retryDelayMs} * interval '1 millisecond'),
           completed_at = ${retry ? null : sql`clock_timestamp()`},
-          last_error = ${sql.json(failure)}, updated_at = clock_timestamp()
+          last_error = ${sql.json(storedFailure)}, updated_at = clock_timestamp()
       WHERE id = ${lease.operationId}
     `
 
