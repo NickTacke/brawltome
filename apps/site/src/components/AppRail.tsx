@@ -1,7 +1,6 @@
 import { BookBookmark, Cup, Gamepad, PieChart, UsersGroupRounded } from '@solar-icons/react'
 import { Link } from '@tanstack/react-router'
 import type { ComponentType, SVGProps } from 'react'
-import { leavesThisApp } from './rail/AccountLink'
 import { RailAccountLink } from './rail/RailAccountLink'
 import { RailPlayers } from './rail/RailPlayers'
 import { railTooltipLook } from './rail/rail-tooltip'
@@ -27,7 +26,6 @@ export function RailLink({ to, label, icon: Icon, exact, wip }: RailItem) {
   return (
     <Link
       to={to}
-      {...leavesThisApp}
       aria-label={wip ? `${label} (Soon)` : label}
       activeOptions={{ exact: exact ?? false, includeSearch: false }}
       activeProps={{ className: 'bg-white/[0.08] !text-text' }}

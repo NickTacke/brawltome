@@ -3,7 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { railItems } from './AppRail'
-import { AccountLink, leavesThisApp } from './rail/AccountLink'
+import { AccountLink } from './rail/AccountLink'
 import { MenuPlayers } from './rail/RailPlayers'
 import type { RailAccount } from './rail/rail-account'
 import { useRailAccount } from './rail/use-rail-account'
@@ -21,7 +21,6 @@ function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose
     <li className="border-b border-line/40 last:border-b-0">
       <Link
         to={to}
-        {...leavesThisApp}
         onClick={onClose}
         aria-current={isActive ? 'page' : undefined}
         className={`flex h-14 items-center gap-4 text-lg font-bold transition-colors ${isActive ? 'text-strong' : 'text-soft hover:text-strong'} ${wip ? 'opacity-60' : ''}`}
