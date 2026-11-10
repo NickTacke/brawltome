@@ -17,7 +17,7 @@ type State = {
   outages?: string[]
 }
 
-const publicServices = ['api', 'web']
+const publicServices = ['api', 'web', 'site']
 
 const directory = process.env.DOCKER_STUB_DIR
 

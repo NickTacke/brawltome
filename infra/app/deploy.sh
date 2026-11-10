@@ -6,7 +6,8 @@
 # serving, then replaces each public service by starting the new container beside the old one and stopping the old one
 # only once the new one is healthy. Traefik routes only to healthy containers; on SIGTERM the old container reports
 # draining on its /serving health check while it keeps answering, so Traefik moves traffic before it stops (api:
-# serve.ts, web: web-server.cjs). The retry middleware replays requests that still race a closing connection.
+# serve.ts, web: web-server.cjs, site: site-server.ts). The retry middleware replays requests that still race a
+# closing connection.
 #
 # CI builds the images and pushes them to GHCR tagged with the commit (ghcr.io/nicktacke/brawltome-<service>:<sha>);
 # nothing is built here. The tag is the checked-out commit, read from .git because the deploy container has no git
@@ -18,7 +19,7 @@
 #   run --rm -v /var/run/docker.sock:/var/run/docker.sock
 #   -v /etc/dokploy/compose/<app>/code:/etc/dokploy/compose/<app>/code -w /etc/dokploy/compose/<app>/code
 #   docker:29-cli@sha256:b1805116a6a86cc591b5d5f60a910a0715cdcc9d18d866ad68b1457ead25c35c
-#   sh infra/app/deploy.sh <app> infra/app/compose.yml api web
+#   sh infra/app/deploy.sh <app> infra/app/compose.yml api web site
 #
 # Emergency rollback by hand: never clear the Command setting. Without it Dokploy runs
 # `compose up -d --build --remove-orphans`, which builds postgres and could recreate it. Instead, from the checkout on
