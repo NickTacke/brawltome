@@ -9,10 +9,9 @@ import type { ActorAdmission } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import {
-  buildSessionCookie,
   buildStateCookie,
   buildSteamStateCookie,
-  clearSessionCookie,
+  clearSessionCookies,
   clearStateCookie,
   clearSteamStateCookie,
   OAUTH_STATE_COOKIE,
@@ -161,7 +160,10 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
         avatarHash: profile.avatarHash,
       })
 
-      c.header('Set-Cookie', buildSessionCookie(sessionToken, SESSION_COOKIE_TTL_SEC), { append: true })
+      // a stale host-only cookie from before the domain was set would otherwise sit beside the new session
+      for (const cookie of reissueSessionCookies(sessionToken, SESSION_COOKIE_TTL_SEC, sessionCookieDomain)) {
+        c.header('Set-Cookie', cookie, { append: true })
+      }
     } catch (err) {
       logger.error('auth.discord_sign_in.failed', err)
 
@@ -193,7 +195,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       }
     }
 
-    c.header('Set-Cookie', clearSessionCookie())
+    for (const cookie of clearSessionCookies(sessionCookieDomain)) c.header('Set-Cookie', cookie, { append: true })
 
     return c.body(null, 204)
   })

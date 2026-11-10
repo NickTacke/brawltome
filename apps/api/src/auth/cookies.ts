@@ -34,8 +34,13 @@ export function buildSessionCookie(rawToken: string, maxAgeSec: number): string 
   return serialize(SESSION_COOKIE, rawToken, { maxAgeSec, domain: sessionCookieDomain })
 }
 
-export function clearSessionCookie(): string {
-  return serialize(SESSION_COOKIE, '', { maxAgeSec: 0, domain: sessionCookieDomain })
+/** Clears the session cookie, and the host-only copy from before SESSION_COOKIE_DOMAIN was set. */
+export function clearSessionCookies(domain: string | undefined): string[] {
+  const clearHostOnly = serialize(SESSION_COOKIE, '', { maxAgeSec: 0 })
+
+  if (!domain) return [clearHostOnly]
+
+  return [clearHostOnly, serialize(SESSION_COOKIE, '', { maxAgeSec: 0, domain })]
 }
 
 /**
