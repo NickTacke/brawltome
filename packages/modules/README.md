@@ -45,7 +45,7 @@ another one:
 
 A module that hasn't been rebuilt keeps its old layout. They all have `index.ts` and
 `migrations/` already, and most have `tests/`; the rest of each folder is still arranged the way it grew. Only `clan`
-and `queue` are rebuilt so far.
+and `queue` are rebuilt so far. `analytics` is newer than the layout and started on it.
 
 ## Adding a background job
 
