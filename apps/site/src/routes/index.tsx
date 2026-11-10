@@ -8,20 +8,21 @@ import { rememberRegion } from '../components/home/region-cookie'
 import { TopGuilds } from '../components/home/TopGuilds'
 import { TopPlayers } from '../components/home/TopPlayers'
 import { useSlowNavigation } from '../components/use-slow-navigation'
-import { getMostPlayedLegends, getPatches, getTopGuilds, getTopPlayers } from '../server/home'
+import { getMetaLegends, getMostPlayedLegends, getPatches, getTopGuilds, getTopPlayers } from '../server/home'
 
 export const Route = createFileRoute('/')({
   validateSearch: parseBoardSearch,
   loaderDeps: ({ search }) => ({ mode: search.mode ?? defaultMode, region: search.region }),
   loader: async ({ deps }) => {
-    const [board, guilds, mostPlayedLegends, patches] = await Promise.all([
+    const [board, guilds, mostPlayedLegends, metaLegends, patches] = await Promise.all([
       getTopPlayers({ data: deps }),
       getTopGuilds(),
       getMostPlayedLegends(),
+      getMetaLegends(),
       getPatches(),
     ])
 
-    return { board, guilds, mostPlayedLegends, patches }
+    return { board, guilds, mostPlayedLegends, metaLegends, patches }
   },
   component: Home,
 })
@@ -33,7 +34,7 @@ const halvesStyle =
   'grid gap-y-8 xl:grid-cols-2 xl:divide-x xl:divide-line/50 xl:[&>*:first-child]:pr-12 xl:[&>*:last-child]:pl-12'
 
 function Home() {
-  const { board, guilds, mostPlayedLegends, patches } = Route.useLoaderData()
+  const { board, guilds, mostPlayedLegends, metaLegends, patches } = Route.useLoaderData()
   const isSlow = useSlowNavigation()
 
   // the location changes as soon as a filter is picked, the route's own search only once the board has loaded
@@ -67,7 +68,7 @@ function Home() {
         <TopPlayers entries={board.entries} filters={filters} isLoading={isSlow} avatarCount={mode === '2v2' ? 2 : 1} />
         <TopGuilds guilds={guilds} />
       </div>
-      <LegendsRow mostPlayed={mostPlayedLegends} />
+      <LegendsRow mostPlayed={mostPlayedLegends} meta={metaLegends} />
       {patches && (
         <div data-search-dim>
           <PatchNews notes={patches} />

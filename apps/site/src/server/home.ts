@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { getCookie } from '@tanstack/react-start/server'
 import { type BoardMode, type BoardRegion, parseMode, parseRegion } from '../components/home/home-filters'
 import { pickRegion, regionCookieName } from '../components/home/region-cookie'
+import { loadMetaLegends } from './load-meta-legends'
 import { loadMostPlayedLegends } from './load-most-played-legends'
 import { loadPatches } from './load-patches'
 import { loadTopGuilds } from './load-top-guilds'
@@ -33,3 +34,5 @@ export const getPatches = createServerFn({ method: 'GET' }).handler(async () => 
 })
 
 export const getMostPlayedLegends = createServerFn({ method: 'GET' }).handler(() => loadMostPlayedLegends())
+
+export const getMetaLegends = createServerFn({ method: 'GET' }).handler(() => loadMetaLegends())
