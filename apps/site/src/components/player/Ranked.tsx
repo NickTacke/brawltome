@@ -65,7 +65,7 @@ export function Ranked({ standing = noStanding }: { standing?: Placed }) {
         <div className="flex items-center gap-4">
           <img src={rankBanner(standing.tier)} alt="" className={banner} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3">
               <div className="truncate font-bold text-text">{tierName(standing.tier)}</div>
               {standing.games > 0 && <Placement standing={standing} />}
             </div>
