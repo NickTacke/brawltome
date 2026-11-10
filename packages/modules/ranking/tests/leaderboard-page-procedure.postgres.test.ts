@@ -18,6 +18,9 @@ const namedPlayerId = 101
 // brawlhalla's order puts a 2,700 on its fourth page of 30 and a 2,490 that ties the tenth row on its fourth too
 const ratingOutOfOrder: Record<number, number> = { 92: 2_490, 95: 2_700 }
 
+// the 2,490 deep in the list has more wins than the 2,490 it ties, so the game ranks it first
+const winsByRank: Record<number, number> = { 92: 60 }
+
 let database: TestDatabase
 
 function boardRow(snapshotId: string, rank: number) {
@@ -35,7 +38,7 @@ function boardRow(snapshotId: string, rank: number) {
     region: 'EU',
     rating: ratingOutOfOrder[rank] ?? 2_500 - rank,
     peak_rating: 2_950,
-    wins: 40,
+    wins: winsByRank[rank] ?? 40,
     losses: 10,
     tier: 'Diamond',
   }
@@ -158,14 +161,14 @@ describe('leaderboardPage', () => {
     expect(page.entries.map(({ standing }) => standing)).toEqual(Array.from({ length: 30 }, (_, index) => index + 1))
   })
 
-  test('breaks a rating tie by the official order', async () => {
+  test('breaks a rating tie by wins, more wins first, as the game does', async () => {
     const page = await readPage({ mode: '1v1', region: 'EU', page: 1 })
 
     if (page.status === 'unavailable') throw new Error('Expected the published EU board')
 
     expect(places(page.entries.slice(10, 13))).toEqual([
-      { standing: 11, sourceRank: 10, rating: 2_490 },
-      { standing: 12, sourceRank: 92, rating: 2_490 },
+      { standing: 11, sourceRank: 92, rating: 2_490 },
+      { standing: 12, sourceRank: 10, rating: 2_490 },
       { standing: 13, sourceRank: 11, rating: 2_489 },
     ])
   })
