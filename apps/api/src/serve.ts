@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto'
 import { createPostgresAccounts } from '@brawltome/accounts'
+import { createPostgresDailySalts } from '@brawltome/analytics'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createClanRefreshReservations, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
@@ -109,6 +109,7 @@ const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
 const playerRefreshReservations = createPlayerRefreshReservations(database)
+const dailySalts = createPostgresDailySalts(database)
 const moduleRuntime: ModuleRuntime = { database }
 
 const postgresReadiness = createPostgresReadiness(
@@ -162,7 +163,7 @@ const visitorRefresh = createVisitorRefreshProcedures({ ...sharedCtx, refreshTru
 const visitorViews = createVisitorViewProcedures({ requestAdmission, profileViews })
 
 const siteVisits = createSiteVisitProcedures({
-  visitorKeys: createDailyVisitorKeys({ now: Date.now, randomBytes }),
+  visitorKeys: createDailyVisitorKeys({ now: Date.now, loadSalt: dailySalts.saltFor }),
   // far more pages a minute than a person opens, so only scripts hit it
   limiter: createVisitLimiter(120, Date.now),
 })

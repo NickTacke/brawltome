@@ -23,10 +23,17 @@ const siteHeaders = {
   'x-visitor-user-agent': browser,
 }
 
-function createHarness({ visitsPerMinute = 120 } = {}) {
+// the day's salt as the database hands it out: the same one however often it is read
+function createSaltSource() {
+  const salt = randomBytes(32)
+
+  return async () => salt
+}
+
+function createHarness({ visitsPerMinute = 120, loadSalt = createSaltSource() } = {}) {
   const sink = createMemorySink()
   const telemetry = createTelemetry({ service: 'api', sink, drainIntervalMs: 0 })
-  const visitorKeys = createDailyVisitorKeys({ now: Date.now, randomBytes: (size) => randomBytes(size) })
+  const visitorKeys = createDailyVisitorKeys({ now: Date.now, loadSalt })
   const visits = createSiteVisitProcedures({ visitorKeys, limiter: createVisitLimiter(visitsPerMinute, Date.now) })
   const router = createOrpcRouter([], { database: {} as Database }, { visits })
   const app = new Hono()
@@ -150,6 +157,45 @@ describe('site visit procedure', () => {
     expect(harness.counted('analytics_events_dropped_total')).toMatchObject([
       { labels: { reason: 'rate_limited' }, value: 1 },
     ])
+  })
+
+  test("drops the view when the day's salt can't be read, and counts again once it can", async () => {
+    const salt = randomBytes(32)
+    let isDatabaseDown = true
+
+    const harness = createHarness({
+      loadSalt: async () => {
+        if (isDatabaseDown) throw new Error('connect ECONNREFUSED 127.0.0.1:5432')
+
+        return salt
+      },
+    })
+
+    expect(await harness.send()).toEqual({ status: 200, body: { recorded: false } })
+    expect(await harness.pageviewLogs()).toEqual([])
+    expect(harness.counted('analytics_pageviews_total')).toEqual([])
+
+    expect(harness.counted('analytics_events_dropped_total')).toMatchObject([
+      { labels: { reason: 'salt_unavailable' }, value: 1 },
+    ])
+
+    isDatabaseDown = false
+
+    expect(await harness.send()).toEqual({ status: 200, body: { recorded: true } })
+    expect(await harness.pageviewLogs()).toHaveLength(1)
+  })
+
+  test('never logs or counts the salt', async () => {
+    const salt = randomBytes(32)
+    const harness = createHarness({ loadSalt: async () => salt })
+
+    await harness.send()
+    await harness.telemetry.flush(1_000)
+
+    const everything = JSON.stringify({ logs: harness.sink.records, metrics: harness.telemetry.metrics.snapshot() })
+
+    expect(everything).not.toContain(salt.toString('hex'))
+    expect(everything).not.toContain(salt.toString('base64'))
   })
 
   test("never logs or counts the visitor's address", async () => {
