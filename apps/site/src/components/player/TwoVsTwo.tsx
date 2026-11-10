@@ -10,6 +10,7 @@ import {
   type CombinedRecord,
   combinedRecord,
   type FixedTeam,
+  noStanding,
   type SoloQueueEntry,
   type Standing,
   soloQueueStanding,
@@ -28,6 +29,24 @@ function WinRateOf({ wins, games }: { wins: number; games: number }) {
   )
 }
 
+function RowResult({ standing }: { standing: Standing }) {
+  if (standing.games === 0) return <p className="text-sm text-soft">No games this season</p>
+
+  return (
+    <>
+      <RatingAndPeak
+        standing={standing}
+        ratingClass="text-[1.75rem] xl:[@media(max-height:880px)]:text-2xl"
+        peakClass="text-base"
+        labelClass="max-[420px]:hidden"
+      />
+      <div className="mt-1">
+        <WinRateOf wins={standing.wins} games={standing.games} />
+      </div>
+    </>
+  )
+}
+
 function NamedRow({ heading, name, standing }: Omit<Entry, 'key'>) {
   return (
     <div className="flex items-center gap-3.5 py-2.5 first:pt-0 last:pb-0 xl:[@media(max-height:880px)]:py-1.5">
@@ -42,15 +61,7 @@ function NamedRow({ heading, name, standing }: Omit<Entry, 'key'>) {
         <div className="truncate text-sm font-semibold text-soft">{tierName(standing.tier)}</div>
       </div>
       <div className="shrink-0 text-right">
-        <RatingAndPeak
-          standing={standing}
-          ratingClass="text-[1.75rem] xl:[@media(max-height:880px)]:text-2xl"
-          peakClass="text-base"
-          labelClass="max-[420px]:hidden"
-        />
-        <div className="mt-1">
-          <WinRateOf wins={standing.wins} games={standing.games} />
-        </div>
+        <RowResult standing={standing} />
       </div>
     </div>
   )
@@ -90,11 +101,10 @@ type TwoVsTwoProps = { teams: FixedTeam[]; soloQueue: SoloQueueEntry[]; playerId
 
 export function TwoVsTwo({ teams, soloQueue, playerId }: TwoVsTwoProps) {
   const best = bestTeamEntry(teams, playerId)
-  const solo = soloQueueStanding(soloQueue)
-  const soloEntry: Entry | null = solo && { key: 'solo', heading: 'Solo queue', name: null, standing: solo }
+  // solo queue always has a row, like ranked 1v1, so a player who never queued reads as unranked instead of missing
+  const solo = soloQueueStanding(soloQueue) ?? noStanding
+  const soloEntry: Entry = { key: 'solo', heading: 'Solo queue', name: null, standing: solo }
   const entries = [best, soloEntry].filter((entry) => entry !== null)
-
-  if (entries.length === 0) return null
 
   const totals = combinedRecord(teams)
   const hasTeams = totals.teams > 0
