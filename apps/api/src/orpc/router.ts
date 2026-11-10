@@ -3,6 +3,7 @@ import type { AnyContractRouter } from '@orpc/contract'
 import type { Router } from '@orpc/server'
 import type { apiModules } from '../modules'
 import type { OrpcContext } from './context'
+import type { createSiteVisitProcedures } from './site-visits'
 import { status } from './status'
 import type { createVisitorRefreshProcedures } from './visitor-refresh'
 import type { createVisitorViewProcedures } from './visitor-views'
@@ -21,6 +22,7 @@ type ApiProcedures = Record<string, Router<AnyContractRouter, OrpcContext>>
 export type ServedApiProcedures = {
   refresh: ReturnType<typeof createVisitorRefreshProcedures>
   views: ReturnType<typeof createVisitorViewProcedures>
+  visits: ReturnType<typeof createSiteVisitProcedures>
 }
 
 function hasRoutes(module: BrawltomeModule): module is ModuleWithRoutes {
