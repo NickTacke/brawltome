@@ -38,3 +38,27 @@ export function leaderboardBody({ page, entryCount, totalRows }: PageShape) {
     entries: Array.from({ length: entryCount }, (_, index) => leaderboardEntry(firstStanding + index)),
   }
 }
+
+function rankedGuild(rank: number) {
+  return {
+    rank,
+    clanId: rank * 10,
+    clanName: `Guild${rank}`,
+    guildPoints: String(100_000 - rank),
+    lifetimeXp: '5000000',
+    memberCount: 100,
+  }
+}
+
+/** One page of the guild ranking as the api answers it, ranked from where the page starts. */
+export function guildRankingBody({ page, entryCount, totalRows }: PageShape) {
+  const firstRank = (page - 1) * 30 + 1
+
+  return {
+    page,
+    pageSize: 30,
+    hasMore: page * 30 < totalRows,
+    totalRows,
+    entries: Array.from({ length: entryCount }, (_, index) => rankedGuild(firstRank + index)),
+  }
+}
