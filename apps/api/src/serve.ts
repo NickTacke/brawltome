@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { createPostgresAccounts } from '@brawltome/accounts'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createClanRefreshReservations, createPostgresClans } from '@brawltome/clan'
@@ -37,6 +38,7 @@ import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
 import { createOrpcRoutes } from './orpc/mount'
 import { createOrpcRouter } from './orpc/router'
+import { createSiteVisitProcedures } from './orpc/site-visits'
 import { createVisitorRefreshProcedures } from './orpc/visitor-refresh'
 import { createVisitorViewProcedures } from './orpc/visitor-views'
 import { createPostgresReadiness } from './postgres-readiness'
@@ -48,6 +50,7 @@ import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/r
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
+import { createDailyVisitorKeys, createVisitLimiter } from './visits'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
@@ -157,7 +160,18 @@ const sharedCtx = {
 
 const visitorRefresh = createVisitorRefreshProcedures({ ...sharedCtx, refreshTrustSecret })
 const visitorViews = createVisitorViewProcedures({ requestAdmission, profileViews })
-const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, { refresh: visitorRefresh, views: visitorViews })
+
+const siteVisits = createSiteVisitProcedures({
+  visitorKeys: createDailyVisitorKeys({ now: Date.now, randomBytes }),
+  // far more pages a minute than a person opens, so only scripts hit it
+  limiter: createVisitLimiter(120, Date.now),
+})
+
+const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, {
+  refresh: visitorRefresh,
+  views: visitorViews,
+  visits: siteVisits,
+})
 
 const app = new Hono()
 

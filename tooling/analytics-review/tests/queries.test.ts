@@ -107,6 +107,28 @@ describe('daily uniques', () => {
   })
 })
 
+describe('page view logs', () => {
+  // the old site logged page views itself, the new one has the api log them
+  test('reads them from the api as well as the old site', async () => {
+    const lokiCalls: string[] = []
+
+    const api: GrafanaApi = {
+      promInstant: async () => [],
+      lokiInstant: async (query) => {
+        lokiCalls.push(query)
+
+        return []
+      },
+    }
+
+    await collectReview(api, 1, end)
+    const pageviewQueries = lokiCalls.filter((query) => query.includes('analytics.pageview'))
+
+    expect(pageviewQueries.length).toBeGreaterThan(0)
+    expect(pageviewQueries.every((query) => query.includes('{service_name=~"web|api"}'))).toBe(true)
+  })
+})
+
 describe('resolveOutputPath', () => {
   test('resolves default and relative paths against the base dir, keeps absolute', () => {
     expect(resolveOutputPath(undefined, end, '/work')).toBe('/work/analytics-review-2026-10-12.md')

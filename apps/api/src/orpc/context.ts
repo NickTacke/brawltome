@@ -10,6 +10,8 @@ import { readClientIp } from '../client-ip'
 export interface OrpcContext extends RequestContext {
   telemetry: Telemetry
   clientIp: string
+  // the visitor's when the site calls for one
+  userAgent: string
   isBot: boolean
 }
 
@@ -31,6 +33,7 @@ export function createOrpcContext(request: Request, options: OrpcContextOptions)
   const context: OrpcContext = {
     telemetry: options.telemetry,
     clientIp: readClientIp(request.headers),
+    userAgent,
     isBot: isBotUserAgent(userAgent),
     isInternalCaller,
   }

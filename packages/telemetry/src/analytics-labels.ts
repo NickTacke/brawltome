@@ -3,6 +3,9 @@ export const analyticsRoutes = [
   '/',
   '/account',
   '/clan/[id]',
+  '/guild/[id]',
+  '/guilds',
+  '/leaderboard',
   '/player/[id]',
   '/learn',
   '/matches',
@@ -11,6 +14,7 @@ export const analyticsRoutes = [
   '/stats/career-weapon-usage',
   '/tournaments',
   '/privacy',
+  '/terms',
   'other',
 ] as const
 
