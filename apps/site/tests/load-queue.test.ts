@@ -60,6 +60,15 @@ describe('loadQueue', () => {
     expect(queue.movers).toBeNull()
   })
 
+  test('movers from a newer scan than the table are left out, so the two never disagree', async () => {
+    answerBoth(activityView(3), { ...moversView(), currentSnapshotId: '00000000-0000-4000-8000-000000000002' })
+
+    const queue = await loadQueue(query)
+
+    expect(queue.view).toEqual(activityView(3))
+    expect(queue.movers).toBeNull()
+  })
+
   test('a failed page read fails the page', async () => {
     stubFetch(() => ({ status: 503, body: {} }))
 

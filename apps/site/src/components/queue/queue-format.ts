@@ -13,3 +13,10 @@ export function changeColour(change: number): string {
 export function rowNoun(mode: string): string {
   return mode === '2v2' ? 'teams' : 'players'
 }
+
+type PageSpan = { page: number; totalRows: number; pageSize: number }
+
+/** A page past the end keeps the pager too, so the reader can get back. */
+export function hasPager({ page, totalRows, pageSize }: PageSpan): boolean {
+  return totalRows > pageSize || page > 1
+}

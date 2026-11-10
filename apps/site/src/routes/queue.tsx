@@ -5,7 +5,7 @@ import { bracketOptions } from '../components/home/home-filters'
 import { Pager } from '../components/Pager'
 import { QueueBody } from '../components/queue/QueueBody'
 import { QueueMovers, QueueMoversSkeleton } from '../components/queue/QueueMovers'
-import { rowNoun } from '../components/queue/queue-format'
+import { hasPager, rowNoun } from '../components/queue/queue-format'
 import { queueQuery, validateQueueSearch } from '../components/queue/queue-search'
 import { regionOptions } from '../components/regions'
 import { useSlowNavigation } from '../components/use-slow-navigation'
@@ -103,7 +103,7 @@ function QueuePage() {
 
         <QueueBody view={view} isLoading={isLoading} />
 
-        {available && available.totalRows > available.pageSize && <QueuePager view={available} onPage={changePage} />}
+        {available && hasPager(available) && <QueuePager view={available} onPage={changePage} />}
       </section>
 
       {sideMovers && <SideColumn movers={sideMovers} isLoading={isLoading} />}

@@ -31,5 +31,8 @@ async function readMovers({ mode, region }: QueueQuery): Promise<QueueMovers | n
 export async function loadQueue(query: QueueQuery): Promise<QueuePage> {
   const [view, movers] = await Promise.all([readActivity(query), readOptional(() => readMovers(query), null)])
 
-  return { view, movers }
+  // the two reads each take the latest scan, and one can publish in between
+  const isSameScan = view.status !== 'unavailable' && movers?.currentSnapshotId === view.currentSnapshotId
+
+  return { view, movers: isSameScan ? movers : null }
 }
