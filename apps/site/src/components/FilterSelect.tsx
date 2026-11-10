@@ -79,11 +79,13 @@ export function FilterSelect({
   )
 
   const selected = options.find((option) => option.value === value)
+  const showsTriggerTooltip = isIconOnly && !isOpen && selected !== undefined
+
   // the icon grid is two short rows, and without a scroll container its tooltips can reach past the panel
   const panelLayout = isIconOnly
     ? 'grid w-max grid-cols-5 gap-0.5'
     : 'max-h-[calc(100dvh-1rem)] min-w-40 overflow-y-auto'
-  const showsTriggerTooltip = isIconOnly && !isOpen && selected !== undefined
+
   // the chevron's wide end makes it look off-centre even when it's exact, so it sits a pixel towards its point
   const chevronPosition = isOpen ? '-translate-y-px rotate-180' : 'translate-y-px'
 
