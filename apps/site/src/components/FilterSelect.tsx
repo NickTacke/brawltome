@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { dropFocusBeforePress } from './drop-focus-before-press'
+import { IconTooltip, iconTooltipParent } from './IconTooltip'
 import { useFilterSelect } from './use-filter-select'
 
 export type FilterOption = { value: string; label: string; flag?: ReactNode; detail?: string }
@@ -35,14 +36,14 @@ function OptionButton({ option, isSelected, isIconOnly, onSelect, onKeyDown }: O
     return (
       <button
         type="button"
-        title={option.label}
         aria-label={option.label}
         aria-current={isSelected ? 'true' : undefined}
         onClick={onSelect}
         onKeyDown={onKeyDown}
-        className={`flex size-10 items-center justify-center rounded-sm transition-colors hover:bg-white/[0.08] ${selectedStyle}`}
+        className={`${iconTooltipParent} flex size-10 items-center justify-center rounded-sm transition-colors hover:bg-white/[0.08] ${selectedStyle}`}
       >
         {option.flag}
+        <IconTooltip label={option.label} />
       </button>
     )
   }
@@ -78,7 +79,11 @@ export function FilterSelect({
   )
 
   const selected = options.find((option) => option.value === value)
-  const panelLayout = isIconOnly ? 'grid w-max grid-cols-5 gap-0.5' : 'min-w-40'
+  // the icon grid is two short rows, and without a scroll container its tooltips can reach past the panel
+  const panelLayout = isIconOnly
+    ? 'grid w-max grid-cols-5 gap-0.5'
+    : 'max-h-[calc(100dvh-1rem)] min-w-40 overflow-y-auto'
+  const showsTriggerTooltip = isIconOnly && !isOpen && selected !== undefined
   // the chevron's wide end makes it look off-centre even when it's exact, so it sits a pixel towards its point
   const chevronPosition = isOpen ? '-translate-y-px rotate-180' : 'translate-y-px'
 
@@ -88,24 +93,24 @@ export function FilterSelect({
       <button
         ref={triggerRef}
         type="button"
-        title={isIconOnly ? selected?.label : undefined}
         aria-label={`${label}: ${selected?.label ?? placeholder ?? value}`}
         aria-expanded={isOpen}
         onPointerDown={dropFocusBeforePress}
         onClick={toggle}
         onKeyDown={handleKeyDown}
-        className="flex h-9 items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-soft transition-colors hover:text-strong aria-expanded:text-strong"
+        className={`${iconTooltipParent} flex h-9 items-center gap-1.5 text-sm font-semibold whitespace-nowrap text-soft transition-colors hover:text-strong aria-expanded:text-strong`}
       >
         <span className="flex items-center gap-2">
           {selected?.flag}
           {!isIconOnly && (selected?.label ?? placeholder)}
         </span>
         <ChevronDown className={`size-4 opacity-70 transition-transform ${chevronPosition}`} aria-hidden="true" />
+        {showsTriggerTooltip && <IconTooltip label={selected.label} />}
       </button>
       {isOpen && (
         <div
           ref={panelRef}
-          className={`absolute top-full right-0 z-50 mt-1 max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-control border border-line bg-ink p-1 shadow-xl ${panelLayout}`}
+          className={`absolute top-full right-0 z-50 mt-1 rounded-control border border-line bg-ink p-1 shadow-xl ${panelLayout}`}
         >
           {options.map((option) => (
             <OptionButton
