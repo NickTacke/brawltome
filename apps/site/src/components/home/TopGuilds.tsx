@@ -11,7 +11,7 @@ import {
   statHeaderStyle,
   TableMessage,
 } from './RankedTable'
-import { SectionHeader, viewAllStyle } from './SectionHeader'
+import { SectionHeader } from './SectionHeader'
 
 const columnCount = 5
 
@@ -67,15 +67,8 @@ function TableBody({ guilds }: { guilds: TopGuild[] | null }) {
 export function TopGuilds({ guilds }: { guilds: TopGuild[] | null }) {
   return (
     <section className="min-w-0 border-t border-line/50 pt-8 xl:border-t-0 xl:pt-0">
-      <SectionHeader
-        title="Top guilds"
-        action={
-          // the guilds page isn't built yet, a plain link keeps working once it is
-          <a href="/guilds" className={viewAllStyle}>
-            View all →
-          </a>
-        }
-      />
+      {/* "view all" comes back with the guilds page */}
+      <SectionHeader title="Top guilds" />
       <RankedTable head={<TableHead />}>
         <TableBody guilds={guilds} />
       </RankedTable>
