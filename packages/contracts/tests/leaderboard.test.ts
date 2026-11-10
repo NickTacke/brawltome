@@ -10,6 +10,8 @@ import {
   leaderboardRecentMoversOutputSchema,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,
+  playerBoardRanksInputSchema,
+  playerBoardRanksSchema,
 } from '../src/leaderboard'
 
 const common = {
@@ -347,5 +349,34 @@ describe('recent leaderboard movers contract', () => {
 
     expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, mostGames: tooMany })).toThrow()
     expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, mode: '2v2' })).toThrow()
+  })
+})
+
+describe('player board ranks contract', () => {
+  test('takes a player, with or without the region of their board', () => {
+    expect(playerBoardRanksInputSchema.parse({ id: 7, region: 'EU' })).toEqual({ id: 7, region: 'EU' })
+    expect(playerBoardRanksInputSchema.parse({ id: 7 })).toEqual({ id: 7 })
+  })
+
+  test('rejects the global board and an unknown one as the region', () => {
+    expect(() => playerBoardRanksInputSchema.parse({ id: 7, region: 'all' })).toThrow()
+    expect(() => playerBoardRanksInputSchema.parse({ id: 7, region: 'MOON' })).toThrow()
+  })
+
+  test('accepts a place on each board, or none', () => {
+    expect(playerBoardRanksSchema.parse({ globalRank: 184, regionRank: 61 })).toEqual({
+      globalRank: 184,
+      regionRank: 61,
+    })
+
+    expect(playerBoardRanksSchema.parse({ globalRank: null, regionRank: null })).toEqual({
+      globalRank: null,
+      regionRank: null,
+    })
+  })
+
+  test('rejects a place of zero and a missing board', () => {
+    expect(() => playerBoardRanksSchema.parse({ globalRank: 0, regionRank: null })).toThrow()
+    expect(() => playerBoardRanksSchema.parse({ globalRank: 1 })).toThrow()
   })
 })

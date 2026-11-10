@@ -1,4 +1,5 @@
 import { rankedModes, rankedRegions } from '@brawltome/game-data/ranked'
+import { brawlhallaIdSchema } from './player-reference'
 import { z } from './zod'
 
 export const leaderboardRegions = rankedRegions
@@ -299,12 +300,23 @@ export const leaderboardRecentMoversOutputSchema = z.union([
   moversUnavailableSchema,
 ])
 
+/** The 1v1 boards to place a player on: always the global one, and the board of `region` when one is given. */
+export const playerBoardRanksInputSchema = z
+  .object({ id: brawlhallaIdSchema, region: leaderboardRegionSchema.optional() })
+  .strict()
+
+/** A player's place by rating on each board, as its leaderboard page shows it. Null when they are not on that board. */
+export const playerBoardRanksSchema = z
+  .object({ globalRank: positiveInt32.nullable(), regionRank: positiveInt32.nullable() })
+  .strict()
+
 export type LeaderboardIdentity = z.infer<typeof leaderboardIdentitySchema>
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>
 export type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
 export type LeaderboardRecentActivityEntry = z.infer<typeof leaderboardRecentActivityEntrySchema>
 export type LeaderboardRecentActivityOutput = z.infer<typeof leaderboardRecentActivityOutputSchema>
 export type LeaderboardRecentMoversOutput = z.infer<typeof leaderboardRecentMoversOutputSchema>
+export type PlayerBoardRanksContract = z.infer<typeof playerBoardRanksSchema>
 
 export function parseLeaderboardOutput(value: unknown): LeaderboardOutput {
   return leaderboardOutputSchema.parse(value)
