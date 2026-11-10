@@ -66,3 +66,45 @@ describe('ranking.leaderboardPage over oRPC', () => {
     expect(operation.security).toEqual([{ internalSecret: [] }])
   })
 })
+
+describe('ranking recent activity over oRPC', () => {
+  test('serves a page of the last hour from the path and query', async () => {
+    expect(await getBoard('3v3/EU/recent-activity?page=2')).toEqual({
+      status: 200,
+      body: { status: 'unavailable', reason: 'not_enough_history', mode: '3v3', region: 'EU', page: 2, pageSize: 30 },
+    })
+  })
+
+  test('serves the movers from the path', async () => {
+    expect(await getBoard('2v2/all/recent-movers')).toEqual({
+      status: 200,
+      body: { status: 'unavailable', reason: 'not_enough_history', mode: '2v2', region: 'all' },
+    })
+  })
+
+  test('rejects an unknown bracket with a 400', async () => {
+    expect((await getBoard('5v5/EU/recent-movers')).status).toBe(400)
+  })
+
+  test('refuses a caller without the secret with 403', async () => {
+    expect((await getBoard('1v1/EU/recent-movers', {})).status).toBe(403)
+  })
+
+  test('is listed in the OpenAPI document with the internal secret', async () => {
+    const response = await app.fetch(new Request('http://api.test/openapi.json'))
+
+    const document = (await response.json()) as {
+      paths: Record<string, Record<string, { operationId?: string; security?: unknown }>>
+    }
+
+    const page = document.paths['/leaderboards/{mode}/{region}/recent-activity'].get
+    const movers = document.paths['/leaderboards/{mode}/{region}/recent-movers'].get
+
+    expect([page.operationId, movers.operationId]).toEqual([
+      'ranking.recentActivityPage',
+      'ranking.recentActivityMovers',
+    ])
+
+    expect([page.security, movers.security]).toEqual([[{ internalSecret: [] }], [{ internalSecret: [] }]])
+  })
+})

@@ -64,7 +64,12 @@ describe('oRPC router built from a module list', () => {
       'mostPlayedLegends',
     ])
 
-    expect(Object.keys(router.ranking)).toEqual(['valhallanEvidenceById', 'leaderboardPage'])
+    expect(Object.keys(router.ranking)).toEqual([
+      'valhallanEvidenceById',
+      'leaderboardPage',
+      'recentActivityPage',
+      'recentActivityMovers',
+    ])
   })
 
   test("puts the api's own procedures beside the modules", () => {

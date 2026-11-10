@@ -5,6 +5,9 @@ import {
   leaderboardPageInputSchema,
   leaderboardPageSize,
   leaderboardRecentActivityOutputSchema,
+  leaderboardRecentMoverCount,
+  leaderboardRecentMoversInputSchema,
+  leaderboardRecentMoversOutputSchema,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,
 } from '../src/leaderboard'
@@ -298,5 +301,51 @@ describe('recent leaderboard activity contract', () => {
         ],
       }),
     ).toThrow()
+  })
+})
+
+describe('recent leaderboard movers contract', () => {
+  const climber = { ...activityMetrics, ratingDelta: 25, identity: { type: 'one-vs-one-player' as const, player } }
+  const faller = { ...activityMetrics, ratingDelta: -25, identity: { type: 'one-vs-one-player' as const, player } }
+
+  const moversBase = {
+    status: 'available' as const,
+    mode: '1v1' as const,
+    region: 'EU' as const,
+    currentSnapshotId: '10000000-0000-4000-8000-000000000004',
+    climbers: [climber],
+    drops: [faller],
+    mostGames: [faller, climber],
+  }
+
+  test('takes a mode and a board, with no page', () => {
+    expect(leaderboardRecentMoversInputSchema.parse({ mode: '2v2', region: 'all' })).toEqual({
+      mode: '2v2',
+      region: 'all',
+    })
+
+    expect(() => leaderboardRecentMoversInputSchema.parse({ mode: '2v2', region: 'all', page: 1 })).toThrow()
+  })
+
+  test('accepts the three lists and the unavailable reasons', () => {
+    expect(leaderboardRecentMoversOutputSchema.parse(moversBase)).toEqual(moversBase)
+
+    for (const reason of ['not_enough_history', 'scan_gap'] as const) {
+      const unavailable = { status: 'unavailable' as const, reason, mode: '1v1' as const, region: 'all' as const }
+
+      expect(leaderboardRecentMoversOutputSchema.parse(unavailable)).toEqual(unavailable)
+    }
+  })
+
+  test('only climbers go up and only drops go down', () => {
+    expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, climbers: [faller] })).toThrow()
+    expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, drops: [climber] })).toThrow()
+  })
+
+  test('caps each list and keeps entries to the mode', () => {
+    const tooMany = Array.from({ length: leaderboardRecentMoverCount + 1 }, () => climber)
+
+    expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, mostGames: tooMany })).toThrow()
+    expect(() => leaderboardRecentMoversOutputSchema.parse({ ...moversBase, mode: '2v2' })).toThrow()
   })
 })
