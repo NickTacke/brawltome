@@ -193,7 +193,7 @@
       "options": {},
       "targets": [
         {
-          "expr": "topk(25, sum by (attributes_query) (count_over_time({service_name=\"web\"} | json | event=\"analytics.search.performed\" | attributes_results=\"0\" [$__range])))",
+          "expr": "topk(25, sum by (attributes_query) (count_over_time({service_name=~\"web|api\"} |= \"analytics.search.performed\" | json | event=\"analytics.search.performed\" | attributes_results=\"0\" [$__range])))",
           "refId": "A",
           "queryType": "instant",
           "instant": true,

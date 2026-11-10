@@ -3,6 +3,7 @@ import { type FocusEvent, type KeyboardEvent, useEffect, useRef, useState } from
 import { SearchField } from './SearchField'
 import { SearchPanel } from './SearchPanel'
 import { enterTarget, type SearchTarget, searchTerm } from './search-keys'
+import { tabSearchReporter } from './tab-search-reporter'
 import { usePageDim } from './use-page-dim'
 import { useResultView } from './use-result-view'
 import { useSearchResults } from './use-search-results'
@@ -34,6 +35,16 @@ export function SearchBox() {
     inputRef.current?.blur()
   }
 
+  // a position counts the shown players first, then the guilds, like the arrow keys do
+  function reportPick(position: number) {
+    tabSearchReporter()?.selected(position, view.players)
+  }
+
+  function closeAfterPick(position: number) {
+    reportPick(position)
+    close()
+  }
+
   function open({ kind, id }: SearchTarget) {
     close()
 
@@ -47,6 +58,9 @@ export function SearchBox() {
 
     if (event.key === 'Enter') {
       const target = enterTarget(query, view.highlighted)
+
+      // a typed brawlhalla id opens a player too, but picks no result
+      if (view.highlighted) reportPick(view.activeIndex)
 
       if (target) open(target)
     }
@@ -75,7 +89,7 @@ export function SearchBox() {
         onFocus={() => setIsOpen(true)}
         onKeyDown={handleKeyDown}
       />
-      {isPanelShown && <SearchPanel answer={answer} view={view} query={query} onOpen={close} />}
+      {isPanelShown && <SearchPanel answer={answer} view={view} query={query} onOpen={closeAfterPick} />}
     </div>
   )
 }
