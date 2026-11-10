@@ -22,7 +22,7 @@ import type { VisitorSession } from './session-cookie'
 // as many player reads at once as the old account page made
 const playerReadsAtOnce = 5
 
-type AccountSession = Pick<VisitorSession, 'token' | 'keepUntil'>
+export type AccountSession = Pick<VisitorSession, 'token' | 'keepUntil'>
 
 function sessionHeaders(sessionToken: string) {
   return { headers: { 'x-visitor-session': sessionToken } }
@@ -79,26 +79,31 @@ async function loadSignedInParts(sessionToken: string) {
   return { verification: toVerification(verificationState, factsById), pins: otherPins, pinOrder }
 }
 
-async function loadAccountOrThrow(session: AccountSession): Promise<AccountPage> {
-  const links = accountLinks(process.env.PUBLIC_API_URL)
+export type SignedInParts = Omit<Extract<AccountPage, { kind: 'signedIn' }>, 'kind' | 'verifySteamUrl'>
 
-  if (!session.token) return { kind: 'signedOut', signInUrl: links.signIn }
+/** The visitor's account with the verified account and pins, or null without a session the api accepts. */
+export async function readSignedInAccount(session: AccountSession): Promise<SignedInParts | null> {
+  if (!session.token) return null
 
   const current = await readApi('/account', accountSessionSchema, 'load account', sessionHeaders(session.token))
 
-  if (current.status === 'anonymous') return { kind: 'signedOut', signInUrl: links.signIn }
+  if (current.status === 'anonymous') return null
 
   session.keepUntil(new Date(current.sessionExpiresAt))
 
   const { displayName, avatarUrl, createdAt } = current.account
   const parts = await loadSignedInParts(session.token)
 
-  return {
-    kind: 'signedIn',
-    account: { displayName, avatarUrl, createdAt },
-    ...parts,
-    verifySteamUrl: links.verifySteam,
-  }
+  return { account: { displayName, avatarUrl, createdAt }, ...parts }
+}
+
+async function loadAccountOrThrow(session: AccountSession): Promise<AccountPage> {
+  const links = accountLinks(process.env.PUBLIC_API_URL)
+  const signedIn = await readSignedInAccount(session)
+
+  if (!signedIn) return { kind: 'signedOut', signInUrl: links.signIn }
+
+  return { kind: 'signedIn', ...signedIn, verifySteamUrl: links.verifySteam }
 }
 
 /** The account page for the visitor's session, which the api checks on every read. */

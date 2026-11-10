@@ -145,6 +145,42 @@ describe('pinned players', () => {
     expect(await failureCode(call(procedures.pinnedPlayers, undefined, visitor('made-up')))).toBe('UNAUTHORIZED')
   })
 
+  test('gain a pin at the end of the order', async () => {
+    const { account, sessionToken } = await signIn()
+
+    await accounts.pinPlayer(account.id, 51)
+
+    const pins = await call(procedures.pinPlayer, { brawlhallaId: 52 }, visitor(sessionToken))
+
+    expect(pins.map(({ brawlhallaId, order }) => [brawlhallaId, order])).toEqual([
+      [51, 0],
+      [52, 1],
+    ])
+  })
+
+  test('keep the order when the player is already pinned', async () => {
+    const { account, sessionToken } = await signIn()
+
+    for (const brawlhallaId of [61, 62]) await accounts.pinPlayer(account.id, brawlhallaId)
+
+    const pins = await call(procedures.pinPlayer, { brawlhallaId: 61 }, visitor(sessionToken))
+
+    expect(pins.map(({ brawlhallaId }) => brawlhallaId)).toEqual([61, 62])
+  })
+
+  test('refuse a pin past the limit', async () => {
+    const { account, sessionToken } = await signIn()
+
+    for (let brawlhallaId = 1001; brawlhallaId <= 1020; brawlhallaId += 1) {
+      await accounts.pinPlayer(account.id, brawlhallaId)
+    }
+
+    const pin = call(procedures.pinPlayer, { brawlhallaId: 1021 }, visitor(sessionToken))
+
+    expect(await failureCode(pin)).toBe('BAD_REQUEST')
+    expect(await accounts.getPinnedPlayers(account.id)).toHaveLength(20)
+  })
+
   test('lose the one unpinned, and only for the visitor', async () => {
     const visitorSignIn = await signIn()
     const otherSignIn = await signIn()
@@ -186,9 +222,11 @@ describe('pinned players', () => {
   })
 
   test('refuse writes without a session the api accepts', async () => {
+    const pin = () => call(procedures.pinPlayer, { brawlhallaId: 1 }, visitor('made-up'))
     const unpin = () => call(procedures.unpinPlayer, { brawlhallaId: 1 }, visitor('made-up'))
     const reorder = () => call(procedures.reorderPinnedPlayers, { brawlhallaIds: [] }, visitor())
 
+    expect(await failureCode(pin())).toBe('UNAUTHORIZED')
     expect(await failureCode(unpin())).toBe('UNAUTHORIZED')
     expect(await failureCode(reorder())).toBe('UNAUTHORIZED')
   })

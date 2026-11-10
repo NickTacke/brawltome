@@ -3,6 +3,7 @@ import type {
   PlayerReferenceContract,
   PrimaryPlayerVerificationStateContract,
 } from '@brawltome/contracts'
+import { fixEncoding } from '../../lib'
 
 /** A pinned player as a row shows it. Every fact but the id is missing when the site has never stored the player. */
 export type PinnedPlayerRow = {
@@ -15,6 +16,11 @@ export type PinnedPlayerRow = {
   peakRating: number | null
   wins: number
   games: number
+}
+
+/** A player's name as the site shows it, or the id when the site has never stored the player. */
+export function playerLabel(player: Pick<PinnedPlayerRow, 'brawlhallaId' | 'name'>): string {
+  return player.name ? fixEncoding(player.name) : `Player ${player.brawlhallaId}`
 }
 
 export type Verification =

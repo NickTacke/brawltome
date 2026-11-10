@@ -2,7 +2,11 @@ import { User } from '@solar-icons/react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { leavesThisApp, railItems, SignInLink } from './AppRail'
+import { railItems } from './AppRail'
+import { AccountLink, leavesThisApp } from './rail/AccountLink'
+import { MenuPlayers } from './rail/RailPlayers'
+import type { RailAccount } from './rail/rail-account'
+import { useRailAccount } from './rail/use-rail-account'
 import { socialLinks } from './social-links'
 
 const iconButtonStyle =
@@ -30,13 +34,32 @@ function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose
   )
 }
 
-function MenuFooter({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="flex items-center justify-between border-t border-line/40 px-2 pt-3">
-      <SignInLink onClick={onClose} className="flex h-10 items-center gap-2.5 font-medium text-soft hover:text-strong">
+type MenuAccountProps = { account: RailAccount; onClose: () => void }
+
+export function MenuAccount({ account, onClose }: MenuAccountProps) {
+  const className = 'flex h-10 min-w-0 items-center gap-2.5 font-medium text-soft hover:text-strong'
+
+  if (account.kind === 'signedOut' || !account.avatarUrl) {
+    return (
+      <AccountLink onClick={onClose} className={className}>
         <User className="size-5" weight="Linear" aria-hidden="true" />
-        Sign in
-      </SignInLink>
+        {account.kind === 'signedIn' ? account.displayName : 'Sign in'}
+      </AccountLink>
+    )
+  }
+
+  return (
+    <AccountLink onClick={onClose} className={className}>
+      <img src={account.avatarUrl} alt="" className="size-6 shrink-0 rounded-full object-cover" />
+      <span className="truncate">{account.displayName}</span>
+    </AccountLink>
+  )
+}
+
+function MenuFooter({ account, onClose }: MenuAccountProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-line/40 px-2 pt-3">
+      <MenuAccount account={account} onClose={onClose} />
       <div className="flex items-center gap-1">
         {socialLinks.map((link) => (
           <a
@@ -56,6 +79,7 @@ function MenuFooter({ onClose }: { onClose: () => void }) {
 }
 
 function MenuPanel({ onClose }: { onClose: () => void }) {
+  const account = useRailAccount()
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useLayoutEffect(() => {
@@ -98,9 +122,10 @@ function MenuPanel({ onClose }: { onClose: () => void }) {
               <MenuItem key={item.to} item={item} onClose={onClose} />
             ))}
           </ul>
+          <MenuPlayers account={account} onClose={onClose} />
         </nav>
 
-        <MenuFooter onClose={onClose} />
+        <MenuFooter account={account} onClose={onClose} />
       </div>
     </dialog>
   )

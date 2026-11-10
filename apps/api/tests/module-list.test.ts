@@ -57,6 +57,7 @@ describe('oRPC router built from a module list', () => {
       'current',
       'pinnedPlayers',
       'primaryPlayer',
+      'pinPlayer',
       'unpinPlayer',
       'reorderPinnedPlayers',
       'signOut',

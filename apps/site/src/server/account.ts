@@ -1,8 +1,15 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getRequestHeader, setResponseHeader } from '@tanstack/react-start/server'
 import { z } from 'zod'
-import { type AccountWriteRequest, reorderPinsForVisitor, signOutVisitor, unpinForVisitor } from './account-writes'
+import {
+  type AccountWriteRequest,
+  pinForVisitor,
+  reorderPinsForVisitor,
+  signOutVisitor,
+  unpinForVisitor,
+} from './account-writes'
 import { loadAccount } from './load-account'
+import { loadRailAccount } from './load-rail-account'
 import { isSameOriginRequest } from './same-origin'
 import { currentSession } from './session-cookie'
 
@@ -26,6 +33,17 @@ export const getAccount = createServerFn({ method: 'GET' }).handler(() => {
 
   return loadAccount(currentSession())
 })
+
+// after hydration on every page, so a visitor without the session cookie gets an answer without an api call
+export const getRailAccount = createServerFn({ method: 'GET' }).handler(() => {
+  setResponseHeader('cache-control', 'private, no-store')
+
+  return loadRailAccount(currentSession())
+})
+
+export const pinAccountPlayer = createServerFn({ method: 'POST' })
+  .validator(brawlhallaIdSchema)
+  .handler(({ data: brawlhallaId }) => pinForVisitor(brawlhallaId, currentWriteRequest()))
 
 export const unpinAccountPlayer = createServerFn({ method: 'POST' })
   .validator(brawlhallaIdSchema)

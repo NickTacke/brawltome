@@ -71,6 +71,25 @@ export function createAccountProcedures(runtime: ModuleRuntime) {
       return toVerificationState(await accounts.getPrimaryPlayerVerificationState(account.id))
     })
 
+  // pinning a player already pinned keeps the order; the store refuses a pin past the limit
+  const pinPlayer = internalProcedure
+    .route({
+      method: 'POST',
+      path: '/account/pinned-players',
+      operationId: 'accounts.pinPlayer',
+      summary: 'Pin a player',
+      tags: ['accounts'],
+    })
+    .input(pinnedPlayerInputSchema)
+    .output(accountPinnedPlayersSchema)
+    .handler(async ({ context, input }) => {
+      const account = await requireAccount(accounts, context.visitorSessionToken)
+
+      await asBadRequest(() => accounts.pinPlayer(account.id, input.brawlhallaId))
+
+      return toAccountPinnedPlayers(await accounts.getPinnedPlayers(account.id))
+    })
+
   const unpinPlayer = internalProcedure
     .route({
       method: 'DELETE',
@@ -122,5 +141,5 @@ export function createAccountProcedures(runtime: ModuleRuntime) {
       return { status: 'signedOut' as const }
     })
 
-  return { current, pinnedPlayers, primaryPlayer, unpinPlayer, reorderPinnedPlayers, signOut }
+  return { current, pinnedPlayers, primaryPlayer, pinPlayer, unpinPlayer, reorderPinnedPlayers, signOut }
 }

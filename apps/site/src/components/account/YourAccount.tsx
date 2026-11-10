@@ -3,8 +3,7 @@ import { Check } from 'lucide-react'
 import { useEffect } from 'react'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
 import { PlayerLink } from '../guild/PlayerLink'
-import type { PinnedPlayerRow, Verification } from './account-model'
-import { playerLabel } from './PinRow'
+import { type PinnedPlayerRow, playerLabel, type Verification } from './account-model'
 
 // the worker usually checks steam within seconds; past a minute a reload is fine
 const pendingCheckEveryMs = 3_000

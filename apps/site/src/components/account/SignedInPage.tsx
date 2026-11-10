@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { railAccount } from '../rail/use-rail-account'
 import { ThemePicker } from '../theme/ThemePicker'
 import { AccountHeader } from './AccountHeader'
 import type { AccountPage } from './account-model'
@@ -9,7 +11,13 @@ type SignedInPageProps = { page: Extract<AccountPage, { kind: 'signedIn' }>; err
 
 export function SignedInPage({ page, errorMessage }: SignedInPageProps) {
   const verifiedPlayer = page.verification.status === 'verified' ? page.verification.player : null
-  const { pins, isBusy, hasFailed, move, unpin } = usePins(page, verifiedPlayer?.brawlhallaId ?? null)
+  const verifiedId = verifiedPlayer?.brawlhallaId ?? null
+  const { pins, isBusy, hasFailed, move, unpin } = usePins(page, verifiedId)
+
+  // the verification poll reloads this page, and the rail has to learn about a newly verified account too
+  useEffect(() => {
+    void railAccount.followVerification(verifiedId)
+  }, [verifiedId])
 
   return (
     // the same two columns as the guild page: content on the left, a fixed side column on wide screens

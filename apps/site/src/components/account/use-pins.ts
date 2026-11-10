@@ -1,6 +1,7 @@
 import { useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { reorderAccountPins, unpinAccountPlayer } from '../../server/account'
+import { railAccount } from '../rail/use-rail-account'
 import type { PinnedPlayerRow, PinWriteAnswer } from './account-model'
 import { isStaleSnapshot, movePin, orderRows } from './pin-order'
 
@@ -37,6 +38,7 @@ export function usePins(page: PinsFromPage, verifiedId: number | null) {
     const answer = await send().catch(() => failed)
 
     setBusyId(null)
+    void railAccount.followPinWrite(answer)
 
     if (answer.kind === 'signedOut') {
       await router.invalidate()

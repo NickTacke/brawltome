@@ -80,6 +80,19 @@ describe('the account procedures over http', () => {
     expect((await callAsSite('/account/pinned-players', { sessionToken: 'made-up' })).status).toBe(401)
   })
 
+  test('pin by body', async () => {
+    const { sessionToken } = await signIn('http-6')
+
+    const pinned = await callAsSite('/account/pinned-players', {
+      method: 'POST',
+      sessionToken,
+      body: { brawlhallaId: 7 },
+    })
+
+    expect(pinned.status).toBe(200)
+    expect(pinned.body.map((pin: { brawlhallaId: number }) => pin.brawlhallaId)).toEqual([7])
+  })
+
   test('unpin by path and reorder by body', async () => {
     const { account, sessionToken } = await signIn('http-4')
 

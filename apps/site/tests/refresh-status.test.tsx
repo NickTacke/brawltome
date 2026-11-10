@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ClanProfileContract } from '@brawltome/contracts'
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { GuildHeader } from '../src/components/guild/GuildHeader'
 import { PlayerPage } from '../src/components/player/PlayerPage'
@@ -36,10 +37,16 @@ const clan = {
   members: [],
 } as unknown as ClanProfileContract
 
-function renderPlayer(status: RefreshStatus): string {
+// the pin button under the name is a link for a signed out visitor, so the page renders inside a small router
+async function renderPlayer(status: RefreshStatus): Promise<string> {
   const refresh = { status, onRetry: () => {} }
+  const element = <PlayerPage {...page} isUnarmedExcluded={false} refresh={refresh} />
+  const rootRoute = createRootRoute({ component: () => element })
+  const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: ['/player/7'] }) })
 
-  return renderToStaticMarkup(<PlayerPage {...page} isUnarmedExcluded={false} refresh={refresh} />)
+  await router.load()
+
+  return renderToStaticMarkup(<RouterProvider router={router} />)
 }
 
 function renderGuild(status: RefreshStatus): string {
@@ -70,20 +77,20 @@ describe('updated time', () => {
 })
 
 describe('refresh status line', () => {
-  test('a failed refresh still shows the page, with one quiet line and a retry', () => {
-    const html = renderPlayer('failed')
+  test('a failed refresh still shows the page, with one quiet line and a retry', async () => {
+    const html = await renderPlayer('failed')
 
     expect(html).toContain('Seven')
     expect(html).toContain('Couldn&#x27;t update')
     expect(html).toContain('Try again</button>')
   })
 
-  test('a running refresh says so', () => {
-    expect(renderPlayer('updating')).toContain('Updating…')
+  test('a running refresh says so', async () => {
+    expect(await renderPlayer('updating')).toContain('Updating…')
   })
 
-  test('an idle page shows no refresh state', () => {
-    const html = renderPlayer('idle')
+  test('an idle page shows no refresh state', async () => {
+    const html = await renderPlayer('idle')
 
     expect(html).not.toContain('Updating')
     expect(html).not.toContain('update')

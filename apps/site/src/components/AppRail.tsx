@@ -1,6 +1,11 @@
-import { BookBookmark, Cup, Gamepad, PieChart, User, UsersGroupRounded } from '@solar-icons/react'
+import { BookBookmark, Cup, Gamepad, PieChart, UsersGroupRounded } from '@solar-icons/react'
 import { Link } from '@tanstack/react-router'
-import type { ComponentType, ReactNode, SVGProps } from 'react'
+import type { ComponentType, SVGProps } from 'react'
+import { leavesThisApp } from './rail/AccountLink'
+import { RailAccountLink } from './rail/RailAccountLink'
+import { RailPlayers } from './rail/RailPlayers'
+import { railTooltipLook } from './rail/rail-tooltip'
+import { useRailAccount } from './rail/use-rail-account'
 import { HouseOutline } from './rail-icons'
 import { socialLinks } from './social-links'
 
@@ -16,14 +21,7 @@ export const railItems: RailItem[] = [
   { to: '/tournaments', label: 'Tournaments', icon: Cup as RailIcon, wip: true },
 ]
 
-export const signInPath = '/account'
-
-// while the old site still serves some of these pages on the same domain, a link must load them from the server, or
-// this app would show its own version, or its not found page, in their place
-export const leavesThisApp = { reloadDocument: true } as const
-
-const tooltipStyle =
-  'pointer-events-none absolute left-full z-40 ml-3 hidden rounded-control border border-line bg-raised px-2 py-1 text-label whitespace-nowrap text-strong group-hover:block group-focus-visible:block'
+const tooltipStyle = `absolute left-full ml-3 ${railTooltipLook}`
 
 export function RailLink({ to, label, icon: Icon, exact, wip }: RailItem) {
   return (
@@ -60,17 +58,9 @@ function RailSocialLinks() {
   )
 }
 
-type SignInLinkProps = { className: string; onClick?: () => void; children?: ReactNode }
-
-export function SignInLink({ className, onClick, children }: SignInLinkProps) {
-  return (
-    <Link to={signInPath} {...leavesThisApp} aria-label="Sign in" onClick={onClick} className={className}>
-      {children}
-    </Link>
-  )
-}
-
 export function AppRail() {
+  const account = useRailAccount()
+
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[57px] flex-col border-r border-line bg-rail md:flex">
       <nav className="shrink-0 px-2 py-1">
@@ -78,13 +68,13 @@ export function AppRail() {
           <RailLink key={item.to} {...item} />
         ))}
       </nav>
-      <div className="mt-2 flex-1 border-t border-line" />
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto border-t border-line px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <RailPlayers account={account} />
+      </div>
       <div className="shrink-0 border-t border-line px-2 py-2">
         <RailSocialLinks />
         <div className="border-t border-line pt-2 pb-1">
-          <SignInLink className="flex size-10 items-center justify-center rounded-control border-2 border-rail bg-raised text-soft transition-all hover:brightness-150">
-            <User className="size-6" weight="Linear" aria-hidden="true" />
-          </SignInLink>
+          <RailAccountLink account={account} />
         </div>
       </div>
     </aside>

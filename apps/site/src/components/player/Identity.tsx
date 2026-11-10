@@ -1,11 +1,15 @@
 import { Link } from '@tanstack/react-router'
+import { Fragment, type ReactNode } from 'react'
 import { fixEncoding, timeAgo } from '../../lib'
 import type { PlayerData } from '../../server/load-player'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
+import { isVerifiedPlayer } from '../rail/rail-account'
+import { useRailAccount } from '../rail/use-rail-account'
 import { type RefreshStatusProps, UpdatedTime } from '../refresh/RefreshStatus'
 import { regionOption } from '../regions'
 import { AliasesButton } from './AliasesButton'
 import { HoverReveal } from './HoverReveal'
+import { PinButton } from './PinButton'
 import { formatHours } from './player-format'
 
 type IdentityProps = { player: PlayerData; loadedAt: string; refresh: RefreshStatusProps }
@@ -28,20 +32,37 @@ function nameSizeStyle(name: string): string {
   return name.length <= 20 ? 'text-3xl' : 'text-2xl'
 }
 
-function AliasesAndRegion({ aliases, region }: { aliases: string[]; region: string | null }) {
-  const hasRegion = regionOption(region) !== undefined
+type NameDetailsProps = { aliases: string[]; region: string | null; playerId: number }
 
-  if (aliases.length === 0 && !hasRegion) return null
+/** The row under the name: aliases, region and the pin button, whichever apply, with a dot between each. */
+export function NameDetails({ aliases, region, playerId }: NameDetailsProps) {
+  const account = useRailAccount()
+  const parts: { key: string; content: ReactNode }[] = []
+
+  if (aliases.length > 0) parts.push({ key: 'aliases', content: <AliasesButton aliases={aliases} /> })
+
+  if (regionOption(region)) {
+    const content = (
+      <span className="flex items-center gap-1.5">
+        Region: <RegionFlag region={region} />
+      </span>
+    )
+
+    parts.push({ key: 'region', content })
+  }
+
+  if (!isVerifiedPlayer(account, playerId)) parts.push({ key: 'pin', content: <PinButton playerId={playerId} /> })
+
+  if (parts.length === 0) return null
 
   return (
     <div className="mt-1 flex items-center gap-2 text-sm text-soft">
-      <AliasesButton aliases={aliases} />
-      {aliases.length > 0 && hasRegion && <span aria-hidden="true">·</span>}
-      {hasRegion && (
-        <span className="flex items-center gap-1.5">
-          Region: <RegionFlag region={region} />
-        </span>
-      )}
+      {parts.map(({ key, content }, index) => (
+        <Fragment key={key}>
+          {index > 0 && <span aria-hidden="true">·</span>}
+          {content}
+        </Fragment>
+      ))}
     </div>
   )
 }
@@ -88,7 +109,7 @@ export function Identity({ player, loadedAt, refresh }: IdentityProps) {
         >
           {name}
         </h1>
-        <AliasesAndRegion aliases={player.aliases} region={region} />
+        <NameDetails aliases={player.aliases} region={region} playerId={player.brawlhallaId} />
         {player.clan && (
           <Link
             to="/guild/$id"
