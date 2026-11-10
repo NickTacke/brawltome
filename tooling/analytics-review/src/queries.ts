@@ -132,7 +132,7 @@ export async function collectReview(api: GrafanaApi, days: number, end: Date): P
     prom(`sum by (procedure, code) (increase(analytics_trpc_failures_total[${w}]))`),
     prom(`sum by (kind) (increase(analytics_deadends_total[${w}]))`),
     loki(
-      `topk(25, sum by (attributes_query) (count_over_time({service_name="web"} | json | event="analytics.search.performed" | attributes_results="0" [${w}])))`,
+      `topk(25, sum by (attributes_query) (count_over_time({service_name=~"web|api"} |= "analytics.search.performed" | json | event="analytics.search.performed" | attributes_results="0" [${w}])))`,
     ),
     prom(`sum by (route) (increase(analytics_pageviews_total[${w}]))`),
     prom(`sum by (feature) (increase(analytics_feature_use_total[${w}]))`),
