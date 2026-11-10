@@ -77,12 +77,12 @@ const expectedServiceSecrets: Record<string, string[]> = {
   web: ['internal_api_secret', 'matches_preview_token', 'metrics_scrape_secret', 'otel_authorization'],
 }
 
-// the pages site has taken over from web. everything else on brawltome.app, including /, banners, legend portraits and
+// the pages site has taken over from web. everything else on brawltome.app, including banners, legend portraits and
 // the favicon, falls through to Dokploy's plain Host rule for web. only the .svg weapon icons move, web serves its own
 // .png ones from the same directory. the silhouette and one renamed portrait only exist on site. `compose config` keeps the $$ escape, the container label gets a single $
 const siteRouterRule =
   'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || ' +
-  'Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
+  'Path(`/`) || Path(`/matches`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
   'Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || ' +
   'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
 
