@@ -140,6 +140,8 @@ services:
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_ANNOUNCE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      # shared with the site on brawltome.app, which reads the session server side
+      SESSION_COOKIE_DOMAIN: brawltome.app
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
       WEB_ORIGIN: https://brawltome.app
     secrets:
@@ -266,6 +268,9 @@ services:
       INTERNAL_API_URL: http://api:3000
       NODE_ENV: production
       PORT: "3000"
+      # sign in, steam verification and the cookie stay on the api, the site only links to them
+      PUBLIC_API_URL: https://api.brawltome.app
+      SESSION_COOKIE_DOMAIN: brawltome.app
       # the public turnstile site key, the same one the web image is built with from the TURNSTILE_SITE_KEY variable
       TURNSTILE_SITE_KEY: 0x4AAAAAACx60GKE7imjvcOh
     secrets:
