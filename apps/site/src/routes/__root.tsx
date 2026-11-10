@@ -5,6 +5,7 @@ import { MobileMenu } from '../components/MobileMenu'
 import { SiteFooter } from '../components/SiteFooter'
 import { syncBrowserColour, themeBootScript } from '../components/theme/theme-storage'
 import { useVisitCounting } from '../components/visits/use-visit-counting'
+import { useWebVitals } from '../components/vitals/use-web-vitals'
 import appStyles from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -28,6 +29,7 @@ function RootComponent() {
   // the boot script sets a saved theme before paint, the address bar colour can only follow once the page exists
   useEffect(() => syncBrowserColour(), [])
   useVisitCounting()
+  useWebVitals()
 
   return (
     <RootDocument>

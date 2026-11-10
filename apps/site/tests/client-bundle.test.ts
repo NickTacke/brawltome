@@ -10,6 +10,8 @@ const serverOutput = join(outputRoot, 'server')
 const secretMarkers = ['INTERNAL_API_SECRET', 'x-internal-secret', 'x-visitor-session', 'brawltome_session']
 const buildTimeoutMs = 180_000
 const largestClientScriptBytes = 500_000
+// an entry type only the web vitals library asks the browser for
+const webVitalsMarker = 'largest-contentful-paint'
 
 function outputFiles(root: string): string[] {
   const entries = readdirSync(root, { recursive: true, encoding: 'utf8' })
@@ -55,6 +57,14 @@ describe('client bundle', () => {
     const oversized = scripts.filter((path) => statSync(path).size > largestClientScriptBytes)
 
     expect(oversized.map((path) => relative(clientOutput, path))).toEqual([])
+  })
+
+  // measuring loading speed must not add to what a page downloads before it is usable
+  test('the web vitals library is a script of its own, fetched only when asked for', () => {
+    const withLibrary = filesContaining(clientOutput, webVitalsMarker)
+
+    expect(withLibrary).toHaveLength(1)
+    expect(withLibrary[0]).toMatch(/^assets\/web-vitals-[\w-]+\.js$/)
   })
 
   // without this the check below passes on a site where nothing uses the api client
