@@ -2,6 +2,9 @@ import {
   leaderboardOutputSchema,
   leaderboardPageInputSchema,
   leaderboardPageSize,
+  leaderboardRecentActivityOutputSchema,
+  leaderboardRecentMoversInputSchema,
+  leaderboardRecentMoversOutputSchema,
   nullablePlayerValhallanEvidenceSchema,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
@@ -9,6 +12,7 @@ import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
 import { createPostgresPlayerReferences } from '@brawltome/player'
 import { createPostgresRanking } from '../postgres'
 import { readNamedLeaderboard } from './read-named-leaderboard'
+import { readNamedRecentActivity, readNamedRecentMovers } from './read-named-recent-activity'
 
 /** The ranking reads the API serves under ranking, at /rpc/ranking/* and /v1. Only internal callers get them. */
 export function createRankingProcedures(runtime: ModuleRuntime) {
@@ -39,5 +43,29 @@ export function createRankingProcedures(runtime: ModuleRuntime) {
     .output(leaderboardOutputSchema)
     .handler(({ input }) => readNamedLeaderboard(queries, references, { ...input, pageSize: leaderboardPageSize }))
 
-  return { valhallanEvidenceById, leaderboardPage }
+  const recentActivityPage = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/leaderboards/{mode}/{region}/recent-activity',
+      operationId: 'ranking.recentActivityPage',
+      summary: 'One page of who played on a board in the last hour',
+      tags: ['ranking'],
+    })
+    .input(leaderboardPageInputSchema)
+    .output(leaderboardRecentActivityOutputSchema)
+    .handler(({ input }) => readNamedRecentActivity(queries, references, { ...input, pageSize: leaderboardPageSize }))
+
+  const recentActivityMovers = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/leaderboards/{mode}/{region}/recent-movers',
+      operationId: 'ranking.recentActivityMovers',
+      summary: 'Biggest climbers, drops and most games on a board in the last hour',
+      tags: ['ranking'],
+    })
+    .input(leaderboardRecentMoversInputSchema)
+    .output(leaderboardRecentMoversOutputSchema)
+    .handler(({ input }) => readNamedRecentMovers(queries, references, input))
+
+  return { valhallanEvidenceById, leaderboardPage, recentActivityPage, recentActivityMovers }
 }
