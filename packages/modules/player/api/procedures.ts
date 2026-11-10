@@ -123,7 +123,7 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
       method: 'GET',
       path: '/legends/meta',
       operationId: 'player.metaLegends',
-      summary: 'The legends players rated 2000+ play most this season',
+      summary: "Each legend's share of this season's ranked games among players rated 2200+",
       tags: ['player'],
     })
     .output(metaLegendsSchema)

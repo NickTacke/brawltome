@@ -4,7 +4,6 @@ import { queueModule } from '@brawltome/queue'
 import { call } from '@orpc/server'
 import { createPlayerProcedures } from '../api/procedures'
 import { readMetaLegends } from '../api/read-meta-legends'
-import { readMetaLegendGames } from '../db/read-meta-legend-games'
 import { playerModule } from '../index'
 
 const internalCaller = { context: { isInternalCaller: true } }
@@ -16,15 +15,15 @@ const seasonStartsAt = '2026-06-24T14:00:00.000Z'
 const beforeTheStart = '2026-06-24T13:59:59.000Z'
 const thisSeason = '2026-07-01T12:00:00.000Z'
 
-type LegendRecord = { nameKey: string; rating: number; wins: number; games: number }
+type LegendRecord = { nameKey: string; wins: number; games: number }
 
 let database: TestDatabase
 
-async function insertSnapshot(brawlhallaId: number, observedAt: string, legends: LegendRecord[]) {
+async function insertSnapshot(brawlhallaId: number, observedAt: string, rating: number, legends: LegendRecord[]) {
   await database.sql`
     INSERT INTO players.ranked_profiles
       (brawlhalla_id, player_name, checked_at, last_success_at, region, rating, peak_rating, tier, wins, games)
-    VALUES (${brawlhallaId}, 'Legend Player', ${observedAt}, ${observedAt}, 'EU', 2000, 2000, 'Diamond', 1, 2)
+    VALUES (${brawlhallaId}, 'Legend Player', ${observedAt}, ${observedAt}, 'EU', ${rating}, ${rating}, 'Diamond', 1, 2)
   `
 
   for (const [ordinal, legend] of legends.entries()) {
@@ -33,7 +32,7 @@ async function insertSnapshot(brawlhallaId: number, observedAt: string, legends:
         (brawlhalla_id, ordinal, legend_id, legend_name_key, rating, peak_rating, tier, wins, games)
       VALUES (
         ${brawlhallaId}, ${ordinal}, ${ordinal + 1}, ${legend.nameKey},
-        ${legend.rating}, ${legend.rating}, 'Diamond', ${legend.wins}, ${legend.games}
+        ${rating}, ${rating}, 'Diamond', ${legend.wins}, ${legend.games}
       )
     `
   }
@@ -42,7 +41,7 @@ async function insertSnapshot(brawlhallaId: number, observedAt: string, legends:
 // thirty players whose game counts fell on the reset day, which is how a season start is found
 async function insertReset() {
   for (let brawlhallaId = 1000; brawlhallaId < 1030; brawlhallaId += 1) {
-    await insertSnapshot(brawlhallaId, resetDay, [])
+    await insertSnapshot(brawlhallaId, resetDay, 1500, [])
 
     await database.sql`
       INSERT INTO players.ranked_rating_history (brawlhalla_id, rating, peak_rating, tier, wins, games, recorded_at)
@@ -52,10 +51,10 @@ async function insertReset() {
   }
 }
 
-// enough players of one legend to clear the player floor the site uses
-async function insertRegulars(firstId: number, nameKey: string, rating: number) {
-  for (let brawlhallaId = firstId; brawlhallaId < firstId + 30; brawlhallaId += 1) {
-    await insertSnapshot(brawlhallaId, thisSeason, [{ nameKey, rating, wins: 6, games: 10 }])
+// high rated players who all play one legend, to fill the ladder up to the players floor
+async function insertRegulars(firstId: number, playerCount: number) {
+  for (let brawlhallaId = firstId; brawlhallaId < firstId + playerCount; brawlhallaId += 1) {
+    await insertSnapshot(brawlhallaId, thisSeason, 2400, [{ nameKey: 'lucien', wins: 1, games: 2 }])
   }
 }
 
@@ -68,93 +67,87 @@ beforeAll(async () => {
 
   await insertReset()
 
-  await insertSnapshot(301, thisSeason, [
-    { nameKey: 'diana', rating: 2100, wins: 15, games: 20 },
-    { nameKey: 'mordex', rating: 2000, wins: 4, games: 10 },
+  await insertSnapshot(301, thisSeason, 2300, [
+    { nameKey: 'diana', wins: 15, games: 20 },
+    { nameKey: 'mordex', wins: 4, games: 10 },
   ])
 
-  await insertSnapshot(302, thisSeason, [
-    { nameKey: 'diana', rating: 2050, wins: 15, games: 30 },
-    // just under the rating floor
-    { nameKey: 'mordex', rating: 1999, wins: 90, games: 100 },
-    // rated high, but one game short of the floor
-    { nameKey: 'sidra', rating: 2200, wins: 9, games: 9 },
+  // rated exactly the floor, which counts
+  await insertSnapshot(302, thisSeason, 2200, [
+    { nameKey: 'diana', wins: 15, games: 30 },
+    // not played this season
+    { nameKey: 'sidra', wins: 0, games: 0 },
   ])
 
-  await insertSnapshot(303, seasonStartsAt, [
-    { nameKey: 'teros', rating: 2300, wins: 20, games: 50 },
-    { nameKey: 'ada', rating: 2000, wins: 5, games: 10 },
+  await insertSnapshot(303, seasonStartsAt, 2250, [
+    { nameKey: 'teros', wins: 20, games: 50 },
+    { nameKey: 'ada', wins: 5, games: 10 },
   ])
+
+  // just under the rating floor
+  await insertSnapshot(304, thisSeason, 2199, [{ nameKey: 'mordex', wins: 90, games: 100 }])
 
   // seen just before the reset, so these games belong to last season
-  await insertSnapshot(304, beforeTheStart, [{ nameKey: 'diana', rating: 2500, wins: 500, games: 500 }])
+  await insertSnapshot(305, beforeTheStart, 2500, [{ nameKey: 'diana', wins: 500, games: 500 }])
 
-  await insertRegulars(2000, 'lucien', 1800)
+  // with the three above, one player short of the hundred the ranking waits for
+  await insertRegulars(2000, 96)
 }, 30_000)
 
 afterAll(async () => {
   await database?.drop()
 })
 
-describe('readMetaLegendGames', () => {
-  test("ranks this season's legends by the average rating of the players who play them, any rating", async () => {
-    const legends = await readMetaLegendGames(database, seasonStartsAt, 1)
-    const order = legends.map(({ legendNameKey, averageRating }) => [legendNameKey, averageRating])
+describe('player.metaLegends', () => {
+  test('names no legends while fewer than a hundred players rated 2200+ have been seen this season', async () => {
+    const meta = await call(procedures().metaLegends, undefined, internalCaller)
 
-    // mordex and ada both average 2000, and mordex's 110 games put it first
-    expect(order.slice(0, 4)).toEqual([
-      ['teros', 2300],
-      ['diana', 2075],
-      ['mordex', 2000],
-      ['ada', 2000],
-    ])
+    expect(meta).toEqual({ season: 40, startsAt: seasonStartsAt, legends: [] })
   })
 
-  test('counts every game of the legends a player has ten or more games on', async () => {
-    const legends = await readMetaLegendGames(database, seasonStartsAt, 1)
-
-    expect(legends.find(({ legendNameKey }) => legendNameKey === 'mordex')).toEqual({
-      legendNameKey: 'mordex',
-      games: 110,
-      wins: 94,
-      playerCount: 2,
-      averageRating: 2000,
-    })
-
-    expect(legends.map(({ legendNameKey }) => legendNameKey)).not.toContain('sidra')
-  })
-
-  test('leaves out legends too few players play', async () => {
-    const legends = await readMetaLegendGames(database, seasonStartsAt, 2)
-
-    expect(legends.map(({ legendNameKey }) => legendNameKey)).toEqual(['diana', 'mordex', 'lucien'])
+  test('rejects callers from outside', () => {
+    expect(call(procedures().metaLegends, undefined, outsideCaller)).rejects.toThrow()
   })
 })
 
-describe('player.metaLegends', () => {
-  test('only names legends at least thirty players play', async () => {
+describe('player.metaLegends with a hundred players rated 2200+', () => {
+  beforeAll(async () => {
+    await insertRegulars(2096, 1)
+  })
+
+  test('ranks legends by their share of the games those players have this season, then by name', async () => {
     const meta = await call(procedures().metaLegends, undefined, internalCaller)
 
     expect(meta).toEqual({
       season: 40,
       startsAt: seasonStartsAt,
-      legends: [{ legendNameKey: 'lucien', games: 300, playerCount: 30, winRate: 0.6, averageRating: 1800 }],
+      legends: [
+        { legendNameKey: 'lucien', games: 194, playerCount: 97, winRate: 0.5, gameShare: 194 / 314 },
+        // won 30 of the 50 games, not the 62.5% an average of each player's rate would give
+        { legendNameKey: 'diana', games: 50, playerCount: 2, winRate: 0.6, gameShare: 50 / 314 },
+        { legendNameKey: 'teros', games: 50, playerCount: 1, winRate: 0.4, gameShare: 50 / 314 },
+        { legendNameKey: 'ada', games: 10, playerCount: 1, winRate: 0.5, gameShare: 10 / 314 },
+        { legendNameKey: 'mordex', games: 10, playerCount: 1, winRate: 0.4, gameShare: 10 / 314 },
+      ],
     })
+  })
+
+  test('the shares add up to one', async () => {
+    const meta = await call(procedures().metaLegends, undefined, internalCaller)
+    const shareSum = meta?.legends.reduce((sum, legend) => sum + legend.gameShare, 0)
+
+    expect(shareSum).toBeCloseTo(1, 10)
   })
 
   test('keeps serving the legends it read for a while', async () => {
     const { metaLegends } = procedures()
 
     await call(metaLegends, undefined, internalCaller)
-    await insertRegulars(3000, 'thor', 2400)
+    await insertSnapshot(306, thisSeason, 2400, [{ nameKey: 'thor', wins: 900, games: 900 }])
 
     const meta = await call(metaLegends, undefined, internalCaller)
 
     expect(meta?.legends.map(({ legendNameKey }) => legendNameKey)).not.toContain('thor')
-  })
-
-  test('rejects callers from outside', () => {
-    expect(call(procedures().metaLegends, undefined, outsideCaller)).rejects.toThrow()
   })
 })
 

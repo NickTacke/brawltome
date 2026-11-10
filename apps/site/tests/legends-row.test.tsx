@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { LegendsRow } from '../src/components/home/LegendsRow'
 
 const redraptor = { legendNameKey: 'redraptor', games: 120, share: 0.0489 }
-const diana = { legendNameKey: 'diana', games: 14_250, playerCount: 138, winRate: 0.5612, averageRating: 1765 }
+const diana = { legendNameKey: 'diana', games: 14_250, playerCount: 543, winRate: 0.5934, gameShare: 0.0512 }
 
 describe('Home legends row', () => {
   test('shows each most played legend with its share of games', () => {
@@ -24,21 +24,21 @@ describe('Home legends row', () => {
     expect(html).toContain('New Legend')
   })
 
-  test('shows each meta legend as a tile with the average elo of its players, like most played', () => {
+  test('shows each meta legend as a tile with its share of games at 2200+, like most played', () => {
     const html = renderToStaticMarkup(<LegendsRow mostPlayed={[]} meta={[diana]} />)
 
     expect(html).toContain('Meta legends')
-    expect(html).toContain('Average elo')
+    expect(html).toContain('Share of games at 2200+')
     expect(html).toContain('/images/legends/avatars/diana.png')
     expect(html).toContain('Diana')
-    expect(html).toContain('>1,765<')
+    expect(html).toContain('>5.1%<')
     expect(html).not.toContain('<table')
   })
 
-  test('a meta tile names its win rate and players on hover', () => {
+  test('a meta tile names its share, players and win rate on hover', () => {
     const html = renderToStaticMarkup(<LegendsRow mostPlayed={[]} meta={[diana]} />)
 
-    expect(html).toContain('title="Diana · 56.1% win rate · 138 players"')
+    expect(html).toContain('title="Diana · 5.1% of games at 2200+ · 543 players · 59.3% win rate"')
   })
 
   test('puts most played on the left and meta on the right, with a line between them', () => {

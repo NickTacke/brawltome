@@ -6,8 +6,10 @@ import { SectionHeader } from './SectionHeader'
 
 function MetaLegendTile({ legend }: { legend: MetaLegend }) {
   const name = legendDisplayName(legend.legendNameKey)
-  const winPercent = legend.winRate * 100
-  const detail = `${name} · ${winPercent.toFixed(1)}% win rate · ${formatWhole(legend.playerCount)} players`
+  const sharePercent = (legend.gameShare * 100).toFixed(1)
+  const winPercent = (legend.winRate * 100).toFixed(1)
+  const players = formatWhole(legend.playerCount)
+  const detail = `${name} · ${sharePercent}% of games at 2200+ · ${players} players · ${winPercent}% win rate`
 
   return (
     // the same tile as most played, so the two halves of the row line up
@@ -21,16 +23,16 @@ function MetaLegendTile({ legend }: { legend: MetaLegend }) {
         />
       </div>
       <figcaption className="mt-1.5 max-w-full truncate text-center text-xs font-semibold text-text">{name}</figcaption>
-      <span className="font-mono text-xs font-bold text-strong">{formatWhole(legend.averageRating)}</span>
+      <span className="font-mono text-xs font-bold text-strong">{sharePercent}%</span>
     </figure>
   )
 }
 
-/** The legends whose players hold the highest average rating on them this season. */
+/** The legends players rated 2200+ play most this season, with each one's share of their games. */
 export function MetaLegends({ legends }: { legends: MetaLegend[] }) {
   return (
     <section className="min-w-0">
-      <SectionHeader title="Meta legends" action={<span className="text-sm text-soft">Average elo</span>} />
+      <SectionHeader title="Meta legends" action={<span className="text-sm text-soft">Share of games at 2200+</span>} />
       <div className="mt-4 grid grid-cols-5 gap-x-2 gap-y-4 sm:grid-cols-9">
         {legends.map((legend) => (
           <MetaLegendTile key={legend.legendNameKey} legend={legend} />

@@ -10,7 +10,7 @@ function meta(keys: string[]) {
     games: 5000 - index,
     playerCount: 140 - index,
     winRate: 0.55,
-    averageRating: 1800 - index,
+    gameShare: 0.05,
   }))
 
   return { season: 42, startsAt: '2026-09-23T14:00:00.000Z', legends }
