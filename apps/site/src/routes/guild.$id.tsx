@@ -67,6 +67,7 @@ function useLiveGuild(page: GuildPageData) {
 
   return useLiveRefresh({
     initial: page,
+    loadKey: page.loadedAt,
     isStale: (current) => isGuildStale(current.clan, new Date(current.loadedAt)),
     isRefreshed: (baseline, current) => isGuildRefreshed(baseline.clan, current.clan, new Date(baseline.loadedAt)),
     load: () => getGuild({ data: guildId }),

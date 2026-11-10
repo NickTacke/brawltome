@@ -84,6 +84,7 @@ function LivePlayer({ isUnarmedExcluded, ...page }: LivePlayerProps) {
 
   const live = useLiveRefresh({
     initial: page,
+    loadKey: page.loadedAt,
     isStale: (current) => isPlayerStale(current.player),
     isRefreshed: (baseline, current) => isPlayerRefreshed(baseline.player, current.player),
     load: () => getPlayer({ data: playerId }),
