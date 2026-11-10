@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
-import { reorderPinsForVisitor, signOutVisitor, unpinForVisitor } from '../src/server/account-writes'
+import { pinForVisitor, reorderPinsForVisitor, signOutVisitor, unpinForVisitor } from '../src/server/account-writes'
 
 const apiUrl = 'http://api.test'
 const token = 'raw-session-token'
@@ -54,6 +54,38 @@ afterEach(() => {
 
   if (originalSecret === undefined) delete process.env.INTERNAL_API_SECRET
   else process.env.INTERNAL_API_SECRET = originalSecret
+})
+
+describe('pinForVisitor', () => {
+  test('pins with the visitor session and answers the new order', async () => {
+    const calls = stubApi(200, pins)
+
+    const answer = await pinForVisitor(9, writeRequest().request)
+
+    expect(answer).toEqual({ kind: 'saved', pinOrder: [8, 9] })
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/account/pinned-players', body: { brawlhallaId: 9 } })
+    expect(calls[0]?.headers.get('x-visitor-session')).toBe(token)
+  })
+
+  test('refuses a request from another site without calling the api', async () => {
+    const calls = stubApi(200, pins)
+
+    expect(await pinForVisitor(9, writeRequest({ isSameOrigin: false }).request)).toEqual({ kind: 'failed' })
+    expect(calls).toEqual([])
+  })
+
+  test('answers signed out without a session', async () => {
+    const calls = stubApi(200, pins)
+
+    expect(await pinForVisitor(9, writeRequest({ hasSession: false }).request)).toEqual({ kind: 'signedOut' })
+    expect(calls).toEqual([])
+  })
+
+  test('answers failed when the api refuses a pin past the limit', async () => {
+    stubApi(400, { message: 'Pinned Players cannot exceed 20' })
+
+    expect(await pinForVisitor(9, writeRequest().request)).toEqual({ kind: 'failed' })
+  })
 })
 
 describe('unpinForVisitor', () => {

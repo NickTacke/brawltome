@@ -52,6 +52,11 @@ export function isPinned(rail: SignedInRail, brawlhallaId: number): boolean {
   return rail.pins.some((pin) => pin.brawlhallaId === brawlhallaId)
 }
 
+// the verified account always leads the pins, so it is never pinned or unpinned by hand
+export function isVerifiedPlayer(account: RailAccount, brawlhallaId: number): boolean {
+  return account.kind === 'signedIn' && account.verifiedPlayer?.brawlhallaId === brawlhallaId
+}
+
 // the verified account doesn't count towards the limit, the api leaves it out too
 export function isAtPinLimit(rail: SignedInRail): boolean {
   return rail.pins.length >= rail.pinLimit

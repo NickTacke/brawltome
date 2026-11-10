@@ -42,6 +42,16 @@ async function writePins(request: AccountWriteRequest, description: string, writ
   }
 }
 
+// the api refuses a pin past the limit, which reads as failed here; the button already knows the count
+export function pinForVisitor(brawlhallaId: number, request: AccountWriteRequest): Promise<PinWriteAnswer> {
+  const description = `pin player ${brawlhallaId}`
+  const body = { brawlhallaId }
+
+  return writePins(request, description, (options) =>
+    writeApi('POST', '/account/pinned-players', body, accountPinnedPlayersSchema, description, options),
+  )
+}
+
 export function unpinForVisitor(brawlhallaId: number, request: AccountWriteRequest): Promise<PinWriteAnswer> {
   const description = `unpin player ${brawlhallaId}`
   const path = `/account/pinned-players/${brawlhallaId}`

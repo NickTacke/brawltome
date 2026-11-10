@@ -1,7 +1,13 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getRequestHeader, setResponseHeader } from '@tanstack/react-start/server'
 import { z } from 'zod'
-import { type AccountWriteRequest, reorderPinsForVisitor, signOutVisitor, unpinForVisitor } from './account-writes'
+import {
+  type AccountWriteRequest,
+  pinForVisitor,
+  reorderPinsForVisitor,
+  signOutVisitor,
+  unpinForVisitor,
+} from './account-writes'
 import { loadAccount } from './load-account'
 import { loadRailAccount } from './load-rail-account'
 import { isSameOriginRequest } from './same-origin'
@@ -34,6 +40,10 @@ export const getRailAccount = createServerFn({ method: 'GET' }).handler(() => {
 
   return loadRailAccount(currentSession())
 })
+
+export const pinAccountPlayer = createServerFn({ method: 'POST' })
+  .validator(brawlhallaIdSchema)
+  .handler(({ data: brawlhallaId }) => pinForVisitor(brawlhallaId, currentWriteRequest()))
 
 export const unpinAccountPlayer = createServerFn({ method: 'POST' })
   .validator(brawlhallaIdSchema)
