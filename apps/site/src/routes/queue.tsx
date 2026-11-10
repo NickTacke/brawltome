@@ -5,7 +5,7 @@ import { bracketOptions } from '../components/home/home-filters'
 import { Pager } from '../components/Pager'
 import { QueueBody } from '../components/queue/QueueBody'
 import { QueueMovers, QueueMoversSkeleton } from '../components/queue/QueueMovers'
-import { hasPager, rowNoun } from '../components/queue/queue-format'
+import { hasPager, rowNoun, spanLabel } from '../components/queue/queue-format'
 import { queueQuery, validateQueueSearch } from '../components/queue/queue-search'
 import { regionOptions } from '../components/regions'
 import { useSlowNavigation } from '../components/use-slow-navigation'
@@ -40,7 +40,7 @@ function QueueSummary({ view }: { view: AvailableView }) {
   return (
     <div className="flex items-center justify-between gap-6 text-soft">
       <div>
-        {formatWhole(view.totalRows)} {rowNoun(view.mode)} · Last hour
+        {formatWhole(view.totalRows)} {rowNoun(view.mode)} · {spanLabel(view)}
       </div>
       <Updated view={view} className="sm:hidden" />
     </div>
