@@ -13,9 +13,9 @@ function ticksFor(wins: number, losses: number): Tick[] {
 /** Wins then losses, one tick each, beside the record it draws. The record itself is the text. */
 export function QueueTicks({ wins, losses }: { wins: number; losses: number }) {
   return (
-    <div className="flex h-2.5 w-[78px] items-stretch gap-0.5" aria-hidden="true">
+    <div className="flex h-2.5 w-[4.875rem] items-stretch gap-0.5" aria-hidden="true">
       {ticksFor(wins, losses).map((tick) => (
-        <span key={tick.key} className={`w-[3px] rounded-[1px] ${tick.style}`} />
+        <span key={tick.key} className={`w-[0.1875rem] rounded-[0.0625rem] ${tick.style}`} />
       ))}
     </div>
   )

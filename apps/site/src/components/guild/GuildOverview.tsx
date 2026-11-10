@@ -35,7 +35,7 @@ function RankRow({ label, rank, value }: RankEntry) {
   const laurelColour = placeColour(rank, 'text-soft/45')
 
   return (
-    <div className="min-w-0 text-center xl:flex xl:h-[72px] xl:items-center xl:gap-3 xl:text-left">
+    <div className="min-w-0 text-center xl:flex xl:h-[4.5rem] xl:items-center xl:gap-3 xl:text-left">
       <div className="flex h-16 items-center justify-center gap-1 xl:w-36 xl:shrink-0 xl:justify-start">
         {hasLaurels && <Laurel colour={laurelColour} />}
         <span className={`text-3xl font-black tracking-tight sm:text-4xl ${placeColour(rank, 'text-strong')}`}>

@@ -13,7 +13,7 @@ function Avatar({ row }: { row: PinnedPlayerRow }) {
   const frameColour = `color-mix(in srgb, ${tierColour(row.tier)} 50%, var(--color-ink))`
 
   return (
-    <div className="size-12 shrink-0 overflow-hidden rounded-lg p-[2px]" style={{ backgroundColor: frameColour }}>
+    <div className="size-12 shrink-0 overflow-hidden rounded-lg p-[0.125rem]" style={{ backgroundColor: frameColour }}>
       <img
         src={legendAvatarUrl(row.legendNameKey)}
         alt=""
@@ -108,7 +108,7 @@ export function PinRow({ row, actions }: PinRowProps) {
       <Avatar row={row} />
       <NameAndTier row={row} isVerified={actions === null} />
       <RatingAndRecord row={row} />
-      <div className="flex w-[104px] shrink-0 justify-end opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+      <div className="flex w-[6.5rem] shrink-0 justify-end opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
         {actions && <PinActions label={playerLabel(row)} {...actions} />}
       </div>
     </li>

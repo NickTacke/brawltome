@@ -1,9 +1,16 @@
-const viewportMarginPx = 8
+// half of the 1rem the panel's max height leaves free, see FilterSelect
+const viewportMarginRem = 0.5
 // the space between the trigger and the panel, mt-1 on the panel
-const panelGapPx = 4
+const panelGapRem = 0.25
 
 // when the panel can't fit, its start edge wins so the first options stay reachable
-export function viewportShiftPx(startPx: number, endPx: number, viewportSizePx: number): number {
+export function viewportShiftPx(
+  startPx: number,
+  endPx: number,
+  viewportSizePx: number,
+  rootFontSizePx: number,
+): number {
+  const viewportMarginPx = viewportMarginRem * rootFontSizePx
   const shiftToStartPx = viewportMarginPx - startPx
 
   if (shiftToStartPx > 0) return shiftToStartPx
@@ -15,7 +22,13 @@ export function viewportShiftPx(startPx: number, endPx: number, viewportSizePx: 
   return Math.max(-overflowEndPx, shiftToStartPx)
 }
 
-type PanelPlacement = { panelTopPx: number; panelBottomPx: number; triggerTopPx: number; viewportHeightPx: number }
+type PanelPlacement = {
+  panelTopPx: number
+  panelBottomPx: number
+  triggerTopPx: number
+  viewportHeightPx: number
+  rootFontSizePx: number
+}
 
 // flips before it shifts, because a shifted panel can land under the cursor and take the click meant for the trigger
 export function panelVerticalShiftPx({
@@ -23,17 +36,19 @@ export function panelVerticalShiftPx({
   panelBottomPx,
   triggerTopPx,
   viewportHeightPx,
+  rootFontSizePx,
 }: PanelPlacement): number {
+  const viewportMarginPx = viewportMarginRem * rootFontSizePx
   const fitsBelow = panelBottomPx <= viewportHeightPx - viewportMarginPx
 
-  if (fitsBelow) return viewportShiftPx(panelTopPx, panelBottomPx, viewportHeightPx)
+  if (fitsBelow) return viewportShiftPx(panelTopPx, panelBottomPx, viewportHeightPx, rootFontSizePx)
 
   const panelHeightPx = panelBottomPx - panelTopPx
-  const flippedTopPx = triggerTopPx - panelGapPx - panelHeightPx
+  const flippedTopPx = triggerTopPx - panelGapRem * rootFontSizePx - panelHeightPx
 
   if (flippedTopPx >= viewportMarginPx) return flippedTopPx - panelTopPx
 
-  return viewportShiftPx(panelTopPx, panelBottomPx, viewportHeightPx)
+  return viewportShiftPx(panelTopPx, panelBottomPx, viewportHeightPx, rootFontSizePx)
 }
 
 function wrapDown(currentIndex: number, optionCount: number, columns: number): number {

@@ -27,7 +27,7 @@ function MoverList({ title, entries, value }: MoverListProps) {
         {entries.map((entry) => (
           <li
             key={rowKey(entry)}
-            className="group relative flex h-[42px] items-center gap-3 border-b border-line/25 text-sm last:border-b-0"
+            className="group relative flex h-[2.625rem] items-center gap-3 border-b border-line/25 text-sm last:border-b-0"
           >
             <Avatars row={entry} />
             <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ function MoverListSkeleton({ title }: { title: string }) {
       <h2 className={sectionTitleStyle}>{title}</h2>
       <ul className="mt-2.5">
         {skeletonNameWidths.map((nameWidth) => (
-          <li key={nameWidth} className="flex h-[42px] items-center gap-3">
+          <li key={nameWidth} className="flex h-[2.625rem] items-center gap-3">
             <span className={`size-7 shrink-0 ${skeletonFill}`} />
             <span className={`h-3 ${nameWidth} ${skeletonFill}`} />
             <span className={`ml-auto h-3 w-16 ${skeletonFill}`} />

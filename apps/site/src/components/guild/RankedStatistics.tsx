@@ -31,7 +31,7 @@ function barColour({ from }: Band): string {
 }
 
 function barHeight(count: number, tallest: number): string {
-  return count === 0 ? '0' : `max(3px, ${(count / tallest) * 100}%)`
+  return count === 0 ? '0' : `max(0.1875rem, ${(count / tallest) * 100}%)`
 }
 
 // waits for the mouse to settle on a bar, so sweeping across the chart doesn't start a fade per bar
@@ -111,7 +111,7 @@ function RatingChart({ bands, average, onBandEnter, onChartLeave }: RatingChartP
             >
               {band.count > 0 && <span className="sr-only">{bandSummary(band)}</span>}
               <div
-                className={`w-full rounded-t-[3px] transition-colors duration-200 group-hover:bg-primary ${barColour(band)}`}
+                className={`w-full rounded-t-[0.1875rem] transition-colors duration-200 group-hover:bg-primary ${barColour(band)}`}
                 style={{ height: barHeight(band.count, tallest) }}
               />
             </li>
@@ -121,7 +121,7 @@ function RatingChart({ bands, average, onBandEnter, onChartLeave }: RatingChartP
           className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-strong ring-2 ring-ink"
           style={{ left: `${percentOf(average)}%` }}
         >
-          <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 font-mono text-[11px] leading-none whitespace-nowrap text-strong">
+          <span className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 font-mono text-[0.6875rem] leading-none whitespace-nowrap text-strong">
             avg
           </span>
         </div>
@@ -153,7 +153,7 @@ function LeaderboardRow({ member, place }: { member: RatedMember; place: number 
 
   return (
     <li
-      className={`group relative flex h-[42px] items-center gap-3 border-b border-line/25 text-sm last:border-b-0 ${heightRule}`}
+      className={`group relative flex h-[2.625rem] items-center gap-3 border-b border-line/25 text-sm last:border-b-0 ${heightRule}`}
     >
       <span className={`w-3 shrink-0 font-mono ${placeColours[place] ?? 'text-soft'}`}>{place}</span>
       <LegendAvatar legend={member.mainLegend} />

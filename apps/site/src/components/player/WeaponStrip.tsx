@@ -10,8 +10,8 @@ import { WeaponDetail } from './WeaponDetail'
 import type { CareerLegend, RankedLegend, WeaponStats } from './weapon-stats'
 
 const weaponColumnsClass = 'grid-cols-8 min-[1500px]:grid-cols-[repeat(var(--tile-count),minmax(0,1fr))]'
-const tallestWeaponBarPx = 56
-const smallestWeaponBarPx = 2
+const tallestWeaponBarRem = 3.5
+const smallestWeaponBarRem = 0.125
 const oneYearSeconds = 31_536_000
 
 function WeaponCard({ weapon }: { weapon: WeaponStats }) {
@@ -37,23 +37,23 @@ function WeaponCard({ weapon }: { weapon: WeaponStats }) {
   )
 }
 
-type WeaponColumnProps = { weapon: WeaponStats; value: string; barHeightPx: number; isSelected: boolean }
+type WeaponColumnProps = { weapon: WeaponStats; value: string; barHeightRem: number; isSelected: boolean }
 
-function WeaponColumn({ weapon, value, barHeightPx, isSelected }: WeaponColumnProps) {
+function WeaponColumn({ weapon, value, barHeightRem, isSelected }: WeaponColumnProps) {
   return (
     <span className="flex h-full flex-col justify-end">
-      <span className="block truncate text-center text-[11px] font-bold text-soft tabular-nums group-hover:text-strong sm:text-xs">
+      <span className="block truncate text-center text-[0.6875rem] font-bold text-soft tabular-nums group-hover:text-strong sm:text-xs">
         {value}
       </span>
       <span
-        className="mx-auto mt-1 block w-3/5 rounded-t-[3px] bg-primary/55 transition-colors group-hover:bg-primary"
-        style={{ height: barHeightPx }}
+        className="mx-auto mt-1 block w-3/5 rounded-t-[0.1875rem] bg-primary/55 transition-colors group-hover:bg-primary"
+        style={{ height: `${barHeightRem}rem` }}
       />
       <img
         src={`/images/weapons/${weapon.weapon}.svg`}
         alt=""
         loading="lazy"
-        className={`mx-auto mt-1 block aspect-square w-[84%] max-w-14 min-[137.5rem]:max-w-[72px] rounded-md object-contain transition-[filter,transform] duration-150 group-hover:scale-105 group-hover:brightness-125 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        className={`mx-auto mt-1 block aspect-square w-[84%] max-w-14 min-[137.5rem]:max-w-[4.5rem] rounded-md object-contain transition-[filter,transform] duration-150 group-hover:scale-105 group-hover:brightness-125 ${isSelected ? 'ring-2 ring-primary' : ''}`}
       />
     </span>
   )
@@ -98,10 +98,10 @@ export function WeaponStrip({ legends, rankedLegends, isUnarmedExcludedAtStart }
   }
 
   function renderTile(weapon: WeaponStats, isSelected: boolean) {
-    const barHeightPx = Math.max((active.score(weapon) / highestScore) * tallestWeaponBarPx, smallestWeaponBarPx)
+    const barHeightRem = Math.max((active.score(weapon) / highestScore) * tallestWeaponBarRem, smallestWeaponBarRem)
 
     return (
-      <WeaponColumn weapon={weapon} value={active.value(weapon)} barHeightPx={barHeightPx} isSelected={isSelected} />
+      <WeaponColumn weapon={weapon} value={active.value(weapon)} barHeightRem={barHeightRem} isSelected={isSelected} />
     )
   }
 

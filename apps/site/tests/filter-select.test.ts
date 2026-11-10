@@ -3,19 +3,23 @@ import { nextOptionIndex, panelVerticalShiftPx, viewportShiftPx } from '../src/c
 
 describe('viewportShiftPx', () => {
   test('leaves a panel that already fits', () => {
-    expect(viewportShiftPx(20, 200, 400)).toBe(0)
+    expect(viewportShiftPx(20, 200, 400, 16)).toBe(0)
   })
 
   test('moves a panel off the start edge, keeping the margin', () => {
-    expect(viewportShiftPx(-30, 100, 400)).toBe(38)
+    expect(viewportShiftPx(-30, 100, 400, 16)).toBe(38)
   })
 
   test('moves a panel off the end edge, keeping the margin', () => {
-    expect(viewportShiftPx(300, 420, 400)).toBe(-28)
+    expect(viewportShiftPx(300, 420, 400, 16)).toBe(-28)
   })
 
   test('keeps the start edge visible when the panel is too big to fit', () => {
-    expect(viewportShiftPx(20, 500, 400)).toBe(-12)
+    expect(viewportShiftPx(20, 500, 400, 16)).toBe(-12)
+  })
+
+  test('keeps a margin that grows with the root font size', () => {
+    expect(viewportShiftPx(-30, 100, 400, 24)).toBe(42)
   })
 })
 
@@ -77,12 +81,12 @@ describe('nextOptionIndex in a part-filled grid', () => {
 })
 
 describe('panelVerticalShiftPx', () => {
-  const trigger = { triggerTopPx: 352 }
+  const trigger = { triggerTopPx: 352, rootFontSizePx: 16 }
 
   test('leaves a panel that fits below', () => {
-    expect(panelVerticalShiftPx({ panelTopPx: 100, panelBottomPx: 300, triggerTopPx: 60, viewportHeightPx: 800 })).toBe(
-      0,
-    )
+    const placement = { panelTopPx: 100, panelBottomPx: 300, triggerTopPx: 60, viewportHeightPx: 800 }
+
+    expect(panelVerticalShiftPx({ ...placement, rootFontSizePx: 16 })).toBe(0)
   })
 
   test('flips above the trigger when it only fits there', () => {
@@ -91,5 +95,11 @@ describe('panelVerticalShiftPx', () => {
 
   test('falls back to shifting when it fits neither way', () => {
     expect(panelVerticalShiftPx({ panelTopPx: 392, panelBottomPx: 792, viewportHeightPx: 600, ...trigger })).toBe(-200)
+  })
+
+  test('keeps the gap to the trigger in step with the root font size when it flips', () => {
+    const placement = { panelTopPx: 394, panelBottomPx: 652, viewportHeightPx: 600, triggerTopPx: 352 }
+
+    expect(panelVerticalShiftPx({ ...placement, rootFontSizePx: 24 })).toBe(-306)
   })
 })

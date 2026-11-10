@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react'
 import { nextOptionIndex, panelVerticalShiftPx, viewportShiftPx } from './filter-select-logic'
+import { readRootFontSizePx } from './root-font-size'
 
 function useDismiss(
   isOpen: boolean,
@@ -55,13 +56,15 @@ function useKeepPanelOnScreen(
       panel.style.transform = ''
       const { left, right, top, bottom } = panel.getBoundingClientRect()
       const triggerTopPx = triggerRef.current?.getBoundingClientRect().top ?? top
-      const shiftXPx = viewportShiftPx(left, right, window.innerWidth)
+      const rootFontSizePx = readRootFontSizePx()
+      const shiftXPx = viewportShiftPx(left, right, window.innerWidth, rootFontSizePx)
 
       const shiftYPx = panelVerticalShiftPx({
         panelTopPx: top,
         panelBottomPx: bottom,
         triggerTopPx,
         viewportHeightPx: window.innerHeight,
+        rootFontSizePx,
       })
 
       panel.style.transform = `translate(${shiftXPx}px, ${shiftYPx}px)`

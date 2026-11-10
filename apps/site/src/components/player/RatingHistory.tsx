@@ -20,7 +20,7 @@ function SeasonLine({ points, isCurrent }: { points: ChartPoint[]; isCurrent: bo
   ]
 
   return (
-    <div className="flex items-baseline gap-3 text-[13px] whitespace-nowrap text-soft tabular-nums">
+    <div className="flex items-baseline gap-3 text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
       {facts.map(({ label, value }) => (
         <span key={label}>
           {label} <span className="font-black text-strong">{value}</span>

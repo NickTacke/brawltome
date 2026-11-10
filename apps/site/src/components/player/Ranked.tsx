@@ -7,7 +7,7 @@ const bigRating =
   'text-[2.25rem] leading-none font-black tracking-tight text-strong min-[400px]:text-[2.75rem] [@media(min-height:960px)]:text-[3.25rem] md:max-lg:text-[2.25rem]! lg:max-xl:text-[2.75rem]!'
 
 const banner =
-  'h-28 w-20 shrink-0 object-contain sm:h-36 sm:w-[104px] md:max-lg:h-24! md:max-lg:w-[68px]! lg:max-xl:h-32! lg:max-xl:w-24! xl:[@media(max-height:880px)]:h-28! xl:[@media(max-height:880px)]:w-20! [@media(min-height:960px)]:h-40 [@media(min-height:960px)]:w-[116px]'
+  'h-28 w-20 shrink-0 object-contain sm:h-36 sm:w-[6.5rem] md:max-lg:h-24! md:max-lg:w-[4.25rem]! lg:max-xl:h-32! lg:max-xl:w-24! xl:[@media(max-height:880px)]:h-28! xl:[@media(max-height:880px)]:w-20! [@media(min-height:960px)]:h-40 [@media(min-height:960px)]:w-[7.25rem]'
 
 function PeakNote({ standing }: { standing: Standing }) {
   if (standing.games === 0) return null
@@ -26,7 +26,7 @@ function PeakNote({ standing }: { standing: Standing }) {
 
 function GamesAndReset({ standing }: { standing: Standing }) {
   return (
-    <div className="text-[13px] whitespace-nowrap text-soft tabular-nums">
+    <div className="text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
       <span className="font-black text-strong">{formatGrouped(standing.games)}</span> games ·{' '}
       <span className="font-black text-strong">{formatGrouped(eloReset(standing.rating))}</span> after reset
     </div>

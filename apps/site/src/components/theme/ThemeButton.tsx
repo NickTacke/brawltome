@@ -38,7 +38,7 @@ export function ThemeButton({ className }: { className: string }) {
         Theme
       </button>
       {isOpen && (
-        <div className="fixed inset-x-3 bottom-3 z-50 max-h-[85dvh] overflow-y-auto rounded-control border border-line bg-ink p-4 shadow-xl md:absolute md:inset-x-auto md:right-0 md:bottom-full md:mb-3 md:max-h-none md:w-[340px] md:overflow-visible">
+        <div className="fixed inset-x-3 bottom-3 z-50 max-h-[85dvh] overflow-y-auto rounded-control border border-line bg-ink p-4 shadow-xl md:absolute md:inset-x-auto md:right-0 md:bottom-full md:mb-3 md:max-h-none md:w-[21.25rem] md:overflow-visible">
           <h2 className="text-base font-bold text-strong">Theme</h2>
           <ThemePicker />
         </div>

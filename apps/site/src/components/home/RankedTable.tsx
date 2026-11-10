@@ -8,7 +8,7 @@ const placeColours: Record<number, string> = {
 }
 
 const columnLabelBase =
-  'h-10 align-middle text-[11px] leading-none font-bold tracking-wide whitespace-nowrap text-soft uppercase'
+  'h-10 align-middle text-[0.6875rem] leading-none font-bold tracking-wide whitespace-nowrap text-soft uppercase'
 
 export const columnLabelStyle = `px-3 ${columnLabelBase}`
 export const statHeaderStyle = `hidden px-2 text-right sm:table-cell ${columnLabelBase}`

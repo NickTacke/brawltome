@@ -11,7 +11,7 @@ type Entry = LeaderboardRecentActivityEntry
 function GamesRecord({ entry }: { entry: Entry }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-[60px] shrink-0 font-mono whitespace-nowrap text-text">
+      <span className="w-[3.75rem] shrink-0 font-mono whitespace-nowrap text-text">
         {entry.winsDelta}W <span className="text-soft">{entry.lossesDelta}L</span>
       </span>
       <QueueTicks wins={entry.winsDelta} losses={entry.lossesDelta} />
@@ -44,15 +44,15 @@ function QueueRow({ entry }: { entry: Entry }) {
 
   return (
     <tr className={stripedRowStyle}>
-      <td className="hidden w-[76px] pr-3 pl-3 font-mono text-soft sm:table-cell">#{formatWhole(entry.standing)}</td>
+      <td className="hidden w-[4.75rem] pr-3 pl-3 font-mono text-soft sm:table-cell">#{formatWhole(entry.standing)}</td>
       <PlayerCell entry={entry} />
       <td className="hidden w-20 px-3 text-soft sm:table-cell">{entry.region}</td>
-      <td className="w-[108px] pr-3 pl-3 text-right font-mono font-semibold text-strong sm:w-24">
+      <td className="w-[6.75rem] pr-3 pl-3 text-right font-mono font-semibold text-strong sm:w-24">
         {formatWhole(entry.rating)}
         <div className={`mt-0.5 text-xs font-normal sm:hidden ${colour}`}>{change}</div>
       </td>
       <td className={`hidden w-20 px-3 text-right font-mono sm:table-cell ${colour}`}>{change}</td>
-      <td className="hidden w-[176px] pr-3 pl-3 sm:table-cell">
+      <td className="hidden w-[11rem] pr-3 pl-3 sm:table-cell">
         <GamesRecord entry={entry} />
       </td>
     </tr>
@@ -63,7 +63,7 @@ function QueueHead() {
   return (
     <thead className="border-y border-line/40">
       <tr>
-        <th scope="col" className={`hidden w-[76px] text-left sm:table-cell ${columnLabelStyle}`}>
+        <th scope="col" className={`hidden w-[4.75rem] text-left sm:table-cell ${columnLabelStyle}`}>
           Rank
         </th>
         <th scope="col" className={`text-left sm:pl-0 ${columnLabelStyle}`}>
@@ -72,13 +72,13 @@ function QueueHead() {
         <th scope="col" className={`hidden w-20 text-left sm:table-cell ${columnLabelStyle}`}>
           Region
         </th>
-        <th scope="col" className={`w-[108px] text-right sm:w-24 ${columnLabelStyle}`}>
+        <th scope="col" className={`w-[6.75rem] text-right sm:w-24 ${columnLabelStyle}`}>
           Rating
         </th>
         <th scope="col" className={`hidden w-20 text-right sm:table-cell ${columnLabelStyle}`}>
           Change
         </th>
-        <th scope="col" className={`hidden w-[176px] text-left sm:table-cell ${columnLabelStyle}`}>
+        <th scope="col" className={`hidden w-[11rem] text-left sm:table-cell ${columnLabelStyle}`}>
           Games
         </th>
       </tr>
@@ -102,7 +102,7 @@ export function QueueTable({ entries }: { entries: Entry[] }) {
 function SkeletonRow({ nameWidth }: { nameWidth: string }) {
   return (
     <tr className={stripedRowStyle}>
-      <td className="hidden w-[76px] pr-3 pl-3 sm:table-cell">
+      <td className="hidden w-[4.75rem] pr-3 pl-3 sm:table-cell">
         <span className={`${skeletonBarStyle} w-8`} />
       </td>
       <td className="max-w-0 pr-3 pl-3 sm:pl-0">
@@ -114,13 +114,13 @@ function SkeletonRow({ nameWidth }: { nameWidth: string }) {
       <td className="hidden w-20 px-3 sm:table-cell">
         <span className={`${skeletonBarStyle} w-8`} />
       </td>
-      <td className="w-[108px] pr-3 pl-3 sm:w-24">
+      <td className="w-[6.75rem] pr-3 pl-3 sm:w-24">
         <span className={`${skeletonBarStyle} ml-auto w-12`} />
       </td>
       <td className="hidden w-20 px-3 sm:table-cell">
         <span className={`${skeletonBarStyle} ml-auto w-7`} />
       </td>
-      <td className="hidden w-[176px] pr-3 pl-3 sm:table-cell">
+      <td className="hidden w-[11rem] pr-3 pl-3 sm:table-cell">
         <span className={`${skeletonBarStyle} w-32`} />
       </td>
     </tr>

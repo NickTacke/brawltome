@@ -28,7 +28,7 @@ export const Route = createFileRoute('/')({
 })
 
 // wider than the main column on large screens, lined up with the footer
-const wideLayout = 'xl:relative xl:left-1/2 xl:w-[min(1400px,calc(100vw-185px))] xl:-translate-x-1/2'
+const wideLayout = 'xl:relative xl:left-1/2 xl:w-[min(87.5rem,calc(100vw-11.5625rem))] xl:-translate-x-1/2'
 
 const halvesStyle =
   'grid gap-y-8 xl:grid-cols-2 xl:divide-x xl:divide-line/50 xl:[&>*:first-child]:pr-12 xl:[&>*:last-child]:pl-12'

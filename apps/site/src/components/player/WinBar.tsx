@@ -10,5 +10,5 @@ export function WinBar({ wins, games }: { wins: number; games: number }) {
 }
 
 export function WinRateLabel() {
-  return <span className="font-sans text-[11px] font-bold tracking-wide text-soft/75">WIN RATE:</span>
+  return <span className="font-sans text-[0.6875rem] font-bold tracking-wide text-soft/75">WIN RATE:</span>
 }
