@@ -1,26 +1,21 @@
 import { useRouter } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { countPageView } from '../../server/visits'
-import { isMeasuringAllowed, isReloadNavigation, randomVisitId, referrerDomainOf } from './browser-visit'
+import { isReloadNavigation, referrerDomainOf } from './browser-visit'
 import { createPageViewCounter, type PageViewCounter, watchPageViews } from './page-view-counter'
+import { tabVisitIdOrNull } from './tab-visit-id'
 import { createVisitSender } from './visit-sender'
 
-// one per tab and only in its memory, so a visit id is never stored on the device; null when we may not count
+// one per tab; null when we may not count
 let tabCounter: PageViewCounter | null | undefined
 
 function createTabCounter(): PageViewCounter | null {
-  const browser = navigator as Navigator & { globalPrivacyControl?: boolean }
+  const visitId = tabVisitIdOrNull()
 
-  const privacy = {
-    doNotTrack: browser.doNotTrack,
-    globalPrivacyControl: browser.globalPrivacyControl,
-    webdriver: browser.webdriver,
-  }
-
-  if (!isMeasuringAllowed(privacy)) return null
+  if (visitId === null) return null
 
   const send = createVisitSender({
-    visitId: randomVisitId(),
+    visitId,
     viewportWidth: () => window.innerWidth,
     referrerDomain: referrerDomainOf(document.referrer, window.location.hostname),
     countPageView: (visit) => countPageView({ data: visit }),
