@@ -70,7 +70,7 @@ function deploy({ firstDeploy = false, newServices = [], env = {} }: DeployOptio
 
   const { BRAWLTOME_IMAGE_TAG: _inherited, ...inheritedEnv } = process.env
 
-  const result = spawnSync('sh', [deployScript, project, 'infra/app/compose.yml', 'api', 'web'], {
+  const result = spawnSync('sh', [deployScript, project, 'infra/app/compose.yml', 'api', 'web', 'site'], {
     cwd: checkout,
     encoding: 'utf8',
     env: {
@@ -90,7 +90,7 @@ function deploy({ firstDeploy = false, newServices = [], env = {} }: DeployOptio
     outages?: string[]
   }
 
-  // Whatever fails, api and web must keep a healthy container serving from the moment they first have one.
+  // Whatever fails, api, web and site must keep a healthy container serving from the moment they first have one.
   expect(state.outages ?? []).toEqual([])
 
   // a run rejected before any docker call leaves no logs
@@ -218,6 +218,7 @@ describe('deploy smoke checks and rollback', () => {
 
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale api=2 api'))
     expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale web=2 web'))
+    expect(rollbackCalls).toContainEqual(expect.stringContaining('--no-recreate --scale site=2 site'))
     expect(imageOf('postgres')).toEqual(['sha256:old-postgres'])
   })
 
@@ -230,15 +231,13 @@ describe('deploy smoke checks and rollback', () => {
     for (const service of appServices) expect(imageOf(service)).toEqual([`sha256:old-${service}`])
   })
 
-  test('a first site deploy that cannot render a page rolls the rest back and leaves site in place', () => {
+  test('a failing release that adds a rolled service is left in place, as nothing can serve its routes before it', () => {
     const { result, imageOf } = deploy({ newServices: ['site'], env: { DOCKER_STUB_FAIL_IMAGE: 'new-site' } })
 
     expect(result.status).toBe(1)
-    expect(result.stdout).toContain('rollback: no previous site image; it keeps running this release')
-    expect(result.stdout).toContain('ROLLED BACK, but the previous release fails the smoke checks too')
-    expect(imageOf('api')).toEqual(['sha256:old-api'])
-    expect(imageOf('web')).toEqual(['sha256:old-web'])
-    expect(imageOf('site')).toEqual(['sha256:new-site'])
+    expect(result.stdout).toContain('rollback: no previous site image (first deploy?); leaving this release in place')
+    expect(result.stdout).toContain('ROLLBACK INCOMPLETE')
+    for (const service of appServices) expect(imageOf(service)).toEqual([`sha256:new-${service}`])
   })
 
   test('a rollback points the configured release image back at the previous image', () => {
@@ -337,8 +336,8 @@ describe('deploy smoke checks and rollback', () => {
     const rollbackCalls = calls.slice(calls.indexOf(`tag ${project}-api:previous ${releaseImage('api')}`))
     const converges = rollbackCalls.filter((call) => call.includes(' up -d --remove-orphans '))
 
-    expect(converges).toHaveLength(1)
-    expect(converges[0]).toEndWith(' site')
+    // every other app service is rolled, so nothing is left to converge
+    expect(converges).toEqual([])
   })
 
   test('a forward roll whose new container fails its health check stops the deploy and keeps the old one', () => {
