@@ -1,4 +1,4 @@
 export { createDailyVisitorKeys } from './daily-visitor-key'
 export { recordSiteVisit, type SiteVisitDependencies, type SiteVisitor } from './record-site-visit'
-export { bindSaltToServer } from './server-bound-salt'
+export { createServerBoundSalts } from './server-bound-salt'
 export { createVisitLimiter } from './visit-limiter'

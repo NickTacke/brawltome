@@ -33,7 +33,7 @@ function createSaltSource() {
 function createHarness({ visitsPerMinute = 120, loadSalt = createSaltSource() } = {}) {
   const sink = createMemorySink()
   const telemetry = createTelemetry({ service: 'api', sink, drainIntervalMs: 0 })
-  const visitorKeys = createDailyVisitorKeys({ now: Date.now, loadSalt })
+  const visitorKeys = createDailyVisitorKeys({ now: Date.now, loadSalt, readTimeoutMs: 1_000 })
   const visits = createSiteVisitProcedures({ visitorKeys, limiter: createVisitLimiter(visitsPerMinute, Date.now) })
   const router = createOrpcRouter([], { database: {} as Database }, { visits })
   const app = new Hono()
@@ -183,6 +183,19 @@ describe('site visit procedure', () => {
 
     expect(await harness.send()).toEqual({ status: 200, body: { recorded: true } })
     expect(await harness.pageviewLogs()).toHaveLength(1)
+  })
+
+  test('never logs the salt when the read fails with an error that carries it', async () => {
+    const salt = randomBytes(32).toString('hex')
+
+    // what a database driver's error can look like: the failed query's parameters in the message and beside it
+    const failure = Object.assign(new Error(`insert failed, params: 2026-11-10,${salt}`), { params: [salt] })
+    const harness = createHarness({ loadSalt: () => Promise.reject(failure) })
+
+    expect(await harness.send()).toEqual({ status: 200, body: { recorded: false } })
+    await harness.telemetry.flush(1_000)
+
+    expect(JSON.stringify(harness.sink.records)).not.toContain(salt)
   })
 
   test('never logs or counts the salt', async () => {

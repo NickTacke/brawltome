@@ -7,6 +7,8 @@ type DailyVisitorKeyOptions = {
   now: () => number
   // the salt of a utc day, the same for every api process; rejects when it can't be read
   loadSalt: (day: string) => Promise<Uint8Array>
+  // how long a page view waits for the salt before it gives up
+  readTimeoutMs: number
 }
 
 /** The keys of one utc day, made with that day's salt. */
@@ -59,30 +61,46 @@ function keysOfDay(day: string, salt: Uint8Array): DayVisitorKeys {
   return { day, keyFor, visitKeyFor }
 }
 
+// only the caller gives up: what it waited for goes on, for whoever asks next
+function withinTime<T>(pending: Promise<T>, timeoutMs: number, action: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${action}: no answer within ${timeoutMs} ms`)), timeoutMs)
+  })
+
+  return Promise.race([pending, timeout]).finally(() => clearTimeout(timer))
+}
+
 /**
  * Keys that tell visitors of one utc day apart without naming them: a hash of address and browser, mixed with a
  * random secret that every api process shares for the day. It is read once a day and kept in memory until the day
  * changes, so a restart or a second process doesn't give a visitor a second key.
  */
-export function createDailyVisitorKeys({ now, loadSalt }: DailyVisitorKeyOptions) {
+export function createDailyVisitorKeys({ now, loadSalt, readTimeoutMs }: DailyVisitorKeyOptions) {
   let latestRead: { day: string; keys: Promise<DayVisitorKeys> } | undefined
 
-  function forToday(): Promise<DayVisitorKeys> {
-    const day = utcDay(now())
-
-    // also true while the read is still under way, so page views that arrive together wait for the same one
-    if (latestRead?.day === day) return latestRead.keys
-
+  function readKeysOf(day: string): Promise<DayVisitorKeys> {
     const read = { day, keys: loadSalt(day).then((salt) => keysOfDay(day, salt)) }
 
     latestRead = read
 
-    // a failed read is forgotten, so the next page view asks again
+    // a failed read is forgotten, so the next page view asks again. only while it is still the latest: a read of
+    // the day before that fails late must not throw away the new day's
     read.keys.catch(() => {
       if (latestRead === read) latestRead = undefined
     })
 
     return read.keys
+  }
+
+  function forToday(): Promise<DayVisitorKeys> {
+    const day = utcDay(now())
+    // also true while the read is still under way, so page views that arrive together wait for the same one
+    const keys = latestRead?.day === day ? latestRead.keys : readKeysOf(day)
+
+    // a slow database must not hold page views up: the one that waited is dropped, the read stays for the next
+    return withinTime(keys, readTimeoutMs, `read the visitor salt of ${day}`)
   }
 
   return { forToday }

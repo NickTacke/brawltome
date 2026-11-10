@@ -3,11 +3,12 @@ import { analyticsModule, createPostgresDailySalts } from '@brawltome/analytics'
 import type { Database } from '@brawltome/foundation'
 import { createTestDatabase, openTestClient, type TestDatabase } from '@brawltome/foundation/testing'
 import { createMemorySink, createTelemetry } from '@brawltome/telemetry'
-import { createDailyVisitorKeys, createVisitLimiter, recordSiteVisit } from '../src/visits'
+import { createDailyVisitorKeys, createServerBoundSalts, createVisitLimiter, recordSiteVisit } from '../src/visits'
 
 const address = '198.51.100.20'
 const browser = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36'
 const visitId = 'b'.repeat(32)
+const serverSecret = 'c'.repeat(32)
 const noon = Date.UTC(2026, 10, 10, 12)
 const nextNoon = Date.UTC(2026, 10, 11, 12)
 
@@ -28,7 +29,9 @@ beforeEach(async () => {
 // an api process: its own key maker, with nothing in memory yet, over the database every process shares
 function startProcess(client: Database, startMs: number) {
   let nowMs = startMs
-  const keys = createDailyVisitorKeys({ now: () => nowMs, loadSalt: createPostgresDailySalts(client).saltFor })
+  const storedSaltFor = createPostgresDailySalts(client).saltFor
+  const loadSalt = createServerBoundSalts({ serverSecret, storedSaltFor })
+  const keys = createDailyVisitorKeys({ now: () => nowMs, loadSalt, readTimeoutMs: 5_000 })
 
   return { keys, moveTo: (timeMs: number) => (nowMs = timeMs) }
 }

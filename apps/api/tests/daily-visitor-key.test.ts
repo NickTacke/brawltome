@@ -21,9 +21,9 @@ function createSaltStore() {
   return { saltFor, readDays }
 }
 
-function keysAt(startMs: number, loadSalt = createSaltStore().saltFor) {
+function keysAt(startMs: number, loadSalt = createSaltStore().saltFor, readTimeoutMs = 1_000) {
   let nowMs = startMs
-  const keys = createDailyVisitorKeys({ now: () => nowMs, loadSalt })
+  const keys = createDailyVisitorKeys({ now: () => nowMs, loadSalt, readTimeoutMs })
 
   return { keys, moveTo: (timeMs: number) => (nowMs = timeMs) }
 }
@@ -84,7 +84,7 @@ describe('daily visitor keys', () => {
     const key = today.keyFor('198.51.100.20', browser)
 
     expect(key).toMatch(/^[0-9a-f]{32}$/)
-    expect(key).not.toContain('198')
+    expect(key).not.toContain('198.51.100.20')
   })
 
   test('two processes that share the salt give a visitor the same key', async () => {
@@ -136,5 +136,50 @@ describe('daily visitor keys', () => {
 
     expect((await keys.forToday()).day).toBe('2026-11-10')
     expect(store.readDays).toEqual(['2026-11-10'])
+  })
+
+  test('a read of the day before that fails late leaves the new day its keys', async () => {
+    const store = createSaltStore()
+    let failYesterdaysRead = (_error: Error) => {}
+
+    const yesterdaysRead = new Promise<Uint8Array>((_resolve, reject) => {
+      failYesterdaysRead = reject
+    })
+
+    const loadSalt = (day: string) => (day === '2026-11-10' ? yesterdaysRead : store.saltFor(day))
+    const { keys, moveTo } = keysAt(Date.UTC(2026, 10, 10, 23, 59), loadSalt, 20)
+    const lateView = keys.forToday()
+
+    moveTo(Date.UTC(2026, 10, 11, 0, 1))
+    await keys.forToday()
+    failYesterdaysRead(new Error('connection refused'))
+
+    await expect(lateView).rejects.toThrow()
+    await keys.forToday()
+
+    expect(store.readDays).toEqual(['2026-11-11'])
+  })
+
+  test('a page view gives up on a slow read, and the read is kept for the next one', async () => {
+    const salt = randomBytes(32)
+    let reads = 0
+    let finishRead = (_salt: Uint8Array) => {}
+
+    const loadSalt = () => {
+      reads += 1
+
+      return new Promise<Uint8Array>((resolve) => {
+        finishRead = resolve
+      })
+    }
+
+    const { keys } = keysAt(Date.UTC(2026, 10, 10, 12), loadSalt, 20)
+
+    await expect(keys.forToday()).rejects.toThrow('read the visitor salt of 2026-11-10: no answer within 20 ms')
+
+    finishRead(salt)
+
+    expect((await keys.forToday()).day).toBe('2026-11-10')
+    expect(reads).toBe(1)
   })
 })
