@@ -86,10 +86,23 @@ const seaBoard = [
   ...Array.from({ length: fullScanRows - droppedRank }, (_, index) => seaRow(droppedRank + index + 1)),
 ]
 
+const globalTop = [american, anna, bram, visitor, cleo]
+const globalBoardSize = 1_002
+
+// the merged board is in order of rating, and each row keeps the rank it had on the board of its region
+function globalRow(place: number): Listed {
+  return { id: 40_000 + place, region: 'EU', rating: 2_300 - place, wins: 20, sourceRank: (place % 500) + 1 }
+}
+
+const globalBoard = [
+  ...globalTop,
+  ...Array.from({ length: globalBoardSize - globalTop.length }, (_, index) => globalRow(globalTop.length + index + 1)),
+]
+
 const absentId = 999
 
 const latestBoards: Record<Scope, Listed[]> = {
-  all: [anna, american, cleo, bram, visitor],
+  all: globalBoard,
   EU: europeBoard,
   'US-E': americanBoard,
   SEA: seaBoard,
@@ -276,16 +289,27 @@ describe('boardRanksById', () => {
     expect(await unrankedOn('SEA')).toEqual([seaFaded.id])
   })
 
-  test('gives every player on the global board the place the leaderboard page shows', async () => {
+  test('gives every player in the first 1,000 of the global board the place the leaderboard page shows', async () => {
     const entries = await readBoard('all')
 
-    expect(entries).toHaveLength(latestBoards.all.length)
+    expect(entries).toHaveLength(globalBoardSize)
 
     for (const entry of entries) {
-      const ranks = await readRanks({ id: playerIdOf(entry) })
+      const { globalRank } = await readRanks({ id: playerIdOf(entry) })
 
-      expect(ranks.globalRank).toBe(entry.standing)
+      expect(globalRank).toBe(entry.standing <= 1_000 ? entry.standing : null)
     }
+  }, 20_000)
+
+  test('has no global rank below place 1,000, where the merged board misses players', async () => {
+    expect(await readRanks({ id: globalRow(1_000).id })).toMatchObject({ globalRank: 1_000 })
+    expect(await readRanks({ id: globalRow(1_001).id })).toMatchObject({ globalRank: null })
+  })
+
+  test('has no cut-off on the global board, whose rows carry the ranks of their regional boards', async () => {
+    const ratedBelowItsLastSourceRank = globalRow(900)
+
+    expect(await readRanks({ id: ratedBelowItsLastSourceRank.id })).toMatchObject({ globalRank: 900 })
   })
 
   test('a rating tie goes to the player with more wins', async () => {

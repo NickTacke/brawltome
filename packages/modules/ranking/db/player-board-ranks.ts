@@ -13,6 +13,11 @@ type PlacedOn = {
   cut_off_rating: number | null
 }
 
+// the global board is the regional boards merged, and each of those stops at about its region's top 1,000. so its
+// first 1,000 places are complete, since no region can hold more of them than its own board lists. below that,
+// players under the cut-off of a bigger region are missing, and a place is better than the player's real one
+const lastExactGlobalPlace = 1_000
+
 /**
  * A player's place on the latest published 1v1 board of each scope asked for. The board is picked as the leaderboard
  * page picks it and ranked by the same rowsByRating, so both show one number. A board the player is not on gives no
@@ -54,6 +59,13 @@ function placeOn(places: PlacedOn[], scope: LeaderboardScope): PlacedOn | null {
   return places.find((place) => place.scope === scope) ?? null
 }
 
+// a merged row has no cut-off rating of its own, so only the place itself can be judged
+function globalRankOf(place: PlacedOn | null): number | null {
+  if (!place || place.rating_standing > lastExactGlobalPlace) return null
+
+  return place.rating_standing
+}
+
 // brawlhalla lists a block of players first, some of them rated far below the rest of the board, and then everyone
 // else by rating down to the last row. so a board the scan filled holds every player rated at least as high as that
 // last row and only a few of the players below it: a standing is exact down to that rating and says nothing under
@@ -80,5 +92,5 @@ export async function readPlayerBoardRanks(
   const globalPlace = placeOn(places, 'all')
   const regionPlace = region ? placeOn(places, region) : null
 
-  return { globalRank: globalPlace?.rating_standing ?? null, regionRank: regionRankOf(regionPlace) }
+  return { globalRank: globalRankOf(globalPlace), regionRank: regionRankOf(regionPlace) }
 }
