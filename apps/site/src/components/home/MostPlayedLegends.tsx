@@ -1,16 +1,11 @@
 import type { MostPlayedLegend } from '../../server/load-most-played-legends'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
-import { legendName } from '../player/player-format'
+import { legendDisplayName } from './legend-display-name'
 import { SectionHeader } from './SectionHeader'
-
-// legend keys are lowercase, and the name also shows in a title, which css can't capitalise
-function capitalizeWords(name: string): string {
-  return name.replace(/(^|\s)\S/g, (letter) => letter.toUpperCase())
-}
 
 function LegendShare({ legend }: { legend: MostPlayedLegend }) {
   const sharePercent = (legend.share * 100).toFixed(1)
-  const name = capitalizeWords(legendName(legend.legendNameKey))
+  const name = legendDisplayName(legend.legendNameKey)
 
   return (
     // long names are cut off in the narrow columns, the title shows them whole
