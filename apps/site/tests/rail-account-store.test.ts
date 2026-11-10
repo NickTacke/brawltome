@@ -169,4 +169,34 @@ describe('the rail account store', () => {
 
     expect(read).toHaveBeenCalledTimes(2)
   })
+
+  test('reads again when the account page shows a verified account the rail does not have yet', async () => {
+    const read = mock(async () => signedIn([1]))
+    const store = createRailAccountStore(read)
+
+    await store.loadOnce()
+    read.mockImplementation(async () => signedIn([1], 7))
+    await store.followVerification(7)
+
+    expect(store.current()).toEqual(signedIn([1], 7))
+  })
+
+  test('leaves the rail alone when it already shows the same verified account', async () => {
+    const read = mock(async () => signedIn([1], 7))
+    const store = createRailAccountStore(read)
+
+    await store.loadOnce()
+    await store.followVerification(7)
+
+    expect(read).toHaveBeenCalledTimes(1)
+  })
+
+  test('a signed out rail does not read for a verification', async () => {
+    const read = mock(async () => signedIn([1], 7))
+    const store = createRailAccountStore(read)
+
+    await store.followVerification(7)
+
+    expect(read).not.toHaveBeenCalled()
+  })
 })

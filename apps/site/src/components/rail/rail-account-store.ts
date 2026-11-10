@@ -60,6 +60,17 @@ export function createRailAccountStore(read: ReadRailAccount) {
     return applyPinOrder(answer.pinOrder)
   }
 
+  /** Reads again when the account page shows a verified account the rail doesn't, e.g. a verification that just finished. */
+  async function followVerification(verifiedId: number | null) {
+    if (account.kind !== 'signedIn') return
+
+    const railVerifiedId = account.verifiedPlayer?.brawlhallaId ?? null
+
+    if (railVerifiedId === verifiedId) return
+
+    return reload()
+  }
+
   return {
     current: () => account,
     subscribe(listener: () => void) {
@@ -76,6 +87,7 @@ export function createRailAccountStore(read: ReadRailAccount) {
     showSignedOut,
     applyPinOrder,
     followPinWrite,
+    followVerification,
   }
 }
 
