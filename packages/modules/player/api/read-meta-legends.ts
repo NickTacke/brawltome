@@ -9,7 +9,7 @@ function withWinRate({ wins, ...legend }: MetaLegendGames) {
 }
 
 /**
- * The legends high rated players play this season. Null until a season start has been detected, because before that
+ * The legends whose players hold the highest average rating on them this season. Null until a season start has been detected, because before that
  * any stored snapshot could hold an older season's games.
  */
 export async function readMetaLegends(

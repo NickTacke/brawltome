@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { metaLegendsSchema } from '../src/meta-legends'
 
 const season = { season: 42, startsAt: '2026-09-23T14:00:00.000Z' }
-const diana = { legendNameKey: 'diana', games: 4200, playerCount: 140, winRate: 0.56 }
-const unknownLegend = { legendNameKey: 'new legend', games: 30, playerCount: 2, winRate: 0.5 }
+const diana = { legendNameKey: 'diana', games: 4200, playerCount: 140, winRate: 0.56, averageRating: 1765 }
+const unknownLegend = { legendNameKey: 'new legend', games: 30, playerCount: 2, winRate: 0.5, averageRating: 1500 }
 const meta = { ...season, legends: [diana, unknownLegend] }
 
 describe('meta legends contract', () => {
@@ -22,5 +22,6 @@ describe('meta legends contract', () => {
     expect(() => metaLegendsSchema.parse({ ...meta, legends: [{ ...diana, winRate: 1.2 }] })).toThrow()
     expect(() => metaLegendsSchema.parse({ ...meta, legends: [{ ...diana, playerCount: 0 }] })).toThrow()
     expect(() => metaLegendsSchema.parse({ ...meta, extra: true })).toThrow()
+    expect(() => metaLegendsSchema.parse({ ...meta, legends: [{ ...diana, averageRating: -1 }] })).toThrow()
   })
 })

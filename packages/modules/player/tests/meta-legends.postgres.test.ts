@@ -4,6 +4,7 @@ import { queueModule } from '@brawltome/queue'
 import { call } from '@orpc/server'
 import { createPlayerProcedures } from '../api/procedures'
 import { readMetaLegends } from '../api/read-meta-legends'
+import { readMetaLegendGames } from '../db/read-meta-legend-games'
 import { playerModule } from '../index'
 
 const internalCaller = { context: { isInternalCaller: true } }
@@ -51,6 +52,13 @@ async function insertReset() {
   }
 }
 
+// enough players of one legend to clear the player floor the site uses
+async function insertRegulars(firstId: number, nameKey: string, rating: number) {
+  for (let brawlhallaId = firstId; brawlhallaId < firstId + 30; brawlhallaId += 1) {
+    await insertSnapshot(brawlhallaId, thisSeason, [{ nameKey, rating, wins: 6, games: 10 }])
+  }
+}
+
 function procedures() {
   return createPlayerProcedures({ database })
 }
@@ -80,26 +88,57 @@ beforeAll(async () => {
 
   // seen just before the reset, so these games belong to last season
   await insertSnapshot(304, beforeTheStart, [{ nameKey: 'diana', rating: 2500, wins: 500, games: 500 }])
+
+  await insertRegulars(2000, 'lucien', 1800)
 }, 30_000)
 
 afterAll(async () => {
   await database?.drop()
 })
 
+describe('readMetaLegendGames', () => {
+  test("ranks this season's legends by the average rating of the players who play them, any rating", async () => {
+    const legends = await readMetaLegendGames(database, seasonStartsAt, 1)
+    const order = legends.map(({ legendNameKey, averageRating }) => [legendNameKey, averageRating])
+
+    // mordex and ada both average 2000, and mordex's 110 games put it first
+    expect(order.slice(0, 4)).toEqual([
+      ['teros', 2300],
+      ['diana', 2075],
+      ['mordex', 2000],
+      ['ada', 2000],
+    ])
+  })
+
+  test('counts every game of the legends a player has ten or more games on', async () => {
+    const legends = await readMetaLegendGames(database, seasonStartsAt, 1)
+
+    expect(legends.find(({ legendNameKey }) => legendNameKey === 'mordex')).toEqual({
+      legendNameKey: 'mordex',
+      games: 110,
+      wins: 94,
+      playerCount: 2,
+      averageRating: 2000,
+    })
+
+    expect(legends.map(({ legendNameKey }) => legendNameKey)).not.toContain('sidra')
+  })
+
+  test('leaves out legends too few players play', async () => {
+    const legends = await readMetaLegendGames(database, seasonStartsAt, 2)
+
+    expect(legends.map(({ legendNameKey }) => legendNameKey)).toEqual(['diana', 'mordex', 'lucien'])
+  })
+})
+
 describe('player.metaLegends', () => {
-  test("ranks this season's legends of players rated 2000+ by games, then by name", async () => {
+  test('only names legends at least thirty players play', async () => {
     const meta = await call(procedures().metaLegends, undefined, internalCaller)
 
     expect(meta).toEqual({
       season: 40,
       startsAt: seasonStartsAt,
-      legends: [
-        // won 30 of the 50 games, not the 62.5% an average of each player's rate would give
-        { legendNameKey: 'diana', games: 50, playerCount: 2, winRate: 0.6 },
-        { legendNameKey: 'teros', games: 50, playerCount: 1, winRate: 0.4 },
-        { legendNameKey: 'ada', games: 10, playerCount: 1, winRate: 0.5 },
-        { legendNameKey: 'mordex', games: 10, playerCount: 1, winRate: 0.4 },
-      ],
+      legends: [{ legendNameKey: 'lucien', games: 300, playerCount: 30, winRate: 0.6, averageRating: 1800 }],
     })
   })
 
@@ -107,7 +146,7 @@ describe('player.metaLegends', () => {
     const { metaLegends } = procedures()
 
     await call(metaLegends, undefined, internalCaller)
-    await insertSnapshot(305, thisSeason, [{ nameKey: 'thor', rating: 2400, wins: 900, games: 900 }])
+    await insertRegulars(3000, 'thor', 2400)
 
     const meta = await call(metaLegends, undefined, internalCaller)
 
