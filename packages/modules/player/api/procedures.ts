@@ -1,4 +1,5 @@
 import {
+  metaLegendsSchema,
   mostPlayedLegendsSchema,
   nullablePlayerCareerProfileSchema,
   nullablePlayerRankedProfileSchema,
@@ -18,6 +19,7 @@ import { createSeasonStartsCache } from '../ranked/season-starts-cache'
 import { createReadCache } from '../read-cache'
 import { mapPlayerCareerProfile } from './map-career-profile'
 import { mapPlayerRankedProfile } from './map-ranked-profile'
+import { readMetaLegends } from './read-meta-legends'
 import { readMostPlayedLegends } from './read-most-played-legends'
 
 // shares over a season of snapshots move by fractions of a percent in an hour, and the read sums every one of them
@@ -37,6 +39,12 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
 
   const cachedMostPlayedLegends = createReadCache(
     async () => readMostPlayedLegends(database, await cachedSeasonStarts()),
+    mostPlayedLegendsLifetimeMs,
+  )
+
+  // the same season of snapshots as most played, so it moves as slowly
+  const cachedMetaLegends = createReadCache(
+    async () => readMetaLegends(database, await cachedSeasonStarts()),
     mostPlayedLegendsLifetimeMs,
   )
 
@@ -110,5 +118,16 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
     .output(mostPlayedLegendsSchema)
     .handler(() => cachedMostPlayedLegends())
 
-  return { rankedSummaries, referenceById, rankedById, careerById, seasonStarts, mostPlayedLegends }
+  const metaLegends = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/legends/meta',
+      operationId: 'player.metaLegends',
+      summary: 'The legends players rated 2000+ play most this season',
+      tags: ['player'],
+    })
+    .output(metaLegendsSchema)
+    .handler(() => cachedMetaLegends())
+
+  return { rankedSummaries, referenceById, rankedById, careerById, seasonStarts, mostPlayedLegends, metaLegends }
 }

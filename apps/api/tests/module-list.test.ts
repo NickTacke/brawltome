@@ -72,6 +72,7 @@ describe('oRPC router built from a module list', () => {
       'careerById',
       'seasonStarts',
       'mostPlayedLegends',
+      'metaLegends',
     ])
 
     expect(Object.keys(router.ranking)).toEqual([
