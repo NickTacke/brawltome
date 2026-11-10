@@ -45,4 +45,16 @@ describe('analytics drizzle tables', () => {
 
     expect(table?.persistence).toBe('u')
   })
+
+  // by default a table this small is only vacuumed after fifty dead rows, which is fifty days of deleted salts
+  test('vacuum the daily salts after every delete', async () => {
+    const [table] = await database.sql<{ options: string[] | null }[]>`
+      SELECT relation.reloptions AS options
+      FROM pg_class relation
+      JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = 'analytics' AND relation.relname = 'daily_salts'
+    `
+
+    expect(table?.options).toEqual(['autovacuum_vacuum_threshold=0', 'autovacuum_vacuum_scale_factor=0'])
+  })
 })

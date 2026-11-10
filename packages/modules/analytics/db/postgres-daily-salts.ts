@@ -7,5 +7,3 @@ export function createPostgresDailySalts(database: Database) {
     saltFor: (day: string) => ensureDailySalt(database, day),
   }
 }
-
-export type PostgresDailySalts = ReturnType<typeof createPostgresDailySalts>
