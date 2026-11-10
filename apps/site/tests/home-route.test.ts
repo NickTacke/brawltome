@@ -4,15 +4,22 @@ const getTopPlayers = mock(async (_query: { data: unknown }) => ({ region: 'EU',
 const getTopGuilds = mock(async () => [])
 const getPatches = mock(async (): Promise<unknown[] | null> => null)
 const getMostPlayedLegends = mock(async () => [])
+const getMetaLegends = mock(async () => [])
 
-mock.module('../src/server/home', () => ({ getTopPlayers, getTopGuilds, getPatches, getMostPlayedLegends }))
+mock.module('../src/server/home', () => ({
+  getTopPlayers,
+  getTopGuilds,
+  getPatches,
+  getMostPlayedLegends,
+  getMetaLegends,
+}))
 
 type Search = { mode?: string; region?: string }
 
 type RouteOptions = {
   validateSearch: (search: Record<string, unknown>) => Search
   loaderDeps: (context: { search: Search }) => Search
-  loader: (context: { deps: Search }) => Promise<{ patches: unknown; mostPlayedLegends: unknown }>
+  loader: (context: { deps: Search }) => Promise<{ patches: unknown; mostPlayedLegends: unknown; metaLegends: unknown }>
 }
 
 let options: RouteOptions
@@ -65,5 +72,12 @@ describe('home route', () => {
 
     expect(getMostPlayedLegends).toHaveBeenCalled()
     expect(page.mostPlayedLegends).toEqual([])
+  })
+
+  test('loads the meta legends with the page', async () => {
+    const page = await load({})
+
+    expect(getMetaLegends).toHaveBeenCalled()
+    expect(page.metaLegends).toEqual([])
   })
 })

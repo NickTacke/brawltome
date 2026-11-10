@@ -93,6 +93,7 @@ describe('player.rankedSummaries over oRPC', () => {
     }
 
     expect(Object.keys(document.paths).sort()).toEqual([
+      '/legends/meta',
       '/legends/most-played',
       '/players/ranked-summaries',
       '/players/{id}/career',
