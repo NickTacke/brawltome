@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { socialLinks } from './social-links'
 import { ThemeButton } from './theme/ThemeButton'
 
@@ -11,12 +12,12 @@ export function SiteFooter() {
           Not associated with or endorsed by Blue Mammoth Games, who own Brawlhalla, its art and its trademarks.
         </p>
         <nav aria-label="Footer" className="flex shrink-0 items-center gap-5 text-sm font-semibold text-soft">
-          <a href="/privacy" className={footerLinkStyle}>
+          <Link to="/privacy" className={footerLinkStyle}>
             Privacy
-          </a>
-          <a href="/terms" className={footerLinkStyle}>
+          </Link>
+          <Link to="/terms" className={footerLinkStyle}>
             Terms
-          </a>
+          </Link>
           <ThemeButton className={footerLinkStyle} />
           <span className="h-4 w-px bg-line" aria-hidden="true" />
           {socialLinks.map(({ href, label, svg }) => (
