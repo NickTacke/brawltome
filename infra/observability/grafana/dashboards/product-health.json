@@ -798,7 +798,7 @@
       },
       "targets": [
         {
-          "expr": "{service_name=\"web\"} | json | event=\"analytics.error.client\"",
+          "expr": "{service_name=~\"web|api\"} |= \"analytics.error.client\" | json | event=\"analytics.error.client\"",
           "refId": "A"
         }
       ],
