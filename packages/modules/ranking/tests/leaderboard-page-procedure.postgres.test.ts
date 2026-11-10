@@ -12,15 +12,15 @@ const outsideCaller = { context: { isInternalCaller: false } }
 
 const observedAt = new Date('2026-11-09T12:00:00.000Z')
 const nextPublicationAt = new Date('2026-11-09T12:15:00.000Z')
-const boardSize = 31
+const boardSize = 100
 const namedPlayerId = 101
-const visitingPlayerRank = 3
+
+// brawlhalla's order puts a 2,700 on its fourth page of 30 and a 2,490 that ties the tenth row on its fourth too
+const ratingOutOfOrder: Record<number, number> = { 92: 2_490, 95: 2_700 }
 
 let database: TestDatabase
 
 function boardRow(snapshotId: string, rank: number) {
-  const isVisitor = rank === visitingPlayerRank
-
   return {
     snapshot_id: snapshotId,
     mode: '1v1',
@@ -32,8 +32,8 @@ function boardRow(snapshotId: string, rank: number) {
     player_one_name: `Captured ${rank}`,
     player_two_id: null,
     player_two_name: null,
-    region: isVisitor ? 'US-E' : 'EU',
-    rating: isVisitor ? 2_900 : 2_500 - rank,
+    region: 'EU',
+    rating: ratingOutOfOrder[rank] ?? 2_500 - rank,
     peak_rating: 2_950,
     wins: 40,
     losses: 10,
@@ -98,6 +98,16 @@ function readPage(input: { mode: '1v1' | '2v2' | 'solo2v2' | '3v3'; region: 'all
   return call(leaderboardPage, input, internalCaller)
 }
 
+type Place = { standing: number; sourceRank: number; rating: number }
+
+function places(entries: Place[]): Place[] {
+  return entries.map(({ standing, sourceRank, rating }) => ({ standing, sourceRank, rating }))
+}
+
+function sourceRanks(entries: Place[]): number[] {
+  return entries.map(({ sourceRank }) => sourceRank)
+}
+
 describe('leaderboardPage', () => {
   test('serves the first 30 rows with current names and best legends', async () => {
     const page = await readPage({ mode: '1v1', region: 'EU', page: 1 })
@@ -107,8 +117,8 @@ describe('leaderboardPage', () => {
     expect(page).toMatchObject({ page: 1, pageSize: 30, hasMore: true, totalRows: boardSize })
     expect(page.entries).toHaveLength(30)
 
-    expect(page.entries[0]).toEqual({
-      standing: 1,
+    expect(page.entries[1]).toEqual({
+      standing: 2,
       sourceRank: 1,
       identity: {
         type: 'one-vs-one-player',
@@ -129,32 +139,53 @@ describe('leaderboardPage', () => {
 
     if (page.status === 'unavailable') throw new Error('Expected the published EU board')
 
-    expect(page.entries[1].identity).toEqual({
+    expect(page.entries[2].identity).toEqual({
       type: 'one-vs-one-player',
       player: { brawlhallaId: 102, name: 'Captured 2', bestLegendNameKey: null },
     })
   })
 
-  test('serves a board in stored order, so a visiting player stays at their rank', async () => {
+  test('ranks the board by rating, so a high rating deep in the official order leads page 1', async () => {
     const page = await readPage({ mode: '1v1', region: 'EU', page: 1 })
 
     if (page.status === 'unavailable') throw new Error('Expected the published EU board')
 
-    expect(page.entries.slice(0, 4).map(({ standing, rating }) => ({ standing, rating }))).toEqual([
-      { standing: 1, rating: 2_499 },
-      { standing: 2, rating: 2_498 },
-      { standing: 3, rating: 2_900 },
-      { standing: 4, rating: 2_496 },
+    expect(places(page.entries.slice(0, 2))).toEqual([
+      { standing: 1, sourceRank: 95, rating: 2_700 },
+      { standing: 2, sourceRank: 1, rating: 2_499 },
+    ])
+
+    expect(page.entries.map(({ standing }) => standing)).toEqual(Array.from({ length: 30 }, (_, index) => index + 1))
+  })
+
+  test('breaks a rating tie by the official order', async () => {
+    const page = await readPage({ mode: '1v1', region: 'EU', page: 1 })
+
+    if (page.status === 'unavailable') throw new Error('Expected the published EU board')
+
+    expect(places(page.entries.slice(10, 13))).toEqual([
+      { standing: 11, sourceRank: 10, rating: 2_490 },
+      { standing: 12, sourceRank: 92, rating: 2_490 },
+      { standing: 13, sourceRank: 11, rating: 2_489 },
     ])
   })
 
-  test('serves the rest of the board on the next page', async () => {
+  test('carries the rows pushed off page 1 onto page 2', async () => {
     const page = await readPage({ mode: '1v1', region: 'EU', page: 2 })
 
     if (page.status === 'unavailable') throw new Error('Expected the published EU board')
 
-    expect(page).toMatchObject({ page: 2, pageSize: 30, hasMore: false, totalRows: boardSize })
-    expect(page.entries.map(({ standing }) => standing)).toEqual([31])
+    expect(page.entries[0]).toMatchObject({ standing: 31, sourceRank: 29 })
+  })
+
+  test('serves the rest of the board on the last page, without the rows that moved up', async () => {
+    const page = await readPage({ mode: '1v1', region: 'EU', page: 4 })
+
+    if (page.status === 'unavailable') throw new Error('Expected the published EU board')
+
+    expect(page).toMatchObject({ page: 4, pageSize: 30, hasMore: false, totalRows: boardSize })
+    expect(page.entries.map(({ standing }) => standing)).toEqual(Array.from({ length: 10 }, (_, index) => 91 + index))
+    expect(sourceRanks(page.entries)).toEqual([89, 90, 91, 93, 94, 96, 97, 98, 99, 100])
   })
 
   test('says a board has not been published yet', async () => {

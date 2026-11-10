@@ -9,6 +9,7 @@ import { createRankingProcedures } from '../api/procedures'
 import { rankingModule } from '../index'
 
 type Mode = '1v1' | '2v2' | 'solo2v2' | '3v3'
+type Region = 'EU' | 'US-E'
 type Standing = { id: number; rating: number; wins: number; losses: number }
 
 const internalCaller = { context: { isInternalCaller: true } }
@@ -26,7 +27,7 @@ function minutesBefore(minutes: number): Date {
   return new Date(currentWindow.getTime() - minutes * minuteMs)
 }
 
-function boardRow(snapshotId: string, mode: Mode, standing: Standing, index: number) {
+function boardRow(snapshotId: string, mode: Mode, region: Region, standing: Standing, index: number) {
   const isTeam = mode === '2v2'
 
   return {
@@ -40,7 +41,7 @@ function boardRow(snapshotId: string, mode: Mode, standing: Standing, index: num
     player_one_name: `Captured ${standing.id}`,
     player_two_id: isTeam ? standing.id + 1_000 : null,
     player_two_name: isTeam ? `Teammate ${standing.id}` : null,
-    region: 'EU',
+    region,
     rating: standing.rating,
     peak_rating: 3_000,
     wins: standing.wins,
@@ -56,9 +57,8 @@ const identityKinds: Record<Mode, string> = {
   '3v3': 'three-vs-three-player',
 }
 
-async function publishBoard(mode: Mode, windowAt: Date, standings: Standing[]) {
+async function publishGeneration(mode: Mode, windowAt: Date, boards: Partial<Record<Region, Standing[]>>) {
   const generationId = randomUUID()
-  const snapshotId = randomUUID()
   const provenance = { source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 2, pageDepth: 1 }
   const nextPublicationAt = new Date(windowAt.getTime() + scanIntervalMs)
   const sql = database.sql
@@ -71,15 +71,24 @@ async function publishBoard(mode: Mode, windowAt: Date, standings: Standing[]) {
       ${windowAt}, ${nextPublicationAt}, 1, 'brawlhalla-v1-ranked-leaderboard', 2, false, ${sql.json(provenance)})
   `
 
-  await sql`
-    INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
-    VALUES (${snapshotId}, ${generationId}, ${mode}, 'EU', ${standings.length})
-  `
+  for (const [region, standings] of Object.entries(boards) as [Region, Standing[]][]) {
+    const snapshotId = randomUUID()
 
-  const rows = standings.map((standing, index) => boardRow(snapshotId, mode, standing, index))
+    await sql`
+      INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+      VALUES (${snapshotId}, ${generationId}, ${mode}, ${region}, ${standings.length})
+    `
 
-  await sql`INSERT INTO rankings.snapshot_rows ${sql(rows)}`
+    const rows = standings.map((standing, index) => boardRow(snapshotId, mode, region, standing, index))
+
+    await sql`INSERT INTO rankings.snapshot_rows ${sql(rows)}`
+  }
+
   await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+}
+
+function publishBoard(mode: Mode, windowAt: Date, standings: Standing[]) {
+  return publishGeneration(mode, windowAt, { EU: standings })
 }
 
 function previousStandings(): Standing[] {
@@ -115,6 +124,32 @@ function currentStandings(): Standing[] {
   return standings.sort((left, right) => right.rating - left.rating)
 }
 
+// brawlhalla's US-E order, which lists a 2,600 seventh and a 2,350 below a 2,340
+function usEastPreviousStandings(): Standing[] {
+  return [
+    { id: 501, rating: 2_400, wins: 50, losses: 50 },
+    { id: 502, rating: 2_380, wins: 50, losses: 50 },
+    { id: 503, rating: 2_380, wins: 50, losses: 50 },
+    { id: 504, rating: 2_340, wins: 50, losses: 50 },
+    { id: 505, rating: 2_340, wins: 50, losses: 50 },
+    { id: 506, rating: 2_340, wins: 50, losses: 50 },
+    { id: 507, rating: 2_500, wins: 50, losses: 50 },
+  ]
+}
+
+// 502, 504, 506 and 507 each won a game this hour
+function usEastCurrentStandings(): Standing[] {
+  return [
+    { id: 501, rating: 2_400, wins: 50, losses: 50 },
+    { id: 502, rating: 2_390, wins: 51, losses: 50 },
+    { id: 503, rating: 2_380, wins: 50, losses: 50 },
+    { id: 504, rating: 2_350, wins: 51, losses: 50 },
+    { id: 505, rating: 2_340, wins: 50, losses: 50 },
+    { id: 506, rating: 2_350, wins: 51, losses: 50 },
+    { id: 507, rating: 2_600, wins: 51, losses: 50 },
+  ]
+}
+
 async function insertNamedPlayer() {
   await database.sql`
     INSERT INTO players.ranked_profiles (
@@ -134,8 +169,8 @@ beforeAll(async () => {
   })
 
   // 1v1 has a full hour of scans
-  await publishBoard('1v1', minutesBefore(60), previousStandings())
-  await publishBoard('1v1', currentWindow, currentStandings())
+  await publishGeneration('1v1', minutesBefore(60), { EU: previousStandings(), 'US-E': usEastPreviousStandings() })
+  await publishGeneration('1v1', currentWindow, { EU: currentStandings(), 'US-E': usEastCurrentStandings() })
 
   // 2v2 has a full hour in which nobody played
   await publishBoard('2v2', minutesBefore(60), previousStandings())
@@ -157,16 +192,20 @@ afterAll(async () => {
   await database?.drop()
 }, 20_000)
 
-function readPage(input: { mode: Mode; region: 'all' | 'EU'; page: number }) {
+function readPage(input: { mode: Mode; region: 'all' | Region; page: number }) {
   const { recentActivityPage } = createRankingProcedures({ database })
 
   return call(recentActivityPage, input, internalCaller)
 }
 
-function readMovers(input: { mode: Mode; region: 'all' | 'EU' }) {
+function readMovers(input: { mode: Mode; region: 'all' | Region }) {
   const { recentActivityMovers } = createRankingProcedures({ database })
 
   return call(recentActivityMovers, input, internalCaller)
+}
+
+function ranks(entries: LeaderboardRecentActivityEntry[]) {
+  return playerIds(entries).map((id, index) => ({ id, standing: entries[index].standing }))
 }
 
 function playerIds(entries: LeaderboardRecentActivityEntry[]): number[] {
@@ -197,6 +236,19 @@ describe('recentActivityPage', () => {
       type: 'one-vs-one-player',
       player: { brawlhallaId: namedPlayerId, name: 'Current Name', bestLegendNameKey: 'bodvar' },
     })
+  })
+
+  test('shows each player at their place by rating on the whole board, not the official one', async () => {
+    const page = await readPage({ mode: '1v1', region: 'US-E', page: 1 })
+
+    if (page.status === 'unavailable') throw new Error('Expected the US-E 1v1 hour')
+
+    expect(ranks(page.entries)).toEqual([
+      { id: 507, standing: 1 },
+      { id: 502, standing: 3 },
+      { id: 504, standing: 5 },
+      { id: 506, standing: 6 },
+    ])
   })
 
   test('says when an hour ago was never scanned', async () => {
@@ -241,6 +293,19 @@ describe('recentActivityMovers', () => {
     // the +10s tie, so the higher rating goes first
     expect(playerIds(movers.climbers)).toEqual([40, 1, 2, 3, 4])
     expect(movers.climbers[0]).toMatchObject({ ratingDelta: 52, winsDelta: 3, lossesDelta: 0, gamesDelta: 3 })
+  })
+
+  test('shows climbers at their place by rating on the whole board', async () => {
+    const movers = await readMovers({ mode: '1v1', region: 'US-E' })
+
+    if (movers.status === 'unavailable') throw new Error('Expected the US-E 1v1 hour')
+
+    expect(ranks(movers.climbers)).toEqual([
+      { id: 507, standing: 1 },
+      { id: 502, standing: 3 },
+      { id: 504, standing: 5 },
+      { id: 506, standing: 6 },
+    ])
   })
 
   test('lists only players who lost rating as drops, not those who broke even', async () => {
