@@ -30,3 +30,12 @@ export function parseMode(value: unknown): BoardMode {
 export function parseRegion(value: unknown): BoardRegion | undefined {
   return isOption(regionOptions, value) ? (value as BoardRegion) : undefined
 }
+
+export type BoardSearch = { mode?: BoardMode; region?: BoardRegion }
+
+// both stay out of the address until picked, so a bare address shows the remembered region
+export function parseBoardSearch(search: Record<string, unknown>): BoardSearch {
+  const mode = search.mode === undefined ? undefined : parseMode(search.mode)
+
+  return { mode: mode === defaultMode ? undefined : mode, region: parseRegion(search.region) }
+}

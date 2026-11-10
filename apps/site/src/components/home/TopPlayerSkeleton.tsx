@@ -2,13 +2,21 @@ import { skeletonAvatarStyle, skeletonBarStyle, stripedTallRowStyle } from '../t
 
 const nameWidths = ['w-24', 'w-36', 'w-20', 'w-32', 'w-28']
 
+// enough rows for a full page, each with its own key
+const skeletonRows = Array.from({ length: 30 }, (_, index) => ({
+  id: `skeleton-${index}`,
+  nameWidth: nameWidths[index % nameWidths.length],
+}))
+
 // a 2v2 row shows both teammates
 const avatarSlots = ['first', 'second']
 
-function SkeletonRow({ nameWidth, avatarCount }: { nameWidth: string; avatarCount: number }) {
+type SkeletonRowProps = { nameWidth: string; avatarCount: number; rankWidthStyle: string }
+
+function SkeletonRow({ nameWidth, avatarCount, rankWidthStyle }: SkeletonRowProps) {
   return (
     <tr className={stripedTallRowStyle}>
-      <td className="w-12 pr-1 pl-3">
+      <td className={`${rankWidthStyle} pr-1 pl-3`}>
         <span className={`${skeletonBarStyle} w-3`} />
       </td>
       <td className="max-w-0 pr-3">
@@ -40,12 +48,14 @@ function SkeletonRow({ nameWidth, avatarCount }: { nameWidth: string; avatarCoun
   )
 }
 
-/** Stands in for the five rows while a slow filter change loads, shaped like them so nothing jumps. */
-export function TopPlayerSkeleton({ avatarCount }: { avatarCount: number }) {
+type TopPlayerSkeletonProps = { avatarCount: number; rowCount?: number; rankWidthStyle?: string }
+
+/** Stands in for the rows while a slow filter change loads, shaped like them so nothing jumps. */
+export function TopPlayerSkeleton({ avatarCount, rowCount = 5, rankWidthStyle = 'w-12' }: TopPlayerSkeletonProps) {
   return (
     <>
-      {nameWidths.map((nameWidth) => (
-        <SkeletonRow key={nameWidth} nameWidth={nameWidth} avatarCount={avatarCount} />
+      {skeletonRows.slice(0, rowCount).map((row) => (
+        <SkeletonRow key={row.id} nameWidth={row.nameWidth} avatarCount={avatarCount} rankWidthStyle={rankWidthStyle} />
       ))}
     </>
   )
