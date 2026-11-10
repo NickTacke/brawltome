@@ -7,6 +7,8 @@ export type Challenge = { siteKey: string; settle: (turnstileToken: string | nul
 
 type LiveRefreshOptions<T> = {
   initial: T
+  // changes only when the page is loaded again; the data object itself can be rebuilt on every render
+  loadKey: string
   isStale: (data: T) => boolean
   isRefreshed: (baseline: T, current: T) => boolean
   // null when the page is gone, which keeps the data on screen
@@ -97,19 +99,23 @@ export function useLiveRefresh<T>(options: LiveRefreshOptions<T>) {
 
   optionsRef.current = options
 
-  const { initial } = options
+  const { loadKey } = options
 
   // a new load of the page, such as navigating to it again, replaces what a run loaded before and starts over
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadKey marks a new load, the data is read from the ref
   useEffect(() => {
+    const { initial } = optionsRef.current
+
     dataRef.current = initial
     setData(initial)
     setStatus('idle')
     setChallenge(null)
-  }, [initial])
+  }, [loadKey])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadKey marks a new load, the data is read from the ref
   useEffect(() => {
     // a retry always asks, the api knows best whether the data is still stale
-    if (attempt === 0 && !optionsRef.current.isStale(initial)) return
+    if (attempt === 0 && !optionsRef.current.isStale(optionsRef.current.initial)) return
 
     let isCancelled = false
 
@@ -127,7 +133,7 @@ export function useLiveRefresh<T>(options: LiveRefreshOptions<T>) {
     return () => {
       isCancelled = true
     }
-  }, [attempt, initial])
+  }, [attempt, loadKey])
 
   return { data, status, challenge, retry: () => setAttempt((count) => count + 1) }
 }

@@ -1,7 +1,7 @@
 import type { LeaderboardEntry } from '@brawltome/contracts'
 import type { ReactNode } from 'react'
 import { columnLabelStyle, RankedTable, statHeaderStyle, TableMessage } from './RankedTable'
-import { SectionHeader, viewAllStyle } from './SectionHeader'
+import { SectionHeader } from './SectionHeader'
 import { TopPlayerRow } from './TopPlayerRow'
 import { TopPlayerSkeleton } from './TopPlayerSkeleton'
 
@@ -51,22 +51,13 @@ function TableBody({ entries, isLoading, avatarCount }: Omit<TopPlayersProps, 'f
 }
 
 export function TopPlayers({ entries, filters, isLoading, avatarCount }: TopPlayersProps) {
-  // the leaderboard page isn't built yet, a plain link keeps working once it is
-  const viewAll = (
-    <a href="/leaderboard" className={viewAllStyle}>
-      View all →
-    </a>
-  )
-
   return (
     <section className="min-w-0">
       <SectionHeader
         title="Top players"
         action={
-          <div className="flex w-full items-center justify-between gap-5 sm:w-auto sm:justify-end">
-            {filters}
-            {viewAll}
-          </div>
+          // "view all" comes back with the leaderboard page
+          <div className="flex w-full items-center justify-between gap-5 sm:w-auto sm:justify-end">{filters}</div>
         }
       />
       <RankedTable head={<TableHead />}>

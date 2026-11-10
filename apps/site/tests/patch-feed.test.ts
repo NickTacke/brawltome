@@ -80,11 +80,10 @@ describe('readPatchFeed', () => {
       patch: 'Patch 11.00',
       publishedAt: '2026-10-13T17:36:01Z',
       url: 'https://brawlhalla.com/news/patch-1100',
-      image: {
-        source: 'https://cms.brawlhalla.com/c/uploads/teros-768.jpg',
-        sourceSet:
-          'https://cms.brawlhalla.com/c/uploads/teros-300.jpg 300w, https://cms.brawlhalla.com/c/uploads/teros-768.jpg 768w',
-      },
+      images: [
+        { width: 300, url: 'https://cms.brawlhalla.com/c/uploads/teros-300.jpg' },
+        { width: 768, url: 'https://cms.brawlhalla.com/c/uploads/teros-768.jpg' },
+      ],
     })
   })
 
@@ -95,7 +94,20 @@ describe('readPatchFeed', () => {
 
     const [note] = await readPatchFeed()
 
-    expect(note.image).toBeNull()
+    expect(note.images).toEqual([])
+  })
+
+  // the site fetches the art itself, so it only ever asks the cms
+  test('drops art hosted anywhere but cms.brawlhalla.com', async () => {
+    const withForeignArt = post('Patch 10.10')
+    const [art] = withForeignArt._embedded['wp:featuredmedia']
+
+    art.media_details.sizes.medium.source_url = 'https://www.brawlhalla.com/c/uploads/teros-300.jpg'
+    answerWith({ status: 200, body: [withForeignArt] })
+
+    const [note] = await readPatchFeed()
+
+    expect(note.images.map(({ width }) => width)).toEqual([768])
   })
 
   // the link ends up in an href, so a javascript: or foreign url must never get through
