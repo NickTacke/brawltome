@@ -16,13 +16,16 @@ const echoStartServer = {
   fetch: (request: Request) => new Response(`rendered ${new URL(request.url).pathname}`),
 }
 
+const whileServing = () => false
+const whileDraining = () => true
+
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { force: true, recursive: true })
 })
 
 describe('site server', () => {
   test('answers the liveness check without rendering a page', async () => {
-    const siteFetch = createSiteFetch(new Map(), failingStartServer)
+    const siteFetch = createSiteFetch(new Map(), failingStartServer, whileServing)
 
     const response = await siteFetch(new Request('http://localhost:3000/health/live'))
 
@@ -30,8 +33,38 @@ describe('site server', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
+  test('reports serving to the load balancer until a stop is announced', async () => {
+    const siteFetch = createSiteFetch(new Map(), failingStartServer, whileServing)
+
+    const response = await siteFetch(new Request('http://localhost:3000/health/serving'))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ status: 'serving' })
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  test('reports draining to the load balancer once a stop is announced', async () => {
+    const siteFetch = createSiteFetch(new Map(), failingStartServer, whileDraining)
+
+    const response = await siteFetch(new Request('http://localhost:3000/health/serving'))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ status: 'draining' })
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  test('keeps answering pages and the liveness check while draining', async () => {
+    const siteFetch = createSiteFetch(new Map(), echoStartServer, whileDraining)
+
+    const page = await siteFetch(new Request('http://localhost:3000/privacy'))
+    const liveness = await siteFetch(new Request('http://localhost:3000/health/live'))
+
+    expect(await page.text()).toBe('rendered /privacy')
+    expect(liveness.status).toBe(200)
+  })
+
   test('hands pages to the start server', async () => {
-    const siteFetch = createSiteFetch(new Map(), echoStartServer)
+    const siteFetch = createSiteFetch(new Map(), echoStartServer, whileServing)
 
     const response = await siteFetch(new Request('http://localhost:3000/privacy'))
 
@@ -45,7 +78,12 @@ describe('site server', () => {
     const assetPath = join(directory, 'main-abc123.js')
 
     writeFileSync(assetPath, 'console.log(1)')
-    const siteFetch = createSiteFetch(new Map([['/assets/main-abc123.js', assetPath]]), failingStartServer)
+
+    const siteFetch = createSiteFetch(
+      new Map([['/assets/main-abc123.js', assetPath]]),
+      failingStartServer,
+      whileServing,
+    )
 
     const response = await siteFetch(new Request('http://localhost:3000/assets/main-abc123.js'))
 
@@ -60,7 +98,12 @@ describe('site server', () => {
     const bannerPath = join(directory, 'Gold 2.png')
 
     writeFileSync(bannerPath, 'banner')
-    const siteFetch = createSiteFetch(new Map([['/images/banners/Gold 2.png', bannerPath]]), failingStartServer)
+
+    const siteFetch = createSiteFetch(
+      new Map([['/images/banners/Gold 2.png', bannerPath]]),
+      failingStartServer,
+      whileServing,
+    )
 
     const response = await siteFetch(new Request('http://localhost:3000/images/banners/Gold%202.png'))
 
@@ -68,7 +111,7 @@ describe('site server', () => {
   })
 
   test('hands a path that is not valid percent encoding to the start server', async () => {
-    const siteFetch = createSiteFetch(new Map(), echoStartServer)
+    const siteFetch = createSiteFetch(new Map(), echoStartServer, whileServing)
 
     const response = await siteFetch(new Request('http://localhost:3000/images/%E0%A4%A'))
 

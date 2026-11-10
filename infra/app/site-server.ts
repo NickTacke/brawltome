@@ -1,9 +1,13 @@
 // Serves the built site. The TanStack Start build only exports a fetch handler, so something has to listen on the port
 // and answer for the files in dist/client.
+//
+// On SIGTERM it drains for zero-downtime deploys (see infra/app/deploy.sh): /health/serving reports draining while
+// pages are still answered, so Traefik's health check moves traffic to the replacement before the port closes.
 import { join, resolve } from 'node:path'
 
 type SiteFetch = (request: Request) => Response | Promise<Response>
 type StartServer = { fetch: SiteFetch }
+type IsDraining = () => boolean
 
 const siteRoot = resolve(import.meta.dir, '../../apps/site/dist')
 const clientRoot = join(siteRoot, 'client')
@@ -11,6 +15,11 @@ const immutableCacheControl = 'public, max-age=31536000, immutable'
 // above the 10 second api timeout, or bun's default of 10 drops the connection before the error page is sent
 const idleTimeoutSeconds = 30
 const livenessPath = '/health/live'
+const servingPath = '/health/serving'
+// traefik checks /health/serving every 2 seconds, so it has dropped this container well before the announce ends
+const shutdownAnnounceMs = 5_000
+// the announce and the drain together must stay under the 20 second stop_grace_period in compose.yml
+const shutdownDrainMs = 5_000
 
 function readPort(): number {
   const port = Number(process.env.PORT)
@@ -65,8 +74,27 @@ function answerLiveness(request: Request): Response | undefined {
   return new Response('ok', { headers: { 'cache-control': 'no-store' } })
 }
 
-export function createSiteFetch(staticFiles: Map<string, string>, startServer: StartServer): SiteFetch {
-  return (request) => answerLiveness(request) ?? serveStaticFile(staticFiles, request) ?? startServer.fetch(request)
+// load balancer membership: traefik stops routing here once this reports draining
+function answerServing(request: Request, isDraining: IsDraining): Response | undefined {
+  if (new URL(request.url).pathname !== servingPath) return undefined
+
+  const headers = { 'cache-control': 'no-store' }
+
+  if (isDraining()) return Response.json({ status: 'draining' }, { status: 503, headers })
+
+  return Response.json({ status: 'serving' }, { headers })
+}
+
+export function createSiteFetch(
+  staticFiles: Map<string, string>,
+  startServer: StartServer,
+  isDraining: IsDraining,
+): SiteFetch {
+  return (request) =>
+    answerLiveness(request) ??
+    answerServing(request, isDraining) ??
+    serveStaticFile(staticFiles, request) ??
+    startServer.fetch(request)
 }
 
 async function start(): Promise<void> {
@@ -74,18 +102,30 @@ async function start(): Promise<void> {
   const staticFiles = listStaticFiles()
   const startServer: StartServer = (await import(join(siteRoot, 'server/server.js'))).default
 
+  let isDraining = false
+
   const server = Bun.serve({
     hostname: '0.0.0.0',
     port,
     idleTimeout: idleTimeoutSeconds,
-    fetch: createSiteFetch(staticFiles, startServer),
+    fetch: createSiteFetch(staticFiles, startServer, () => isDraining),
   })
 
   console.log(`site listening on port ${server.port}`)
 
+  const closeAfterAnnounce = () => {
+    // a request that outlives the drain is cut off, so the container never waits for docker's kill
+    setTimeout(() => process.exit(0), shutdownDrainMs)
+
+    void server.stop().then(() => process.exit(0))
+  }
+
   // as pid 1 the process ignores SIGTERM unless it handles it
   const stop = () => {
-    void server.stop().then(() => process.exit(0))
+    if (isDraining) return
+
+    isDraining = true
+    setTimeout(closeAfterAnnounce, shutdownAnnounceMs)
   }
 
   process.on('SIGTERM', stop)
