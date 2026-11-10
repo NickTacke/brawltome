@@ -255,11 +255,53 @@ const activityUnavailableSchema = z
 
 export const leaderboardRecentActivityOutputSchema = z.union([activityAvailableOutputSchema, activityUnavailableSchema])
 
+export const leaderboardRecentMoverCount = 5
+export const leaderboardRecentMoversInputSchema = leaderboardPageInputSchema.pick({ mode: true, region: true })
+
+type RatedEntrySchema = z.ZodType<{ ratingDelta: number }>
+
+const hasRatingGain = (entry: { ratingDelta: number }) => entry.ratingDelta > 0
+const hasRatingLoss = (entry: { ratingDelta: number }) => entry.ratingDelta < 0
+
+function moverListSchema<Entry extends RatedEntrySchema>(entry: Entry) {
+  return z.array(entry).max(leaderboardRecentMoverCount)
+}
+
+function moversAvailableSchema<const Mode extends (typeof leaderboardModes)[number], Entry extends RatedEntrySchema>(
+  mode: Mode,
+  entry: Entry,
+) {
+  return z
+    .object({
+      status: z.literal('available'),
+      mode: z.literal(mode),
+      region: leaderboardScopeSchema,
+      currentSnapshotId: z.uuid(),
+      climbers: moverListSchema(entry),
+      drops: moverListSchema(entry),
+      mostGames: moverListSchema(entry),
+    })
+    .strict()
+    .refine(({ climbers }) => climbers.every(hasRatingGain), 'climbers must gain rating')
+    .refine(({ drops }) => drops.every(hasRatingLoss), 'drops must lose rating')
+}
+
+const moversUnavailableSchema = activityUnavailableSchema.omit({ page: true, pageSize: true })
+
+export const leaderboardRecentMoversOutputSchema = z.union([
+  moversAvailableSchema('1v1', activity1v1EntrySchema),
+  moversAvailableSchema('2v2', activityFixed2v2EntrySchema),
+  moversAvailableSchema('solo2v2', activitySolo2v2EntrySchema),
+  moversAvailableSchema('3v3', activity3v3EntrySchema),
+  moversUnavailableSchema,
+])
+
 export type LeaderboardIdentity = z.infer<typeof leaderboardIdentitySchema>
 export type LeaderboardEntry = z.infer<typeof leaderboardEntrySchema>
 export type LeaderboardOutput = z.infer<typeof leaderboardOutputSchema>
 export type LeaderboardRecentActivityEntry = z.infer<typeof leaderboardRecentActivityEntrySchema>
 export type LeaderboardRecentActivityOutput = z.infer<typeof leaderboardRecentActivityOutputSchema>
+export type LeaderboardRecentMoversOutput = z.infer<typeof leaderboardRecentMoversOutputSchema>
 
 export function parseLeaderboardOutput(value: unknown): LeaderboardOutput {
   return leaderboardOutputSchema.parse(value)

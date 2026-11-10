@@ -141,6 +141,30 @@ export type RecentActivityView =
       pageSize: number
     }
 
+type RecentActivityUnavailableReason = Extract<RecentActivityView, { status: 'unavailable' }>['reason']
+
+export type RecentMoversView =
+  | {
+      status: 'available'
+      mode: LeaderboardMode
+      region: LeaderboardScope
+      currentSnapshotId: string
+      climbers: RecentActivityEntry[]
+      drops: RecentActivityEntry[]
+      mostGames: RecentActivityEntry[]
+    }
+  | {
+      status: 'unavailable'
+      reason: RecentActivityUnavailableReason
+      mode: LeaderboardMode
+      region: LeaderboardScope
+    }
+
+export type RecentMoversQueries = {
+  /** The hour's biggest climbers, drops and most games, each ranked across everyone who played in it. */
+  getRecentMovers(input: { mode: LeaderboardMode; region: LeaderboardScope }): Promise<RecentMoversView>
+}
+
 export type PlayerValhallanEvidence = {
   oneVsOne: boolean
   fixedTwoVsTwoTeams: Array<{ brawlhallaIdOne: number; brawlhallaIdTwo: number }>

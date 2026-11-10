@@ -17,6 +17,7 @@ import { dropEffectTableCompatibility } from './migrations/0014-drop-effect-tabl
 
 export { enrichLeaderboardEntries } from './api/enrich-leaderboard-entries'
 export { readNamedLeaderboard } from './api/read-named-leaderboard'
+export { readNamedRecentActivity } from './api/read-named-recent-activity'
 export { readAppliedLeaderboardEffects } from './db/leaderboard-effects'
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
@@ -61,6 +62,8 @@ export {
   type RankingQueries,
   type RecentActivityEntry,
   type RecentActivityView,
+  type RecentMoversQueries,
+  type RecentMoversView,
 } from './leaderboard'
 export { createPostgresRanking, type PostgresRanking } from './postgres'
 export {

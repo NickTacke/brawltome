@@ -16,6 +16,7 @@ import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as QueueRouteImport } from './routes/queue'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
@@ -57,6 +58,11 @@ const MatchesRoute = MatchesRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QueueRoute = QueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StatsRoute = StatsRouteImport.update({
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/learn': typeof LearnRoute
   '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/queue': typeof QueueRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tournaments': typeof TournamentsRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/learn': typeof LearnRoute
   '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/queue': typeof QueueRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tournaments': typeof TournamentsRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/learn': typeof LearnRoute
   '/matches': typeof MatchesRoute
   '/privacy': typeof PrivacyRoute
+  '/queue': typeof QueueRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tournaments': typeof TournamentsRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/learn'
     | '/matches'
     | '/privacy'
+    | '/queue'
     | '/stats'
     | '/terms'
     | '/tournaments'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/learn'
     | '/matches'
     | '/privacy'
+    | '/queue'
     | '/stats'
     | '/terms'
     | '/tournaments'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/learn'
     | '/matches'
     | '/privacy'
+    | '/queue'
     | '/stats'
     | '/terms'
     | '/tournaments'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   LearnRoute: typeof LearnRoute
   MatchesRoute: typeof MatchesRoute
   PrivacyRoute: typeof PrivacyRoute
+  QueueRoute: typeof QueueRoute
   StatsRoute: typeof StatsRoute
   TermsRoute: typeof TermsRoute
   TournamentsRoute: typeof TournamentsRoute
@@ -261,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/queue': {
+      id: '/queue'
+      path: '/queue'
+      fullPath: '/queue'
+      preLoaderRoute: typeof QueueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stats': {
@@ -323,6 +343,7 @@ const rootRouteChildren: RootRouteChildren = {
   LearnRoute: LearnRoute,
   MatchesRoute: MatchesRoute,
   PrivacyRoute: PrivacyRoute,
+  QueueRoute: QueueRoute,
   StatsRoute: StatsRoute,
   TermsRoute: TermsRoute,
   TournamentsRoute: TournamentsRoute,
