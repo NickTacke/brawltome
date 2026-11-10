@@ -24,16 +24,21 @@ describe('Home legends row', () => {
     expect(html).toContain('New Legend')
   })
 
-  test('shows each meta legend with its games, high rated players and win rate', () => {
+  test('shows each meta legend as a tile with its win rate, like most played', () => {
     const html = renderToStaticMarkup(<LegendsRow mostPlayed={[]} meta={[diana]} />)
 
     expect(html).toContain('Meta legends')
-    expect(html).toContain('Most played by players rated 2000+ this season')
+    expect(html).toContain('Rated 2000+')
     expect(html).toContain('/images/legends/avatars/diana.png')
     expect(html).toContain('Diana')
-    expect(html).toContain('14,250')
-    expect(html).toContain('138')
     expect(html).toContain('text-win">56.1%')
+    expect(html).not.toContain('<table')
+  })
+
+  test('a meta tile names its games and high rated players on hover', () => {
+    const html = renderToStaticMarkup(<LegendsRow mostPlayed={[]} meta={[diana]} />)
+
+    expect(html).toContain('title="Diana · 14,250 games by 138 players"')
   })
 
   test('puts most played on the left and meta on the right, with a line between them', () => {

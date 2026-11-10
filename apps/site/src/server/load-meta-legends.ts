@@ -4,7 +4,7 @@ import { optionalRead, readOptional } from './optional-read'
 
 export type MetaLegend = NonNullable<MetaLegendsContract>['legends'][number]
 
-const shownLegendCount = 5
+const shownLegendCount = 9
 
 async function readMetaLegends(): Promise<MetaLegend[]> {
   const meta = await readApi('/legends/meta', metaLegendsSchema, 'load meta legends', optionalRead)

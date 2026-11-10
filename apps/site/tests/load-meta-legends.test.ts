@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { loadMetaLegends } from '../src/server/load-meta-legends'
 import { stubFetch, useApiSettings } from './api-stub'
 
-const legendKeys = ['diana', 'mordex', 'sidra', 'teros', 'ada', 'thor', 'hattori']
+const legendKeys = ['diana', 'mordex', 'sidra', 'teros', 'ada', 'thor', 'hattori', 'yumiko', 'bodvar', 'petra', 'orion']
 
 function meta(keys: string[]) {
   const legends = keys.map((legendNameKey, index) => ({
@@ -26,12 +26,12 @@ describe('loadMetaLegends', () => {
     expect(urls).toEqual(['/legends/meta'])
   })
 
-  test('keeps the five most played in the order the api gave', async () => {
+  test('keeps the nine most played in the order the api gave, the same count as most played', async () => {
     stubFetch(() => ({ status: 200, body: meta(legendKeys) }))
 
     const legends = await loadMetaLegends()
 
-    expect(legends.map(({ legendNameKey }) => legendNameKey)).toEqual(legendKeys.slice(0, 5))
+    expect(legends.map(({ legendNameKey }) => legendNameKey)).toEqual(legendKeys.slice(0, 9))
   })
 
   test('a season with no high rated players yet is empty', async () => {
