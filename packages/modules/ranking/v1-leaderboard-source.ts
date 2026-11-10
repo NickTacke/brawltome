@@ -7,6 +7,9 @@ export type RegionalLeaderboardScope = RankedRegion
 export const leaderboardModes = rankedModes
 export type LeaderboardMode = RankedMode
 
+/** The rows the source is asked for per page, so a scan of `depth` pages lists at most this many times `depth`. */
+export const leaderboardSourcePageSize = 50
+
 export type SourcePlayer = { id: number; username: string }
 export type SourceLeaderboardIdentity =
   | { type: 'one-vs-one-player'; player: SourcePlayer }
@@ -177,7 +180,9 @@ export function decodeLeaderboardPage(
 
   if (!Array.isArray(value.rankings)) invalid('rankings must be an array')
 
-  if (value.rankings.length > 50) invalid('rankings cannot contain more than 50 rows')
+  if (value.rankings.length > leaderboardSourcePageSize) {
+    invalid(`rankings cannot contain more than ${leaderboardSourcePageSize} rows`)
+  }
 
   const totalPages = requiredInteger(value.total_pages, 'total_pages', 0)
 
@@ -236,7 +241,8 @@ export async function fetchLeaderboardPage(
     throw new LeaderboardSourceError('source_contract_invalid', 'source page must be a positive integer', false)
   }
 
-  const url = `${sourceBase}?region=${input.region}&game_mode=${sourceModes[input.mode]}&page=${input.page}&max_results=50&leaderboard=prod`
+  const query = `region=${input.region}&game_mode=${sourceModes[input.mode]}&page=${input.page}`
+  const url = `${sourceBase}?${query}&max_results=${leaderboardSourcePageSize}&leaderboard=prod`
   let response: Response
 
   try {

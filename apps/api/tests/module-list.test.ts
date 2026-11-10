@@ -78,6 +78,7 @@ describe('oRPC router built from a module list', () => {
 
     expect(Object.keys(router.ranking)).toEqual([
       'valhallanEvidenceById',
+      'boardRanksById',
       'leaderboardPage',
       'recentActivityPage',
       'recentActivityMovers',

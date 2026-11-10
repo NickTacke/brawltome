@@ -85,8 +85,11 @@ export {
   leaderboardRecentMoverCount,
   leaderboardRecentMoversInputSchema,
   leaderboardRecentMoversOutputSchema,
+  type PlayerBoardRanksContract,
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,
+  playerBoardRanksInputSchema,
+  playerBoardRanksSchema,
 } from './leaderboard'
 export { type MetaLegendsContract, metaLegendsSchema } from './meta-legends'
 export { type MostPlayedLegendsContract, mostPlayedLegendsSchema } from './most-played-legends'

@@ -6,10 +6,13 @@ import {
   leaderboardRecentMoversInputSchema,
   leaderboardRecentMoversOutputSchema,
   nullablePlayerValhallanEvidenceSchema,
+  playerBoardRanksInputSchema,
+  playerBoardRanksSchema,
   playerReferenceByIdInputSchema,
 } from '@brawltome/contracts'
 import { internalProcedure, type ModuleRuntime } from '@brawltome/foundation'
 import { createPostgresPlayerReferences } from '@brawltome/player'
+import { readPlayerBoardRanks } from '../db/player-board-ranks'
 import { createPostgresRanking } from '../postgres'
 import { readNamedLeaderboard } from './read-named-leaderboard'
 import { readNamedRecentActivity, readNamedRecentMovers } from './read-named-recent-activity'
@@ -30,6 +33,20 @@ export function createRankingProcedures(runtime: ModuleRuntime) {
     .input(playerReferenceByIdInputSchema)
     .output(nullablePlayerValhallanEvidenceSchema)
     .handler(({ input }) => queries.playerValhallanEvidenceById(input.id))
+
+  const boardRanksById = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/players/{id}/board-ranks',
+      operationId: 'ranking.boardRanksById',
+      summary: "A player's place on the global 1v1 board and on the board of one region",
+      tags: ['ranking'],
+    })
+    .input(playerBoardRanksInputSchema)
+    .output(playerBoardRanksSchema)
+    .handler(({ input }) =>
+      readPlayerBoardRanks(runtime.database.sql, { brawlhallaId: input.id, region: input.region ?? null }),
+    )
 
   const leaderboardPage = internalProcedure
     .route({
@@ -67,5 +84,5 @@ export function createRankingProcedures(runtime: ModuleRuntime) {
     .output(leaderboardRecentMoversOutputSchema)
     .handler(({ input }) => readNamedRecentMovers(queries, references, input))
 
-  return { valhallanEvidenceById, leaderboardPage, recentActivityPage, recentActivityMovers }
+  return { valhallanEvidenceById, boardRanksById, leaderboardPage, recentActivityPage, recentActivityMovers }
 }

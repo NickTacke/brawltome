@@ -6,12 +6,14 @@ import {
   type PlayerCareerProfileContract,
   type PlayerRankedProfileContract,
   type PlayerReferenceContract,
+  playerBoardRanksSchema,
   playerClanMembershipSchema,
   type SeasonStartContract,
   seasonStartsSchema,
 } from '@brawltome/contracts'
 import type { z } from 'zod'
 import { readApi } from './api'
+import { withBoardRanks } from './board-ranks'
 import { withOfficialValhallanTier } from './official-tier'
 import { failureText, optionalRead, readOptional } from './optional-read'
 
@@ -40,6 +42,25 @@ type RequiredParts = [
   PlayerCareerProfileContract | null,
 ]
 
+function readBoardRanks(playerId: number, region: string | null) {
+  const description = `load board ranks for player ${playerId}`
+  const query = region ? `?region=${encodeURIComponent(region)}` : ''
+  const path = `/players/${playerId}/board-ranks${query}`
+
+  return readOptional(() => readApi(path, playerBoardRanksSchema, description, optionalRead), null)
+}
+
+// the ranks are read after the profile, not beside it, because the regional board to ask for is in the profile
+async function readRanked(playerId: number, description: string): Promise<PlayerRankedProfileContract | null> {
+  const ranked = await readApi(`/players/${playerId}/ranked`, nullablePlayerRankedProfileSchema, description)
+
+  if (!ranked?.snapshot) return ranked
+
+  const boardRanks = await readBoardRanks(playerId, ranked.snapshot.oneVsOne.region)
+
+  return withBoardRanks(ranked, boardRanks)
+}
+
 // thrown messages reach the page's html, so the detail only goes to the server log
 async function readRequiredParts(playerId: number): Promise<RequiredParts> {
   const description = `load player ${playerId}`
@@ -47,7 +68,7 @@ async function readRequiredParts(playerId: number): Promise<RequiredParts> {
   try {
     return await Promise.all([
       readApi(`/players/${playerId}/reference`, nullablePlayerReferenceSchema, description),
-      readApi(`/players/${playerId}/ranked`, nullablePlayerRankedProfileSchema, description),
+      readRanked(playerId, description),
       readApi(`/players/${playerId}/career`, nullablePlayerCareerProfileSchema, description),
     ])
   } catch (error) {

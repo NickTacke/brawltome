@@ -51,6 +51,7 @@ describe('valhallanEvidenceById', () => {
 
     expect(Object.keys(rankingModule.routes({ database }))).toEqual([
       'valhallanEvidenceById',
+      'boardRanksById',
       'leaderboardPage',
       'recentActivityPage',
       'recentActivityMovers',

@@ -38,6 +38,8 @@ const ranked = {
 }
 
 const valhallanEvidence = { oneVsOne: true, fixedTwoVsTwoTeams: [], soloTwoVsTwo: false }
+const boardRanksPath = '/players/7/board-ranks?region=EU'
+const boardRanks = { globalRank: 184, regionRank: 61 }
 
 type Answers = Record<string, { status: number; body: unknown }>
 
@@ -48,6 +50,7 @@ function healthyAnswers(): Answers {
     '/players/7/career': { status: 200, body: null },
     '/players/7/clan': { status: 200, body: clan },
     '/players/7/valhallan-evidence': { status: 200, body: null },
+    [boardRanksPath]: { status: 200, body: { globalRank: null, regionRank: null } },
     '/seasons': { status: 200, body: seasons },
   }
 }
@@ -145,6 +148,44 @@ describe('loadPlayer', () => {
     stubApi(failing('/seasons'))
 
     expect((await loadPlayer(7))?.seasonStarts).toEqual([])
+  })
+
+  test("fills the ranks with the player's place on the boards", async () => {
+    stubApi({ ...healthyAnswers(), [boardRanksPath]: { status: 200, body: boardRanks } })
+
+    expect((await loadPlayer(7))?.player.currentSeason?.snapshot?.oneVsOne).toMatchObject(boardRanks)
+  })
+
+  test('a failed board ranks read leaves the player without ranks', async () => {
+    stubApi(failing(boardRanksPath))
+
+    const oneVsOne = (await loadPlayer(7))?.player.currentSeason?.snapshot?.oneVsOne
+
+    expect(oneVsOne).toMatchObject({ rating: 2100, globalRank: null, regionRank: null })
+  })
+
+  test('asks for the global board alone when the profile has no region', async () => {
+    const oneVsOne = { ...ranked.snapshot.oneVsOne, region: null }
+    const withoutRegion = { ...ranked, snapshot: { ...ranked.snapshot, oneVsOne } }
+
+    const paths = stubApi({
+      ...healthyAnswers(),
+      '/players/7/ranked': { status: 200, body: withoutRegion },
+      '/players/7/board-ranks': { status: 200, body: { globalRank: 184, regionRank: null } },
+    })
+
+    const loaded = (await loadPlayer(7))?.player.currentSeason?.snapshot?.oneVsOne
+
+    expect(paths).toContain('/players/7/board-ranks')
+    expect(loaded).toMatchObject({ region: null, globalRank: 184, regionRank: null })
+  })
+
+  test('asks for no ranks when the player has no ranked data', async () => {
+    const paths = stubApi({ ...healthyAnswers(), '/players/7/ranked': { status: 200, body: null } })
+
+    await loadPlayer(7)
+
+    expect(paths.filter((path) => path.includes('board-ranks'))).toEqual([])
   })
 
   test('applies valhallan evidence', async () => {
