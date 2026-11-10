@@ -20,3 +20,21 @@ type PageSpan = { page: number; totalRows: number; pageSize: number }
 export function hasPager({ page, totalRows, pageSize }: PageSpan): boolean {
   return totalRows > pageSize || page > 1
 }
+
+const roundingMinutes = 5
+
+type ScanSpan = { previousObservedAt: string; currentObservedAt: string }
+
+/** The time between the two compared scans, such as "Last 1 h 15 min". Scans land about hourly, not on the hour. */
+export function spanLabel({ previousObservedAt, currentObservedAt }: ScanSpan): string {
+  const spanMinutes = (Date.parse(currentObservedAt) - Date.parse(previousObservedAt)) / 60_000
+  const minutes = Math.round(spanMinutes / roundingMinutes) * roundingMinutes
+  const hours = Math.floor(minutes / 60)
+  const minutesPastHour = minutes % 60
+
+  if (hours === 0) return `Last ${minutes} min`
+
+  if (minutesPastHour > 0) return `Last ${hours} h ${minutesPastHour} min`
+
+  return hours === 1 ? 'Last hour' : `Last ${hours} hours`
+}
