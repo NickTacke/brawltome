@@ -51,10 +51,11 @@ export const privacySections: LegalSection[] = [
           which features are used and which website sent you.
         </p>
         <p>
-          To count unique visitors per day we use a one-way hash of your IP address and browser details, mixed with a
-          secret that is replaced every day and then thrown away. The hash can't be turned back into your IP address or
-          linked across days. We never store your IP address or browser details, and nothing is stored on your device
-          for this.
+          To count unique visitors per day we use a one-way hash of your IP address (for IPv6, only the part that names
+          your network) and browser details, mixed with a secret that is replaced every day and then thrown away. The
+          hash can't be turned back into your IP address or linked across days. We never store your IP address or
+          browser details. Each open tab gets a random visit ID that only lives in that tab's memory, so nothing is
+          stored on your device for this.
         </p>
         <p>
           If your browser sends Do Not Track or Global Privacy Control, we don't measure anything. Measurement data is
