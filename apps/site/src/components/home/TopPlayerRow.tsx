@@ -39,7 +39,14 @@ function NameAndTier({ entry }: { entry: LeaderboardEntry }) {
 
   return (
     <div className="min-w-0 flex-1">
-      <Link to="/player/$id" params={{ id: String(players[0].brawlhallaId) }} title={name} className={nameLinkStyle}>
+      {/* a full leaderboard page has thirty rows, and each preloaded player page is six internal reads */}
+      <Link
+        to="/player/$id"
+        params={{ id: String(players[0].brawlhallaId) }}
+        preload={false}
+        title={name}
+        className={nameLinkStyle}
+      >
         {name}
       </Link>
       <div className="mt-0.5 truncate text-xs text-soft">
@@ -49,12 +56,14 @@ function NameAndTier({ entry }: { entry: LeaderboardEntry }) {
   )
 }
 
-export function TopPlayerRow({ entry }: { entry: LeaderboardEntry }) {
+type TopPlayerRowProps = { entry: LeaderboardEntry; rankWidthStyle?: string }
+
+export function TopPlayerRow({ entry, rankWidthStyle }: TopPlayerRowProps) {
   const peakRating = entry.peakRating === null ? '—' : formatWhole(entry.peakRating)
 
   return (
     <tr className={stripedTallRowStyle}>
-      <Place place={entry.standing} />
+      <Place place={entry.standing} widthStyle={rankWidthStyle} />
       <td className="max-w-0 pr-3">
         <div className="flex items-center gap-3">
           <Avatars entry={entry} />
