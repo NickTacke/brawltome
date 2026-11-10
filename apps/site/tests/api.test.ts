@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { z } from 'zod'
-import { postApi, readApi } from '../src/server/api'
+import { postApi, readApi, writeApi } from '../src/server/api'
 
 const apiUrl = 'http://api.test'
 const internalSecret = 'test-internal-secret'
@@ -228,5 +228,39 @@ describe('postApi', () => {
 
     expect(headers.get('x-internal-secret')).toBe(internalSecret)
     expect(headers.get('content-type')).toBe('application/json')
+  })
+})
+
+describe('writeApi', () => {
+  test('writeApi sends a put with a json body', async () => {
+    const calls = stubFetch(() => jsonAnswer({ name: 'Warriors' }))
+
+    await writeApi('PUT', '/account/pinned-players', { brawlhallaIds: [2, 1] }, guildSchema, 'reorder pins')
+    const headers = new Headers(calls[0]?.init.headers)
+
+    expect(calls[0]?.init.method).toBe('PUT')
+    expect(calls[0]?.init.body).toBe('{"brawlhallaIds":[2,1]}')
+    expect(headers.get('content-type')).toBe('application/json')
+    expect(headers.get('x-internal-secret')).toBe(internalSecret)
+  })
+
+  test('writeApi sends a delete without a body', async () => {
+    const calls = stubFetch(() => jsonAnswer({ name: 'Warriors' }))
+
+    await writeApi('DELETE', '/account/pinned-players/7', undefined, guildSchema, 'unpin player 7')
+    const headers = new Headers(calls[0]?.init.headers)
+
+    expect(calls[0]?.url).toBe('http://api.test/v1/account/pinned-players/7')
+    expect(calls[0]?.init.method).toBe('DELETE')
+    expect(calls[0]?.init.body).toBeUndefined()
+    expect(headers.has('content-type')).toBe(false)
+  })
+
+  test('writeApi throws naming the description and status on a 401', async () => {
+    stubFetch(() => new Response('upstream detail', { status: 401 }))
+
+    const write = writeApi('DELETE', '/account/pinned-players/7', undefined, guildSchema, 'unpin player 7')
+
+    expect(await readFailureMessage(write)).toBe('unpin player 7: api answered 401')
   })
 })

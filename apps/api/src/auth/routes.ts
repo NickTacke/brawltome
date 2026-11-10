@@ -9,17 +9,18 @@ import type { ActorAdmission } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 import { Hono } from 'hono'
 import {
-  buildSessionCookie,
   buildStateCookie,
   buildSteamStateCookie,
-  clearSessionCookie,
+  clearSessionCookies,
   clearStateCookie,
   clearSteamStateCookie,
   OAUTH_STATE_COOKIE,
   parseCookies,
+  reissueSessionCookies,
   SESSION_COOKIE,
   SESSION_COOKIE_TTL_SEC,
   STEAM_STATE_COOKIE,
+  sessionCookieDomain,
 } from './cookies'
 import { buildAuthorizeUrl, exchangeCode, fetchDiscordUser } from './discord'
 import { buildSteamLoginUrl, verifySteamLogin } from './steam'
@@ -64,7 +65,36 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
   const logger = deps.logger ?? { error: () => undefined, warn: () => undefined }
   const expectedOrigin = normalizeOrigin(config.webOrigin)
 
-  app.get('/discord/login', (c) => {
+  // the cookies to set for a visitor whose session cookie the api still accepts, or null to go through discord
+  async function existingSessionCookies(cookieHeader: string | undefined): Promise<string[] | null> {
+    const rawToken = parseCookies(cookieHeader)[SESSION_COOKIE]
+
+    if (!rawToken) return null
+
+    try {
+      const authentication = await accounts.authenticate(rawToken)
+
+      if (authentication.status === 'anonymous') return null
+
+      const remainingSec = Math.floor((authentication.expiresAt.getTime() - Date.now()) / 1000)
+
+      return reissueSessionCookies(rawToken, remainingSec, sessionCookieDomain)
+    } catch (err) {
+      logger.error('auth.discord_login.session_check_failed', err)
+
+      return null
+    }
+  }
+
+  app.get('/discord/login', async (c) => {
+    const sessionCookies = await existingSessionCookies(c.req.header('cookie'))
+
+    if (sessionCookies) {
+      for (const cookie of sessionCookies) c.header('Set-Cookie', cookie, { append: true })
+
+      return c.redirect(`${config.webOrigin}/account`)
+    }
+
     const state = randomBytes(32).toString('base64url')
 
     c.header('Set-Cookie', buildStateCookie(state))
@@ -130,7 +160,10 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
         avatarHash: profile.avatarHash,
       })
 
-      c.header('Set-Cookie', buildSessionCookie(sessionToken, SESSION_COOKIE_TTL_SEC), { append: true })
+      // a stale host-only cookie from before the domain was set would otherwise sit beside the new session
+      for (const cookie of reissueSessionCookies(sessionToken, SESSION_COOKIE_TTL_SEC, sessionCookieDomain)) {
+        c.header('Set-Cookie', cookie, { append: true })
+      }
     } catch (err) {
       logger.error('auth.discord_sign_in.failed', err)
 
@@ -162,7 +195,7 @@ export function createAuthRoutes(deps: CreateAuthRoutesDeps): Hono {
       }
     }
 
-    c.header('Set-Cookie', clearSessionCookie())
+    for (const cookie of clearSessionCookies(sessionCookieDomain)) c.header('Set-Cookie', cookie, { append: true })
 
     return c.body(null, 204)
   })

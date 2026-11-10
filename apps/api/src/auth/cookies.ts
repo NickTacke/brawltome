@@ -5,11 +5,13 @@ export const SESSION_COOKIE_TTL_SEC = 30 * 24 * 60 * 60
 export const OAUTH_STATE_TTL_SEC = 10 * 60
 
 const isProd = process.env.NODE_ENV === 'production'
-const sessionCookieDomain = process.env.SESSION_COOKIE_DOMAIN ?? undefined
+
+// empty or unset keeps the session cookie on the api's own host
+export const sessionCookieDomain = process.env.SESSION_COOKIE_DOMAIN || undefined
 
 interface CookieOptions {
   maxAgeSec: number
-  includeDomain?: boolean
+  domain?: string
 }
 
 function serialize(name: string, value: string, opts: CookieOptions): string {
@@ -23,17 +25,37 @@ function serialize(name: string, value: string, opts: CookieOptions): string {
 
   if (isProd) parts.push('Secure')
 
-  if (opts.includeDomain && sessionCookieDomain) parts.push(`Domain=${sessionCookieDomain}`)
+  if (opts.domain) parts.push(`Domain=${opts.domain}`)
 
   return parts.join('; ')
 }
 
 export function buildSessionCookie(rawToken: string, maxAgeSec: number): string {
-  return serialize(SESSION_COOKIE, rawToken, { maxAgeSec, includeDomain: true })
+  return serialize(SESSION_COOKIE, rawToken, { maxAgeSec, domain: sessionCookieDomain })
 }
 
-export function clearSessionCookie(): string {
-  return serialize(SESSION_COOKIE, '', { maxAgeSec: 0, includeDomain: true })
+/** Clears the session cookie, and the host-only copy from before SESSION_COOKIE_DOMAIN was set. */
+export function clearSessionCookies(domain: string | undefined): string[] {
+  const clearHostOnly = serialize(SESSION_COOKIE, '', { maxAgeSec: 0 })
+
+  if (!domain) return [clearHostOnly]
+
+  return [clearHostOnly, serialize(SESSION_COOKIE, '', { maxAgeSec: 0, domain })]
+}
+
+/**
+ * Sets a session the visitor already holds again. Once SESSION_COOKIE_DOMAIN is set, this moves a host-only cookie
+ * from before onto the domain, where the site can read it too.
+ */
+export function reissueSessionCookies(rawToken: string, maxAgeSec: number, domain: string | undefined): string[] {
+  const sessionCookie = serialize(SESSION_COOKIE, rawToken, { maxAgeSec, domain })
+
+  if (!domain) return [sessionCookie]
+
+  // the host-only copy is a separate cookie, and left in place it would still reach this host beside the new one
+  const clearHostOnly = serialize(SESSION_COOKIE, '', { maxAgeSec: 0 })
+
+  return [clearHostOnly, sessionCookie]
 }
 
 export function buildStateCookie(state: string): string {

@@ -96,6 +96,29 @@ export function readApi<T>(
   return requestApi(path, { method: 'GET' }, schema, description, options)
 }
 
+/**
+ * Calls a writing method on /v1{path} as an internal caller, with the body as json when there is one. Only for server
+ * functions: it reads the internal secret.
+ */
+export function writeApi<T>(
+  method: 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  body: unknown,
+  schema: ZodType<T>,
+  description: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  if (body === undefined) return requestApi(path, { method }, schema, description, options)
+
+  const init = {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+
+  return requestApi(path, init, schema, description, options)
+}
+
 /** Calls POST /v1{path} on the API as an internal caller. Only for server functions: it reads the internal secret. */
 export function postApi<T>(
   path: string,
@@ -104,11 +127,5 @@ export function postApi<T>(
   description: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const init = {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }
-
-  return requestApi(path, init, schema, description, options)
+  return writeApi('POST', path, body, schema, description, options)
 }

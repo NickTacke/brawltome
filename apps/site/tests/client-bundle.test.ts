@@ -6,7 +6,8 @@ const siteRoot = join(import.meta.dir, '..')
 const outputRoot = join(siteRoot, 'dist')
 const clientOutput = join(outputRoot, 'client')
 const serverOutput = join(outputRoot, 'server')
-const secretMarkers = ['INTERNAL_API_SECRET', 'x-internal-secret']
+// the session token only travels between the site's server and the api, so nothing in the browser names it
+const secretMarkers = ['INTERNAL_API_SECRET', 'x-internal-secret', 'x-visitor-session', 'brawltome_session']
 const buildTimeoutMs = 180_000
 const largestClientScriptBytes = 500_000
 
@@ -57,8 +58,8 @@ describe('client bundle', () => {
   })
 
   // without this the check below passes on a site where nothing uses the api client
-  test('the secret header is in the server output', () => {
-    expect(filesContaining(serverOutput, 'x-internal-secret').length).toBeGreaterThan(0)
+  test.each(['x-internal-secret', 'x-visitor-session', 'brawltome_session'])('%s is in the server output', (marker) => {
+    expect(filesContaining(serverOutput, marker).length).toBeGreaterThan(0)
   })
 
   test.each(secretMarkers)('no client file contains %s', (marker) => {

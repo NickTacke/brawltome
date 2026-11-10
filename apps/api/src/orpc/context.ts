@@ -25,13 +25,19 @@ export function createOrpcContext(request: Request, options: OrpcContextOptions)
   // the site calls for its visitors, so it names their user agent; anyone else is judged by their own
   const visitorUserAgent = isInternalCaller ? request.headers.get('x-visitor-user-agent') : null
   const userAgent = visitorUserAgent ?? request.headers.get('user-agent') ?? ''
+  // the site reads the visitor's session cookie and forwards it here; accounts checks it on every call
+  const visitorSessionToken = isInternalCaller ? request.headers.get('x-visitor-session') : null
 
-  return {
+  const context: OrpcContext = {
     telemetry: options.telemetry,
     clientIp: readClientIp(request.headers),
     isBot: isBotUserAgent(userAgent),
     isInternalCaller,
   }
+
+  if (visitorSessionToken) context.visitorSessionToken = visitorSessionToken
+
+  return context
 }
 
 export const procedure = os.$context<OrpcContext>()

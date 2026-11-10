@@ -1,4 +1,5 @@
 import type { BrawltomeModule, Database } from '@brawltome/foundation'
+import { createAccountProcedures } from './api/procedures'
 import { initializeAndImportV2Accounts } from './migrations/0001-initialize-and-import-v2'
 import { addV2AuthCutoverState } from './migrations/0002-add-v2-auth-cutover-state'
 import { addAccountPreferences } from './migrations/0003-add-preferences'
@@ -72,7 +73,9 @@ const migrations = [
 ] as const
 
 export const accountsModule = {
-  name: 'accounts',
+  // a literal, so the API router can serve the procedures under this name with their types
+  name: 'accounts' as const,
   dependsOn: ['queue'],
   migrations,
+  routes: createAccountProcedures,
 } satisfies BrawltomeModule

@@ -140,6 +140,8 @@ services:
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_ANNOUNCE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
+      # shared with the site on brawltome.app, which reads the session server side
+      SESSION_COOKIE_DOMAIN: brawltome.app
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
       WEB_ORIGIN: https://brawltome.app
     secrets:
@@ -266,6 +268,9 @@ services:
       INTERNAL_API_URL: http://api:3000
       NODE_ENV: production
       PORT: "3000"
+      # sign in, steam verification and the cookie stay on the api, the site only links to them
+      PUBLIC_API_URL: https://api.brawltome.app
+      SESSION_COOKIE_DOMAIN: brawltome.app
       # the public turnstile site key, the same one the web image is built with from the TURNSTILE_SITE_KEY variable
       TURNSTILE_SITE_KEY: 0x4AAAAAACx60GKE7imjvcOh
     secrets:
@@ -301,7 +306,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
-      - traefik.http.routers.brawltome-site.rule=Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\.svg$$`))
+      - traefik.http.routers.brawltome-site.rule=Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\.svg$$`))
       - traefik.http.routers.brawltome-site.priority=1000
       - traefik.http.routers.brawltome-site.entrypoints=websecure
       - traefik.http.routers.brawltome-site.tls.certresolver=letsencrypt
