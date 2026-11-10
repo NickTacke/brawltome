@@ -1,7 +1,7 @@
 import { bestRating, eloReset, formatGrouped, rankBanner, tierName } from './player-format'
 import { sectionBody, sectionTitle, statLabel } from './player-styles'
 import { SplitRecord } from './SplitRecord'
-import { noStanding, type Standing } from './side-summary'
+import { noStanding, type Placed, type Standing } from './side-summary'
 
 const bigRating =
   'text-[2.25rem] leading-none font-black tracking-tight text-strong min-[400px]:text-[2.75rem] [@media(min-height:960px)]:text-[3.25rem] md:max-lg:text-[2.25rem]! lg:max-xl:text-[2.75rem]!'
@@ -33,7 +33,28 @@ function GamesAndReset({ standing }: { standing: Standing }) {
   )
 }
 
-export function Ranked({ standing = noStanding }: { standing?: Standing }) {
+function Placement({ standing }: { standing: Placed }) {
+  const { region, regionRank, globalRank } = standing
+
+  if (!regionRank && !globalRank) return null
+
+  return (
+    <div className="flex shrink-0 items-baseline gap-2.5 text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
+      {regionRank && region && (
+        <span>
+          <span className="font-black text-strong">#{formatGrouped(regionRank)}</span> {region}
+        </span>
+      )}
+      {globalRank && (
+        <span>
+          <span className="font-black text-strong">#{formatGrouped(globalRank)}</span> Global
+        </span>
+      )}
+    </div>
+  )
+}
+
+export function Ranked({ standing = noStanding }: { standing?: Placed }) {
   return (
     <section data-ranked>
       <div className="flex flex-wrap items-center justify-between gap-x-3">
@@ -44,7 +65,10 @@ export function Ranked({ standing = noStanding }: { standing?: Standing }) {
         <div className="flex items-center gap-4">
           <img src={rankBanner(standing.tier)} alt="" className={banner} />
           <div className="min-w-0 flex-1">
-            <div className="truncate font-bold text-text">{tierName(standing.tier)}</div>
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="truncate font-bold text-text">{tierName(standing.tier)}</div>
+              {standing.games > 0 && <Placement standing={standing} />}
+            </div>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5">
               <span className={bigRating}>{formatGrouped(standing.rating)}</span>
               <PeakNote standing={standing} />

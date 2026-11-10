@@ -8,6 +8,8 @@ export type FixedTeam = RankedSnapshot['fixedTeams'][number]
 export type SoloQueueEntry = RankedSnapshot['soloQueue'][number]
 export type OneVsOne = RankedSnapshot['oneVsOne']
 export type Standing = { rating: number; peakRating: number; tier: string | null; wins: number; games: number }
+/** A standing that may carry the player's place on the 1v1 boards. */
+export type Placed = Standing & Partial<Pick<OneVsOne, 'region' | 'globalRank' | 'regionRank'>>
 export type CombinedRecord = { teams: number; wins: number; games: number }
 
 export const noStanding: Standing = { rating: 0, peakRating: 0, tier: null, wins: 0, games: 0 }
