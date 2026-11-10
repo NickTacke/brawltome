@@ -137,15 +137,15 @@ function usEastPreviousStandings(): Standing[] {
   ]
 }
 
-// 502, 504, 506 and 507 each won a game this hour
+// 502 and 507 won a game this hour. 504 and 506 end level on 2,350: 504 played more games, 506 has more wins
 function usEastCurrentStandings(): Standing[] {
   return [
     { id: 501, rating: 2_400, wins: 50, losses: 50 },
     { id: 502, rating: 2_390, wins: 51, losses: 50 },
     { id: 503, rating: 2_380, wins: 50, losses: 50 },
-    { id: 504, rating: 2_350, wins: 51, losses: 50 },
+    { id: 504, rating: 2_350, wins: 51, losses: 52 },
     { id: 505, rating: 2_340, wins: 50, losses: 50 },
-    { id: 506, rating: 2_350, wins: 51, losses: 50 },
+    { id: 506, rating: 2_350, wins: 52, losses: 50 },
     { id: 507, rating: 2_600, wins: 51, losses: 50 },
   ]
 }
@@ -246,8 +246,8 @@ describe('recentActivityPage', () => {
     expect(ranks(page.entries)).toEqual([
       { id: 507, standing: 1 },
       { id: 502, standing: 3 },
-      { id: 504, standing: 5 },
-      { id: 506, standing: 6 },
+      { id: 506, standing: 5 },
+      { id: 504, standing: 6 },
     ])
   })
 
@@ -300,11 +300,12 @@ describe('recentActivityMovers', () => {
 
     if (movers.status === 'unavailable') throw new Error('Expected the US-E 1v1 hour')
 
+    // climbers are ordered by the rating they gained, so the two +10s keep their own order and show their ranks
     expect(ranks(movers.climbers)).toEqual([
       { id: 507, standing: 1 },
       { id: 502, standing: 3 },
-      { id: 504, standing: 5 },
-      { id: 506, standing: 6 },
+      { id: 504, standing: 6 },
+      { id: 506, standing: 5 },
     ])
   })
 

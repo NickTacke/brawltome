@@ -464,9 +464,7 @@ export function createPostgresRanking(
       SELECT ${activityColumns(sql)},
              (count(*) OVER ())::integer AS total_count
       ${playedRows(sql, comparedSnapshots(interval))}
-      ORDER BY current.rating DESC,
-               ((current.wins + current.losses) - (previous.wins + previous.losses)) DESC,
-               current.identity_key ASC
+      ORDER BY current.rating_standing
       OFFSET ${offset}
       LIMIT ${pageSize}
     `
