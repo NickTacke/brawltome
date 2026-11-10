@@ -77,7 +77,9 @@ export const leaderboardPageSize = 30
 export const leaderboardPageInputSchema = leaderboardInputSchema.pick({ mode: true, region: true, page: true })
 
 const entryMetrics = {
+  /** Place on the whole board by rating, highest first; a tie keeps Brawlhalla's order. */
   standing: positiveInt32,
+  /** Brawlhalla's own rank, which on regional boards does not always follow rating. */
   sourceRank: positiveInt32,
   region: leaderboardRegionSchema,
   rating: nonnegativeInt32,
@@ -176,6 +178,7 @@ const unavailableSchema = z
 export const leaderboardOutputSchema = z.union([availableOutputSchema, unavailableSchema])
 
 const activityMetrics = {
+  /** Place on the whole board by rating, as on the leaderboard. */
   standing: positiveInt32,
   region: leaderboardRegionSchema,
   rating: nonnegativeInt32,
