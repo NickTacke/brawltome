@@ -27,7 +27,7 @@ function MenuItem({ item, onClose }: { item: (typeof railItems)[number]; onClose
       >
         <Icon className="size-6" weight="Linear" aria-hidden="true" />
         {label}
-        {wip && <span className="ml-auto text-[11px] font-bold tracking-wide uppercase">Soon</span>}
+        {wip && <span className="ml-auto text-[0.6875rem] font-bold tracking-wide uppercase">Soon</span>}
       </Link>
     </li>
   )

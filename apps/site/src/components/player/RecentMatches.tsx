@@ -19,7 +19,7 @@ export function RecentMatches() {
         {ghostRows.map(({ name, detail, opacity }, index) => (
           <li
             key={name}
-            className={`flex h-[50px] items-center gap-3 ${index > 2 ? 'max-xl:hidden' : ''}`}
+            className={`flex h-[3.125rem] items-center gap-3 ${index > 2 ? 'max-xl:hidden' : ''}`}
             style={{ opacity }}
           >
             <img

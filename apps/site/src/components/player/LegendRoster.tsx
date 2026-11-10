@@ -67,7 +67,7 @@ function LegendTile({ legend, ranked, value, isSelected }: LegendTileProps) {
 
   return (
     <span
-      className={`block overflow-hidden rounded-lg p-[2px] pb-0 transition-transform duration-150 group-hover:scale-105 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+      className={`block overflow-hidden rounded-lg p-[0.125rem] pb-0 transition-transform duration-150 group-hover:scale-105 ${isSelected ? 'ring-2 ring-primary' : ''}`}
       style={{ backgroundColor: frameColour }}
     >
       <img
@@ -76,7 +76,7 @@ function LegendTile({ legend, ranked, value, isSelected }: LegendTileProps) {
         loading="lazy"
         className="block aspect-square w-full rounded-md bg-raised object-cover object-top"
       />
-      <span className="block truncate py-0.5 text-center text-[13px] leading-tight font-black tracking-tight text-strong tabular-nums">
+      <span className="block truncate py-0.5 text-center text-[0.8125rem] leading-tight font-black tracking-tight text-strong tabular-nums">
         {value}
       </span>
     </span>
@@ -104,7 +104,7 @@ export function LegendRoster({ legends, rankedLegends }: LegendRosterProps) {
             Legends
           </h2>
           {maxedCount > 0 && (
-            <span className="text-[13px] whitespace-nowrap text-soft tabular-nums">
+            <span className="text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
               <span className="font-black text-strong">{maxedCount}</span> at level 100
             </span>
           )}

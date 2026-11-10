@@ -9,7 +9,7 @@ export function TeamCard({ team, ownId }: { team: FixedTeam; ownId: number }) {
 
   return (
     <div className="group relative -mx-3 flex items-center gap-4 rounded-md px-3 py-3 transition-colors hover:bg-white/[0.04]">
-      <img src={rankBanner(team.tier)} alt="" loading="lazy" className="h-[88px] w-16 shrink-0 object-contain" />
+      <img src={rankBanner(team.tier)} alt="" loading="lazy" className="h-[5.5rem] w-16 shrink-0 object-contain" />
       {/* measured against the card, because two columns on a laptop are as narrow as a phone */}
       <div className="@container min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-x-4 @max-sm:flex-col @max-sm:items-stretch @max-sm:gap-y-1 @max-sm:[&>span]:justify-start">

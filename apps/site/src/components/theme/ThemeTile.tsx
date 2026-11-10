@@ -15,7 +15,7 @@ export function MiniPage({ tokens }: { tokens: ThemeTokens }) {
         style={{ backgroundColor: tokens.rail, boxShadow: `inset -1px 0 0 ${previewLine}` }}
       />
       <span
-        className="absolute top-[11%] left-[19%] size-[20%] rounded-[3px]"
+        className="absolute top-[11%] left-[19%] size-[20%] rounded-[0.1875rem]"
         style={{ backgroundColor: tokens.raised }}
       />
       <span

@@ -103,7 +103,7 @@ function ChartGuides({ yPercent, low, high }: { yPercent: Scale['yPercent']; low
           style={{ top: `${yPercent(rating)}%`, borderColor: `${colour}55` }}
         >
           {yPercent(rating) < lowestTierLabelPercent && (
-            <span className="absolute top-1 right-0 text-[11px] leading-none font-bold text-soft">{name}</span>
+            <span className="absolute top-1 right-0 text-[0.6875rem] leading-none font-bold text-soft">{name}</span>
           )}
         </div>
       ))}
@@ -113,7 +113,7 @@ function ChartGuides({ yPercent, low, high }: { yPercent: Scale['yPercent']; low
           className="pointer-events-none absolute inset-x-0 border-t border-line/20"
           style={{ top: `${yPercent(tick)}%` }}
         >
-          <span className="absolute -top-1.5 -left-12 w-10 text-right font-mono text-[11px] leading-none text-soft/60">
+          <span className="absolute -top-1.5 -left-12 w-10 text-right font-mono text-[0.6875rem] leading-none text-soft/60">
             {formatGrouped(tick)}
           </span>
         </div>
@@ -147,7 +147,7 @@ function ChartLine({ line, yPercent, high }: { line: string; yPercent: Scale['yP
         d={line}
         fill="none"
         stroke={`url(#${gradientId})`}
-        strokeWidth="2.5"
+        strokeWidth="0.15625rem"
         vectorEffect="non-scaling-stroke"
         strokeLinejoin="round"
       />

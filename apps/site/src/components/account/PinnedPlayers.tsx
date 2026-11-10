@@ -20,7 +20,7 @@ export function PinnedPlayers({ verifiedPlayer, pins, isBusy, hasFailed, onMove,
       <div className="flex items-baseline justify-between gap-4">
         <h2 className={sectionTitleStyle}>Pinned players</h2>
         {count > 0 && (
-          <span className="text-[13px] text-soft tabular-nums">
+          <span className="text-[0.8125rem] text-soft tabular-nums">
             <span className="font-black text-strong">{count}</span> pinned
           </span>
         )}

@@ -19,7 +19,7 @@ function CareerTable({ snapshot: { account, combat } }: { snapshot: CareerSnapsh
           <div className={statLabel}>Games</div>
           <div className={`mt-1 ${headlineFigure}`}>{formatGrouped(combat.games)}</div>
         </div>
-        <div className="w-[150px] shrink-0 [&>[data-mini-table]]:w-full">
+        <div className="w-[9.375rem] shrink-0 [&>[data-mini-table]]:w-full">
           <MiniTable
             rows={[
               { label: 'Level', value: String(account.level) },

@@ -53,7 +53,7 @@ function NamedRow({ heading, name, standing }: Omit<Entry, 'key'>) {
       <img
         src={rankBanner(standing.tier)}
         alt=""
-        className="h-20 w-14 shrink-0 object-contain xl:[@media(max-height:880px)]:h-16! xl:[@media(max-height:880px)]:w-12! [@media(min-height:960px)]:h-24 [@media(min-height:960px)]:w-[68px]"
+        className="h-20 w-14 shrink-0 object-contain xl:[@media(max-height:880px)]:h-16! xl:[@media(max-height:880px)]:w-12! [@media(min-height:960px)]:h-24 [@media(min-height:960px)]:w-[4.25rem]"
       />
       <div className="min-w-0 flex-1">
         {name && <div className="truncate text-xs font-bold text-soft">{heading}</div>}
@@ -89,7 +89,7 @@ function bestTeamEntry(teams: FixedTeam[], playerId: number): Entry | null {
 
 function TeamCounts({ totals }: { totals: CombinedRecord }) {
   return (
-    <div className="text-[13px] whitespace-nowrap text-soft tabular-nums">
+    <div className="text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
       <span className="font-black text-strong">{formatGrouped(totals.teams)}</span>{' '}
       {totals.teams === 1 ? 'team' : 'teams'} ·{' '}
       <span className="font-black text-strong">{formatGrouped(totals.games)}</span> games

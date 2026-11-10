@@ -82,7 +82,7 @@ function GuildPage(page: GuildPageData) {
   const record = rankedRecord(summaries, new Date(loadedAt))
 
   return (
-    <div className="divide-y divide-line/50 [--gutter:max(4rem,calc((100vw-57px-1080px-380px)/3))] md:px-[max(0px,calc(40px-max(0px,(100vw-1209px)/2)))] max-xl:[&>*]:py-7 max-xl:[&>*:first-child]:pt-0 max-xl:[&>*:first-child]:pb-10 max-xl:[&>*:last-child]:pt-4 max-xl:[&>*:last-child]:pb-0 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-57px)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_380px] xl:grid-rows-[auto_1fr] xl:divide-y-0 xl:px-(--gutter)">
+    <div className="divide-y divide-line/50 [--gutter:max(4rem,calc((100vw-3.5625rem-67.5rem-23.75rem)/3))] md:px-[max(0px,calc(2.5rem-max(0px,100vw-75.5625rem)/2))] max-xl:[&>*]:py-7 max-xl:[&>*:first-child]:pt-0 max-xl:[&>*:first-child]:pb-10 max-xl:[&>*:last-child]:pt-4 max-xl:[&>*:last-child]:pb-0 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-3.5625rem)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_23.75rem] xl:grid-rows-[auto_1fr] xl:divide-y-0 xl:px-(--gutter)">
       <div className="min-w-0 xl:col-start-1 xl:row-start-1 xl:pr-(--gutter) xl:pb-8">
         <GuildHeader clan={clan} refresh={{ status: live.status, onRetry: live.retry }} />
         <RefreshChallenge challenge={live.challenge} />

@@ -19,7 +19,7 @@ import {
 } from './roster'
 
 const pageSize = 30
-const columnLabelStyle = 'flex h-4 items-center gap-1 text-[11px] leading-none font-bold tracking-wide uppercase'
+const columnLabelStyle = 'flex h-4 items-center gap-1 text-[0.6875rem] leading-none font-bold tracking-wide uppercase'
 
 function Role({ member }: { member: RankedMember }) {
   return (
@@ -85,13 +85,13 @@ function MemberRow({ member }: { member: RankedMember }) {
       <td className="hidden w-24 px-3 text-right font-mono text-soft md:table-cell">
         {member.elo === null ? '—' : formatWhole(member.elo)}
       </td>
-      <td className="w-[140px] pr-3 pl-3 text-right font-mono font-semibold text-strong sm:w-32">
+      <td className="w-[8.75rem] pr-3 pl-3 text-right font-mono font-semibold text-strong sm:w-32">
         {formatWhole(member.xp)}
         {member.elo !== null && (
           <div className="mt-0.5 text-xs font-normal text-soft md:hidden">{formatWhole(member.elo)} 1v1 Elo</div>
         )}
       </td>
-      <td className="hidden w-[156px] pr-3 pl-3 text-right text-soft sm:table-cell">{formatDay(member.joinDate)}</td>
+      <td className="hidden w-[9.75rem] pr-3 pl-3 text-right text-soft sm:table-cell">{formatDay(member.joinDate)}</td>
     </tr>
   )
 }
@@ -170,7 +170,13 @@ function RosterTable({
           >
             1v1 Elo
           </SortableHeader>
-          <SortableHeader sortKey="xp" sort={sort} onSort={onSort} alignRight className="w-[140px] text-right sm:w-32">
+          <SortableHeader
+            sortKey="xp"
+            sort={sort}
+            onSort={onSort}
+            alignRight
+            className="w-[8.75rem] text-right sm:w-32"
+          >
             XP
           </SortableHeader>
           <SortableHeader
@@ -178,7 +184,7 @@ function RosterTable({
             sort={sort}
             onSort={onSort}
             alignRight
-            className="hidden w-[156px] text-right sm:table-cell"
+            className="hidden w-[9.75rem] text-right sm:table-cell"
           >
             Joined
           </SortableHeader>

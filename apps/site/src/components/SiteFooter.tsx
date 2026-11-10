@@ -7,7 +7,7 @@ const footerLinkStyle = 'transition-colors hover:text-strong'
 export function SiteFooter() {
   return (
     <footer className="border-t border-line/50">
-      <div className="mx-auto flex w-full flex-col gap-5 px-6 py-7 md:flex-row md:items-center md:justify-between md:gap-12 md:px-16 xl:w-[min(1400px,calc(100vw-185px))] xl:px-0">
+      <div className="mx-auto flex w-full flex-col gap-5 px-6 py-7 md:flex-row md:items-center md:justify-between md:gap-12 md:px-16 xl:w-[min(87.5rem,calc(100vw-11.5625rem))] xl:px-0">
         <p className="text-xs leading-relaxed text-soft">
           Not associated with or endorsed by Blue Mammoth Games, who own Brawlhalla, its art and its trademarks.
         </p>

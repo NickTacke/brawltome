@@ -1,6 +1,6 @@
 export function MiniTable({ rows }: { rows: Array<{ label: string; value: string }> }) {
   return (
-    <div data-mini-table className="w-[132px] shrink-0">
+    <div data-mini-table className="w-[8.25rem] shrink-0">
       {rows.map(({ label, value }) => (
         <div
           key={label}

@@ -1,15 +1,21 @@
 import type { FilterOption } from './FilterSelect'
 
 function Flag({ code }: { code: string }) {
-  return <img src={`/images/flags/${code}.svg`} alt="" className="h-[18px] w-6 shrink-0 rounded-[2px] object-cover" />
+  return (
+    <img
+      src={`/images/flags/${code}.svg`}
+      alt=""
+      className="h-[1.125rem] w-6 shrink-0 rounded-[0.125rem] object-cover"
+    />
+  )
 }
 
 // both coasts share a flag, so a corner badge tells them apart
 function UsFlag({ side }: { side: 'E' | 'W' }) {
   return (
-    <span className="relative block h-[18px] w-6 shrink-0">
-      <img src="/images/flags/us.svg" alt="" className="size-full rounded-[2px] object-cover" />
-      <span className="absolute -right-1.5 -bottom-1.5 flex size-4 items-center justify-center rounded-[3px] bg-ink text-[11px] leading-none font-black text-strong ring-1 ring-line">
+    <span className="relative block h-[1.125rem] w-6 shrink-0">
+      <img src="/images/flags/us.svg" alt="" className="size-full rounded-[0.125rem] object-cover" />
+      <span className="absolute -right-1.5 -bottom-1.5 flex size-4 items-center justify-center rounded-[0.1875rem] bg-ink text-[0.6875rem] leading-none font-black text-strong ring-1 ring-line">
         {side}
       </span>
     </span>
@@ -18,7 +24,7 @@ function UsFlag({ side }: { side: 'E' | 'W' }) {
 
 function GlobalGlobe() {
   return (
-    <span className="flex h-[18px] w-6 shrink-0 items-center justify-center">
+    <span className="flex h-[1.125rem] w-6 shrink-0 items-center justify-center">
       <img src="/images/flags/globe-world.svg" alt="" className="size-5" />
     </span>
   )

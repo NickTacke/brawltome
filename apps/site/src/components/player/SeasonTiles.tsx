@@ -27,7 +27,7 @@ function TileLine({ points, colour }: { points: ChartPoint[]; colour: string }) 
         fill="none"
         stroke={colour}
         strokeOpacity="0.7"
-        strokeWidth="1.5"
+        strokeWidth="0.09375rem"
         vectorEffect="non-scaling-stroke"
       />
     </svg>
@@ -49,7 +49,7 @@ function SeasonTile({ season, isSelected, onSelect }: { season: Season; isSelect
       <img
         src={rankBanner(totals.tier)}
         alt=""
-        className="h-[52px] w-[38px] shrink-0 object-contain transition-transform duration-150 group-hover:scale-110"
+        className="h-[3.25rem] w-[2.375rem] shrink-0 object-contain transition-transform duration-150 group-hover:scale-110"
       />
       <span className="relative min-w-0">
         <span

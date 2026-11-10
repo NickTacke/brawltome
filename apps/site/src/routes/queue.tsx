@@ -26,7 +26,7 @@ type AvailableView = Extract<LeaderboardRecentActivityOutput, { status: 'fresh' 
 
 // the queue's table on the left and a sticky column on the right from 1280 wide, the same frame as the guild page
 const pageStyle =
-  '[--gutter:max(4rem,calc((100vw-57px-1080px-380px)/3))] md:px-[max(0px,calc(40px-max(0px,(100vw-1209px)/2)))] xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-57px)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_380px] xl:grid-rows-[auto_1fr] xl:px-(--gutter)'
+  '[--gutter:max(4rem,calc((100vw-3.5625rem-67.5rem-23.75rem)/3))] md:px-[max(0px,calc(2.5rem-max(0px,100vw-75.5625rem)/2))] xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-3.5625rem)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_23.75rem] xl:grid-rows-[auto_1fr] xl:px-(--gutter)'
 
 function Updated({ view, className }: { view: AvailableView; className: string }) {
   return (

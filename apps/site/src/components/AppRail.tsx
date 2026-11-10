@@ -60,7 +60,7 @@ export function AppRail() {
   const account = useRailAccount()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[57px] flex-col border-r border-line bg-rail md:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[3.5625rem] flex-col border-r border-line bg-rail md:flex">
       <nav className="shrink-0 px-2 py-1">
         {railItems.map((item) => (
           <RailLink key={item.to} {...item} />

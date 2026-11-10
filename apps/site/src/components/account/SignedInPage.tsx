@@ -21,7 +21,7 @@ export function SignedInPage({ page, errorMessage }: SignedInPageProps) {
 
   return (
     // the same two columns as the guild page: content on the left, a fixed side column on wide screens
-    <div className="[--gutter:max(4rem,calc((100vw-57px-1080px-380px)/3))] md:px-10 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-57px)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_380px] xl:px-(--gutter)">
+    <div className="[--gutter:max(4rem,calc((100vw-3.5625rem-67.5rem-23.75rem)/3))] md:px-10 xl:relative xl:left-1/2 xl:grid xl:w-[calc(100vw-3.5625rem)] xl:-translate-x-1/2 xl:grid-cols-[minmax(0,1fr)_23.75rem] xl:px-(--gutter)">
       <div className="min-w-0 xl:border-r xl:border-line/50 xl:pr-(--gutter)">
         <AccountHeader account={page.account} />
         <div className="pt-6">
