@@ -16,8 +16,7 @@ export const railItems: RailItem[] = [
   { to: '/tournaments', label: 'Tournaments', icon: Cup as RailIcon, wip: true },
 ]
 
-// a plain string because the account page isn't a route yet, a literal fails the route types
-export const signInPath: string = '/account'
+export const signInPath = '/account'
 
 // while the old site still serves some of these pages on the same domain, a link must load them from the server, or
 // this app would show its own version, or its not found page, in their place
