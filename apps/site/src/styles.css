@@ -33,12 +33,28 @@
   --text-name--line-height: 1;
 }
 
+/*
+ * for layouts that need 2200 px of design width: a magnified page only has that on a window at least 2.2 times as
+ * wide as it is high, a 16:9 screen stays at 1920 however many real px it has
+ */
+@custom-variant ultrawide {
+  @media (min-width: 137.5rem) and (min-aspect-ratio: 11 / 5) {
+    @slot;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-ink);
     color: var(--color-text);
     color-scheme: dark;
-    font-size: 100%;
+    /*
+     * the design is 1920 wide, a wider screen shows that same layout magnified through the root font size
+     * the height term keeps the design at least 1000 high, so the sticky columns fit as they do on a 1920×1080 screen
+     * the variable leaves 100vw / 120 for the browser to work out, the minifier would round it and shift every size
+     */
+    --magnified-font-size: min(calc(100vw / 120), calc(100vh / 62.5));
+    font-size: max(100%, var(--magnified-font-size));
     -webkit-font-smoothing: antialiased;
     scrollbar-color: var(--color-line) transparent;
   }
