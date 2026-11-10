@@ -193,6 +193,48 @@ describe('GET /auth/discord/login', () => {
     expect(state).toBeTruthy()
     expect(setCookie).toContain(`brawltome_oauth_state=${state}`)
   })
+
+  // a visitor signed in before the site moved keeps the session; the cookie is set again with the configured domain
+  it('skips discord for a visitor who is already signed in', async () => {
+    const fakes = makeFakes()
+
+    fakes.sessions.add('raw-session-token')
+
+    const app = buildApp(fakes)
+    const res = await app.request('/auth/discord/login', { headers: { cookie: 'brawltome_session=raw-session-token' } })
+    const setCookie = res.headers.get('set-cookie') ?? ''
+
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('http://localhost:3001/account')
+    expect(setCookie).toContain('brawltome_session=raw-session-token')
+    expect(setCookie).toMatch(/Max-Age=\d{7}/)
+    expect(setCookie).not.toContain('brawltome_oauth_state=')
+    expect(fakes.profiles).toEqual([])
+  })
+
+  it('still goes to discord for a session the api rejects', async () => {
+    const app = buildApp(makeFakes())
+    const res = await app.request('/auth/discord/login', { headers: { cookie: 'brawltome_session=made-up' } })
+
+    expect(res.headers.get('location') ?? '').toStartWith('https://discord.com/api/oauth2/authorize')
+    expect(res.headers.get('set-cookie') ?? '').not.toContain('brawltome_session=')
+  })
+
+  it('still goes to discord when the session check fails', async () => {
+    const fakes = makeFakes()
+    const errors: string[] = []
+    const logger = { error: (event: string) => errors.push(event), warn: () => undefined }
+
+    fakes.accounts.authenticate = async () => {
+      throw new Error('database unavailable')
+    }
+
+    const app = buildApp(fakes, undefined, logger)
+    const res = await app.request('/auth/discord/login', { headers: { cookie: 'brawltome_session=raw-session-token' } })
+
+    expect(res.headers.get('location') ?? '').toStartWith('https://discord.com/api/oauth2/authorize')
+    expect(errors).toEqual(['auth.discord_login.session_check_failed'])
+  })
 })
 
 describe('GET /auth/discord/callback', () => {
