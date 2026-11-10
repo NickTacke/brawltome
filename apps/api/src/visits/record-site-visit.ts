@@ -7,6 +7,8 @@ import type { VisitLimiter } from './visit-limiter'
 export type SiteVisitDependencies = {
   visitorKeys: ReturnType<typeof createDailyVisitorKeys>
   limiter: VisitLimiter
+  // events have a budget of their own, so a burst of searches never costs a visitor their page views
+  eventLimiter: VisitLimiter
 }
 
 /**

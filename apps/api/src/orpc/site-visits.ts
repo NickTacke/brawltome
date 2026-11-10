@@ -1,8 +1,8 @@
-import { siteVisitInputSchema, siteVisitResponseSchema } from '@brawltome/contracts'
-import { recordSiteVisit, type SiteVisitDependencies } from '../visits'
+import { siteEventInputSchema, siteVisitInputSchema, siteVisitResponseSchema } from '@brawltome/contracts'
+import { recordSiteEvent, recordSiteVisit, type SiteVisitDependencies } from '../visits'
 import { internalApiProcedure } from './context'
 
-/** Page views the site counts for its visitors, keyed per day by the address the api trusts for them. */
+/** Page views and events the site counts for its visitors, keyed per day by the address the api trusts for them. */
 export function createSiteVisitProcedures(dependencies: SiteVisitDependencies) {
   const page = internalApiProcedure
     .route({
@@ -20,5 +20,21 @@ export function createSiteVisitProcedures(dependencies: SiteVisitDependencies) {
       return recordSiteVisit(dependencies, { telemetry, clientIp, userAgent, isBot }, input)
     })
 
-  return { page }
+  const event = internalApiProcedure
+    .route({
+      method: 'POST',
+      path: '/visits/events',
+      operationId: 'visits.event',
+      summary: 'Count something a visitor did on the site',
+      tags: ['visits'],
+    })
+    .input(siteEventInputSchema)
+    .output(siteVisitResponseSchema)
+    .handler(({ context, input }) => {
+      const { telemetry, clientIp, userAgent, isBot } = context
+
+      return recordSiteEvent(dependencies, { telemetry, clientIp, userAgent, isBot }, input)
+    })
+
+  return { page, event }
 }

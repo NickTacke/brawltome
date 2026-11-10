@@ -1,5 +1,6 @@
 export type { SiteVisitor } from './admit-visitor'
 export { createDailyVisitorKeys } from './daily-visitor-key'
+export { recordSiteEvent } from './record-site-event'
 export { recordSiteVisit, type SiteVisitDependencies } from './record-site-visit'
 export { createServerBoundSalts } from './server-bound-salt'
 export { createVisitLimiter } from './visit-limiter'

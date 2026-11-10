@@ -103,6 +103,7 @@ describe('daily visitor keys over postgres', () => {
     const dependencies = {
       visitorKeys: startProcess(unreachable, noon).keys,
       limiter: createVisitLimiter(120, Date.now),
+      eventLimiter: createVisitLimiter(120, Date.now),
     }
 
     const visitor = { telemetry, clientIp: address, userAgent: browser, isBot: false }

@@ -171,6 +171,8 @@ const siteVisits = createSiteVisitProcedures({
   visitorKeys: createDailyVisitorKeys({ now: Date.now, loadSalt: visitorSalts, readTimeoutMs: 2_000 }),
   // far more pages a minute than a person opens, so only scripts hit it
   limiter: createVisitLimiter(120, Date.now),
+  // two searches a second for a whole minute, which typing doesn't reach
+  eventLimiter: createVisitLimiter(120, Date.now),
 })
 
 const orpcRouter = createOrpcRouter(apiModules, moduleRuntime, {
