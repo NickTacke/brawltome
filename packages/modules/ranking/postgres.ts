@@ -14,6 +14,7 @@ import {
 } from './db/activity-rows'
 import { recordLeaderboardEffect } from './db/leaderboard-effects'
 import { readRecentMovers } from './db/recent-movers'
+import { rowsByRating } from './db/rows-by-rating'
 import { publishedIdentity, type StoredIdentityRow } from './db/stored-identity'
 import type {
   LeaderboardGenerationCandidate,
@@ -382,11 +383,10 @@ export function createPostgresRanking(
       const offset = (page - 1) * pageSize
 
       const entries = await sql<StandingRow[]>`
-      SELECT standing, source_rank, identity_kind, player_one_id, player_one_name,
+      SELECT rating_standing AS standing, source_rank, identity_kind, player_one_id, player_one_name,
              player_two_id, player_two_name, region, rating, peak_rating, wins, losses, tier
-      FROM rankings.snapshot_rows
-      WHERE snapshot_id = ${snapshot.snapshot_id} AND mode = ${snapshot.mode}
-      ORDER BY ordinal
+      FROM (${rowsByRating(sql, snapshot.snapshot_id)}) ranked
+      ORDER BY rating_standing
       OFFSET ${offset}
       LIMIT ${pageSize}
     `

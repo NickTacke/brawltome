@@ -90,6 +90,7 @@ export type LeaderboardView =
       pageSize: number
       hasMore: boolean
       totalRows: number
+      /** Ordered by rating, with `standing` as the place by rating rather than the stored one. */
       entries: Array<Omit<PublishedLeaderboardRow, 'peakRating'> & { peakRating: number | null; games: number }>
     }
   | {
@@ -101,6 +102,7 @@ export type LeaderboardView =
     }
 
 export type RecentActivityEntry = {
+  /** Place on the whole board by rating, not the stored standing. */
   standing: number
   identity: PublishedLeaderboardIdentity
   region: RegionalLeaderboardScope
