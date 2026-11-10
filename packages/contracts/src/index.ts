@@ -88,6 +88,7 @@ export {
   parseLeaderboardOutput,
   parseLeaderboardRecentActivityOutput,
 } from './leaderboard'
+export { type MetaLegendsContract, metaLegendsSchema } from './meta-legends'
 export { type MostPlayedLegendsContract, mostPlayedLegendsSchema } from './most-played-legends'
 export {
   nullablePlayerCareerProfileSchema,
