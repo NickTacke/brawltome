@@ -186,9 +186,17 @@ function publishedProvenance(
   }
 }
 
+// scans land about hourly and at uneven times, so a closer one covers too little play to stand for the last hour
+const shortestComparedSpan = '45 minutes'
+// further back, the comparison no longer reads as recent play
+const longestComparedSpan = '2 hours'
+// scans this old only show the board had history, not that the collector skipped a scan
+const scanGapLookback = '6 hours'
+
 /**
- * Finds the snapshot an hour before the newest one. Scans in the hour before that mean the collector was running and
- * missed the scans an hour ago, which clears up after the next scan. Without them the board is too new to compare.
+ * Finds the latest snapshot between 45 minutes and 2 hours before the newest one. Scans before that range, up to six
+ * hours back, mean the collector skipped scans, which clears up after the next scan. Without them the board is too new
+ * to compare.
  */
 async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Promise<ActivityInterval> {
   const [row] = await sql<ActivityIntervalLookupRow[]>`
@@ -232,9 +240,8 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
              WHERE generation.finalized
                AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
                AND generation.mode = current_endpoint.mode
-               AND generation.schedule_window_at < current_endpoint.schedule_window_at - interval '1 hour'
-                 - (current_endpoint.expected_next_publication_at - current_endpoint.schedule_window_at)
-               AND generation.schedule_window_at >= current_endpoint.schedule_window_at - interval '2 hours'
+               AND generation.schedule_window_at < current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
+               AND generation.schedule_window_at >= current_endpoint.schedule_window_at - ${scanGapLookback}::interval
            ) AS has_earlier_scans
     FROM current_endpoint
     LEFT JOIN LATERAL (
@@ -243,9 +250,8 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
       WHERE generation.finalized
         AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
         AND generation.mode = current_endpoint.mode
-        AND generation.schedule_window_at <= current_endpoint.schedule_window_at - interval '1 hour'
-        AND generation.schedule_window_at >= current_endpoint.schedule_window_at - interval '1 hour'
-          - (current_endpoint.expected_next_publication_at - current_endpoint.schedule_window_at)
+        AND generation.schedule_window_at <= current_endpoint.schedule_window_at - ${shortestComparedSpan}::interval
+        AND generation.schedule_window_at >= current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
       ORDER BY generation.schedule_window_at DESC, generation.id DESC
       LIMIT 1
     ) previous_generation ON true
