@@ -53,7 +53,7 @@ function WeaponColumn({ weapon, value, barHeightRem, isSelected }: WeaponColumnP
         src={`/images/weapons/${weapon.weapon}.svg`}
         alt=""
         loading="lazy"
-        className={`mx-auto mt-1 block aspect-square w-[84%] max-w-14 min-[137.5rem]:max-w-[4.5rem] rounded-md object-contain transition-[filter,transform] duration-150 group-hover:scale-105 group-hover:brightness-125 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        className={`mx-auto mt-1 block aspect-square w-[84%] max-w-14 ultrawide:max-w-[4.5rem] rounded-md object-contain transition-[filter,transform] duration-150 group-hover:scale-105 group-hover:brightness-125 ${isSelected ? 'ring-2 ring-primary' : ''}`}
       />
     </span>
   )
