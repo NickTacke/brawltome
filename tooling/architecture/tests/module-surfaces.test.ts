@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as accounts from '@brawltome/accounts'
+import * as analytics from '@brawltome/analytics'
 import * as clan from '@brawltome/clan'
 import * as discovery from '@brawltome/discovery'
 import type { BrawltomeModule } from '@brawltome/foundation'
@@ -21,6 +22,7 @@ type ModulePackage = {
 
 const modulePackages: Record<string, ModulePackage> = {
   '@brawltome/accounts': { exports: accounts, module: accounts.accountsModule },
+  '@brawltome/analytics': { exports: analytics, module: analytics.analyticsModule },
   '@brawltome/clan': { exports: clan, module: clan.clanModule },
   '@brawltome/discovery': { exports: discovery, module: discovery.discoveryModule },
   '@brawltome/player': { exports: player, module: player.playerModule },

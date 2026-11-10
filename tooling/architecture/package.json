@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@brawltome/accounts": "workspace:*",
+    "@brawltome/analytics": "workspace:*",
     "@brawltome/clan": "workspace:*",
     "@brawltome/discovery": "workspace:*",
     "@brawltome/player": "workspace:*",
