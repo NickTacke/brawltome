@@ -1,7 +1,7 @@
-import { siteVisitInputSchema } from '@brawltome/contracts'
+import { siteEventInputSchema, siteVisitInputSchema } from '@brawltome/contracts'
 import { createServerFn } from '@tanstack/react-start'
 import { getRequestHeader } from '@tanstack/react-start/server'
-import { recordVisit } from './record-visit'
+import { recordSiteEvent, recordVisit } from './record-visit'
 import { isSameOriginRequest } from './same-origin'
 import type { VisitSignals } from './visit-signals'
 import { currentVisitor } from './visitor'
@@ -26,3 +26,8 @@ function currentVisitSignals(): VisitSignals {
 export const countPageView = createServerFn({ method: 'POST' })
   .validator(siteVisitInputSchema)
   .handler(({ data }) => recordVisit(data, { signals: currentVisitSignals(), visitor: currentVisitor() }))
+
+// what a visitor did on a page, like a search, sent by that page under the same rules as its page view
+export const countSiteEvent = createServerFn({ method: 'POST' })
+  .validator(siteEventInputSchema)
+  .handler(({ data }) => recordSiteEvent(data, { signals: currentVisitSignals(), visitor: currentVisitor() }))
