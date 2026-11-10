@@ -29,6 +29,10 @@ before stays until the next one comes.
 
 Callers keep the salt in memory for the day. The api asks once per process per day.
 
+A database backup taken during the day holds that day's row. The api therefore doesn't use the stored salt as it
+is: it mixes it with a secret from its own environment (`apps/api/src/visits/server-bound-salt.ts`), so the table
+alone can't recreate a day's keys.
+
 The salt must never be logged, returned by a procedure or put in an error message. drizzle writes a failed query's
 parameters into its error, so a failed insert is thrown again without them.
 
