@@ -12,6 +12,8 @@ const buildTimeoutMs = 180_000
 const largestClientScriptBytes = 500_000
 // an entry type only the web vitals library asks the browser for
 const webVitalsMarker = 'largest-contentful-paint'
+// an event only the site's own client entry listens for
+const errorReportingMarker = 'unhandledrejection'
 
 function outputFiles(root: string): string[] {
   const entries = readdirSync(root, { recursive: true, encoding: 'utf8' })
@@ -65,6 +67,11 @@ describe('client bundle', () => {
 
     expect(withLibrary).toHaveLength(1)
     expect(withLibrary[0]).toMatch(/^assets\/web-vitals-[\w-]+\.js$/)
+  })
+
+  // errors are reported from src/client.tsx, which replaces the framework's entry only as long as the build finds it
+  test('the client entry that reports errors is the one that was built', () => {
+    expect(filesContaining(clientOutput, errorReportingMarker)).toHaveLength(1)
   })
 
   // without this the check below passes on a site where nothing uses the api client
