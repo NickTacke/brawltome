@@ -134,6 +134,7 @@ export {
   replayJobSummarySchema,
 } from './replay-analysis'
 export { type SeasonStartContract, seasonStartsSchema } from './season-starts'
+export { type SiteEventInputContract, siteEventInputSchema } from './site-event'
 export { type SiteVisitInputContract, siteVisitInputSchema, siteVisitResponseSchema } from './site-visit'
 export {
   type LegendMetaHistoryOutput,
