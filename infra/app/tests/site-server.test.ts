@@ -52,4 +52,26 @@ describe('site server', () => {
     expect(await response.text()).toBe('console.log(1)')
     expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
   })
+
+  test('serves a public file whose name has a space in it', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'brawltome-site-'))
+
+    temporaryDirectories.push(directory)
+    const bannerPath = join(directory, 'Gold 2.png')
+
+    writeFileSync(bannerPath, 'banner')
+    const siteFetch = createSiteFetch(new Map([['/images/banners/Gold 2.png', bannerPath]]), failingStartServer)
+
+    const response = await siteFetch(new Request('http://localhost:3000/images/banners/Gold%202.png'))
+
+    expect(await response.text()).toBe('banner')
+  })
+
+  test('hands a path that is not valid percent encoding to the start server', async () => {
+    const siteFetch = createSiteFetch(new Map(), echoStartServer)
+
+    const response = await siteFetch(new Request('http://localhost:3000/images/%E0%A4%A'))
+
+    expect(await response.text()).toBe('rendered /images/%E0%A4%A')
+  })
 })
