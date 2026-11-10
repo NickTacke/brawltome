@@ -32,10 +32,22 @@ function listStaticFiles(): Map<string, string> {
   return files
 }
 
+// the url keeps a space in a file name as %20, the list holds the name as it is on disk
+function decodePath(pathname: string): string | undefined {
+  try {
+    return decodeURIComponent(pathname)
+  } catch {
+    return undefined
+  }
+}
+
 function serveStaticFile(staticFiles: Map<string, string>, request: Request): Response | undefined {
   if (request.method !== 'GET' && request.method !== 'HEAD') return undefined
 
-  const { pathname } = new URL(request.url)
+  const pathname = decodePath(new URL(request.url).pathname)
+
+  if (pathname === undefined) return undefined
+
   const filePath = staticFiles.get(pathname)
 
   if (!filePath) return undefined

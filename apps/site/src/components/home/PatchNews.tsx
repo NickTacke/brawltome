@@ -8,12 +8,15 @@ const patchNotesUrl = 'https://www.brawlhalla.com/news/patch-notes'
 const imageSizes = '(min-width: 640px) 33vw, 128px'
 
 function PatchArt({ note }: { note: PatchNote }) {
+  const largest = note.images.at(-1)
+  const sourceSet = note.images.map((image) => `${image.url} ${image.width}w`).join(', ')
+
   return (
     <div className="aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-raised sm:w-full">
-      {note.image && (
+      {largest && (
         <img
-          src={note.image.source}
-          srcSet={note.image.sourceSet}
+          src={largest.url}
+          srcSet={sourceSet}
           sizes={imageSizes}
           alt=""
           loading="lazy"

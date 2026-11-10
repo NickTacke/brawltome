@@ -1,4 +1,5 @@
 import {
+  mostPlayedLegendsSchema,
   nullablePlayerCareerProfileSchema,
   nullablePlayerRankedProfileSchema,
   nullablePlayerReferenceSchema,
@@ -14,8 +15,13 @@ import { readSeasonStarts } from '../db/read-season-starts'
 import { createPostgresPlayerReferences } from '../player-references'
 import { createPostgresRankedPlayers } from '../ranked/postgres'
 import { createSeasonStartsCache } from '../ranked/season-starts-cache'
+import { createReadCache } from '../read-cache'
 import { mapPlayerCareerProfile } from './map-career-profile'
 import { mapPlayerRankedProfile } from './map-ranked-profile'
+import { readMostPlayedLegends } from './read-most-played-legends'
+
+// shares over a season of snapshots move by fractions of a percent in an hour, and the read sums every one of them
+const mostPlayedLegendsLifetimeMs = 60 * 60 * 1000
 
 /** The player reads the API serves under player, at /rpc/player/* and /v1. Only internal callers get them. */
 export function createPlayerProcedures(runtime: ModuleRuntime) {
@@ -28,6 +34,11 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
   })
 
   const cachedSeasonStarts = createSeasonStartsCache(() => readSeasonStarts(database))
+
+  const cachedMostPlayedLegends = createReadCache(
+    async () => readMostPlayedLegends(database, await cachedSeasonStarts()),
+    mostPlayedLegendsLifetimeMs,
+  )
 
   const rankedSummaries = internalProcedure
     .route({
@@ -88,5 +99,16 @@ export function createPlayerProcedures(runtime: ModuleRuntime) {
     .output(seasonStartsSchema)
     .handler(() => cachedSeasonStarts())
 
-  return { rankedSummaries, referenceById, rankedById, careerById, seasonStarts }
+  const mostPlayedLegends = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/legends/most-played',
+      operationId: 'player.mostPlayedLegends',
+      summary: "Each legend's share of this season's ranked games",
+      tags: ['player'],
+    })
+    .output(mostPlayedLegendsSchema)
+    .handler(() => cachedMostPlayedLegends())
+
+  return { rankedSummaries, referenceById, rankedById, careerById, seasonStarts, mostPlayedLegends }
 }

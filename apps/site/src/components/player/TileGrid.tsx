@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import { pauseScrollAnchoring } from '../scroll-anchoring'
 
 const cardWidthPx = 256
 const cardGapPx = 8
@@ -276,6 +277,7 @@ export function TileGrid<Item>({
   function toggleExpanded() {
     if (isExpanded && remainingItems.some((item) => keyOf(item) === selectedKey)) select(null)
 
+    pauseScrollAnchoring()
     setIsExpanded(!isExpanded)
   }
 

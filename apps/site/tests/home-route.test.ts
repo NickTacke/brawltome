@@ -3,15 +3,16 @@ import { afterEach, beforeAll, describe, expect, mock, test } from 'bun:test'
 const getTopPlayers = mock(async (_query: { data: unknown }) => ({ region: 'EU', entries: [] }))
 const getTopGuilds = mock(async () => [])
 const getPatches = mock(async (): Promise<unknown[] | null> => null)
+const getMostPlayedLegends = mock(async () => [])
 
-mock.module('../src/server/home', () => ({ getTopPlayers, getTopGuilds, getPatches }))
+mock.module('../src/server/home', () => ({ getTopPlayers, getTopGuilds, getPatches, getMostPlayedLegends }))
 
 type Search = { mode?: string; region?: string }
 
 type RouteOptions = {
   validateSearch: (search: Record<string, unknown>) => Search
   loaderDeps: (context: { search: Search }) => Search
-  loader: (context: { deps: Search }) => Promise<{ patches: unknown }>
+  loader: (context: { deps: Search }) => Promise<{ patches: unknown; mostPlayedLegends: unknown }>
 }
 
 let options: RouteOptions
@@ -57,5 +58,12 @@ describe('home route', () => {
     const page = await load({})
 
     expect(page.patches).toBeNull()
+  })
+
+  test('loads the most played legends with the page', async () => {
+    const page = await load({})
+
+    expect(getMostPlayedLegends).toHaveBeenCalled()
+    expect(page.mostPlayedLegends).toEqual([])
   })
 })

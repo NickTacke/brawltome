@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { pauseScrollAnchoring } from '../scroll-anchoring'
 
 type MobileCollapseProps = {
   title: string
@@ -22,6 +23,11 @@ export function MobileCollapse({
   const [isOpen, setIsOpen] = useState(false)
   const headerEndVisibility = !isOpen && isHeaderEndHiddenWhenClosed ? 'max-md:hidden' : ''
 
+  function toggleOpen() {
+    pauseScrollAnchoring()
+    setIsOpen(!isOpen)
+  }
+
   return (
     <>
       <div className="relative flex items-center justify-between gap-3">
@@ -35,7 +41,7 @@ export function MobileCollapse({
             data-collapse-toggle
             aria-expanded={isOpen}
             aria-label={`${isOpen ? 'Hide' : 'Show'} ${title}`}
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={toggleOpen}
             className="text-soft after:absolute after:inset-0 md:hidden"
           >
             <ChevronDown
