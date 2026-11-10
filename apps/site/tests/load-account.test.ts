@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { loadAccount } from '../src/server/load-account'
+import { loadRailAccount } from '../src/server/load-rail-account'
 
 const apiUrl = 'http://api.test'
 const publicApiUrl = 'https://api.brawltome.app'
@@ -262,5 +263,56 @@ describe('loadAccount failures', () => {
     const failure = await failureOf(loadAccount(sessionWith(undefined).session))
 
     expect(failure.message).toBe('load account: the account could not be read')
+  })
+})
+
+describe('loadRailAccount', () => {
+  test('is signed out without asking the api when there is no session cookie', async () => {
+    const calls = stubApi(healthyAnswers())
+
+    expect(await loadRailAccount(sessionWith(undefined).session)).toEqual({ kind: 'signedOut' })
+    expect(calls).toEqual([])
+  })
+
+  test('is signed out for a session the api rejects', async () => {
+    stubApi({ ...healthyAnswers(), 'GET /account': { status: 200, body: { status: 'anonymous' } } })
+
+    expect(await loadRailAccount(sessionWith('expired-token').session)).toEqual({ kind: 'signedOut' })
+  })
+
+  test('has the avatar, the verified account and the other pins in their order', async () => {
+    stubApi(healthyAnswers())
+
+    const rail = await loadRailAccount(sessionWith(token).session)
+
+    expect(rail).toEqual({
+      kind: 'signedIn',
+      displayName: 'Ada',
+      avatarUrl: account.avatarUrl,
+      verifiedPlayer: { brawlhallaId: 7, name: 'Seven', legendNameKey: 'bodvar' },
+      pins: [
+        { brawlhallaId: 9, name: 'Nine', legendNameKey: 'bodvar' },
+        { brawlhallaId: 8, name: 'Eight', legendNameKey: null },
+      ],
+      pinLimit: 20,
+    })
+  })
+
+  test('keeps the cookie until the end of the session', async () => {
+    stubApi(healthyAnswers())
+
+    const { session, keptUntil } = sessionWith(token)
+
+    await loadRailAccount(session)
+
+    expect(keptUntil).toEqual([new Date(signedIn.sessionExpiresAt)])
+  })
+
+  test('fails without the detail when the account read fails', async () => {
+    stubApi({ ...healthyAnswers(), 'GET /account': { status: 500, body: {} } })
+
+    const error = await failureOf(loadRailAccount(sessionWith(token).session))
+
+    expect(error.message).toBe('load rail account: the account could not be read')
   })
 })

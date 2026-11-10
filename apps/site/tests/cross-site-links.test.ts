@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { RailLink, railItems, SignInLink } from '../src/components/AppRail'
+import { RailLink, railItems } from '../src/components/AppRail'
 import { NotFound } from '../src/components/NotFound'
+import { AccountLink } from '../src/components/rail/AccountLink'
 
 type Element = { props: { reloadDocument?: boolean } }
 
@@ -12,7 +13,7 @@ describe('links to pages the old site may still serve', () => {
   })
 
   test('sign in loads the page', () => {
-    expect((SignInLink({ className: '' }) as unknown as Element).props.reloadDocument).toBe(true)
+    expect((AccountLink({ className: '' }) as unknown as Element).props.reloadDocument).toBe(true)
   })
 
   test('the not found page links home with a page load', () => {

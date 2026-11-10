@@ -1,17 +1,13 @@
 import { ArrowDown, ArrowUp, X } from 'lucide-react'
-import { fixEncoding, formatWhole } from '../../lib'
+import { formatWhole } from '../../lib'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
 import { PlayerLink } from '../guild/PlayerLink'
 import { rankBanner, tierColour, tierName, winPercent, winRateColour } from '../player/player-format'
 import { regionOption } from '../regions'
-import type { PinnedPlayerRow } from './account-model'
+import { type PinnedPlayerRow, playerLabel } from './account-model'
 
 const actionStyle =
   'flex size-8 items-center justify-center rounded-sm text-soft transition-colors hover:bg-white/[0.08] hover:text-strong disabled:opacity-25 disabled:hover:bg-transparent'
-
-export function playerLabel(row: PinnedPlayerRow): string {
-  return row.name ? fixEncoding(row.name) : `Player ${row.brawlhallaId}`
-}
 
 function Avatar({ row }: { row: PinnedPlayerRow }) {
   const frameColour = `color-mix(in srgb, ${tierColour(row.tier)} 50%, var(--color-ink))`

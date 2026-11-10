@@ -3,6 +3,7 @@ import { getRequestHeader, setResponseHeader } from '@tanstack/react-start/serve
 import { z } from 'zod'
 import { type AccountWriteRequest, reorderPinsForVisitor, signOutVisitor, unpinForVisitor } from './account-writes'
 import { loadAccount } from './load-account'
+import { loadRailAccount } from './load-rail-account'
 import { isSameOriginRequest } from './same-origin'
 import { currentSession } from './session-cookie'
 
@@ -25,6 +26,13 @@ export const getAccount = createServerFn({ method: 'GET' }).handler(() => {
   setResponseHeader('cache-control', 'private, no-store')
 
   return loadAccount(currentSession())
+})
+
+// after hydration on every page, so a visitor without the session cookie gets an answer without an api call
+export const getRailAccount = createServerFn({ method: 'GET' }).handler(() => {
+  setResponseHeader('cache-control', 'private, no-store')
+
+  return loadRailAccount(currentSession())
 })
 
 export const unpinAccountPlayer = createServerFn({ method: 'POST' })

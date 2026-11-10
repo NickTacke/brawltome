@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { formatDay } from '../../lib'
 import { signOutAccount } from '../../server/account'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
+import { railAccount } from '../rail/use-rail-account'
 import { socialLinks } from '../social-links'
 import type { SignedInAccount } from './account-model'
 
@@ -27,6 +28,7 @@ function useSignOut() {
       return
     }
 
+    railAccount.showSignedOut()
     await router.invalidate()
   }
 
