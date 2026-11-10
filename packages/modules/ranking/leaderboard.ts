@@ -1,6 +1,7 @@
 import { resolveTier } from './commands/sweep-helpers'
 import {
   type LeaderboardMode,
+  leaderboardSourcePageSize,
   type RegionalLeaderboardScope,
   regionalLeaderboardScopes,
   type SourceLeaderboardIdentity,
@@ -398,7 +399,7 @@ function validateRegionRows(
 
     const isSourceTerminal = pageIndex + 1 === totalPages
 
-    if (!isSourceTerminal && page.rankings.length !== 50) {
+    if (!isSourceTerminal && page.rankings.length !== leaderboardSourcePageSize) {
       throw new LeaderboardCandidateError(`${mode}/${region} page ${pageIndex + 1} is incomplete`)
     }
 
