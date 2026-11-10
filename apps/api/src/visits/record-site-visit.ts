@@ -1,42 +1,14 @@
 import type { SiteVisitInputContract } from '@brawltome/contracts'
-import type { Telemetry } from '@brawltome/telemetry'
-import type { createDailyVisitorKeys, DayVisitorKeys } from './daily-visitor-key'
+import { admitVisitor, type SiteVisitor } from './admit-visitor'
+import type { createDailyVisitorKeys } from './daily-visitor-key'
 import { deviceOf, routeOf, viewportBucketOf } from './visit-labels'
 import type { VisitLimiter } from './visit-limiter'
 
 export type SiteVisitDependencies = {
   visitorKeys: ReturnType<typeof createDailyVisitorKeys>
   limiter: VisitLimiter
-}
-
-export type SiteVisitor = {
-  telemetry: Pick<Telemetry, 'metrics' | 'logger'>
-  clientIp: string
-  userAgent: string
-  isBot: boolean
-}
-
-type DropReason = 'bot' | 'rate_limited' | 'salt_unavailable'
-
-function dropVisit(visitor: SiteVisitor, reason: DropReason): { recorded: false } {
-  visitor.telemetry.metrics.add('analytics_events_dropped_total', 1, { reason })
-
-  return { recorded: false }
-}
-
-// undefined when the day's salt can't be read. a salt made up here instead would only hold inside this process, so
-// the same visitor would get a second key from the next one
-async function readTodaysKeys(
-  dependencies: SiteVisitDependencies,
-  visitor: SiteVisitor,
-): Promise<DayVisitorKeys | undefined> {
-  try {
-    return await dependencies.visitorKeys.forToday()
-  } catch (error) {
-    visitor.telemetry.logger.error('analytics.salt.failed', error)
-
-    return undefined
-  }
+  // events have a budget of their own, so a burst of searches never costs a visitor their page views
+  eventLimiter: VisitLimiter
 }
 
 /**
@@ -48,16 +20,11 @@ export async function recordSiteVisit(
   visitor: SiteVisitor,
   visit: SiteVisitInputContract,
 ): Promise<{ recorded: boolean }> {
-  if (visitor.isBot) return dropVisit(visitor, 'bot')
+  const admitted = await admitVisitor(dependencies, visitor)
 
-  const todaysKeys = await readTodaysKeys(dependencies, visitor)
+  if (!admitted) return { recorded: false }
 
-  if (!todaysKeys) return dropVisit(visitor, 'salt_unavailable')
-
-  const visitorKey = todaysKeys.keyFor(visitor.clientIp, visitor.userAgent)
-
-  if (!dependencies.limiter.allow(visitorKey)) return dropVisit(visitor, 'rate_limited')
-
+  const { visitorKey, todaysKeys } = admitted
   const route = routeOf(visit.path)
   const device = deviceOf(visit.viewportWidth)
 

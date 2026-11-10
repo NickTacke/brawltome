@@ -30,30 +30,37 @@ function createSaltSource() {
   return async () => salt
 }
 
-function createHarness({ visitsPerMinute = 120, loadSalt = createSaltSource() } = {}) {
+function createHarness({ visitsPerMinute = 120, eventsPerMinute = 120, loadSalt = createSaltSource() } = {}) {
   const sink = createMemorySink()
   const telemetry = createTelemetry({ service: 'api', sink, drainIntervalMs: 0 })
   const visitorKeys = createDailyVisitorKeys({ now: Date.now, loadSalt, readTimeoutMs: 1_000 })
-  const visits = createSiteVisitProcedures({ visitorKeys, limiter: createVisitLimiter(visitsPerMinute, Date.now) })
+  const limiter = createVisitLimiter(visitsPerMinute, Date.now)
+  const eventLimiter = createVisitLimiter(eventsPerMinute, Date.now)
+  const visits = createSiteVisitProcedures({ visitorKeys, limiter, eventLimiter })
   const router = createOrpcRouter([], { database: {} as Database }, { visits })
   const app = new Hono()
 
   app.route('/', createOrpcRoutes({ telemetry, internalSecret, router }))
 
   // goes through the same address check serve.ts runs before any route
-  async function send(headers: Record<string, string> = siteHeaders, body: unknown = visit) {
+  async function send(headers: Record<string, string> = siteHeaders, body: unknown = visit, path = '/v1/visits') {
     const init = { method: 'POST', headers, body: JSON.stringify(body) }
-    const request = new Request('http://api.test/v1/visits', init)
+    const request = new Request(`http://api.test${path}`, init)
     const response = await app.fetch(requestWithVerifiedClientIp(request, siteAddress, internalSecret))
 
     return { status: response.status, body: await response.json() }
   }
 
-  async function pageviewLogs() {
+  const sendEvent = (event: unknown, headers: Record<string, string> = siteHeaders) =>
+    send(headers, event, '/v1/visits/events')
+
+  async function logs(event: string) {
     await telemetry.flush(1_000)
 
-    return sink.records.filter((record) => record.event === 'analytics.pageview')
+    return sink.records.filter((record) => record.event === event)
   }
+
+  const pageviewLogs = () => logs('analytics.pageview')
 
   const counted = (name: string) =>
     telemetry.metrics
@@ -61,7 +68,7 @@ function createHarness({ visitsPerMinute = 120, loadSalt = createSaltSource() } 
       .find((metric) => metric.name === name)
       ?.series.map((series) => series) ?? []
 
-  return { send, pageviewLogs, counted, sink, telemetry }
+  return { send, sendEvent, logs, pageviewLogs, counted, sink, telemetry }
 }
 
 describe('site visit procedure', () => {
@@ -216,6 +223,140 @@ describe('site visit procedure', () => {
 
     await harness.send()
     await harness.send({ ...siteHeaders, 'x-visitor-user-agent': 'Googlebot/2.1' })
+    await harness.telemetry.flush(1_000)
+
+    const everything = JSON.stringify({ logs: harness.sink.records, metrics: harness.telemetry.metrics.snapshot() })
+
+    expect(everything).not.toContain(visitorAddress)
+  })
+})
+
+describe('site event procedure', () => {
+  const tab = { visitId: 'b'.repeat(32), path: '/' }
+  const found = { query: 'boomie', results: 3, aliasResults: 1, latencyMs: 180 }
+  const performed = { ...tab, name: 'search.performed', source: 'bar', ...found }
+  const failed = { ...tab, name: 'search.failed', source: 'bar', latencyMs: 5_000 }
+  const selected = { ...tab, name: 'search.selected', source: 'bar', position: 2, viaAlias: true }
+
+  test('refuses callers without the internal secret', async () => {
+    const harness = createHarness()
+    const { 'x-internal-secret': _secret, ...withoutSecret } = siteHeaders
+
+    expect((await harness.sendEvent(performed, withoutSecret)).status).toBe(403)
+    expect(await harness.logs('analytics.search.performed')).toEqual([])
+  })
+
+  test('counts a search that found something as a hit, with its latency', async () => {
+    const harness = createHarness()
+
+    expect(await harness.sendEvent(performed)).toEqual({ status: 200, body: { recorded: true } })
+
+    const [log] = await harness.logs('analytics.search.performed')
+    const { visitId, ...attributes } = log.attributes ?? {}
+
+    expect(attributes).toEqual({ route: '/', source: 'bar', ...found })
+
+    expect(visitId).toMatch(/^[0-9a-f]{32}$/)
+    expect(visitId).not.toBe(tab.visitId)
+
+    expect(harness.counted('analytics_searches_total')).toMatchObject([
+      { labels: { outcome: 'hit', source: 'bar' }, value: 1 },
+    ])
+
+    expect(harness.counted('analytics_search_latency_ms')).toMatchObject([
+      { labels: { source: 'bar' }, count: 1, sum: 180 },
+    ])
+  })
+
+  test('counts a search that found nothing as a miss', async () => {
+    const harness = createHarness()
+
+    await harness.sendEvent({ ...performed, results: 0, aliasResults: 0 })
+
+    expect(harness.counted('analytics_searches_total')).toMatchObject([
+      { labels: { outcome: 'miss', source: 'bar' }, value: 1 },
+    ])
+  })
+
+  test('scrubs the query before it is logged, and never puts it in a metric', async () => {
+    const harness = createHarness()
+
+    await harness.sendEvent({ ...performed, query: '  mail me@example.com   from 203.0.113.42 ' })
+
+    const [log] = await harness.logs('analytics.search.performed')
+
+    expect(log.attributes?.query).toBe('mail [email] from [ip]')
+    expect(JSON.stringify(harness.telemetry.metrics.snapshot())).not.toContain('mail')
+  })
+
+  test('counts a failed search as an error, without a latency sample', async () => {
+    const harness = createHarness()
+
+    await harness.sendEvent(failed)
+
+    const [log] = await harness.logs('analytics.search.failed')
+
+    expect(log.attributes).toMatchObject({ route: '/', source: 'bar', latencyMs: 5_000 })
+
+    expect(harness.counted('analytics_searches_total')).toMatchObject([
+      { labels: { outcome: 'error', source: 'bar' }, value: 1 },
+    ])
+
+    expect(harness.counted('analytics_search_latency_ms')).toEqual([])
+  })
+
+  test('counts a picked result, and whether an old name found it', async () => {
+    const harness = createHarness()
+
+    await harness.sendEvent(selected)
+    await harness.sendEvent({ ...selected, viaAlias: false })
+
+    const [log] = await harness.logs('analytics.search.selected')
+
+    expect(log.attributes).toMatchObject({ route: '/', source: 'bar', position: 2, viaAlias: true })
+
+    expect(harness.counted('analytics_search_selections_total')).toMatchObject([
+      { labels: { via_alias: 'true', source: 'bar' }, value: 1 },
+      { labels: { via_alias: 'false', source: 'bar' }, value: 1 },
+    ])
+  })
+
+  test('drops a bot', async () => {
+    const harness = createHarness()
+    const asBot = { ...siteHeaders, 'x-visitor-user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }
+
+    expect((await harness.sendEvent(performed, asBot)).body).toEqual({ recorded: false })
+    expect(await harness.logs('analytics.search.performed')).toEqual([])
+    expect(harness.counted('analytics_searches_total')).toEqual([])
+    expect(harness.counted('analytics_events_dropped_total')).toMatchObject([{ labels: { reason: 'bot' }, value: 1 }])
+  })
+
+  test('drops events over the per visitor budget, without using up the page views', async () => {
+    const harness = createHarness({ eventsPerMinute: 2 })
+
+    for (let index = 0; index < 3; index++) await harness.sendEvent(performed)
+
+    expect(await harness.logs('analytics.search.performed')).toHaveLength(2)
+
+    expect(harness.counted('analytics_events_dropped_total')).toMatchObject([
+      { labels: { reason: 'rate_limited' }, value: 1 },
+    ])
+
+    expect((await harness.send()).body).toEqual({ recorded: true })
+  })
+
+  test('refuses an event with a field it does not know', async () => {
+    const harness = createHarness()
+
+    expect((await harness.sendEvent({ ...performed, ip: visitorAddress })).status).toBe(400)
+    expect(await harness.logs('analytics.search.performed')).toEqual([])
+  })
+
+  test("never logs or counts the visitor's address", async () => {
+    const harness = createHarness()
+
+    for (const event of [performed, failed, selected]) await harness.sendEvent(event)
+
     await harness.telemetry.flush(1_000)
 
     const everything = JSON.stringify({ logs: harness.sink.records, metrics: harness.telemetry.metrics.snapshot() })
