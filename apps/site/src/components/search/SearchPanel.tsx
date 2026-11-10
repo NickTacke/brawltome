@@ -3,7 +3,7 @@ import { SearchResultList } from './SearchResultList'
 import type { ResultView } from './use-result-view'
 import type { SearchAnswer } from './use-search-results'
 
-type SearchPanelProps = { answer: SearchAnswer; view: ResultView; query: string; onOpen: () => void }
+type SearchPanelProps = { answer: SearchAnswer; view: ResultView; query: string; onOpen: (position: number) => void }
 
 const loadingNameWidths = ['w-32', 'w-24', 'w-40']
 

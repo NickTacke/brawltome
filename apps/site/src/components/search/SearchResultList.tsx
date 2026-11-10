@@ -9,7 +9,7 @@ function keepFieldFocus(event: MouseEvent) {
   event.preventDefault()
 }
 
-type SearchResultListProps = { view: ResultView; query: string; onOpen: () => void }
+type SearchResultListProps = { view: ResultView; query: string; onOpen: (position: number) => void }
 
 function MoreButtons({ view }: { view: ResultView }) {
   const { hiddenPlayerCount, guildCount, isGuildListOpen } = view
@@ -45,7 +45,7 @@ export function SearchResultList({ view, query, onOpen }: SearchResultListProps)
             player={player}
             query={query}
             isActive={index === view.activeIndex}
-            onOpen={onOpen}
+            onOpen={() => onOpen(index)}
           />
         ))}
       </div>
@@ -58,7 +58,7 @@ export function SearchResultList({ view, query, onOpen }: SearchResultListProps)
               guild={guild}
               query={query}
               isActive={playerCount + index === view.activeIndex}
-              onOpen={onOpen}
+              onOpen={() => onOpen(playerCount + index)}
             />
           ))}
         </div>
