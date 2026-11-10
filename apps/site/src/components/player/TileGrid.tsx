@@ -1,12 +1,14 @@
 import { ChevronDown } from 'lucide-react'
 import { type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import { readRootFontSizePx } from '../root-font-size'
 import { pauseScrollAnchoring } from '../scroll-anchoring'
 
-const cardWidthPx = 256
-const cardGapPx = 8
+// w-64 on the card
+const cardWidthRem = 16
+const cardGapRem = 0.5
 const cardShowDelayMs = 120
 const cardHideDelayMs = 80
-const roomNeededAboveTilePx = 210
+const roomNeededAboveTileRem = 13.125
 const detailCloseMs = 180
 
 type TileGridProps<Item> = {
@@ -44,10 +46,14 @@ function useColumnCount() {
   return { gridRef, columns }
 }
 
-function cardPosition(tile: DOMRect, container: DOMRect): { left: number; top: number; isBelow: boolean } {
+type CardPosition = { left: number; top: number; isBelow: boolean }
+
+function cardPosition(tile: DOMRect, container: DOMRect, rootFontSizePx: number): CardPosition {
+  const cardWidthPx = cardWidthRem * rootFontSizePx
+  const cardGapPx = cardGapRem * rootFontSizePx
   const centred = tile.left - container.left + tile.width / 2 - cardWidthPx / 2
   const left = Math.min(Math.max(centred, 0), Math.max(container.width - cardWidthPx, 0))
-  const isBelow = tile.top < roomNeededAboveTilePx
+  const isBelow = tile.top < roomNeededAboveTileRem * rootFontSizePx
   const top = isBelow ? tile.bottom - container.top + cardGapPx : tile.top - container.top - cardGapPx
 
   return { left, top, isBelow }
@@ -65,7 +71,10 @@ function useHoverCard<Item>(containerRef: RefObject<HTMLDivElement | null>) {
     timer.current = setTimeout(() => {
       if (!containerRef.current) return
 
-      setCard({ item, ...cardPosition(tile.getBoundingClientRect(), containerRef.current.getBoundingClientRect()) })
+      const tileBox = tile.getBoundingClientRect()
+      const containerBox = containerRef.current.getBoundingClientRect()
+
+      setCard({ item, ...cardPosition(tileBox, containerBox, readRootFontSizePx()) })
     }, cardShowDelayMs)
   }
 
