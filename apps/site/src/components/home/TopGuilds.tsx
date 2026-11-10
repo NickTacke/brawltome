@@ -1,7 +1,8 @@
+import { Link } from '@tanstack/react-router'
 import type { TopGuild } from '../../server/load-top-guilds'
 import { GuildRow, GuildTableHead, guildColumnCount } from './GuildColumns'
 import { RankedTable, TableMessage } from './RankedTable'
-import { SectionHeader } from './SectionHeader'
+import { SectionHeader, viewAllStyle } from './SectionHeader'
 
 function TableBody({ guilds }: { guilds: TopGuild[] | null }) {
   if (guilds === null) {
@@ -15,10 +16,15 @@ function TableBody({ guilds }: { guilds: TopGuild[] | null }) {
 
 // null when the ranking couldn't be read
 export function TopGuilds({ guilds }: { guilds: TopGuild[] | null }) {
+  const viewAll = (
+    <Link to="/guilds" className={viewAllStyle}>
+      View all →
+    </Link>
+  )
+
   return (
     <section className="min-w-0 border-t border-line/50 pt-8 xl:border-t-0 xl:pt-0">
-      {/* "view all" comes back with the guilds page */}
-      <SectionHeader title="Top guilds" />
+      <SectionHeader title="Top guilds" action={viewAll} />
       <RankedTable head={<GuildTableHead />}>
         <TableBody guilds={guilds} />
       </RankedTable>
