@@ -1,30 +1,27 @@
 import { createFileRoute, useRouterState } from '@tanstack/react-router'
 import { HomeFilters } from '../components/home/HomeFilters'
 import { HomeHero } from '../components/home/HomeHero'
-import { type BoardMode, type BoardRegion, defaultMode, parseMode, parseRegion } from '../components/home/home-filters'
+import { defaultMode, parseBoardSearch, parseRegion } from '../components/home/home-filters'
+import { LegendsRow } from '../components/home/LegendsRow'
 import { PatchNews } from '../components/home/PatchNews'
 import { rememberRegion } from '../components/home/region-cookie'
 import { TopGuilds } from '../components/home/TopGuilds'
 import { TopPlayers } from '../components/home/TopPlayers'
 import { useSlowNavigation } from '../components/use-slow-navigation'
-import { getPatches, getTopGuilds, getTopPlayers } from '../server/home'
-
-type HomeSearch = { mode?: BoardMode; region?: BoardRegion }
-
-// both stay out of the address until picked, a bare / shows the remembered region
-function validateSearch(search: Record<string, unknown>): HomeSearch {
-  const mode = search.mode === undefined ? undefined : parseMode(search.mode)
-
-  return { mode: mode === defaultMode ? undefined : mode, region: parseRegion(search.region) }
-}
+import { getMostPlayedLegends, getPatches, getTopGuilds, getTopPlayers } from '../server/home'
 
 export const Route = createFileRoute('/')({
-  validateSearch,
+  validateSearch: parseBoardSearch,
   loaderDeps: ({ search }) => ({ mode: search.mode ?? defaultMode, region: search.region }),
   loader: async ({ deps }) => {
-    const [board, guilds, patches] = await Promise.all([getTopPlayers({ data: deps }), getTopGuilds(), getPatches()])
+    const [board, guilds, mostPlayedLegends, patches] = await Promise.all([
+      getTopPlayers({ data: deps }),
+      getTopGuilds(),
+      getMostPlayedLegends(),
+      getPatches(),
+    ])
 
-    return { board, guilds, patches }
+    return { board, guilds, mostPlayedLegends, patches }
   },
   component: Home,
 })
@@ -36,12 +33,12 @@ const halvesStyle =
   'grid gap-y-8 xl:grid-cols-2 xl:divide-x xl:divide-line/50 xl:[&>*:first-child]:pr-12 xl:[&>*:last-child]:pl-12'
 
 function Home() {
-  const { board, guilds, patches } = Route.useLoaderData()
+  const { board, guilds, mostPlayedLegends, patches } = Route.useLoaderData()
   const isSlow = useSlowNavigation()
 
   // the location changes as soon as a filter is picked, the route's own search only once the board has loaded
   const locationSearch = useRouterState({ select: (state) => state.location.search })
-  const search = validateSearch(locationSearch)
+  const search = parseBoardSearch(locationSearch)
   const mode = search.mode ?? defaultMode
   const region = search.region ?? board.region
   const navigate = Route.useNavigate()
@@ -56,7 +53,7 @@ function Home() {
   }
 
   function changeMode(nextMode: string) {
-    void navigate({ search: (previous) => validateSearch({ ...previous, mode: nextMode }), resetScroll: false })
+    void navigate({ search: (previous) => parseBoardSearch({ ...previous, mode: nextMode }), resetScroll: false })
   }
 
   const filters = <HomeFilters mode={mode} region={region} onMode={changeMode} onRegion={changeRegion} />
@@ -70,6 +67,7 @@ function Home() {
         <TopPlayers entries={board.entries} filters={filters} isLoading={isSlow} avatarCount={mode === '2v2' ? 2 : 1} />
         <TopGuilds guilds={guilds} />
       </div>
+      <LegendsRow mostPlayed={mostPlayedLegends} />
       {patches && (
         <div data-search-dim>
           <PatchNews notes={patches} />

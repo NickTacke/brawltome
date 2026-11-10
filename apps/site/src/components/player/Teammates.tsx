@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { FilterSelect } from '../FilterSelect'
+import { pauseScrollAnchoring } from '../scroll-anchoring'
 import { sectionTitle } from './player-styles'
 import { type FixedTeam, sortTeams, type TeamSortKey, teamSortOptions } from './side-summary'
 import { TeamCard } from './TeamCard'
@@ -71,6 +72,11 @@ export function Teammates({ teams, playerId }: { teams: FixedTeam[]; playerId: n
   const sorted = sortTeams(teams, sort)
   const remaining = sorted.slice(collapsedTeams)
 
+  function toggleExpanded() {
+    pauseScrollAnchoring()
+    setIsExpanded(!isExpanded)
+  }
+
   return (
     <section data-teammates>
       <div className="flex items-center justify-between gap-4">
@@ -85,7 +91,7 @@ export function Teammates({ teams, playerId }: { teams: FixedTeam[]; playerId: n
       <div className="mt-1.5">
         <CardGrid teams={sorted.slice(0, collapsedTeams)} ownId={playerId} />
         {remaining.length > 0 && (
-          <ShowMore isExpanded={isExpanded} onToggle={() => setIsExpanded(!isExpanded)}>
+          <ShowMore isExpanded={isExpanded} onToggle={toggleExpanded}>
             <CardGrid teams={remaining} ownId={playerId} continuesList />
           </ShowMore>
         )}
