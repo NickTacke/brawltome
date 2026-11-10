@@ -16,8 +16,8 @@ export const statCellStyle = 'hidden px-2 text-right font-mono text-soft sm:tabl
 export const nameLinkStyle =
   'block truncate text-base font-semibold text-strong transition-colors group-hover:text-primary after:absolute after:inset-0'
 
-export function Place({ place }: { place: number }) {
-  return <td className={`w-12 pr-1 pl-3 font-mono ${placeColours[place] ?? 'text-soft'}`}>{place}</td>
+export function Place({ place, widthStyle = 'w-12' }: { place: number; widthStyle?: string }) {
+  return <td className={`${widthStyle} pr-1 pl-3 font-mono ${placeColours[place] ?? 'text-soft'}`}>{place}</td>
 }
 
 export function RankedTable({ head, children }: { head: ReactNode; children: ReactNode }) {

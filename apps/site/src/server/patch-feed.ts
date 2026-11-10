@@ -1,13 +1,14 @@
 import { z } from 'zod'
 
-export type PatchImage = { source: string; sourceSet: string }
+export type PatchImageSize = { width: number; url: string }
 
 export type PatchNote = {
   headline: string
   patch: string | null
   publishedAt: string
   url: string
-  image: PatchImage | null
+  // smallest first, empty when the post has no art
+  images: PatchImageSize[]
 }
 
 const feedUrl = new URL('https://cms.brawlhalla.com/wp-json/wp/v2/posts')
@@ -28,7 +29,10 @@ const imageWidths = [300, 768]
 // links and images end up in href and src, so only https on brawlhalla.com gets through
 const brawlhallaUrl = z.url({ protocol: /^https$/, hostname: /(^|\.)brawlhalla\.com$/ })
 
-const imageSizeSchema = z.object({ width: z.number(), source_url: brawlhallaUrl })
+// the site fetches the art for the visitor, so only the cms itself gets asked
+const cmsUrl = z.url({ protocol: /^https$/, hostname: /^cms\.brawlhalla\.com$/ })
+
+const imageSizeSchema = z.object({ width: z.number(), source_url: cmsUrl })
 
 const mediaSchema = z.object({
   media_details: z.object({ sizes: z.record(z.string(), z.unknown()) }),
@@ -61,25 +65,20 @@ export function splitPatchTitle(title: string): { headline: string; patch: strin
   return { headline, patch: patch ?? null }
 }
 
-function pickImage(embedded: unknown[] | undefined): PatchImage | null {
+function pickImages(embedded: unknown[] | undefined): PatchImageSize[] {
   const media = mediaSchema.safeParse(embedded?.[0])
 
-  if (!media.success) return null
+  if (!media.success) return []
 
   const sizes = Object.values(media.data.media_details.sizes).flatMap((size) => {
     const parsedSize = imageSizeSchema.safeParse(size)
 
-    return parsedSize.success && imageWidths.includes(parsedSize.data.width) ? [parsedSize.data] : []
+    if (!parsedSize.success || !imageWidths.includes(parsedSize.data.width)) return []
+
+    return [{ width: parsedSize.data.width, url: parsedSize.data.source_url }]
   })
 
-  if (sizes.length === 0) return null
-
-  sizes.sort((left, right) => left.width - right.width)
-
-  return {
-    source: sizes[sizes.length - 1].source_url,
-    sourceSet: sizes.map((size) => `${size.source_url} ${size.width}w`).join(', '),
-  }
+  return sizes.sort((left, right) => left.width - right.width)
 }
 
 function toPatchNote(post: unknown): PatchNote[] {
@@ -91,7 +90,7 @@ function toPatchNote(post: unknown): PatchNote[] {
   const { headline, patch } = splitPatchTitle(decodeEntities(title.rendered))
 
   return [
-    { headline, patch, publishedAt: `${date_gmt}Z`, url: link, image: pickImage(_embedded?.['wp:featuredmedia']) },
+    { headline, patch, publishedAt: `${date_gmt}Z`, url: link, images: pickImages(_embedded?.['wp:featuredmedia']) },
   ]
 }
 
