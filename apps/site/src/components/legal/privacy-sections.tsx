@@ -55,7 +55,8 @@ export const privacySections: LegalSection[] = [
           your network) and browser details, mixed with a secret that is replaced every day and then thrown away. The
           hash can't be turned back into your IP address or linked across days. We never store your IP address or
           browser details. Each open tab gets a random visit ID that only lives in that tab's memory, so nothing is
-          stored on your device for this.
+          stored on your device for this. We mix that ID with the same daily secret before keeping it, so a tab left
+          open overnight can't link two days either.
         </p>
         <p>
           If your browser sends Do Not Track or Global Privacy Control, we don't measure anything. Measurement data is

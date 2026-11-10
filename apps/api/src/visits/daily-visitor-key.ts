@@ -47,7 +47,7 @@ export function createDailyVisitorKeys({ now, randomBytes }: DailyVisitorKeyOpti
   let saltDay = ''
   let salt: Uint8Array = new Uint8Array()
 
-  function keyFor(address: string, userAgent: string): VisitorKey {
+  function currentDay(): string {
     const day = utcDay(now())
 
     if (day !== saltDay) {
@@ -55,10 +55,22 @@ export function createDailyVisitorKeys({ now, randomBytes }: DailyVisitorKeyOpti
       salt = randomBytes(saltBytes)
     }
 
+    return day
+  }
+
+  function keyFor(address: string, userAgent: string): VisitorKey {
+    const day = currentDay()
     const hash = createHash('sha256').update(salt).update(addressForKey(address)).update('\n').update(userAgent)
 
     return { key: hash.digest('hex').slice(0, 32), day }
   }
 
-  return { keyFor }
+  // a tab left open overnight keeps its visit id, so the id is renamed with the same daily secret before it's logged
+  function visitKeyFor(visitId: string): string {
+    currentDay()
+
+    return createHash('sha256').update(salt).update('visit\n').update(visitId).digest('hex').slice(0, 32)
+  }
+
+  return { keyFor, visitKeyFor }
 }

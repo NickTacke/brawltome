@@ -74,7 +74,6 @@ describe('site visit procedure', () => {
     const [log] = await harness.pageviewLogs()
 
     expect(log.attributes).toMatchObject({
-      visitId: visit.visitId,
       route: '/player/[id]',
       device: 'desktop',
       viewport: '1024-1440',
@@ -82,6 +81,9 @@ describe('site visit procedure', () => {
     })
 
     expect(log.attributes?.visitorKey).toMatch(/^[0-9a-f]{32}$/)
+    // the tab's id is only logged renamed with the day's secret, so it can't link one day to the next
+    expect(log.attributes?.visitId).toMatch(/^[0-9a-f]{32}$/)
+    expect(log.attributes?.visitId).not.toBe(visit.visitId)
     expect(log.attributes?.day).toBe(new Date().toISOString().slice(0, 10))
 
     expect(harness.counted('analytics_pageviews_total')).toMatchObject([

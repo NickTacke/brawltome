@@ -43,7 +43,7 @@ export function recordSiteVisit(
   visitor.telemetry.metrics.add('analytics_pageviews_total', 1, { route, device })
 
   visitor.telemetry.logger.info('analytics.pageview', {
-    visitId: visit.visitId,
+    visitId: dependencies.visitorKeys.visitKeyFor(visit.visitId),
     route,
     device,
     viewport: viewportBucketOf(visit.viewportWidth),

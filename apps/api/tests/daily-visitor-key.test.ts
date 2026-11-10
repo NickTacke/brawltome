@@ -34,6 +34,19 @@ describe('daily visitor keys', () => {
     expect(tomorrow.day).toBe('2026-11-11')
   })
 
+  test('a visit id is renamed with the day, so a tab left open overnight cannot be followed', () => {
+    const { keys, moveTo } = keysAt(Date.UTC(2026, 10, 10, 23, 55))
+    const visitId = 'b'.repeat(32)
+    const lateEvening = keys.visitKeyFor(visitId)
+
+    expect(keys.visitKeyFor(visitId)).toBe(lateEvening)
+    expect(lateEvening).not.toContain(visitId)
+
+    moveTo(Date.UTC(2026, 10, 11, 0, 5))
+
+    expect(keys.visitKeyFor(visitId)).not.toBe(lateEvening)
+  })
+
   test('a day revisited later never gets its old key back, the secret is gone', () => {
     const { keys, moveTo } = keysAt(Date.UTC(2026, 10, 10, 12))
     const first = keys.keyFor('198.51.100.20', browser)
