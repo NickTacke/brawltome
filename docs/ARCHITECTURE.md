@@ -17,6 +17,7 @@ one Postgres schema and the migrations that create it, and exposes one `index.ts
 | Module | Schema | Owns |
 | --- | --- | --- |
 | `accounts` | `accounts` | Discord sign-in, preferences, pinned players, primary player verification |
+| `analytics` | `analytics` | The daily secret behind the visitor keys |
 | `clan` | `clans` | Clan profiles and refreshes |
 | `discovery` | `discovery` | Finding players and clans worth tracking |
 | `player` | `players` | Profiles, career and ranked stats, freshness, name verification |
@@ -73,7 +74,7 @@ Each process has a list of the modules it needs:
 | Operations worker | `apps/api/src/worker-modules.ts` (`workerModules`) |
 | `bun run db:migrate` | `tooling/database-migrations/src/modules.ts` (`migrationModules`) |
 
-The worker leaves out `replay-analysis`; the other two lists have all nine. At start-up `serve.ts` and
+The worker leaves out `replay-analysis` and `analytics`; the other two lists have all ten. At start-up `serve.ts` and
 `operations-worker.ts` call `checkModuleList` on their list, which fails on a duplicate name, a missing dependency, a
 dependency cycle, migrations under more than one owner name in a module, or one owner name shared by two modules.
 They then build the module factories by

@@ -1,4 +1,5 @@
 import { accountsModule } from '@brawltome/accounts'
+import { analyticsModule } from '@brawltome/analytics'
 import { clanModule } from '@brawltome/clan'
 import { discoveryModule } from '@brawltome/discovery'
 import type { BrawltomeModule } from '@brawltome/foundation'
@@ -20,4 +21,5 @@ export const apiModules = [
   rankingModule,
   statisticsModule,
   replayAnalysisModule,
+  analyticsModule,
 ] as const satisfies readonly BrawltomeModule[]

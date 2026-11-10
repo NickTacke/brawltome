@@ -16,6 +16,7 @@
       "name": "@brawltome/api",
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
+        "@brawltome/analytics": "workspace:*",
         "@brawltome/bhapi": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/contracts": "workspace:*",
@@ -211,6 +212,16 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/modules/analytics": {
+      "name": "@brawltome/analytics",
+      "dependencies": {
+        "@brawltome/foundation": "workspace:*",
+        "drizzle-orm": "0.45.4",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/modules/clan": {
       "name": "@brawltome/clan",
       "dependencies": {
@@ -351,6 +362,7 @@
       },
       "devDependencies": {
         "@brawltome/accounts": "workspace:*",
+        "@brawltome/analytics": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/player": "workspace:*",
@@ -367,6 +379,7 @@
       "name": "@brawltome/database-migrations",
       "dependencies": {
         "@brawltome/accounts": "workspace:*",
+        "@brawltome/analytics": "workspace:*",
         "@brawltome/clan": "workspace:*",
         "@brawltome/discovery": "workspace:*",
         "@brawltome/foundation": "workspace:*",
@@ -451,6 +464,8 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.6.6", "", { "os": "win32", "cpu": "x64" }, "sha512-B7KMG26A4I9lAuxwBGMmiVcjMGAeJRoz+pzFt9brRvOAsIrgOu8ptJld5rUWui6tM1uiJwxeJhhDPuAiZtxXdw=="],
 
     "@brawltome/accounts": ["@brawltome/accounts@workspace:packages/modules/accounts"],
+
+    "@brawltome/analytics": ["@brawltome/analytics@workspace:packages/modules/analytics"],
 
     "@brawltome/analytics-review": ["@brawltome/analytics-review@workspace:tooling/analytics-review"],
 

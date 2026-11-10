@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto'
 import { createPostgresAccounts } from '@brawltome/accounts'
+import { createPostgresDailySalts } from '@brawltome/analytics'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createClanRefreshReservations, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
@@ -50,7 +50,7 @@ import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/r
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
-import { createDailyVisitorKeys, createVisitLimiter } from './visits'
+import { createDailyVisitorKeys, createServerBoundSalts, createVisitLimiter } from './visits'
 
 if (!process.env.INTERNAL_API_SECRET || process.env.INTERNAL_API_SECRET.length < 32) {
   throw new Error('INTERNAL_API_SECRET must be set and at least 32 characters')
@@ -109,6 +109,7 @@ const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
 const playerRefreshReservations = createPlayerRefreshReservations(database)
+const dailySalts = createPostgresDailySalts(database)
 const moduleRuntime: ModuleRuntime = { database }
 
 const postgresReadiness = createPostgresReadiness(
@@ -161,8 +162,13 @@ const sharedCtx = {
 const visitorRefresh = createVisitorRefreshProcedures({ ...sharedCtx, refreshTrustSecret })
 const visitorViews = createVisitorViewProcedures({ requestAdmission, profileViews })
 
+// the salt has no secret of its own: any value that stays the same across restarts and lives only in the
+// environment will do
+const visitorSalts = createServerBoundSalts({ serverSecret: refreshTrustSecret, storedSaltFor: dailySalts.saltFor })
+
 const siteVisits = createSiteVisitProcedures({
-  visitorKeys: createDailyVisitorKeys({ now: Date.now, randomBytes }),
+  // the site waits 3 s for a page view to be counted, so a slower read is a view nobody is waiting for
+  visitorKeys: createDailyVisitorKeys({ now: Date.now, loadSalt: visitorSalts, readTimeoutMs: 2_000 }),
   // far more pages a minute than a person opens, so only scripts hit it
   limiter: createVisitLimiter(120, Date.now),
 })

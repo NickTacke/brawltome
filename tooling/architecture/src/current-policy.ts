@@ -17,6 +17,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/architecture': 'tooling',
     '@brawltome/analytics-review': 'tooling',
     '@brawltome/accounts': 'capability',
+    '@brawltome/analytics': 'capability',
     '@brawltome/clan': 'capability',
     '@brawltome/contracts': 'contracts',
     '@brawltome/discovery': 'capability',
@@ -29,6 +30,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
   },
   moduleSchemas: {
     accounts: '@brawltome/accounts',
+    analytics: '@brawltome/analytics',
     clans: '@brawltome/clan',
     discovery: '@brawltome/discovery',
     players: '@brawltome/player',
@@ -53,6 +55,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/architecture': [],
     '@brawltome/analytics-review': [],
     '@brawltome/accounts': ['.', './dead-letter-hooks', './testing'],
+    '@brawltome/analytics': ['.'],
     '@brawltome/clan': ['.', './dead-letter-hooks'],
     '@brawltome/contracts': ['.', './legend-weapons'],
     '@brawltome/discovery': ['.'],
@@ -70,6 +73,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
   },
   capabilityDependencies: {
     '@brawltome/accounts': ['@brawltome/queue'],
+    '@brawltome/analytics': [],
     '@brawltome/clan': ['@brawltome/queue'],
     '@brawltome/discovery': ['@brawltome/queue'],
     '@brawltome/player': ['@brawltome/queue'],

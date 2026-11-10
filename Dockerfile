@@ -42,6 +42,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/bhapi/package.json packages/bhapi/
 COPY packages/telemetry/package.json packages/telemetry/
 COPY packages/modules/accounts/package.json packages/modules/accounts/
+COPY packages/modules/analytics/package.json packages/modules/analytics/
 COPY packages/modules/player/package.json packages/modules/player/
 COPY packages/modules/clan/package.json packages/modules/clan/
 COPY packages/modules/ranking/package.json packages/modules/ranking/
