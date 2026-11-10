@@ -176,8 +176,8 @@ beforeAll(async () => {
   await publishBoard('2v2', minutesBefore(60), previousStandings())
   await publishBoard('2v2', currentWindow, previousStandings())
 
-  // 3v3 missed the scans an hour ago but has history before them
-  await publishBoard('3v3', minutesBefore(90), previousStandings())
+  // 3v3 went more than two hours without a scan but has history before that
+  await publishBoard('3v3', minutesBefore(180), previousStandings())
   await publishBoard('3v3', minutesBefore(30), previousStandings())
   await publishBoard('3v3', currentWindow, currentStandings())
 
@@ -262,7 +262,7 @@ describe('recentActivityPage', () => {
     })
   })
 
-  test('says when the scans an hour ago were missed', async () => {
+  test('says when scans were missed', async () => {
     expect(await readPage({ mode: '3v3', region: 'EU', page: 1 })).toEqual({
       status: 'unavailable',
       reason: 'scan_gap',
