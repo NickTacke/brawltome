@@ -42,6 +42,17 @@ const webVital = z
   })
   .strict()
 
+const clientError = z
+  .object({
+    ...tab,
+    name: z.literal('error.client'),
+    // caught while rendering, thrown outside of it, or a promise nobody handled
+    kind: z.enum(['render', 'unhandled', 'rejection']),
+    // as the browser worded it, the api scrubs it before it is logged
+    message: z.string().max(1000),
+  })
+  .strict()
+
 /**
  * One thing a visitor did, or that the site measured for them, counted beside page views. A new kind of event is one
  * more member here, the api adds who it was, as a daily key, from the request itself.
@@ -51,6 +62,7 @@ export const siteEventInputSchema = z.discriminatedUnion('name', [
   searchFailed,
   searchSelected,
   webVital,
+  clientError,
 ])
 
 export type SiteEventInputContract = z.infer<typeof siteEventInputSchema>
