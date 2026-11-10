@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { randomUUID } from 'node:crypto'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
@@ -20,11 +21,70 @@ async function getBoard(path: string, headers: Record<string, string> = internal
   return { status: response.status, body: await response.json() }
 }
 
+async function getBoardRanks(path: string, headers: Record<string, string> = internalHeaders) {
+  const response = await app.fetch(new Request(`http://api.test/v1/players/${path}`, { headers }))
+
+  return { status: response.status, body: await response.json() }
+}
+
+function boardRow(snapshotId: string, rank: number, playerId: number) {
+  return {
+    snapshot_id: snapshotId,
+    mode: '1v1',
+    ordinal: rank,
+    standing: rank,
+    source_rank: rank,
+    identity_kind: 'one-vs-one-player',
+    player_one_id: playerId,
+    player_one_name: `Captured ${playerId}`,
+    region: 'SEA',
+    rating: 2_500 - rank,
+    peak_rating: 2_600,
+    wins: 40,
+    losses: 10,
+    tier: 'Diamond',
+  }
+}
+
+// the only boards in this file with rows: player 72 is second in the world and first in SEA
+async function publishOneVsOneBoards() {
+  const generationId = randomUUID()
+  const observedAt = new Date('2026-11-09T12:00:00.000Z')
+  const nextPublicationAt = new Date('2026-11-09T12:15:00.000Z')
+  const provenance = { source: 'brawlhalla-v1-ranked-leaderboard', contractVersion: 2, pageDepth: 1 }
+  const boards = { all: [71, 72], SEA: [72] }
+  const sql = database.sql
+
+  await sql`
+    INSERT INTO rankings.generations
+      (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
+       expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
+    VALUES (${generationId}, ${randomUUID()}, 'orpc-ranking-test', '1v1', ${observedAt}, ${observedAt},
+      ${nextPublicationAt}, 1, 'brawlhalla-v1-ranked-leaderboard', 2, false, ${sql.json(provenance)})
+  `
+
+  for (const [scope, playerIds] of Object.entries(boards)) {
+    const snapshotId = randomUUID()
+    const rows = playerIds.map((playerId, index) => boardRow(snapshotId, index + 1, playerId))
+
+    await sql`
+      INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
+      VALUES (${snapshotId}, ${generationId}, '1v1', ${scope}, ${rows.length})
+    `
+
+    await sql`INSERT INTO rankings.snapshot_rows ${sql(rows)}`
+  }
+
+  await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
+}
+
 beforeAll(async () => {
   database = await createTestDatabase({
     label: 'orpc_ranking',
     modules: [queueModule, playerModule, rankingModule],
   })
+
+  await publishOneVsOneBoards()
 
   const router = createOrpcRouter([rankingModule], { database })
   const telemetry = createTelemetry({ service: 'api', drainIntervalMs: 0 })
@@ -106,5 +166,46 @@ describe('ranking recent activity over oRPC', () => {
     ])
 
     expect([page.security, movers.security]).toEqual([[{ internalSecret: [] }], [{ internalSecret: [] }]])
+  })
+})
+
+describe('ranking.boardRanksById over oRPC', () => {
+  test('takes the player from the path and the region from the query', async () => {
+    expect(await getBoardRanks('72/board-ranks?region=SEA')).toEqual({
+      status: 200,
+      body: { globalRank: 2, regionRank: 1 },
+    })
+  })
+
+  test('answers with the global rank alone when no region is given', async () => {
+    expect(await getBoardRanks('72/board-ranks')).toEqual({ status: 200, body: { globalRank: 2, regionRank: null } })
+  })
+
+  test('answers with no ranks for a player on no board', async () => {
+    expect(await getBoardRanks('73/board-ranks?region=SEA')).toEqual({
+      status: 200,
+      body: { globalRank: null, regionRank: null },
+    })
+  })
+
+  test.each(['MOON', 'all'])('rejects %s as a region with a 400', async (region) => {
+    expect((await getBoardRanks(`72/board-ranks?region=${region}`)).status).toBe(400)
+  })
+
+  test('refuses a caller without the secret with 403', async () => {
+    expect((await getBoardRanks('72/board-ranks?region=SEA', {})).status).toBe(403)
+  })
+
+  test('is listed in the OpenAPI document with the internal secret', async () => {
+    const response = await app.fetch(new Request('http://api.test/openapi.json'))
+
+    const document = (await response.json()) as {
+      paths: Record<string, Record<string, { operationId?: string; security?: unknown }>>
+    }
+
+    const operation = document.paths['/players/{id}/board-ranks'].get
+
+    expect(operation.operationId).toBe('ranking.boardRanksById')
+    expect(operation.security).toEqual([{ internalSecret: [] }])
   })
 })
