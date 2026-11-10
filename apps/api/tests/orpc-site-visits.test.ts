@@ -393,6 +393,100 @@ describe('site event procedure', () => {
     })
   })
 
+  describe('errors in the browser', () => {
+    const thrown = { kind: 'unhandled', message: 'x is not a function' }
+    const clientError = { ...tab, path: '/guild/9', name: 'error.client', ...thrown }
+    const errorLogs = (harness: ReturnType<typeof createHarness>) => harness.logs('analytics.error.client')
+
+    test('counts an error under its kind and route, and logs its message', async () => {
+      const harness = createHarness()
+
+      expect(await harness.sendEvent(clientError)).toEqual({ status: 200, body: { recorded: true } })
+      await harness.sendEvent({ ...clientError, kind: 'render' })
+      await harness.sendEvent({ ...clientError, kind: 'rejection' })
+
+      const [log] = await errorLogs(harness)
+      const { visitId, ...attributes } = log.attributes ?? {}
+
+      expect(attributes).toEqual({ route: '/guild/[id]', ...thrown })
+
+      expect(visitId).toMatch(/^[0-9a-f]{32}$/)
+      expect(visitId).not.toBe(tab.visitId)
+
+      expect(harness.counted('analytics_client_errors_total')).toMatchObject([
+        { labels: { kind: 'unhandled', route: '/guild/[id]' }, value: 1 },
+        { labels: { kind: 'render', route: '/guild/[id]' }, value: 1 },
+        { labels: { kind: 'rejection', route: '/guild/[id]' }, value: 1 },
+      ])
+    })
+
+    test('scrubs the message before it is logged, and never puts it in a metric', async () => {
+      const harness = createHarness()
+      const message = 'load https://api.test/player/7?api_key=SECRET for me@example.com from 203.0.113.42 failed'
+
+      await harness.sendEvent({ ...clientError, message })
+
+      const [log] = await errorLogs(harness)
+
+      expect(log.attributes?.message).toBe('load [url] for [email] from [ip] failed')
+      expect(JSON.stringify(harness.telemetry.metrics.snapshot())).not.toContain('failed')
+    })
+
+    test('logs no more than the first 200 characters of a message', async () => {
+      const harness = createHarness()
+
+      await harness.sendEvent({ ...clientError, message: 'm'.repeat(1000) })
+
+      const [log] = await errorLogs(harness)
+
+      expect(log.attributes?.message).toBe('m'.repeat(200))
+    })
+
+    test('refuses an error of an unknown kind, with a longer message or with a field it does not know', async () => {
+      const harness = createHarness()
+
+      expect((await harness.sendEvent({ ...clientError, kind: 'network' })).status).toBe(400)
+      expect((await harness.sendEvent({ ...clientError, message: 'm'.repeat(1001) })).status).toBe(400)
+      expect((await harness.sendEvent({ ...clientError, stack: 'at render (app.js:1:1)' })).status).toBe(400)
+      expect(await errorLogs(harness)).toEqual([])
+      expect(harness.counted('analytics_client_errors_total')).toEqual([])
+    })
+
+    test('drops the errors of a bot', async () => {
+      const harness = createHarness()
+      const asBot = { ...siteHeaders, 'x-visitor-user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }
+
+      expect((await harness.sendEvent(clientError, asBot)).body).toEqual({ recorded: false })
+      expect(await errorLogs(harness)).toEqual([])
+      expect(harness.counted('analytics_client_errors_total')).toEqual([])
+      expect(harness.counted('analytics_events_dropped_total')).toMatchObject([{ labels: { reason: 'bot' }, value: 1 }])
+    })
+
+    test('drops errors over the per visitor budget', async () => {
+      const harness = createHarness({ eventsPerMinute: 2 })
+
+      for (let index = 0; index < 3; index++) await harness.sendEvent(clientError)
+
+      expect(await errorLogs(harness)).toHaveLength(2)
+
+      expect(harness.counted('analytics_events_dropped_total')).toMatchObject([
+        { labels: { reason: 'rate_limited' }, value: 1 },
+      ])
+    })
+
+    test("never logs or counts the visitor's address or browser", async () => {
+      const harness = createHarness()
+
+      await harness.sendEvent(clientError)
+      await harness.telemetry.flush(1_000)
+
+      const everything = JSON.stringify({ logs: harness.sink.records, metrics: harness.telemetry.metrics.snapshot() })
+
+      expect(everything).not.toContain(visitorAddress)
+      expect(everything).not.toContain('Safari')
+    })
+  })
+
   test('drops a bot', async () => {
     const harness = createHarness()
     const asBot = { ...siteHeaders, 'x-visitor-user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }
