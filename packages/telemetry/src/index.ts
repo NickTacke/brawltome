@@ -457,7 +457,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   analytics_events_dropped_total: {
     kind: 'counter',
     help: 'Analytics events dropped at ingestion',
-    labels: { reason: ['invalid', 'too_many', 'rate_limited', 'opted_out', 'bot'] },
+    labels: { reason: ['invalid', 'too_many', 'rate_limited', 'opted_out', 'bot', 'salt_unavailable'] },
   },
   search_requests_total: {
     kind: 'counter',
