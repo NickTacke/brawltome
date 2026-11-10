@@ -42,6 +42,33 @@ function renderPlayer(status: RefreshStatus): string {
   return renderToStaticMarkup(<PlayerPage {...page} isUnarmedExcluded={false} refresh={refresh} />)
 }
 
+function renderGuild(status: RefreshStatus): string {
+  return renderToStaticMarkup(<GuildHeader clan={clan} refresh={{ status, onRetry: () => {} }} />)
+}
+
+describe('updated time', () => {
+  test('a running refresh takes the place of the updated time', () => {
+    const html = renderGuild('updating')
+
+    expect(html).toContain('Updating…')
+    expect(html).not.toContain('Updated')
+  })
+
+  test('the updated time comes back once the refresh is done', () => {
+    const html = renderGuild('idle')
+
+    expect(html).toContain('Updated')
+    expect(html).not.toContain('Updating…')
+  })
+
+  test('a failed refresh keeps the updated time beside the retry', () => {
+    const html = renderGuild('failed')
+
+    expect(html).toContain('Updated')
+    expect(html).toContain('Try again</button>')
+  })
+})
+
 describe('refresh status line', () => {
   test('a failed refresh still shows the page, with one quiet line and a retry', () => {
     const html = renderPlayer('failed')
@@ -60,11 +87,5 @@ describe('refresh status line', () => {
 
     expect(html).not.toContain('Updating')
     expect(html).not.toContain('update')
-  })
-
-  test('the guild line follows the time of the last update', () => {
-    const html = renderToStaticMarkup(<GuildHeader clan={clan} refresh={{ status: 'updating', onRetry: () => {} }} />)
-
-    expect(html).toMatch(/Updated [^<]+<\/span><span aria-live="polite"> · Updating…<\/span>/)
   })
 })

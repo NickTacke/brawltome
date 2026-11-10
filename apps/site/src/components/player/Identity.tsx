@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { fixEncoding, timeAgo } from '../../lib'
 import type { PlayerData } from '../../server/load-player'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
-import { RefreshStatus, type RefreshStatusProps } from '../refresh/RefreshStatus'
+import { type RefreshStatusProps, UpdatedTime } from '../refresh/RefreshStatus'
 import { regionOption } from '../regions'
 import { AliasesButton } from './AliasesButton'
 import { HoverReveal } from './HoverReveal'
@@ -62,9 +62,11 @@ function PlaytimeAndFreshness({ player, loadedAt, refresh }: IdentityProps) {
   return (
     <div className="mt-0.5 text-sm text-soft">
       {matchTime !== undefined && <span className="font-semibold text-text">{formatHours(matchTime)} played</span>}
-      {matchTime !== undefined && lastUpdate && ' · '}
-      {lastUpdate && `Updated ${timeAgo(lastUpdate, new Date(loadedAt))}`}
-      <RefreshStatus {...refresh} hasTextBefore={matchTime !== undefined || Boolean(lastUpdate)} />
+      <UpdatedTime
+        {...refresh}
+        updatedText={lastUpdate ? `Updated ${timeAgo(lastUpdate, new Date(loadedAt))}` : null}
+        hasTextBefore={matchTime !== undefined}
+      />
     </div>
   )
 }
