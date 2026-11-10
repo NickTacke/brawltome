@@ -2,9 +2,11 @@ export function formatChange(change: number): string {
   return change > 0 ? `+${change}` : String(change)
 }
 
-// only gains get a colour, a drop stays quiet rather than turning the list red
+// the same green and red the player page uses for rating changes
 export function changeColour(change: number): string {
-  return change > 0 ? 'text-win' : 'text-soft'
+  if (change > 0) return 'text-emerald-400'
+
+  return change < 0 ? 'text-red-400' : 'text-soft'
 }
 
 /** Whose row this is: a fixed 2v2 entry is a team, every other bracket lists players. */

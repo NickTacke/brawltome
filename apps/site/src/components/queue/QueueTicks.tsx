@@ -4,8 +4,8 @@ type Tick = { key: string; style: string }
 
 function ticksFor(wins: number, losses: number): Tick[] {
   const { winTicks, lossTicks } = tickCounts(wins, losses)
-  const winRun = Array.from({ length: winTicks }, (_, index) => ({ key: `win-${index}`, style: 'bg-win' }))
-  const lossRun = Array.from({ length: lossTicks }, (_, index) => ({ key: `loss-${index}`, style: 'bg-soft/40' }))
+  const winRun = Array.from({ length: winTicks }, (_, index) => ({ key: `win-${index}`, style: 'bg-emerald-400/85' }))
+  const lossRun = Array.from({ length: lossTicks }, (_, index) => ({ key: `loss-${index}`, style: 'bg-red-400/70' }))
 
   return [...winRun, ...lossRun]
 }
