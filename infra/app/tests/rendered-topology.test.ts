@@ -156,11 +156,6 @@ describe('rendered application topology', () => {
     expect(labels).toEqual({
       'traefik.docker.network': 'dokploy-network',
       'traefik.enable': 'true',
-      'traefik.http.middlewares.brawltome-site-retry.retry.attempts': '3',
-      'traefik.http.routers.brawltome-site.middlewares': 'brawltome-site-retry',
-      'traefik.http.services.brawltome-site.loadbalancer.healthcheck.interval': '2s',
-      'traefik.http.services.brawltome-site.loadbalancer.healthcheck.path': '/health/serving',
-      'traefik.http.services.brawltome-site.loadbalancer.healthcheck.timeout': '1s',
       'traefik.http.routers.brawltome-site.entrypoints': 'websecure',
       'traefik.http.routers.brawltome-site.priority': '1000',
       [siteRuleLabel]:
@@ -191,7 +186,6 @@ describe('rendered application topology', () => {
     ['a plain http entrypoint', 'traefik.http.routers.brawltome-site.entrypoints', 'web'],
     ['an extra router', 'traefik.http.routers.brawltome-site-extra.rule', 'PathPrefix(`/`)'],
     ['an extra middleware', 'traefik.http.middlewares.brawltome-site.headers.customrequestheaders.x', 'y'],
-    ['a serving check on another path', 'traefik.http.services.brawltome-site.loadbalancer.healthcheck.path', '/'],
   ])('rejects site routing drift: %s', (_drift, label, value) => {
     const topology = renderedTopology()
 

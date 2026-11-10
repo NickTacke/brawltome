@@ -95,12 +95,6 @@ const expectedSiteLabels: Record<string, string> = {
   'traefik.http.routers.brawltome-site.rule': siteRouterRule,
   'traefik.http.routers.brawltome-site.service': 'brawltome-site',
   'traefik.http.routers.brawltome-site.tls.certresolver': 'letsencrypt',
-  // the retry and the serving check are what let deploy.sh roll site without dropping requests
-  'traefik.http.middlewares.brawltome-site-retry.retry.attempts': '3',
-  'traefik.http.routers.brawltome-site.middlewares': 'brawltome-site-retry',
-  'traefik.http.services.brawltome-site.loadbalancer.healthcheck.interval': '2s',
-  'traefik.http.services.brawltome-site.loadbalancer.healthcheck.path': '/health/serving',
-  'traefik.http.services.brawltome-site.loadbalancer.healthcheck.timeout': '1s',
   'traefik.http.services.brawltome-site.loadbalancer.server.port': '3000',
 }
 

@@ -311,13 +311,7 @@ services:
       - traefik.http.routers.brawltome-site.entrypoints=websecure
       - traefik.http.routers.brawltome-site.tls.certresolver=letsencrypt
       - traefik.http.routers.brawltome-site.service=brawltome-site
-      - traefik.http.routers.brawltome-site.middlewares=brawltome-site-retry
-      - traefik.http.middlewares.brawltome-site-retry.retry.attempts=3
       - traefik.http.services.brawltome-site.loadbalancer.server.port=3000
-      # zero-downtime deploys, see the api labels and infra/app/deploy.sh
-      - traefik.http.services.brawltome-site.loadbalancer.healthcheck.path=/health/serving
-      - traefik.http.services.brawltome-site.loadbalancer.healthcheck.interval=2s
-      - traefik.http.services.brawltome-site.loadbalancer.healthcheck.timeout=1s
     restart: unless-stopped
     read_only: true
     init: true

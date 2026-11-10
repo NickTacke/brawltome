@@ -2,7 +2,7 @@
 // and answer for the files in dist/client.
 //
 // On SIGTERM it drains for zero-downtime deploys (see infra/app/deploy.sh): /health/serving reports draining while
-// pages are still answered, so Traefik's health check moves traffic to the replacement before the port closes.
+// pages are still answered, so a load balancer that checks it moves traffic to the replacement before the port closes.
 import { join, resolve } from 'node:path'
 
 type SiteFetch = (request: Request) => Response | Promise<Response>
@@ -16,7 +16,7 @@ const immutableCacheControl = 'public, max-age=31536000, immutable'
 const idleTimeoutSeconds = 30
 const livenessPath = '/health/live'
 const servingPath = '/health/serving'
-// traefik checks /health/serving every 2 seconds, so it has dropped this container well before the announce ends
+// long enough for a load balancer that checks /health/serving every 2 seconds to drop this container first
 const shutdownAnnounceMs = 5_000
 // the announce and the drain together must stay under the 20 second stop_grace_period in compose.yml
 const shutdownDrainMs = 5_000
@@ -74,7 +74,7 @@ function answerLiveness(request: Request): Response | undefined {
   return new Response('ok', { headers: { 'cache-control': 'no-store' } })
 }
 
-// load balancer membership: traefik stops routing here once this reports draining
+// load balancer membership: routing here should stop once this reports draining
 function answerServing(request: Request, isDraining: IsDraining): Response | undefined {
   if (new URL(request.url).pathname !== servingPath) return undefined
 
@@ -120,7 +120,6 @@ async function start(): Promise<void> {
     void server.stop().then(() => process.exit(0))
   }
 
-  // as pid 1 the process ignores SIGTERM unless it handles it
   const stop = () => {
     if (isDraining) return
 
