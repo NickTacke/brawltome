@@ -16,7 +16,7 @@ const account = {
   createdAt: '2025-03-12T10:00:00.000Z',
 }
 
-const signedIn = { status: 'signedIn', account, sessionRenewedUntil: null }
+const signedIn = { status: 'signedIn', account, sessionExpiresAt: '2026-11-20T12:00:00.000Z' }
 
 const pin = (brawlhallaId: number, order: number) => ({ brawlhallaId, order, pinnedAt: checkedAt })
 
@@ -195,23 +195,13 @@ describe('loadAccount for a signed in visitor', () => {
     expect(playerCalls.some(({ headers }) => headers.has('x-visitor-session'))).toBe(false)
   })
 
-  test('keeps the cookie until the renewed end of the session', async () => {
-    const renewed = { ...signedIn, sessionRenewedUntil: '2026-12-01T12:00:00.000Z' }
-    const { session, keptUntil } = sessionWith(token)
-
-    stubApi({ ...healthyAnswers(), 'GET /account': { status: 200, body: renewed } })
-    await loadAccount(session)
-
-    expect(keptUntil).toEqual([new Date('2026-12-01T12:00:00.000Z')])
-  })
-
-  test('leaves the cookie alone when the session was not renewed', async () => {
+  test('keeps the cookie until the end of the session on every load', async () => {
     const { session, keptUntil } = sessionWith(token)
 
     stubApi(healthyAnswers())
     await loadAccount(session)
 
-    expect(keptUntil).toEqual([])
+    expect(keptUntil).toEqual([new Date('2026-11-20T12:00:00.000Z')])
   })
 
   test('still shows a pin whose player reads fail', async () => {

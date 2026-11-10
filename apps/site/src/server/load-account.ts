@@ -88,7 +88,7 @@ async function loadAccountOrThrow(session: AccountSession): Promise<AccountPage>
 
   if (current.status === 'anonymous') return { kind: 'signedOut', signInUrl: links.signIn }
 
-  if (current.sessionRenewedUntil) session.keepUntil(new Date(current.sessionRenewedUntil))
+  session.keepUntil(new Date(current.sessionExpiresAt))
 
   const { displayName, avatarUrl, createdAt } = current.account
   const parts = await loadSignedInParts(session.token)

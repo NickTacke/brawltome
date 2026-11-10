@@ -92,19 +92,32 @@ describe('the account the site reads for a visitor', () => {
         avatarUrl: null,
         createdAt: account.createdAt.toISOString(),
       },
-      sessionRenewedUntil: null,
+      sessionExpiresAt: expect.any(String),
     })
   })
 
-  test('says until when it renewed a session close to its end', async () => {
+  test('says when the session ends after renewing one close to its end', async () => {
     const { sessionToken } = await signIn()
 
     await setSessionExpiry(sessionToken, new Date(Date.now() + dayMs))
 
     const answer = await call(procedures.current, undefined, visitor(sessionToken))
-    const renewedUntil = answer.status === 'signedIn' ? Date.parse(answer.sessionRenewedUntil ?? '') : 0
+    const expiresAt = answer.status === 'signedIn' ? Date.parse(answer.sessionExpiresAt) : 0
 
-    expect(renewedUntil).toBeGreaterThan(Date.now() + 29 * dayMs)
+    expect(expiresAt).toBeGreaterThan(Date.now() + 29 * dayMs)
+  })
+
+  // a pin write can renew the session too, and it has no way to update the cookie, so every read repeats the end
+  test('says when the session ends even when this read did not renew it', async () => {
+    const { sessionToken } = await signIn()
+    const storedEnd = new Date(Date.now() + 20 * dayMs)
+
+    await setSessionExpiry(sessionToken, storedEnd)
+
+    const answer = await call(procedures.current, undefined, visitor(sessionToken))
+    const expiresAt = answer.status === 'signedIn' ? Date.parse(answer.sessionExpiresAt) : 0
+
+    expect(Math.abs(expiresAt - storedEnd.getTime())).toBeLessThan(1_000)
   })
 
   test('is refused to anyone without the internal secret', async () => {

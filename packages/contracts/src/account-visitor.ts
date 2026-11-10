@@ -12,12 +12,12 @@ const maximumPinnedPlayers = 100
 
 const anonymousSessionSchema = z.object({ status: z.literal('anonymous') }).strict()
 
-// sessionRenewedUntil is set when this read extended the session, so the site can extend the visitor's cookie to match
+// any read or write can extend the session, so every answer says when it ends and the site keeps its cookie in step
 const signedInSessionSchema = z
   .object({
     status: z.literal('signedIn'),
     account: accountSchema,
-    sessionRenewedUntil: utcDateTime.nullable(),
+    sessionExpiresAt: utcDateTime,
   })
   .strict()
 

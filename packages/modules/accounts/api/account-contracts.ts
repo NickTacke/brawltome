@@ -9,7 +9,7 @@ import type { AccountAuthentication, PinnedPlayer, PrimaryPlayerVerificationStat
 export function toAccountSession(authentication: AccountAuthentication): AccountSessionContract {
   if (authentication.status === 'anonymous') return { status: 'anonymous' }
 
-  const { account, expiresAt, extended } = authentication
+  const { account, expiresAt } = authentication
 
   return {
     status: 'signedIn',
@@ -19,7 +19,7 @@ export function toAccountSession(authentication: AccountAuthentication): Account
       avatarUrl: account.avatarUrl,
       createdAt: account.createdAt.toISOString(),
     },
-    sessionRenewedUntil: extended ? expiresAt.toISOString() : null,
+    sessionExpiresAt: expiresAt.toISOString(),
   }
 }
 

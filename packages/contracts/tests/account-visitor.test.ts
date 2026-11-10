@@ -13,16 +13,20 @@ describe('account session', () => {
     expect(accountSessionSchema.parse({ status: 'anonymous' })).toEqual({ status: 'anonymous' })
   })
 
-  test('answers the account and when a renewed session now ends', () => {
-    const renewed = { status: 'signedIn' as const, account, sessionRenewedUntil: '2026-09-08T18:42:01.000Z' }
-    const notRenewed = { status: 'signedIn' as const, account, sessionRenewedUntil: null }
+  test('answers the account and when its session ends', () => {
+    const signedIn = { status: 'signedIn' as const, account, sessionExpiresAt: '2026-09-08T18:42:01.000Z' }
 
-    expect(accountSessionSchema.parse(renewed)).toEqual(renewed)
-    expect(accountSessionSchema.parse(notRenewed)).toEqual(notRenewed)
+    expect(accountSessionSchema.parse(signedIn)).toEqual(signedIn)
+  })
+
+  test('always says when the session ends, so the site can keep the cookie in step', () => {
+    const withoutEnd = { status: 'signedIn', account, sessionExpiresAt: null }
+
+    expect(accountSessionSchema.safeParse(withoutEnd).success).toBe(false)
   })
 
   test('never carries a session token', () => {
-    const withToken = { status: 'signedIn', account, sessionRenewedUntil: null, sessionToken: 'raw' }
+    const withToken = { status: 'signedIn', account, sessionExpiresAt: '2026-09-08T18:42:01.000Z', sessionToken: 'raw' }
 
     expect(accountSessionSchema.safeParse(withToken).success).toBe(false)
   })
