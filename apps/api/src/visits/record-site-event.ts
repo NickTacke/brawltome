@@ -3,6 +3,7 @@ import { admitVisitor, type SiteVisitor } from './admit-visitor'
 import type { SiteVisitDependencies } from './record-site-visit'
 import { type EventTab, recordSearchFailed, recordSearchPerformed, recordSearchSelected } from './search-events'
 import { routeOf } from './visit-labels'
+import { recordWebVital } from './web-vitals'
 
 function recordEvent({ telemetry }: SiteVisitor, tab: EventTab, event: SiteEventInputContract): void {
   switch (event.name) {
@@ -15,12 +16,15 @@ function recordEvent({ telemetry }: SiteVisitor, tab: EventTab, event: SiteEvent
     case 'search.selected':
       recordSearchSelected(telemetry, tab, event)
       break
+    case 'vitals':
+      recordWebVital(telemetry, tab, event)
+      break
   }
 }
 
 /**
- * Counts one thing a visitor did on the site, like a search. Bots and visitors over their budget are left out the way
- * they are for page views, and the address is never logged.
+ * Counts one thing a visitor did on the site, like a search, or that the site measured for them, like a web vital.
+ * Bots and visitors over their budget are left out the way they are for page views, and the address is never logged.
  */
 export async function recordSiteEvent(
   dependencies: SiteVisitDependencies,

@@ -321,6 +321,78 @@ describe('site event procedure', () => {
     ])
   })
 
+  describe('web vitals', () => {
+    const vital = { ...tab, path: '/player/7', name: 'vitals', metric: 'LCP', value: 1834.5, viewportWidth: 390 }
+
+    test('observes a web vital under its name, route and the device its viewport makes it', async () => {
+      const harness = createHarness()
+
+      expect(await harness.sendEvent(vital)).toEqual({ status: 200, body: { recorded: true } })
+      await harness.sendEvent({ ...vital, metric: 'CLS', value: 0.08, viewportWidth: 800 })
+      await harness.sendEvent({ ...vital, metric: 'INP', value: 96, viewportWidth: 1280 })
+      await harness.sendEvent({ ...vital, metric: 'TTFB', value: 240, viewportWidth: 1280 })
+
+      const route = '/player/[id]'
+
+      expect(harness.counted('analytics_web_vitals')).toMatchObject([
+        { labels: { name: 'LCP', route, device: 'mobile' }, count: 1, sum: 1834.5 },
+        { labels: { name: 'CLS', route, device: 'tablet' }, count: 1, sum: 0.08 },
+        { labels: { name: 'INP', route, device: 'desktop' }, count: 1, sum: 96 },
+        { labels: { name: 'TTFB', route, device: 'desktop' }, count: 1, sum: 240 },
+      ])
+    })
+
+    test('refuses a web vital that brings its own device', async () => {
+      const harness = createHarness()
+
+      expect((await harness.sendEvent({ ...vital, device: 'desktop' })).status).toBe(400)
+      expect(harness.counted('analytics_web_vitals')).toEqual([])
+    })
+
+    test('refuses a metric the dashboards do not show and a value out of range', async () => {
+      const harness = createHarness()
+
+      expect((await harness.sendEvent({ ...vital, metric: 'FCP' })).status).toBe(400)
+      expect((await harness.sendEvent({ ...vital, value: 600_001 })).status).toBe(400)
+      expect((await harness.sendEvent({ ...vital, value: -1 })).status).toBe(400)
+      expect(harness.counted('analytics_web_vitals')).toEqual([])
+    })
+
+    test('drops the web vitals of a bot', async () => {
+      const harness = createHarness()
+      const asBot = { ...siteHeaders, 'x-visitor-user-agent': 'Mozilla/5.0 (Windows NT 10.0) Chrome-Lighthouse' }
+
+      expect((await harness.sendEvent(vital, asBot)).body).toEqual({ recorded: false })
+      expect(harness.counted('analytics_web_vitals')).toEqual([])
+      expect(harness.counted('analytics_events_dropped_total')).toMatchObject([{ labels: { reason: 'bot' }, value: 1 }])
+    })
+
+    test('drops web vitals over the per visitor budget', async () => {
+      const harness = createHarness({ eventsPerMinute: 4 })
+
+      for (let index = 0; index < 5; index++) await harness.sendEvent(vital)
+
+      expect(harness.counted('analytics_web_vitals')).toMatchObject([{ count: 4 }])
+
+      expect(harness.counted('analytics_events_dropped_total')).toMatchObject([
+        { labels: { reason: 'rate_limited' }, value: 1 },
+      ])
+    })
+
+    test("logs nothing for a web vital, so neither the tab nor the visitor's address", async () => {
+      const harness = createHarness()
+
+      await harness.sendEvent(vital)
+      await harness.telemetry.flush(1_000)
+
+      const everything = JSON.stringify({ logs: harness.sink.records, metrics: harness.telemetry.metrics.snapshot() })
+
+      expect(harness.sink.records.filter((record) => record.event?.startsWith('analytics.'))).toEqual([])
+      expect(everything).not.toContain(visitorAddress)
+      expect(everything).not.toContain(vital.visitId)
+    })
+  })
+
   test('drops a bot', async () => {
     const harness = createHarness()
     const asBot = { ...siteHeaders, 'x-visitor-user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }
