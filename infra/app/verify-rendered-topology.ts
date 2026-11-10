@@ -84,7 +84,7 @@ const siteRouterRule =
   'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || ' +
   'Path(`/`) || Path(`/matches`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
   'Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || ' +
-  'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
+  'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
 
 const expectedSiteLabels: Record<string, string> = {
   'traefik.docker.network': 'dokploy-network',
