@@ -384,6 +384,12 @@ describe('observability deployment contract', () => {
 
     expect(exprs).toContain('analytics.search.performed')
 
+    const targets = dashboard.panels.flatMap((panel: { targets?: Array<{ expr?: string }> }) => panel.targets ?? [])
+    const searchLogs = targets.find((target: { expr?: string }) => target.expr?.includes('analytics.search.performed'))
+
+    // the old site logged searches itself, the new one has the api log them
+    expect(searchLogs.expr).toContain('{service_name=~"web|api"}')
+
     const missRate = dashboard.panels
       .flatMap((panel: { targets?: Array<{ expr?: string }> }) => panel.targets ?? [])
       .map((target: { expr?: string }) => target.expr ?? '')
