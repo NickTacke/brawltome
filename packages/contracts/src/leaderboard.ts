@@ -305,7 +305,10 @@ export const playerBoardRanksInputSchema = z
   .object({ id: brawlhallaIdSchema, region: leaderboardRegionSchema.optional() })
   .strict()
 
-/** A player's place by rating on each board, as its leaderboard page shows it. Null when they are not on that board. */
+/**
+ * A player's place by rating on each board, as its leaderboard page shows it. Null when they are not on that board,
+ * or when the board cannot vouch for the place.
+ */
 export const playerBoardRanksSchema = z
   .object({ globalRank: positiveInt32.nullable(), regionRank: positiveInt32.nullable() })
   .strict()
