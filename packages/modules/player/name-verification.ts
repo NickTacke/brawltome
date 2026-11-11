@@ -1,7 +1,7 @@
 import type { Database, Sql } from '@brawltome/foundation'
 
 export type NameVerificationCandidate = { brawlhallaId: number; playerName: string; v0Name: string }
-export type NameVerificationBacklog = { rename_signal: number; demand: number; other: number }
+export type NameVerificationBacklog = { rename_signal: number; demand: number; team_name: number; other: number }
 
 export type NameVerificationPolicy = {
   // Defaults to the database clock.
@@ -32,10 +32,11 @@ type CandidateRow = {
   observed_at: string
   rename_signal: number
   demand: number
+  team_name: number
   other: number
 }
 
-const emptyBacklog: NameVerificationBacklog = { rename_signal: 0, demand: 0, other: 0 }
+const emptyBacklog: NameVerificationBacklog = { rename_signal: 0, demand: 0, team_name: 0, other: 0 }
 // Unspent claims outlive any queue delay; failed checks retry after 1h, 6h, then daily.
 const pendingHoldMs = 24 * 60 * 60 * 1000
 
@@ -87,10 +88,11 @@ async function selectCandidates(
       SELECT *,
         CASE
           WHEN previous_player_name IS NOT NULL AND players.names_match(previous_player_name, v0_name) THEN 0
-          -- The teammate's profile was just refreshed, so this player is likely to be looked for next.
-          WHEN is_team_name THEN 0
           WHEN brawlhalla_id = ANY(${demandIds}::integer[]) THEN 1
-          ELSE 2
+          -- The teammate's profile was just refreshed, so this player is likely to be looked for next. Most team
+          -- names that differ are old names though, so they wait behind the players someone asked for.
+          WHEN is_team_name THEN 2
+          ELSE 3
         END AS tier
       FROM observed
       WHERE (observed_at > v0_observed_at
@@ -117,7 +119,8 @@ async function selectCandidates(
     SELECT brawlhalla_id, player_name, v0_name, v0_observed_at::text, observed_at::text,
            count(*) FILTER (WHERE tier = 0) OVER ()::integer AS rename_signal,
            count(*) FILTER (WHERE tier = 1) OVER ()::integer AS demand,
-           count(*) FILTER (WHERE tier = 2) OVER ()::integer AS other
+           count(*) FILTER (WHERE tier = 2) OVER ()::integer AS team_name,
+           count(*) FILTER (WHERE tier = 3) OVER ()::integer AS other
     FROM chosen
     -- Within a tier, names V1 saw change rank above mismatches present since the first observation.
     ORDER BY tier, previous_player_name IS NULL, global_rank ASC NULLS LAST, rating DESC NULLS LAST,
@@ -129,7 +132,9 @@ async function selectCandidates(
 function backlogOf(rows: CandidateRow[]): NameVerificationBacklog {
   const [row] = rows
 
-  return row ? { rename_signal: row.rename_signal, demand: row.demand, other: row.other } : { ...emptyBacklog }
+  if (!row) return { ...emptyBacklog }
+
+  return { rename_signal: row.rename_signal, demand: row.demand, team_name: row.team_name, other: row.other }
 }
 
 const toCandidate = (row: CandidateRow): NameVerificationCandidate => ({
