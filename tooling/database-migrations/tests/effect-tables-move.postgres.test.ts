@@ -413,7 +413,10 @@ describeWithDatabase('queue effect tables at their owners', () => {
 
     const lockUrl = urlForDatabase(lockDatabaseName)
 
-    await migratePostgres(lockUrl, migrationsWithout(droppingIdentities))
+    const beforeDrops = migrationsWithout(droppingIdentities)
+    const withDrops = migrationsWithout(new Set([renameIdentity]))
+
+    await migratePostgres(lockUrl, beforeDrops)
 
     const holder = postgres(lockUrl, { max: 1 })
 
@@ -438,9 +441,8 @@ describeWithDatabase('queue effect tables at their owners', () => {
       await Promise.race([locked, holding])
 
       try {
-        expect(await migratePostgres(lockUrl, migrationsWithout(new Set([renameIdentity])))).toBe(
-          droppingIdentities.size,
-        )
+        // the drops, and the later migrations that are built on them
+        expect(await migratePostgres(lockUrl, withDrops)).toBe(withDrops.length - beforeDrops.length)
       } finally {
         release()
       }
