@@ -22,6 +22,7 @@ import { addLeaderboardTeamModeObservations } from './migrations/0019-add-leader
 import { addLeaderboardTeamObservationsSecondPlayerIndex } from './migrations/0020-add-leaderboard-team-observations-second-player-index'
 import { movePrimaryMonitoringWatermark } from './migrations/0021-move-primary-monitoring-watermark'
 import { dropPrimaryMonitoringWatermarkView } from './migrations/0022-drop-primary-monitoring-watermark-view'
+import { addTeammateNameSignals } from './migrations/0023-add-teammate-name-signals'
 
 export { mapPlayerCareerProfile } from './api/map-career-profile'
 export { mapPlayerRankedProfile } from './api/map-ranked-profile'
@@ -160,6 +161,7 @@ const migrations = [
   addLeaderboardTeamObservationsSecondPlayerIndex,
   movePrimaryMonitoringWatermark,
   dropPrimaryMonitoringWatermarkView,
+  addTeammateNameSignals,
 ] as const
 
 export const playerModule = {
