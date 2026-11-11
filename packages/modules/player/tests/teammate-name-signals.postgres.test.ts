@@ -12,6 +12,7 @@ const ownerId = 700
 const lastRefresh = '2026-10-01T00:00:00Z'
 const firstVisit = new Date('2026-10-05T12:00:00Z')
 const secondVisit = new Date('2026-10-05T13:00:00Z')
+const archiveChecksum = 'a'.repeat(64)
 
 beforeAll(async () => {
   database = await createTestDatabase({ label: 'player_teammate_name_signals', modules: [queueModule, playerModule] })
@@ -95,6 +96,35 @@ describe('Teammate name signals', () => {
     // a team name can still carry a name the teammate has since changed
     await ranked(805, 'Current Name')
     await formerName(805, 'Former Name')
+    // names the old site knew are former names too; the archive tables cannot be cleared, so these ids are used once
+    await ranked(806, 'Current Name')
+    await ranked(807, 'Current Name')
+    await ranked(808, 'Current Name')
+
+    await control`
+      INSERT INTO players.legacy_discovery_profiles
+        (brawlhalla_id, player_name, region, rating, view_count, observed_at, archive_checksum)
+      VALUES (806, 'Old Site Name', 'EU', 1700, 0, ${lastRefresh}, ${archiveChecksum})
+    `
+
+    await control`
+      INSERT INTO players.legacy_discovery_aliases
+        (brawlhalla_id, normalized_alias, display_alias, observed_at, archive_checksum)
+      VALUES (807, 'old site alias', 'Old Site Alias', ${lastRefresh}, ${archiveChecksum})
+    `
+
+    await control`
+      INSERT INTO players.legacy_profile_discovery (brawlhalla_id, player_name, observed_at, archive_checksum)
+      VALUES (808, 'Old Profile Name', ${lastRefresh}, ${archiveChecksum})
+    `
+
+    // the leaderboard name is searchable and waits for its own check
+    await ranked(809, 'Current Name')
+
+    await control`
+      INSERT INTO players.leaderboard_name_observations (brawlhalla_id, player_name, observed_at)
+      VALUES (809, 'Board Name', ${firstVisit})
+    `
 
     const recorded = await record([
       { brawlhallaId: 801, playerName: 'Same Name' },
@@ -102,6 +132,10 @@ describe('Teammate name signals', () => {
       { brawlhallaId: 803, playerName: 'Padded' },
       { brawlhallaId: 804, playerName: 'Career Name' },
       { brawlhallaId: 805, playerName: 'Former Name' },
+      { brawlhallaId: 806, playerName: 'Old Site Name' },
+      { brawlhallaId: 807, playerName: 'Old Site Alias' },
+      { brawlhallaId: 808, playerName: 'Old Profile Name' },
+      { brawlhallaId: 809, playerName: 'Board Name' },
     ])
 
     expect(recorded).toEqual({ recorded: 0 })
@@ -109,8 +143,9 @@ describe('Teammate name signals', () => {
   })
 
   test('a teammate without a live profile records nothing', async () => {
-    // never seen, only imported from the old site, or only on a leaderboard: no live name to check against
+    // never seen, only imported from the old site, only on a leaderboard, or only an alias: no live name to check
     await career(902, 'Imported Name', 'legacy-v2')
+    await formerName(904, 'Former Name')
 
     await control`
       INSERT INTO players.leaderboard_name_observations (brawlhalla_id, player_name, observed_at)
@@ -121,6 +156,7 @@ describe('Teammate name signals', () => {
       { brawlhallaId: 901, playerName: 'Stranger' },
       { brawlhallaId: 902, playerName: 'New Name' },
       { brawlhallaId: 903, playerName: 'New Name' },
+      { brawlhallaId: 904, playerName: 'New Name' },
     ])
 
     expect(recorded).toEqual({ recorded: 0 })

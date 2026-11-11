@@ -84,13 +84,31 @@ export async function recordTeammateNameSignals(
       SELECT brawlhalla_id, display_alias, false
       FROM players.discovery_aliases
       WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
+      UNION ALL
+      SELECT brawlhalla_id, player_name, false
+      FROM players.legacy_discovery_profiles
+      WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
+      UNION ALL
+      SELECT brawlhalla_id, display_alias, false
+      FROM players.legacy_discovery_aliases
+      WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
+      UNION ALL
+      SELECT brawlhalla_id, player_name, false
+      FROM players.legacy_profile_discovery
+      WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
+      UNION ALL
+      -- already searchable, and it waits for its own check
+      SELECT brawlhalla_id, player_name, false
+      FROM players.leaderboard_name_observations
+      WHERE brawlhalla_id = ANY(${brawlhallaIds}::integer[])
     ),
     unseen AS (
       SELECT input.brawlhalla_id, input.player_name
       FROM input
       JOIN known_names known USING (brawlhalla_id)
       GROUP BY input.brawlhalla_id, input.player_name
-      -- verification compares with a live V0 name, and a name the teammate already had is not news
+      -- verification compares with a live V0 name, and a name the teammate already had is not news: an old name
+      -- is what a stale team name carries
       HAVING bool_or(known.is_live)
         AND NOT bool_or(players.names_match(btrim(known.player_name), input.player_name))
     )
