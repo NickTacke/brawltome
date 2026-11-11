@@ -48,12 +48,19 @@ async function selectCandidates(
 
   return sql<CandidateRow[]>`
     WITH clock AS (SELECT coalesce(${policy.now ?? null}::timestamptz, clock_timestamp()) AS now),
+    -- A leaderboard name and a name read from a team name are both hints that only V0 can confirm.
+    hints AS (
+      SELECT brawlhalla_id, player_name, observed_at, previous_player_name, false AS is_team_name
+      FROM players.leaderboard_name_observations
+      UNION ALL
+      SELECT brawlhalla_id, player_name, observed_at, NULL, true FROM players.teammate_name_signals
+    ),
     observed AS (
       SELECT observation.brawlhalla_id, observation.player_name, observation.observed_at,
-             observation.previous_player_name, live.player_name AS v0_name, live.observed_at AS v0_observed_at,
-             ranked.global_rank, ranked.rating, attempt.outcome, attempt.checked_at, attempt.failures,
-             attempt.observed_at AS attempt_observed_at, clock.now
-      FROM players.leaderboard_name_observations observation
+             observation.previous_player_name, observation.is_team_name, live.player_name AS v0_name,
+             live.observed_at AS v0_observed_at, ranked.global_rank, ranked.rating, attempt.outcome,
+             attempt.checked_at, attempt.failures, attempt.observed_at AS attempt_observed_at, clock.now
+      FROM hints observation
       LEFT JOIN players.ranked_profiles ranked ON ranked.brawlhalla_id = observation.brawlhalla_id
       -- The canonical live V0 name: newest of ranked and live career, ties keep career. Either alone qualifies.
       CROSS JOIN LATERAL (
@@ -79,12 +86,16 @@ async function selectCandidates(
       SELECT *,
         CASE
           WHEN previous_player_name IS NOT NULL AND players.names_match(previous_player_name, v0_name) THEN 0
+          -- The teammate's profile was just refreshed, so this player is likely to be looked for next.
+          WHEN is_team_name THEN 0
           WHEN brawlhalla_id = ANY(${demandIds}::integer[]) THEN 1
           ELSE 2
         END AS tier
       FROM observed
       WHERE (observed_at > v0_observed_at
-          OR (outcome = 'confirmed_stale' AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
+          -- A stored team name is not read again, so only a name the leaderboard keeps showing earns a recheck.
+          OR (NOT is_team_name AND outcome = 'confirmed_stale'
+            AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
         AND NOT coalesce(CASE outcome
           WHEN 'pending' THEN checked_at > now - ${pendingHoldMs} * interval '1 millisecond'
           WHEN 'failed' THEN checked_at > now - CASE
@@ -95,12 +106,16 @@ async function selectCandidates(
               AND checked_at > now - ${policy.staleRecheckMs} * interval '1 millisecond')
           ELSE checked_at > now - ${policy.dedupeMs} * interval '1 millisecond'
         END, false)
+    ),
+    -- One name per player: checks of two names would share one operation, and one V0 call settles both.
+    chosen AS (
+      SELECT DISTINCT ON (brawlhalla_id) * FROM pending ORDER BY brawlhalla_id, tier, is_team_name
     )
     SELECT brawlhalla_id, player_name, v0_name, v0_observed_at::text, observed_at::text,
            count(*) FILTER (WHERE tier = 0) OVER ()::integer AS rename_signal,
            count(*) FILTER (WHERE tier = 1) OVER ()::integer AS demand,
            count(*) FILTER (WHERE tier = 2) OVER ()::integer AS other
-    FROM pending
+    FROM chosen
     -- Within a tier, names V1 saw change rank above mismatches present since the first observation.
     ORDER BY tier, previous_player_name IS NULL, global_rank ASC NULLS LAST, rating DESC NULLS LAST,
              v0_observed_at, brawlhalla_id
@@ -218,16 +233,18 @@ export function createPostgresPlayerNameVerifications(database: Database) {
       `
     },
 
-    // Re-checked right before the call: another V0 refresh or a newer leaderboard name may have settled it.
+    // Re-checked right before the call: another V0 refresh or a newer leaderboard or team name may have settled it.
     async prepare(brawlhallaId: number, playerName: string): Promise<NameVerificationPreparation> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
 
         const [row] = await sql<{ observed: boolean; refreshed: boolean }[]>`
-          SELECT observation.player_name IS NOT DISTINCT FROM attempt.player_name AS observed,
+          SELECT (observation.player_name IS NOT DISTINCT FROM attempt.player_name
+                   OR team_name.player_name IS NOT DISTINCT FROM attempt.player_name) AS observed,
                  coalesce(live.observed_at > attempt.v0_observed_at, false) AS refreshed
           FROM players.name_verifications attempt
           LEFT JOIN players.leaderboard_name_observations observation USING (brawlhalla_id)
+          LEFT JOIN players.teammate_name_signals team_name USING (brawlhalla_id)
           LEFT JOIN LATERAL (
             SELECT max(last_success_at) AS observed_at
             FROM (

@@ -37,7 +37,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await control`
     TRUNCATE players.ranked_profiles, players.career_profiles, players.leaderboard_name_observations,
-      players.name_verifications CASCADE
+      players.teammate_name_signals, players.name_verifications CASCADE
   `
 })
 
@@ -76,6 +76,15 @@ async function board(brawlhallaId: number, name: string, observedAt: string | Da
     ON CONFLICT (brawlhalla_id) DO UPDATE
     SET player_name = EXCLUDED.player_name, observed_at = EXCLUDED.observed_at,
       previous_player_name = EXCLUDED.previous_player_name
+  `
+}
+
+async function teamName(brawlhallaId: number, name: string, observedAt: string | Date) {
+  await control`
+    INSERT INTO players.teammate_name_signals (brawlhalla_id, player_name, profile_brawlhalla_id, observed_at)
+    VALUES (${brawlhallaId}, ${name}, 700, ${observedAt})
+    ON CONFLICT (brawlhalla_id) DO UPDATE
+    SET player_name = EXCLUDED.player_name, observed_at = EXCLUDED.observed_at
   `
 }
 
@@ -156,6 +165,57 @@ describe('Player name verification candidates', () => {
       other: 5,
     })
   })
+
+  test('checks a team name after the renames V1 saw and ahead of demand and plain mismatches', async () => {
+    const stale = '2026-06-01T00:00:00Z'
+
+    await ranked(1, 'A', stale, { rating: 2950, globalRank: 1 })
+    await board(1, 'B', '2026-10-05T00:00:00Z')
+    await ranked(2, 'A', stale, { rating: 2900, globalRank: 2 })
+    await board(2, 'B', '2026-10-05T00:00:00Z')
+    await ranked(3, 'A', stale, { rating: 1000 })
+    await board(3, 'B', '2026-10-05T00:00:00Z', 'A')
+    // unranked and not demanded: only the team name puts this player near the front
+    await ranked(4, 'A', stale, { rating: 500 })
+    await teamName(4, 'B', '2026-10-05T00:00:00Z')
+    // already refreshed since the team name was read, or the same name through mojibake: nothing to check
+    await ranked(5, 'A', '2026-10-05T06:00:00Z')
+    await teamName(5, 'B', '2026-10-05T00:00:00Z')
+    await ranked(6, 'Müller', stale)
+    await teamName(6, 'MÃ¼ller', '2026-10-05T00:00:00Z')
+
+    expect(await verifications.candidates({ ...policy, demandIds: [2] })).toEqual({
+      backlog: { rename_signal: 2, demand: 1, other: 1 },
+      candidates: [
+        { brawlhallaId: 3, playerName: 'B', v0Name: 'A' },
+        { brawlhallaId: 4, playerName: 'B', v0Name: 'A' },
+        { brawlhallaId: 2, playerName: 'B', v0Name: 'A' },
+        { brawlhallaId: 1, playerName: 'B', v0Name: 'A' },
+      ],
+    })
+  })
+
+  test('a player with a leaderboard name and a team name gets one check', async () => {
+    const stale = '2026-06-01T00:00:00Z'
+
+    // the two disagree: the team name has the better tier, and one V0 call settles both
+    await ranked(1, 'A', stale)
+    await board(1, 'Cached', '2026-10-05T00:00:00Z')
+    await teamName(1, 'B', '2026-10-05T00:00:00Z')
+    // the two agree
+    await ranked(2, 'A', stale)
+    await board(2, 'B', '2026-10-05T00:00:00Z')
+    await teamName(2, 'B', '2026-10-05T00:00:00Z')
+
+    expect(await verifications.claim(policy)).toEqual({
+      backlog: { rename_signal: 2, demand: 0, other: 0 },
+      usedInWindow: 0,
+      claimed: [
+        { brawlhallaId: 1, playerName: 'B', v0Name: 'A' },
+        { brawlhallaId: 2, playerName: 'B', v0Name: 'A' },
+      ],
+    })
+  })
 })
 
 describe('Player name verification suppression', () => {
@@ -183,6 +243,20 @@ describe('Player name verification suppression', () => {
     await attempt(5, 'Cached', ago(10 * dayMs), 'confirmed_stale', { observedAt })
 
     expect(await ids()).toEqual([2, 3, 4])
+  })
+
+  test('a team name V0 confirmed stale is not rechecked until a team shows another name', async () => {
+    const observedAt = '2026-08-01T00:00:00Z'
+
+    // a stored team name is not looked at again, so the 60 day recheck of leaderboard names does not apply
+    await ranked(1, 'Old', ago(61 * dayMs))
+    await teamName(1, 'Team Half', observedAt)
+    await attempt(1, 'Team Half', ago(61 * dayMs), 'confirmed_stale', { observedAt })
+    await ranked(2, 'Old', ago(61 * dayMs))
+    await teamName(2, 'Another Half', ago(dayMs))
+    await attempt(2, 'Team Half', ago(61 * dayMs), 'confirmed_stale', { observedAt })
+
+    expect(await ids()).toEqual([2])
   })
 
   test('failed checks back off for 1h, 6h, then 24h; pending claims hold for a day', async () => {
@@ -337,6 +411,24 @@ describe('Player name verification claims', () => {
     ])
 
     expect((await verifications.claim(policy)).usedInWindow).toBe(1)
+  })
+
+  test('a claim for a team name stays needed while a team name still shows it', async () => {
+    await ranked(1, 'Old', '2026-06-01T00:00:00Z')
+    await teamName(1, 'New', '2026-10-05T00:00:00Z')
+    await ranked(2, 'Old', '2026-06-01T00:00:00Z')
+    await teamName(2, 'New', '2026-10-05T00:00:00Z')
+    // a cached leaderboard name beside the team name does not make the claim obsolete
+    await ranked(3, 'Old', '2026-06-01T00:00:00Z')
+    await board(3, 'Old', '2026-10-04T00:00:00Z')
+    await teamName(3, 'New', '2026-10-05T00:00:00Z')
+    expect((await verifications.claim(policy)).claimed).toHaveLength(3)
+
+    await teamName(2, 'Newer', '2026-10-05T11:00:00Z')
+
+    expect(await verifications.prepare(1, 'New')).toEqual({ state: 'needed' })
+    expect(await verifications.prepare(2, 'New')).toEqual({ state: 'obsolete' })
+    expect(await verifications.prepare(3, 'New')).toEqual({ state: 'needed' })
   })
 
   test('leaderboard scans remember the name a player was seen with before a change', async () => {
