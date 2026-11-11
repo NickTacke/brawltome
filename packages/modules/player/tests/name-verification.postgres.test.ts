@@ -231,6 +231,27 @@ describe('Player name verification candidates', () => {
       ],
     })
   })
+
+  test('a player with a claim in flight is not claimed again for another name', async () => {
+    const stale = '2026-06-01T00:00:00Z'
+
+    await ranked(1, 'A', stale)
+    await board(1, 'Cached', '2026-10-05T00:00:00Z')
+    await teamName(1, 'B', '2026-10-05T00:00:00Z')
+    await ranked(2, 'A', stale)
+    await board(2, 'B', '2026-10-05T00:00:00Z')
+
+    expect((await verifications.claim({ ...policy, perWindow: 1 })).claimed).toEqual([
+      { brawlhallaId: 1, playerName: 'B', v0Name: 'A' },
+    ])
+
+    // the operation for "B" is still queued: a claim for "Cached" would find it active and hold a slot for a day
+    expect(await verifications.claim(policy)).toEqual({
+      backlog: { rename_signal: 0, demand: 0, team_name: 0, other: 1 },
+      usedInWindow: 1,
+      claimed: [{ brawlhallaId: 2, playerName: 'B', v0Name: 'A' }],
+    })
+  })
 })
 
 describe('Player name verification suppression', () => {

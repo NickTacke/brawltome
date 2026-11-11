@@ -99,8 +99,16 @@ async function selectCandidates(
           -- The leaderboard is known to still show its name. A team name has to be seen again after the V0 refresh.
           OR (NOT is_team_name AND outcome = 'confirmed_stale'
             AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
+        -- A claim in flight holds the whole player: a claim for another name would find the operation active,
+        -- stay unexecuted and keep a slot of the window until it expires.
+        AND NOT EXISTS (
+          SELECT 1 FROM players.name_verifications held
+          WHERE held.brawlhalla_id = observed.brawlhalla_id AND held.outcome = 'pending'
+            AND held.checked_at > now - ${pendingHoldMs} * interval '1 millisecond'
+        )
         AND NOT coalesce(CASE outcome
-          WHEN 'pending' THEN checked_at > now - ${pendingHoldMs} * interval '1 millisecond'
+          -- Only an abandoned claim gets here.
+          WHEN 'pending' THEN false
           WHEN 'failed' THEN checked_at > now - CASE
             WHEN failures <= 1 THEN interval '1 hour' WHEN failures = 2 THEN interval '6 hours' ELSE interval '1 day'
           END
