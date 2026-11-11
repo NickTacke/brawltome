@@ -182,13 +182,11 @@ describe('A teammate renamed since their last refresh', () => {
     expect(await names('teacup')).toEqual([])
     expect(await names('kettle drum')).toEqual(['Kettle Drum'])
 
-    // a second visit with the same teams changes nothing
-    const signalWrittenAt = await control`SELECT xmin::text, observed_at FROM players.teammate_name_signals`
-
+    // a second visit with the same teams keeps the one signal, and later the one check
     await visit(operations, visitedPayload)
 
-    expect([...(await control`SELECT xmin::text, observed_at FROM players.teammate_name_signals`)]).toEqual([
-      ...signalWrittenAt,
+    expect(await signals()).toEqual([
+      { brawlhalla_id: teammateId, player_name: 'Teacup', profile_brawlhalla_id: visitedId },
     ])
 
     const sourceAdmission = createPostgresRequestAdmission(database, {
