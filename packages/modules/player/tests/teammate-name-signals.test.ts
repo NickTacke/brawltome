@@ -32,6 +32,18 @@ describe('Teammate names in 2v2 team names', () => {
     expect(read([team(ownerId, 801, 'Owner+Second')], null)).toEqual([])
   })
 
+  test('ignores spaces around either half and stores the name without them', () => {
+    expect(read([team(ownerId, 801, 'Owner + Second '), team(802, ownerId, ' First+Owner')], ' Owner ')).toEqual([
+      { brawlhallaId: 801, playerName: 'Second' },
+      { brawlhallaId: 802, playerName: 'First' },
+    ])
+  })
+
+  test('keeps a no-break space, which is half of a letter in a mojibake name', () => {
+    // "à" arrives as "Ã" followed by U+00A0
+    expect(read([team(ownerId, 801, 'Owner+PapÃ\u00a0')])).toEqual([{ brawlhallaId: 801, playerName: 'PapÃ\u00a0' }])
+  })
+
   test('keeps a mojibake name as the source spelled it', () => {
     expect(read([team(ownerId, 801, 'MÃ¼ller+JosÃ©')], 'MÃ¼ller')).toEqual([{ brawlhallaId: 801, playerName: 'JosÃ©' }])
   })

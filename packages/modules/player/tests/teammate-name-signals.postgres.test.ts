@@ -88,7 +88,7 @@ describe('Teammate name signals', () => {
   test('a name we already hold for the teammate records nothing', async () => {
     await ranked(801, 'Same Name')
     await ranked(802, 'Müller')
-    await ranked(803, 'Padded')
+    await ranked(803, ' Padded ')
     // ranked and career can disagree; either one is a name we hold
     await ranked(804, 'Ranked Name')
     await career(804, 'Career Name', 'v0-player-snapshot')
@@ -99,7 +99,7 @@ describe('Teammate name signals', () => {
     const recorded = await record([
       { brawlhallaId: 801, playerName: 'Same Name' },
       { brawlhallaId: 802, playerName: 'MÃ¼ller' },
-      { brawlhallaId: 803, playerName: ' Padded ' },
+      { brawlhallaId: 803, playerName: 'Padded' },
       { brawlhallaId: 804, playerName: 'Career Name' },
       { brawlhallaId: 805, playerName: 'Former Name' },
     ])

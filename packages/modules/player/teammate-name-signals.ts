@@ -10,9 +10,15 @@ type TeamNameSource = Pick<V0RankedSnapshot, 'brawlhallaId' | 'name'> & { fixedT
 // a player has up to a few dozen teams; the cap keeps a refresh to one bounded write
 export const maxTeammateNamesPerRefresh = 50
 
+// plain spaces only, the same as btrim in the query below. trim() also removes U+00A0, which is the second half of
+// a letter in a mojibake name ("à" arrives as "Ã" and U+00A0)
+function trimSpaces(value: string): string {
+  return value.replace(/^ +| +$/g, '')
+}
+
 // V0 names a team "One+Two", in the order of brawlhalla_id_one and brawlhalla_id_two
 function teammateNameIn(team: NamedTeam, ownerId: number, ownerName: string): TeammateName | null {
-  const halves = team.teamName.split('+')
+  const halves = team.teamName.split('+').map(trimSpaces)
 
   // a name can contain "+", and then nothing says where one name ends
   if (halves.length !== 2) return null
@@ -22,7 +28,7 @@ function teammateNameIn(team: NamedTeam, ownerId: number, ownerName: string): Te
   const teammateHalf = halves[isOwnerFirst ? 1 : 0]
 
   // the same response names the owner: a team name that disagrees about them is not trusted about the teammate
-  if (ownerHalf.trim() !== ownerName.trim()) return null
+  if (ownerHalf !== ownerName) return null
 
   const brawlhallaId = isOwnerFirst ? team.brawlhallaIdTwo : team.brawlhallaIdOne
 
@@ -32,7 +38,7 @@ function teammateNameIn(team: NamedTeam, ownerId: number, ownerName: string): Te
 }
 
 export function readTeammateNames(snapshot: TeamNameSource): TeammateName[] {
-  const ownerName = snapshot.name
+  const ownerName = trimSpaces(snapshot.name ?? '')
 
   if (!ownerName) return []
 
@@ -86,7 +92,7 @@ export async function recordTeammateNameSignals(
       GROUP BY input.brawlhalla_id, input.player_name
       -- verification compares with a live V0 name, and a name the teammate already had is not news
       HAVING bool_or(known.is_live)
-        AND NOT bool_or(players.names_match(btrim(known.player_name), btrim(input.player_name)))
+        AND NOT bool_or(players.names_match(btrim(known.player_name), input.player_name))
     )
     INSERT INTO players.teammate_name_signals AS current
       (brawlhalla_id, player_name, profile_brawlhalla_id, observed_at)
