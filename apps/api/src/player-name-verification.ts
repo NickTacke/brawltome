@@ -20,7 +20,7 @@ import type { SourceDomain } from '@brawltome/request-admission'
 import type { Telemetry } from '@brawltome/telemetry'
 
 // V1 leaderboard names can be stale upstream caches or newer than a months-old V0 name. A capped trickle of
-// V0 ranked calls settles which, and only while V0 is quiet, so it never competes with users for the budget.
+// V0 ranked calls settles which. It stops when visitors push V0 usage up, so it never competes with them.
 
 export type PlayerNameVerificationConfig = {
   // Kill switch at 0.
@@ -55,7 +55,13 @@ export function readPlayerNameVerificationConfig(env: NodeJS.ProcessEnv): Player
       minimum: 0,
       maximum: 150,
     }),
-    maxUsageRatio: ratio(env.PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO, 0.4, 'PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO'),
+    // Above the freshness planner's cap (0.5) plus this trickle: that planner holds usage at its cap all day, so a
+    // lower cap here was open about 1% of the time and renamed players waited days to be found by their new name.
+    maxUsageRatio: ratio(
+      env.PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO,
+      0.65,
+      'PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO',
+    ),
     dedupeMs:
       parseBoundedInteger(env.PLAYER_NAME_VERIFICATION_DEDUPE_DAYS, {
         name: 'PLAYER_NAME_VERIFICATION_DEDUPE_DAYS',
