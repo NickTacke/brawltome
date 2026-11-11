@@ -163,21 +163,23 @@ describe('Teammate name signals', () => {
     expect(await signals()).toEqual([])
   })
 
-  test('a second identical refresh adds nothing, a different name replaces the signal', async () => {
+  test('a player keeps one signal: the newest refresh sets its name and when it was seen', async () => {
+    const thirdVisit = new Date('2026-10-05T14:00:00Z')
+
     await ranked(801, 'Old Name')
 
     await record([{ brawlhallaId: 801, playerName: 'New Name' }])
 
-    expect(await record([{ brawlhallaId: 801, playerName: 'New Name' }], secondVisit)).toEqual({ recorded: 0 })
-    expect(await signals()).toMatchObject([{ player_name: 'New Name', observed_at: firstVisit }])
+    // the same name again only moves the time, so a later check can tell it is still being shown
+    expect(await record([{ brawlhallaId: 801, playerName: 'New Name' }], secondVisit)).toEqual({ recorded: 1 })
+    expect(await signals()).toMatchObject([{ player_name: 'New Name', observed_at: secondVisit }])
 
     // an older refresh that lands late never overwrites a newer signal
-    expect(await record([{ brawlhallaId: 801, playerName: 'Late Name' }], new Date(lastRefresh))).toEqual({
-      recorded: 0,
-    })
+    expect(await record([{ brawlhallaId: 801, playerName: 'Late Name' }], firstVisit)).toEqual({ recorded: 0 })
+    expect(await record([{ brawlhallaId: 801, playerName: 'New Name' }], secondVisit)).toEqual({ recorded: 0 })
 
-    expect(await record([{ brawlhallaId: 801, playerName: 'Newer Name' }], secondVisit)).toEqual({ recorded: 1 })
-    expect(await signals()).toMatchObject([{ player_name: 'Newer Name', observed_at: secondVisit }])
+    expect(await record([{ brawlhallaId: 801, playerName: 'Newer Name' }], thirdVisit)).toEqual({ recorded: 1 })
+    expect(await signals()).toMatchObject([{ player_name: 'Newer Name', observed_at: thirdVisit }])
   })
 
   test('a leaderboard scan and a team name keep their own observation of the same player', async () => {

@@ -10,7 +10,8 @@ export type NameVerificationPolicy = {
   windowMs: number
   // Minimum gap between checks of one (player, leaderboard name) pair.
   dedupeMs: number
-  // A name V0 confirmed stale is rechecked after this long while the leaderboard keeps showing it.
+  // A name V0 confirmed stale is rechecked after this long while the leaderboard keeps showing it, or once a team
+  // name shows it again.
   staleRecheckMs: number
   // Pinned and Primary Players.
   demandIds?: readonly number[]
@@ -93,7 +94,7 @@ async function selectCandidates(
         END AS tier
       FROM observed
       WHERE (observed_at > v0_observed_at
-          -- A stored team name is not read again, so only a name the leaderboard keeps showing earns a recheck.
+          -- The leaderboard is known to still show its name. A team name has to be seen again after the V0 refresh.
           OR (NOT is_team_name AND outcome = 'confirmed_stale'
             AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
         AND NOT coalesce(CASE outcome
@@ -102,7 +103,9 @@ async function selectCandidates(
             WHEN failures <= 1 THEN interval '1 hour' WHEN failures = 2 THEN interval '6 hours' ELSE interval '1 day'
           END
           WHEN 'confirmed_stale' THEN checked_at > now - ${policy.dedupeMs} * interval '1 millisecond'
-            OR (attempt_observed_at = observed_at
+            -- A team name's observation moves with every refresh of a teammate, and two teammates with different
+            -- old names swap it back and forth, so for a team name the attempt alone is the memory.
+            OR ((is_team_name OR attempt_observed_at = observed_at)
               AND checked_at > now - ${policy.staleRecheckMs} * interval '1 millisecond')
           ELSE checked_at > now - ${policy.dedupeMs} * interval '1 millisecond'
         END, false)

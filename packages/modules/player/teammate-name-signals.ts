@@ -121,9 +121,9 @@ export async function recordTeammateNameSignals(
       player_name = EXCLUDED.player_name,
       profile_brawlhalla_id = EXCLUDED.profile_brawlhalla_id,
       observed_at = EXCLUDED.observed_at
-    -- the same name again must not look like a new observation, or every refresh would ask for another check
+    -- the same name again moves the time: verification remembers what V0 disproved, and after its recheck time
+    -- it checks a name only if a team name still showed it since the last V0 refresh
     WHERE current.observed_at < EXCLUDED.observed_at
-      AND NOT players.names_match(current.player_name, EXCLUDED.player_name)
     RETURNING brawlhalla_id
   `
 

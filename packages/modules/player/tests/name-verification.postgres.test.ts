@@ -245,18 +245,55 @@ describe('Player name verification suppression', () => {
     expect(await ids()).toEqual([2, 3, 4])
   })
 
-  test('a team name V0 confirmed stale is not rechecked until a team shows another name', async () => {
-    const observedAt = '2026-08-01T00:00:00Z'
+  test('two stale team names that take turns cost one check each, then none until the recheck time', async () => {
+    const start = new Date('2026-06-01T00:00:00Z')
+    const day = (days: number) => new Date(start.getTime() + days * dayMs)
 
-    // a stored team name is not looked at again, so the 60 day recheck of leaderboard names does not apply
+    const claimedOn = async (days: number) =>
+      (await verifications.claim({ ...policy, now: day(days) })).claimed.map(({ playerName }) => playerName)
+
+    // V0 keeps answering with the old name
+    const disprove = async (name: string, days: number) => {
+      await ranked(1, 'Old', day(days))
+      await verifications.recordChecked(1, name)
+    }
+
+    await ranked(1, 'Old', day(0))
+    await teamName(1, 'First Half', day(1))
+    expect(await claimedOn(1)).toEqual(['First Half'])
+    await disprove('First Half', 1)
+    await teamName(1, 'Second Half', day(2))
+    expect(await claimedOn(2)).toEqual(['Second Half'])
+    await disprove('Second Half', 2)
+
+    // each refresh of one of the two teammates flips the signal, also after the 14 day dedupe
+    const flips: [string, number][] = [
+      ['First Half', 3],
+      ['Second Half', 17],
+      ['First Half', 18],
+      ['Second Half', 32],
+      ['First Half', 60],
+    ]
+
+    for (const [name, days] of flips) {
+      await teamName(1, name, day(days))
+      expect(await claimedOn(days)).toEqual([])
+    }
+
+    // 60 days after its check, a name that is still being shown is checked again: by then it may be true
+    await teamName(1, 'First Half', day(62))
+    expect(await claimedOn(62)).toEqual(['First Half'])
+  })
+
+  test('a disproved team name that no refresh shows again is left alone', async () => {
+    const observedAt = ago(62 * dayMs)
+
+    // unlike a leaderboard name, a stored team name says nothing about today
     await ranked(1, 'Old', ago(61 * dayMs))
     await teamName(1, 'Team Half', observedAt)
     await attempt(1, 'Team Half', ago(61 * dayMs), 'confirmed_stale', { observedAt })
-    await ranked(2, 'Old', ago(61 * dayMs))
-    await teamName(2, 'Another Half', ago(dayMs))
-    await attempt(2, 'Team Half', ago(61 * dayMs), 'confirmed_stale', { observedAt })
 
-    expect(await ids()).toEqual([2])
+    expect(await ids()).toEqual([])
   })
 
   test('failed checks back off for 1h, 6h, then 24h; pending claims hold for a day', async () => {
