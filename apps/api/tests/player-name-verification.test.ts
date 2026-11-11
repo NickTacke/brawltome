@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NameVerificationPreparation } from '@brawltome/player'
 import { SourceAdmissionLimitedError } from '@brawltome/queue'
 import { createTelemetry } from '@brawltome/telemetry'
+import { readFreshnessPlannerConfig } from '../src/freshness-planner'
 import {
   createPlayerNameVerificationPlanner,
   executePlayerNameVerification,
@@ -69,10 +70,10 @@ function plannerFixture(options: { usage?: () => number; perWindow?: number } = 
 }
 
 describe('player name verification config', () => {
-  test('defaults to 24 checks per window below 40% V0 usage', () => {
+  test('defaults to 24 checks per window below 65% V0 usage', () => {
     expect(config).toEqual({
       perWindow: 24,
-      maxUsageRatio: 0.4,
+      maxUsageRatio: 0.65,
       dedupeMs: 14 * 24 * 60 * 60 * 1000,
       staleRecheckMs: 60 * 24 * 60 * 60 * 1000,
       intervalMs: 60_000,
@@ -92,6 +93,15 @@ describe('player name verification config', () => {
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_PER_WINDOW: '151' })).toThrow()
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO: '0' })).toThrow()
     expect(() => readPlayerNameVerificationConfig({ PLAYER_NAME_VERIFICATION_MAX_USAGE_RATIO: '1.5' })).toThrow()
+  })
+
+  // the freshness planner keeps v0 usage at its own cap all day, so a lower cap here would never open
+  test('stays open while the freshness planner holds usage at its cap', () => {
+    const freshnessCap = readFreshnessPlannerConfig({}).maxUsageRatio
+    const usageHeldByFreshness = { used: Math.floor(180 * freshnessCap) + config.perWindow - 1, limit: 180 }
+
+    expect(config.maxUsageRatio).toBeGreaterThan(freshnessCap)
+    expect(sourceBudgetOpen(usageHeldByFreshness, config.maxUsageRatio)).toBe(true)
   })
 
   test('the source budget is open only below the usage ratio', () => {
@@ -172,13 +182,13 @@ describe('player name verification planner', () => {
   })
 
   test('stops above the usage ratio and resumes once V0 is quiet again', async () => {
-    let used = 72
+    let used = 117
     const { planner, calls, telemetry, advance } = plannerFixture({ usage: () => used })
 
     expect(await planner.tick()).toBe(0)
     expect(calls.claim).toEqual([])
     expect(counters(telemetry)).toEqual({ skipped_budget: 1 })
-    used = 71
+    used = 116
     advance(60_000)
     expect(await planner.tick()).toBe(1)
     expect(calls.claim).toHaveLength(1)
@@ -255,7 +265,7 @@ describe('player name verification execution', () => {
   })
 
   test('re-checks the usage ratio right before every call and releases the claim', async () => {
-    let used = 100
+    let used = 130
     const { run, calls, telemetry } = executionFixture({ usage: () => used })
 
     expect(await run()).toBe('skipped_budget')
