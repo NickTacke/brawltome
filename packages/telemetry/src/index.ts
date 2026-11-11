@@ -335,13 +335,13 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   },
   player_name_verifications_total: {
     kind: 'counter',
-    help: 'Budget-capped V0 checks of leaderboard player names',
+    help: 'Budget-capped V0 checks of leaderboard and team names',
     labels: { outcome: ['renamed', 'unchanged', 'failed', 'skipped_budget', 'resolved_free'] },
   },
   player_name_verification_backlog: {
     kind: 'gauge',
-    help: 'Players whose newer leaderboard name awaits V0 verification',
-    labels: { tier: ['rename_signal', 'demand', 'other'] },
+    help: 'Players whose newer leaderboard or team name awaits V0 verification',
+    labels: { tier: ['rename_signal', 'demand', 'team_name', 'other'] },
   },
   freshness_refreshes_total: {
     kind: 'counter',

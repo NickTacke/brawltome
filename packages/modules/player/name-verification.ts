@@ -1,7 +1,7 @@
 import type { Database, Sql } from '@brawltome/foundation'
 
 export type NameVerificationCandidate = { brawlhallaId: number; playerName: string; v0Name: string }
-export type NameVerificationBacklog = { rename_signal: number; demand: number; other: number }
+export type NameVerificationBacklog = { rename_signal: number; demand: number; team_name: number; other: number }
 
 export type NameVerificationPolicy = {
   // Defaults to the database clock.
@@ -10,7 +10,8 @@ export type NameVerificationPolicy = {
   windowMs: number
   // Minimum gap between checks of one (player, leaderboard name) pair.
   dedupeMs: number
-  // A name V0 confirmed stale is rechecked after this long while the leaderboard keeps showing it.
+  // A name V0 confirmed stale is rechecked after this long while the leaderboard keeps showing it, or once a team
+  // name shows it again.
   staleRecheckMs: number
   // Pinned and Primary Players.
   demandIds?: readonly number[]
@@ -31,10 +32,11 @@ type CandidateRow = {
   observed_at: string
   rename_signal: number
   demand: number
+  team_name: number
   other: number
 }
 
-const emptyBacklog: NameVerificationBacklog = { rename_signal: 0, demand: 0, other: 0 }
+const emptyBacklog: NameVerificationBacklog = { rename_signal: 0, demand: 0, team_name: 0, other: 0 }
 // Unspent claims outlive any queue delay; failed checks retry after 1h, 6h, then daily.
 const pendingHoldMs = 24 * 60 * 60 * 1000
 
@@ -48,12 +50,19 @@ async function selectCandidates(
 
   return sql<CandidateRow[]>`
     WITH clock AS (SELECT coalesce(${policy.now ?? null}::timestamptz, clock_timestamp()) AS now),
+    -- A leaderboard name and a name read from a team name are both hints that only V0 can confirm.
+    hints AS (
+      SELECT brawlhalla_id, player_name, observed_at, previous_player_name, false AS is_team_name
+      FROM players.leaderboard_name_observations
+      UNION ALL
+      SELECT brawlhalla_id, player_name, observed_at, NULL, true FROM players.teammate_name_signals
+    ),
     observed AS (
       SELECT observation.brawlhalla_id, observation.player_name, observation.observed_at,
-             observation.previous_player_name, live.player_name AS v0_name, live.observed_at AS v0_observed_at,
-             ranked.global_rank, ranked.rating, attempt.outcome, attempt.checked_at, attempt.failures,
-             attempt.observed_at AS attempt_observed_at, clock.now
-      FROM players.leaderboard_name_observations observation
+             observation.previous_player_name, observation.is_team_name, live.player_name AS v0_name,
+             live.observed_at AS v0_observed_at, ranked.global_rank, ranked.rating, attempt.outcome,
+             attempt.checked_at, attempt.failures, attempt.observed_at AS attempt_observed_at, clock.now
+      FROM hints observation
       LEFT JOIN players.ranked_profiles ranked ON ranked.brawlhalla_id = observation.brawlhalla_id
       -- The canonical live V0 name: newest of ranked and live career, ties keep career. Either alone qualifies.
       CROSS JOIN LATERAL (
@@ -80,27 +89,47 @@ async function selectCandidates(
         CASE
           WHEN previous_player_name IS NOT NULL AND players.names_match(previous_player_name, v0_name) THEN 0
           WHEN brawlhalla_id = ANY(${demandIds}::integer[]) THEN 1
-          ELSE 2
+          -- The teammate's profile was just refreshed, so this player is likely to be looked for next. Most team
+          -- names that differ are old names though, so they wait behind the players someone asked for.
+          WHEN is_team_name THEN 2
+          ELSE 3
         END AS tier
       FROM observed
       WHERE (observed_at > v0_observed_at
-          OR (outcome = 'confirmed_stale' AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
+          -- The leaderboard is known to still show its name. A team name has to be seen again after the V0 refresh.
+          OR (NOT is_team_name AND outcome = 'confirmed_stale'
+            AND checked_at <= now - ${policy.staleRecheckMs} * interval '1 millisecond'))
+        -- A claim in flight holds the whole player: a claim for another name would find the operation active,
+        -- stay unexecuted and keep a slot of the window until it expires.
+        AND NOT EXISTS (
+          SELECT 1 FROM players.name_verifications held
+          WHERE held.brawlhalla_id = observed.brawlhalla_id AND held.outcome = 'pending'
+            AND held.checked_at > now - ${pendingHoldMs} * interval '1 millisecond'
+        )
         AND NOT coalesce(CASE outcome
-          WHEN 'pending' THEN checked_at > now - ${pendingHoldMs} * interval '1 millisecond'
+          -- Only an abandoned claim gets here.
+          WHEN 'pending' THEN false
           WHEN 'failed' THEN checked_at > now - CASE
             WHEN failures <= 1 THEN interval '1 hour' WHEN failures = 2 THEN interval '6 hours' ELSE interval '1 day'
           END
           WHEN 'confirmed_stale' THEN checked_at > now - ${policy.dedupeMs} * interval '1 millisecond'
-            OR (attempt_observed_at = observed_at
+            -- A team name's observation moves with every refresh of a teammate, and two teammates with different
+            -- old names swap it back and forth, so for a team name the attempt alone is the memory.
+            OR ((is_team_name OR attempt_observed_at = observed_at)
               AND checked_at > now - ${policy.staleRecheckMs} * interval '1 millisecond')
           ELSE checked_at > now - ${policy.dedupeMs} * interval '1 millisecond'
         END, false)
+    ),
+    -- One name per player: checks of two names would share one operation, and one V0 call settles both.
+    chosen AS (
+      SELECT DISTINCT ON (brawlhalla_id) * FROM pending ORDER BY brawlhalla_id, tier, is_team_name
     )
     SELECT brawlhalla_id, player_name, v0_name, v0_observed_at::text, observed_at::text,
            count(*) FILTER (WHERE tier = 0) OVER ()::integer AS rename_signal,
            count(*) FILTER (WHERE tier = 1) OVER ()::integer AS demand,
-           count(*) FILTER (WHERE tier = 2) OVER ()::integer AS other
-    FROM pending
+           count(*) FILTER (WHERE tier = 2) OVER ()::integer AS team_name,
+           count(*) FILTER (WHERE tier = 3) OVER ()::integer AS other
+    FROM chosen
     -- Within a tier, names V1 saw change rank above mismatches present since the first observation.
     ORDER BY tier, previous_player_name IS NULL, global_rank ASC NULLS LAST, rating DESC NULLS LAST,
              v0_observed_at, brawlhalla_id
@@ -111,7 +140,9 @@ async function selectCandidates(
 function backlogOf(rows: CandidateRow[]): NameVerificationBacklog {
   const [row] = rows
 
-  return row ? { rename_signal: row.rename_signal, demand: row.demand, other: row.other } : { ...emptyBacklog }
+  if (!row) return { ...emptyBacklog }
+
+  return { rename_signal: row.rename_signal, demand: row.demand, team_name: row.team_name, other: row.other }
 }
 
 const toCandidate = (row: CandidateRow): NameVerificationCandidate => ({
@@ -218,16 +249,18 @@ export function createPostgresPlayerNameVerifications(database: Database) {
       `
     },
 
-    // Re-checked right before the call: another V0 refresh or a newer leaderboard name may have settled it.
+    // Re-checked right before the call: another V0 refresh or a newer leaderboard or team name may have settled it.
     async prepare(brawlhallaId: number, playerName: string): Promise<NameVerificationPreparation> {
       return client.begin(async (transaction) => {
         const sql = transaction as unknown as Sql
 
         const [row] = await sql<{ observed: boolean; refreshed: boolean }[]>`
-          SELECT observation.player_name IS NOT DISTINCT FROM attempt.player_name AS observed,
+          SELECT (observation.player_name IS NOT DISTINCT FROM attempt.player_name
+                   OR team_name.player_name IS NOT DISTINCT FROM attempt.player_name) AS observed,
                  coalesce(live.observed_at > attempt.v0_observed_at, false) AS refreshed
           FROM players.name_verifications attempt
           LEFT JOIN players.leaderboard_name_observations observation USING (brawlhalla_id)
+          LEFT JOIN players.teammate_name_signals team_name USING (brawlhalla_id)
           LEFT JOIN LATERAL (
             SELECT max(last_success_at) AS observed_at
             FROM (

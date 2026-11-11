@@ -12,7 +12,7 @@ import {
 
 const config = readPlayerNameVerificationConfig({})
 const candidate = { brawlhallaId: 7, playerName: 'New', v0Name: 'Old' }
-const backlog = { rename_signal: 2, demand: 3, other: 40 }
+const backlog = { rename_signal: 2, demand: 3, team_name: 5, other: 40 }
 
 function metric(telemetry: ReturnType<typeof createTelemetry>, name: string, label: string) {
   const found = telemetry.metrics.snapshot().find((item) => item.name === name)

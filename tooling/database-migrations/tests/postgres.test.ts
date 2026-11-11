@@ -330,8 +330,10 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
 
     await admin.unsafe(`CREATE DATABASE "${databaseName}"`)
     try {
-      // the migrations that move tables out of the queue need its migrations too, and this test loads only Players
-      const playerMigrations = playerModule.migrations.filter((migration: Migration) => !migration.requires?.length)
+      // the migrations that move tables out of the queue need its migrations too, and this test loads only Players,
+      // so it stops before the first of them: every later migration is built on it
+      const firstNeedingQueue = playerModule.migrations.findIndex((migration: Migration) => migration.requires?.length)
+      const playerMigrations = playerModule.migrations.slice(0, firstNeedingQueue)
 
       expect(await migratePostgres(databaseUrl.toString(), playerMigrations.slice(0, 2))).toBe(2)
 

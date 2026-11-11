@@ -3,6 +3,7 @@ import { legendSlug } from '@brawltome/game-data'
 import { getLegendById } from '@brawltome/game-data/legends'
 import { acquireActiveLease, commitInteractiveSection } from '@brawltome/queue'
 import { selectCanonicalPlayerName } from '../reference'
+import { readTeammateNames, recordTeammateNameSignals } from '../teammate-name-signals'
 import {
   deriveObservedRatingDirection,
   type MainLegend,
@@ -874,6 +875,12 @@ export function createPostgresRankedPlayers(
             )}
           `
         }
+
+        await recordTeammateNameSignals(sql, {
+          profileBrawlhallaId: snapshot.brawlhallaId,
+          observedAt,
+          names: readTeammateNames(snapshot),
+        })
 
         if (one.rating > 0) {
           const [last] = await sql<{ rating: number; games: number }[]>`
