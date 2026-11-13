@@ -4,6 +4,7 @@ import { createReplays } from './migrations/0001-create-replays'
 export * from './keys'
 export * from './limits'
 export type { ReplaysDeps } from './model'
+export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
 const migrations = [createReplays] as const
 
