@@ -73,3 +73,27 @@ export async function cleanupReplayFiles(deps: ReplaysDeps, now: Date): Promise<
 
   return expired.length
 }
+
+export type ReplayQueueInspection = {
+  jobsByStatus: Record<'pending' | 'processing' | 'completed' | 'failed', number>
+  // 0 when nothing waits
+  oldestPendingAgeMs: number
+}
+
+/** What /metrics reports about the replay queue. */
+export async function inspectReplayQueue(sql: Sql): Promise<ReplayQueueInspection> {
+  const counts = await sql<{ status: keyof ReplayQueueInspection['jobsByStatus']; count: number }[]>`
+    SELECT status, count(*)::int AS count FROM replays.jobs GROUP BY status
+  `
+
+  const [oldest] = await sql<{ ageMs: number | null }[]>`
+    SELECT (extract(epoch FROM clock_timestamp() - min(created_at)) * 1000)::bigint AS "ageMs"
+    FROM replays.jobs WHERE status = 'pending'
+  `
+
+  const jobsByStatus = { pending: 0, processing: 0, completed: 0, failed: 0 }
+
+  for (const { status, count } of counts) jobsByStatus[status] = count
+
+  return { jobsByStatus, oldestPendingAgeMs: Number(oldest?.ageMs ?? 0) }
+}

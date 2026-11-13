@@ -69,6 +69,8 @@ export type MetricName =
   | 'operation_claim_duration_ms'
   | 'operation_oldest_pending_age_ms'
   | 'operation_dead_letters'
+  | 'replay_jobs'
+  | 'replay_oldest_pending_age_ms'
   | 'schedule_lateness_ms'
   | 'schedule_materializations_total'
   | 'schedule_missed_windows_total'
@@ -267,6 +269,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     help: 'Current unresolved durable dead letters',
     labels: { work_class: workClass, kind: operationKind, reason: ['execution', 'admission_rejected'] },
   },
+  replay_jobs: {
+    kind: 'gauge',
+    help: 'Replay parse jobs by status',
+    labels: { status: ['pending', 'processing', 'completed', 'failed'] },
+  },
+  replay_oldest_pending_age_ms: { kind: 'gauge', help: 'Age of the oldest replay waiting to be parsed', labels: {} },
   schedule_lateness_ms: { kind: 'gauge', help: 'Maximum current schedule lateness', labels: { kind: operationKind } },
   schedule_materializations_total: {
     kind: 'counter',

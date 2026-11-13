@@ -137,6 +137,11 @@ services:
       # idle connections after 60 s; the pool sizes and application names are in apps/api/src/database-pools.ts.
       PGIDLE_TIMEOUT: "60"
       PORT: "3000"
+      # replay files and timelines; the key pair is limited to this bucket and to this server's address
+      R2_BUCKET: brawltome-replays
+      R2_ENDPOINT: https://75bca8c1b0af15912e4f9efdbde6ec32.r2.cloudflarestorage.com
+      # accounts that may upload any replay, for testing; Nick's
+      REPLAY_OPERATOR_ACCOUNTS: 14b22ce8-bb52-4181-a5de-dcc1349c5b70
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
       RUNTIME_SHUTDOWN_ANNOUNCE_MS: "5000"
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
@@ -154,7 +159,10 @@ services:
       - internal_api_secret
       - metrics_scrape_secret
       - otel_authorization
+      - r2_access_key_id
+      - r2_secret_access_key
       - refresh_trust_cookie_secret
+      - replay_worker_token
       - turnstile_secret_key
     networks:
       - application
@@ -516,9 +524,18 @@ secrets:
   postgres_runtime_password:
     name: brawltome_postgres_runtime_password
     file: /var/lib/brawltome-secrets/postgres-runtime-password
+  r2_access_key_id:
+    name: brawltome_r2_access_key_id
+    file: /var/lib/brawltome-secrets/r2-access-key-id
+  r2_secret_access_key:
+    name: brawltome_r2_secret_access_key
+    file: /var/lib/brawltome-secrets/r2-secret-access-key
   refresh_trust_cookie_secret:
     name: brawltome_refresh_trust_cookie_secret
     file: /var/lib/brawltome-secrets/refresh-trust-cookie-secret
+  replay_worker_token:
+    name: brawltome_replay_worker_token
+    file: /var/lib/brawltome-secrets/replay-worker-token
   runtime_database_url:
     name: brawltome_runtime_database_url
     file: /var/lib/brawltome-secrets/runtime-database-url

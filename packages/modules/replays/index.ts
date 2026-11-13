@@ -13,6 +13,7 @@ export {
 } from './jobs'
 export * from './keys'
 export * from './limits'
+export { inspectReplayQueue, type ReplayQueueInspection } from './maintenance'
 export type { ReplaysDeps } from './model'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 

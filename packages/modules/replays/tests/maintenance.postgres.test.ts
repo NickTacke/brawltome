@@ -5,7 +5,7 @@ import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { replaysModule } from '../index'
 import { claimJob } from '../jobs'
-import { cleanupReplayFiles, noteWorkerReport } from '../maintenance'
+import { cleanupReplayFiles, inspectReplayQueue, noteWorkerReport } from '../maintenance'
 import type { ReplaysDeps } from '../model'
 import { fakeReplay } from './fixtures/replays'
 
@@ -175,5 +175,24 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
     `
 
     expect(patch?.seen).toBe(true)
+  })
+
+  test('the queue inspection counts jobs by status and ages the oldest waiting one', async () => {
+    const waiting = await storedReplay({ patch: null })
+    const failed = await storedReplay({ patch: null })
+
+    await database.sql`
+      INSERT INTO replays.jobs (digest, kind, created_at) VALUES (${waiting.digest}, 'parse', clock_timestamp() - interval '2 minutes')
+    `
+
+    await database.sql`
+      INSERT INTO replays.jobs (digest, kind, status, failure)
+      VALUES (${failed.digest}, 'parse', 'failed', '{"code":"game-error","message":"x"}')
+    `
+
+    const inspection = await inspectReplayQueue(database.sql)
+
+    expect(inspection.jobsByStatus).toEqual({ pending: 1, processing: 0, completed: 0, failed: 1 })
+    expect(inspection.oldestPendingAgeMs).toBeGreaterThanOrEqual(120_000)
   })
 })
