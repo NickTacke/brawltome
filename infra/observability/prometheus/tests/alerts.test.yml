@@ -727,3 +727,34 @@ tests:
       - eval_time: 5m
         alertname: RefreshFailuresElevated
         exp_alerts: []
+
+  - name: replay queue stuck fires after an hour of waiting and recovers
+    interval: 1m
+    input_series:
+      - series: 'replay_oldest_pending_age_ms'
+        values: "4000000 4000000 4000000 4000000 4000000 4000000 0 0"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ReplayQueueStuck
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: brawltome
+              signal: replay-queue
+            exp_annotations:
+              summary: "Replays have waited over an hour"
+              description: "The oldest uploaded replay has waited more than an hour for the replay worker on VM 106."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#replayqueuestuck"
+      - eval_time: 7m
+        alertname: ReplayQueueStuck
+        exp_alerts: []
+
+  - name: replay queue under an hour stays quiet
+    interval: 1m
+    input_series:
+      - series: 'replay_oldest_pending_age_ms'
+        values: "3000000 3000000 3000000 3000000 3000000 3000000 3000000"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ReplayQueueStuck
+        exp_alerts: []
