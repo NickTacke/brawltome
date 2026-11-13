@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { replaysModule } from '../index'
@@ -34,7 +35,7 @@ describe.skipIf(!connectionString)('uploading replays', () => {
   }
 
   function upload(accountId: string, files: { name: string; bytes: Uint8Array }[]) {
-    return uploadReplays({ database, objectStore }, { accountId, isOperator: false, files })
+    return uploadReplays({ database, objectStore, accounts: {} as Accounts }, { accountId, isOperator: false, files })
   }
 
   async function jobCount(digest: string): Promise<number> {

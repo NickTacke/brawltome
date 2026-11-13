@@ -1,6 +1,14 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
 import { createReplays } from './migrations/0001-create-replays'
 
+export {
+  type ClaimedJob,
+  type CompleteOutcome,
+  createReplayJobs,
+  type JobFailureCode,
+  type ReplayJobs,
+  type WorkerReport,
+} from './jobs'
 export * from './keys'
 export * from './limits'
 export type { ReplaysDeps } from './model'
