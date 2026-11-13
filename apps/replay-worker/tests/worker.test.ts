@@ -35,6 +35,8 @@ describe('the replay worker', () => {
       newestProcesses: 1,
       previousProcesses: 0,
       build: 'dev-test',
+      replayTimeoutMs: 5000,
+      restartDelayMs: 100,
     })
 
     // the api's worker routes, as far as the worker sees them
@@ -77,7 +79,7 @@ describe('the replay worker', () => {
 
   afterAll(async () => {
     server?.stop(true)
-    await pool?.close()
+    pool?.close()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -124,5 +126,18 @@ describe('the replay worker', () => {
   test('is idle when there is no job, and leaves no files behind', async () => {
     expect(await runOnce(deps())).toBe('idle')
     expect(readdirSync(join(root, 'work'))).toEqual([])
+  })
+
+  test('claims nothing while its bh-native processes are down', async () => {
+    nextReplay = 'ok'
+
+    const downPool = {
+      isReady: () => false,
+      report: () => pool.report(),
+      play: () => pool.play(''),
+    } as unknown as ProcessPool
+
+    expect(await runOnce({ ...deps(), pool: downPool })).toBe('idle')
+    expect(received.authorizations).toEqual([])
   })
 })

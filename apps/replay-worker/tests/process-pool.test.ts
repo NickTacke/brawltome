@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ProcessPool } from '../src/process-pool'
@@ -9,7 +9,7 @@ const pools: ProcessPool[] = []
 const folders: string[] = []
 
 afterEach(async () => {
-  for (const pool of pools.splice(0)) await pool.close()
+  for (const pool of pools.splice(0)) pool.close()
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
 })
 
@@ -32,6 +32,11 @@ function setup(patches: string[]) {
   return { gameRoot: join(root, 'games'), replay }
 }
 
+// the worker waits for this before it claims again
+async function untilReady(pool: ProcessPool): Promise<void> {
+  for (let waited = 0; !pool.isReady() && waited < 5000; waited += 20) await Bun.sleep(20)
+}
+
 async function startPool(gameRoot: string, newestProcesses = 1, previousProcesses = 1) {
   const pool = await ProcessPool.start({
     command: fake,
@@ -39,6 +44,8 @@ async function startPool(gameRoot: string, newestProcesses = 1, previousProcesse
     newestProcesses,
     previousProcesses,
     build: 'dev-test',
+    replayTimeoutMs: 1000,
+    restartDelayMs: 100,
   })
 
   pools.push(pool)
@@ -96,6 +103,7 @@ describe('the bh-native process pool', () => {
     const pool = await startPool(gameRoot)
 
     expect(await pool.play(replay('boom.replay', 'crash'))).toMatchObject({ kind: 'failure', code: 'worker-error' })
+    await untilReady(pool)
     expect((await pool.play(replay('next.replay', 'ok'))).kind).toBe('line')
   })
 
@@ -108,5 +116,31 @@ describe('the bh-native process pool', () => {
     await pool.play(replay('a.replay', 'ok'))
 
     expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00'] })
+  })
+
+  test('a replay that never gets an answer fails with worker-error and its process is replaced', async () => {
+    const { gameRoot, replay } = setup(['11.00'])
+    const pool = await startPool(gameRoot)
+
+    expect(await pool.play(replay('stuck.replay', 'hang'))).toMatchObject({ kind: 'failure', code: 'worker-error' })
+    await untilReady(pool)
+    expect((await pool.play(replay('next.replay', 'ok'))).kind).toBe('line')
+  })
+
+  test('while a process can\u2019t start again the pool isn\u2019t ready, and it recovers on its own', async () => {
+    const { gameRoot, replay } = setup(['11.00'])
+    const pool = await startPool(gameRoot)
+
+    // the folder disappears, so the restart after the crash fails
+    renameSync(join(gameRoot, '11.00'), join(gameRoot, 'moved'))
+    await pool.play(replay('boom.replay', 'crash'))
+    await Bun.sleep(300)
+
+    expect(pool.isReady()).toBe(false)
+
+    renameSync(join(gameRoot, 'moved'), join(gameRoot, '11.00'))
+    await Bun.sleep(1500)
+
+    expect(pool.isReady()).toBe(true)
   })
 })

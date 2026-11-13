@@ -17,6 +17,8 @@ const pool = await ProcessPool.start({
   newestProcesses: config.newestProcesses,
   previousProcesses: config.previousProcesses,
   build,
+  replayTimeoutMs: config.replayTimeoutMs,
+  restartDelayMs: config.restartDelayMs,
 })
 
 const api = createApiClient({ apiUrl: config.apiUrl, token: config.token })
@@ -46,4 +48,4 @@ process.on('SIGTERM', () => {
 
 // one loop per process for the newest patch, so that many replays play at once
 await Promise.all(Array.from({ length: config.newestProcesses }, loop))
-await pool.close()
+pool.close()

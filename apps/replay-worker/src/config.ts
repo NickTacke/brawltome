@@ -10,6 +10,9 @@ export type WorkerConfig = {
   pollMs: number
   // the api's lease is 600 s; renewing every two minutes keeps a slow replay's lease with room to spare
   renewEveryMs: number
+  // a 3-minute replay takes about 15 s to play; five minutes means the game is stuck
+  replayTimeoutMs: number
+  restartDelayMs: number
 }
 
 type Env = Record<string, string | undefined>
@@ -30,6 +33,8 @@ export function readConfig(env: Env): WorkerConfig {
     previousProcesses: count(env.REPLAY_PREVIOUS_PROCESSES, 1, 'REPLAY_PREVIOUS_PROCESSES'),
     pollMs: 2000,
     renewEveryMs: 120_000,
+    replayTimeoutMs: 300_000,
+    restartDelayMs: 10_000,
   }
 }
 

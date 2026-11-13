@@ -1,6 +1,6 @@
 // stands in for `bhnative replay <game folder> --stdin` in tests: the game folder's name is its patch, and each
-// replay file's text says what to answer: ok, old (a 10.09 replay), crash, slow
-import { readFileSync } from 'node:fs'
+// replay file's text says what to answer: ok, old (a 10.09 replay), crash, slow, hang
+import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
 const gameFolder = process.argv[3] ?? ''
@@ -13,6 +13,9 @@ function playedLine(replay: string): string {
   return JSON.stringify({ replay, exit: 0, patch, format: 1, stats: { ReplayVersion: gameVersion } })
 }
 
+// a game folder that isn't there makes the start fail, like a real missing patch
+if (!existsSync(gameFolder)) process.exit(2)
+
 await Bun.sleep(readyDelayMs)
 console.error('the game has started; reading replay paths, one a line')
 
@@ -24,6 +27,9 @@ for await (const chunk of Bun.stdin.stream()) {
     if (content === 'crash') process.exit(9)
 
     if (content === 'slow') await Bun.sleep(700)
+
+    // never answers, like a game stuck in a loop
+    if (content === 'hang') await new Promise(() => undefined)
 
     if (content === 'old' && gameVersion !== 270) {
       console.log(

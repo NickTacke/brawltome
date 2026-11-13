@@ -13,6 +13,9 @@ export type WorkerDeps = {
 
 /** Claims one replay, plays it and sends the answer; 'idle' when the api had nothing to do. */
 export async function runOnce(deps: WorkerDeps): Promise<'idle' | 'done'> {
+  // with no bh-native running every claim would fail its job, so nothing is claimed until one is back
+  if (!deps.pool.isReady()) return 'idle'
+
   const job = await deps.api.claim(deps.pool.report())
 
   if (!job) return 'idle'

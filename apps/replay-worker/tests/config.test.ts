@@ -15,6 +15,8 @@ describe('worker settings', () => {
       previousProcesses: 1,
       pollMs: 2000,
       renewEveryMs: 120_000,
+      replayTimeoutMs: 300_000,
+      restartDelayMs: 10_000,
     })
   })
 
