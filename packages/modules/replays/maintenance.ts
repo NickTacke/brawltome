@@ -88,7 +88,8 @@ export async function inspectReplayQueue(sql: Sql): Promise<ReplayQueueInspectio
 
   const [oldest] = await sql<{ ageMs: number | null }[]>`
     SELECT (extract(epoch FROM clock_timestamp() - min(created_at)) * 1000)::bigint AS "ageMs"
-    FROM replays.jobs WHERE status = 'pending'
+    -- re-parses after a new build may wait for hours by design; only uploads waiting to be read count
+    FROM replays.jobs WHERE status = 'pending' AND kind = 'parse'
   `
 
   const jobsByStatus = { pending: 0, processing: 0, completed: 0, failed: 0 }

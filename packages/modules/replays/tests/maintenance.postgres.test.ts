@@ -195,4 +195,14 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
     expect(inspection.jobsByStatus).toEqual({ pending: 1, processing: 0, completed: 0, failed: 1 })
     expect(inspection.oldestPendingAgeMs).toBeGreaterThanOrEqual(120_000)
   })
+
+  test('re-parse jobs do not age the queue, so a new build cannot raise the stuck alert', async () => {
+    const replay = await storedReplay({ patch: '11.00', build: 'dev-1' })
+
+    await database.sql`
+      INSERT INTO replays.jobs (digest, kind, created_at) VALUES (${replay.digest}, 'reparse', clock_timestamp() - interval '3 hours')
+    `
+
+    expect((await inspectReplayQueue(database.sql)).oldestPendingAgeMs).toBe(0)
+  })
 })
