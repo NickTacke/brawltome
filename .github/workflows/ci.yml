@@ -52,7 +52,7 @@ jobs:
       - name: Build every image target
         if: github.event_name == 'pull_request'
         run: |
-          for target in postgres migration dead-letter-role dead-letter-cli api web site operations-worker discord-bot; do
+          for target in postgres migration dead-letter-role dead-letter-cli api web site operations-worker discord-bot replay-worker; do
             docker build --target "$target" \
               --build-arg NEXT_PUBLIC_API_URL=https://api.brawltome.app \
               --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=test-site-key \
@@ -113,7 +113,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [migration, dead-letter-role, dead-letter-cli, api, web, site, operations-worker, discord-bot]
+        target: [migration, dead-letter-role, dead-letter-cli, api, web, site, operations-worker, discord-bot, replay-worker]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -180,7 +180,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Promote the checked images
         run: |
-          for target in migration dead-letter-role dead-letter-cli api web site operations-worker discord-bot; do
+          for target in migration dead-letter-role dead-letter-cli api web site operations-worker discord-bot replay-worker; do
             image=ghcr.io/nicktacke/brawltome-$target
             docker buildx imagetools create --tag "$image:$GITHUB_SHA" "$image:$GITHUB_SHA-candidate"
           done

@@ -12,6 +12,7 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md). How the modules
 | `apps/api` | Hono + tRPC API **and** the operations worker (`dev:operations-worker`); loads the modules listed in `src/modules.ts` and `src/worker-modules.ts` |
 | `apps/web` | Next.js 16 site |
 | `apps/discord-bot` | discord.js slash-command bot (`/player`, `/clan`, `/status`) |
+| `apps/replay-worker` | Parses uploaded replays with bh-native on the replay VM (deployed from the private `ax42-infra` repo) |
 | `apps/desktop` | Tauri Windows overlay; `detection/` is a private submodule, Windows only |
 | `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, analytics, clan, discovery, player, queue, ranking, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object; layout in [`packages/modules/README.md`](packages/modules/README.md) |
 | `packages/foundation` | Shared database client, the migration and module types, and the migration runner |

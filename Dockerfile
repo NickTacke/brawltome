@@ -36,6 +36,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/discord-bot/package.json apps/discord-bot/
+COPY apps/replay-worker/package.json apps/replay-worker/
 COPY apps/site/package.json apps/site/
 COPY apps/web/package.json apps/web/
 COPY packages/bhapi/package.json packages/bhapi/
@@ -96,6 +97,16 @@ USER bun
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/bin/sh", "infra/app/run-with-secrets.sh"]
 CMD ["discord-bot"]
+
+# runs on the replay VM, not with the other services: bh-native is built against Ubuntu 24.04's glibc (2.39), newer
+# than the Debian one under oven/bun, so this stage is Ubuntu with Bun copied in. The worker uses only Bun's own APIs.
+FROM ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 AS replay-worker
+COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
+WORKDIR /app
+COPY --from=build /app/apps/replay-worker/src apps/replay-worker/src
+USER nobody
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["bun", "run", "apps/replay-worker/src/index.ts"]
 
 FROM build AS web-build
 ARG NEXT_PUBLIC_API_URL
