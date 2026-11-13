@@ -12,7 +12,6 @@
     "@brawltome/accounts": "workspace:*",
     "@brawltome/contracts": "workspace:*",
     "@brawltome/foundation": "workspace:*",
-    "@brawltome/queue": "workspace:*",
     "@orpc/server": "1.16.2",
     "drizzle-orm": "0.45.4",
     "postgres": "3.4.9",

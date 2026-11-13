@@ -124,3 +124,19 @@ export const matchUploads = replaysSchema.table(
   },
   (table) => [primaryKey({ columns: [table.matchId, table.uploadId] })],
 )
+
+export const workerReports = replaysSchema.table('worker_reports', {
+  patch: varchar('patch', { length: 16 }).primaryKey(),
+  firstReportedAt: timestamp('first_reported_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  lastReportedAt: timestamp('last_reported_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+})
+
+export const builds = replaysSchema.table('builds', {
+  build: varchar('build', { length: 64 }).primaryKey(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+})
+
+export const maintenance = replaysSchema.table('maintenance', {
+  name: varchar('name', { length: 32 }).primaryKey(),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }).notNull(),
+})

@@ -3,6 +3,7 @@ import type { Sql, TransactionSql } from '@brawltome/foundation'
 import { replayKey, timelineKey } from './keys'
 import { LEASE_SECONDS, MAX_ATTEMPTS } from './limits'
 import { candidateKey, type PlayedLine, parseReplayLine, UnknownFormatError } from './line'
+import { cleanupIfDue, noteWorkerReport } from './maintenance'
 import type { ReplaysDeps } from './model'
 import { owningUploads, rejectWaitingUploads, settleUploads, waitingUploads } from './ownership'
 
@@ -42,6 +43,8 @@ const exitFailures: Record<number, JobFailureCode> = {
 
 /** The next job for the worker, oldest parse first, then re-parses; null when there is nothing to do. */
 export async function claimJob(deps: ReplaysDeps, report: WorkerReport): Promise<ClaimedJob | null> {
+  await noteWorkerReport(deps.database.sql, report)
+  await cleanupIfDue(deps, new Date())
   await failExhaustedJobs(deps.database.sql)
 
   for (;;) {
