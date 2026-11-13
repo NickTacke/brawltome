@@ -140,37 +140,39 @@ async function storeMatch(
   rawLine: string,
 ): Promise<CompleteOutcome> {
   const sql = deps.database.sql
-  const uploads = await waitingUploads(sql, job.digest)
-
-  const owners = await owningUploads(
-    deps,
-    uploads,
-    line.players.map((player) => player.brawlhallaId),
-  )
+  const playerIds = line.players.map((player) => player.brawlhallaId)
 
   const [existing] = await sql<{ id: string; timelineKey: string | null }[]>`
     SELECT id, timeline_key AS "timelineKey" FROM replays.matches WHERE digest = ${job.digest}
   `
 
-  if (!existing && owners.size === 0) {
-    await finishWithFailure(sql, job, 'not-your-match', 'no uploader played in this match', true)
-    await deleteReplayFile(deps, job.digest)
-
-    return 'failed'
-  }
-
   const matchId = existing?.id ?? randomUUID()
   const key = timelineKey(matchId, job.build)
 
+  // written first, so a stored match always has its timeline; dropped again below if nothing is stored
   await deps.objectStore.put(key, Bun.gzipSync(new TextEncoder().encode(rawLine)), 'application/gzip')
 
-  const stored = await sql.begin(async (transaction) => {
+  const outcome = await sql.begin(async (transaction) => {
     const [locked] = await transaction<{ ok: boolean }[]>`
       SELECT (status = 'processing' AND lease_token = ${leaseToken} AND lease_expires_at > clock_timestamp()) AS ok
       FROM replays.jobs WHERE id = ${job.id} FOR UPDATE
     `
 
-    if (!locked?.ok) return false
+    if (!locked?.ok) return 'lease-lost' as const
+
+    // an upload of the same file takes this row too, so one arriving now is either read here or, once this
+    // commits, finds the match itself
+    await transaction`SELECT 1 FROM replays.replay_files WHERE digest = ${job.digest} FOR UPDATE`
+
+    const uploads = await waitingUploads(transaction, job.digest)
+    const owners = await owningUploads(deps, uploads, playerIds)
+
+    if (!existing && owners.size === 0) {
+      await finishWithFailure(transaction, job, 'not-your-match', 'no uploader played in this match', true)
+      await transaction`UPDATE replays.replay_files SET deleted_at = clock_timestamp() WHERE digest = ${job.digest}`
+
+      return 'nobody-owns-it' as const
+    }
 
     await writeMatch(transaction, matchId, job, line)
     await settleUploads(transaction, uploads, owners, matchId)
@@ -181,13 +183,20 @@ async function storeMatch(
       WHERE id = ${job.id}
     `
 
-    return true
+    return 'stored' as const
   })
 
-  if (!stored) {
+  if (outcome === 'lease-lost') {
     if (existing?.timelineKey !== key) await deps.objectStore.delete(key)
 
     return 'lease-lost'
+  }
+
+  if (outcome === 'nobody-owns-it') {
+    await deps.objectStore.delete(key)
+    await deps.objectStore.delete(replayKey(job.digest))
+
+    return 'failed'
   }
 
   if (existing?.timelineKey && existing.timelineKey !== key) await deps.objectStore.delete(existing.timelineKey)
@@ -234,11 +243,6 @@ async function writeMatch(transaction: TransactionSql, matchId: string, job: Liv
   }
 }
 
-async function deleteReplayFile(deps: ReplaysDeps, digest: string): Promise<void> {
-  await deps.objectStore.delete(replayKey(digest))
-  await deps.database.sql`UPDATE replays.replay_files SET deleted_at = clock_timestamp() WHERE digest = ${digest}`
-}
-
 async function findLiveJob(sql: Sql, jobId: string, leaseToken: string): Promise<LiveJob | 'not-found' | 'lease-lost'> {
   const [job] = await sql<(LiveJob & { live: boolean })[]>`
     SELECT id, digest, build, attempts,
@@ -270,7 +274,7 @@ export async function failJob(
 }
 
 async function finishWithFailure(
-  sql: Sql,
+  sql: Sql | TransactionSql,
   job: Pick<LiveJob, 'id' | 'digest'>,
   code: JobFailureCode,
   message: string,

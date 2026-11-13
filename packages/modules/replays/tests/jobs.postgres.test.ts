@@ -262,4 +262,46 @@ describe.skipIf(!connectionString)('replay jobs', () => {
       `timelines/${match?.id}/dev-2.json.gz`,
     ])
   })
+
+  test('a teammate uploading the same file while it is being stored joins the match', async () => {
+    const replay = fakeReplay()
+    const owner = await playerAccount(1001)
+    const teammate = await playerAccount(1002)
+
+    await uploadAs(owner, replay.bytes)
+
+    const claimed = await claimJob(deps, report)
+    let teammateUpload: ReturnType<typeof uploadReplays> | null = null
+    const accounts = deps.accounts
+
+    // the teammate's upload starts while the worker's answer is being stored, and isn't waited for there
+    deps = {
+      ...deps,
+      accounts: {
+        getPrimaryPlayerVerificationState: (accountId: string) => {
+          teammateUpload ??= uploadReplays(
+            { ...deps, accounts },
+            { accountId: teammate, isOperator: false, files: [{ name: 'b.replay', bytes: replay.bytes }] },
+          )
+
+          return accounts.getPrimaryPlayerVerificationState(accountId)
+        },
+      } as unknown as Accounts,
+    }
+
+    await completeJob(deps, {
+      jobId: claimed?.jobId as string,
+      leaseToken: claimed?.leaseToken as string,
+      line: makeLine(),
+    })
+
+    const [outcome] = await (teammateUpload as unknown as ReturnType<typeof uploadReplays>)
+
+    const [row] = await database.sql<{ status: string }[]>`
+      SELECT status FROM replays.uploads WHERE account_id = ${teammate}
+    `
+
+    expect(row?.status).toBe('done')
+    expect(outcome?.status).not.toBe('rejected')
+  })
 })
