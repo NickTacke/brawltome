@@ -134,4 +134,26 @@ describe.skipIf(!connectionString)('uploading replays', () => {
 
     expect(outcome).toMatchObject({ status: 'rejected', rejection: 'daily-limit' })
   })
+
+  test('re-parse jobs and finished uploads do not count against the pending limit', async () => {
+    const accountId = await newAccount()
+
+    // 20 finished uploads whose files are being re-parsed after a new bh-native build
+    for (let index = 0; index < 20; index++) {
+      const replay = fakeReplay()
+
+      await database.sql`INSERT INTO replays.replay_files (digest, byte_size) VALUES (${replay.digest}, 64)`
+
+      await database.sql`
+        INSERT INTO replays.uploads (account_id, digest, byte_size, status, created_at)
+        VALUES (${accountId}, ${replay.digest}, 64, 'done', clock_timestamp() - interval '2 days')
+      `
+
+      await database.sql`INSERT INTO replays.jobs (digest, kind) VALUES (${replay.digest}, 'reparse')`
+    }
+
+    const [outcome] = await upload(accountId, [{ name: 'new.replay', bytes: fakeReplay().bytes }])
+
+    expect(outcome?.status).toBe('queued')
+  })
 })

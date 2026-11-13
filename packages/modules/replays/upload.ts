@@ -117,8 +117,7 @@ async function checkLimits(sql: Sql, accountId: string): Promise<UploadRejection
   const [counts] = await sql<{ pending: number; today: number }[]>`
     SELECT
       (SELECT count(*)::int FROM replays.uploads AS upload
-        JOIN replays.jobs AS job ON job.digest = upload.digest AND job.status IN ('pending', 'processing')
-        WHERE upload.account_id = ${accountId}) AS pending,
+        WHERE upload.account_id = ${accountId} AND upload.status = 'queued') AS pending,
       (SELECT count(*)::int FROM replays.uploads
         WHERE account_id = ${accountId}
           AND created_at >= date_trunc('day', clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AS today
