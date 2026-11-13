@@ -142,6 +142,9 @@ services:
       RUNTIME_SHUTDOWN_DEADLINE_MS: "60000"
       # shared with the site on brawltome.app, which reads the session server side
       SESSION_COOKIE_DOMAIN: brawltome.app
+      # without these the api falls back to localhost and steam sends players there after linking
+      STEAM_REALM: https://api.brawltome.app
+      STEAM_RETURN_URL: https://api.brawltome.app/auth/steam/callback
       TELEMETRY_TRACE_SAMPLE_RATE: "0.1"
       WEB_ORIGIN: https://brawltome.app
     secrets:

@@ -230,6 +230,14 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
       violations.push('api must use the public Discord OAuth callback')
     }
 
+    if (readPath(api, 'environment', 'STEAM_RETURN_URL') !== 'https://api.brawltome.app/auth/steam/callback') {
+      violations.push('api must use the public Steam OpenID callback')
+    }
+
+    if (readPath(api, 'environment', 'STEAM_REALM') !== 'https://api.brawltome.app') {
+      violations.push('api must use the public Steam OpenID realm')
+    }
+
     if (readPath(api, 'environment', 'WEB_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must use the final public web origin')
     }
