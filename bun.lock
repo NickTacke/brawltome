@@ -27,6 +27,7 @@
         "@brawltome/queue": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/replay-analysis": "workspace:*",
+        "@brawltome/replays": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "@brawltome/telemetry": "workspace:*",
@@ -300,6 +301,20 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/modules/replays": {
+      "name": "@brawltome/replays",
+      "dependencies": {
+        "@brawltome/accounts": "workspace:*",
+        "@brawltome/foundation": "workspace:*",
+        "@brawltome/queue": "workspace:*",
+        "drizzle-orm": "0.45.4",
+        "postgres": "3.4.9",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/modules/request-admission": {
       "name": "@brawltome/request-admission",
       "dependencies": {
@@ -363,6 +378,7 @@
         "@brawltome/queue": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/replay-analysis": "workspace:*",
+        "@brawltome/replays": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "@types/bun": "latest",
@@ -381,6 +397,7 @@
         "@brawltome/queue": "workspace:*",
         "@brawltome/ranking": "workspace:*",
         "@brawltome/replay-analysis": "workspace:*",
+        "@brawltome/replays": "workspace:*",
         "@brawltome/request-admission": "workspace:*",
         "@brawltome/statistics": "workspace:*",
         "postgres": "^3.4.0",
@@ -492,6 +509,8 @@
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/modules/ranking"],
 
     "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/modules/replay-analysis"],
+
+    "@brawltome/replays": ["@brawltome/replays@workspace:packages/modules/replays"],
 
     "@brawltome/request-admission": ["@brawltome/request-admission@workspace:packages/modules/request-admission"],
 

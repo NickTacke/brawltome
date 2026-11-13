@@ -25,6 +25,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': 'capability',
     '@brawltome/request-admission': 'capability',
     '@brawltome/replay-analysis': 'capability',
+    '@brawltome/replays': 'capability',
     '@brawltome/statistics': 'capability',
   },
   moduleSchemas: {
@@ -36,6 +37,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     queue: '@brawltome/queue',
     rankings: '@brawltome/ranking',
     replay_analysis: '@brawltome/replay-analysis',
+    replays: '@brawltome/replays',
     request_admission: '@brawltome/request-admission',
     statistics: '@brawltome/statistics',
   },
@@ -62,6 +64,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': ['.', './dead-letter-hooks'],
     '@brawltome/request-admission': ['.'],
     '@brawltome/replay-analysis': ['.'],
+    '@brawltome/replays': ['.'],
     '@brawltome/statistics': ['.', './dead-letter-hooks'],
   },
   testOnlyExports: {
@@ -79,6 +82,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/ranking': ['@brawltome/player', '@brawltome/queue'],
     '@brawltome/request-admission': [],
     '@brawltome/replay-analysis': ['@brawltome/accounts'],
+    '@brawltome/replays': ['@brawltome/accounts', '@brawltome/queue'],
     '@brawltome/statistics': ['@brawltome/queue'],
   },
   contractsDependencies: ['@brawltome/game-data'],

@@ -20,7 +20,8 @@
       "@brawltome/queue": ["./packages/modules/queue/index.ts"],
       "@brawltome/ranking": ["./packages/modules/ranking/index.ts"],
       "@brawltome/request-admission": ["./packages/modules/request-admission/index.ts"],
-      "@brawltome/replay-analysis": ["./packages/modules/replay-analysis/index.ts"]
+      "@brawltome/replay-analysis": ["./packages/modules/replay-analysis/index.ts"],
+      "@brawltome/replays": ["./packages/modules/replays/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]

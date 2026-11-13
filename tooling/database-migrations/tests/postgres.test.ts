@@ -8,6 +8,7 @@ import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
+import { replaysModule } from '@brawltome/replays'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
 import postgres from 'postgres'
@@ -112,6 +113,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
       statisticsModule.migrations,
       requestAdmissionModule.migrations,
       replayAnalysisModule.migrations,
+      replaysModule.migrations,
     ]
 
     for (const inventory of inventories) {
@@ -779,6 +781,7 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
         await client`CREATE SCHEMA statistics`
         await client`CREATE SCHEMA clans`
         await client`CREATE TABLE clans.clans (clan_id integer PRIMARY KEY)`
+        await client`CREATE TABLE accounts.users (id uuid PRIMARY KEY)`
 
         await client`
           CREATE TABLE refresh_operations.operations (

@@ -7,6 +7,7 @@ import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
 import { rankingModule } from '@brawltome/ranking'
 import { replayAnalysisModule } from '@brawltome/replay-analysis'
+import { replaysModule } from '@brawltome/replays'
 import { requestAdmissionModule } from '@brawltome/request-admission'
 import { statisticsModule } from '@brawltome/statistics'
 
@@ -21,5 +22,6 @@ export const apiModules = [
   rankingModule,
   statisticsModule,
   replayAnalysisModule,
+  replaysModule,
   analyticsModule,
 ] as const satisfies readonly BrawltomeModule[]

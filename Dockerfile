@@ -48,6 +48,7 @@ COPY packages/modules/ranking/package.json packages/modules/ranking/
 COPY packages/modules/request-admission/package.json packages/modules/request-admission/
 COPY packages/modules/queue/package.json packages/modules/queue/
 COPY packages/modules/replay-analysis/package.json packages/modules/replay-analysis/
+COPY packages/modules/replays/package.json packages/modules/replays/
 COPY packages/modules/statistics/package.json packages/modules/statistics/
 COPY packages/modules/discovery/package.json packages/modules/discovery/
 COPY packages/game-data/package.json packages/game-data/
