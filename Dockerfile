@@ -36,7 +36,6 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/discord-bot/package.json apps/discord-bot/
-COPY apps/replay-bridge/package.json apps/replay-bridge/
 COPY apps/site/package.json apps/site/
 COPY apps/web/package.json apps/web/
 COPY packages/bhapi/package.json packages/bhapi/

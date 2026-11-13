@@ -114,7 +114,6 @@ describe('one database client per process', () => {
       INTERNAL_API_SECRET: internalSecret,
       METRICS_SCRAPE_SECRET: metricsSecret,
       REFRESH_TRUST_COOKIE_SECRET: 'database-connections-refresh-trust-secret-32-chars',
-      REPLAY_BRIDGE_SECRET: 'database-connections-replay-bridge-secret-32-chars',
       PORT: String(port),
       RUNTIME_SHUTDOWN_DEADLINE_MS: '2000',
       RUNTIME_CLEANUP_RESERVE_MS: '500',

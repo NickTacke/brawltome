@@ -14,7 +14,6 @@ import {
 } from '@brawltome/player'
 import { createPostgresRefreshOperations } from '@brawltome/queue'
 import { createPostgresRanking } from '@brawltome/ranking'
-import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics } from '@brawltome/statistics'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
@@ -46,7 +45,6 @@ import { createRefreshEventStreams } from './refresh-event-streams'
 import { appRouter } from './router'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
-import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
@@ -64,12 +62,6 @@ const refreshTrustSecret = process.env.REFRESH_TRUST_COOKIE_SECRET
 
 if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
   throw new Error('REFRESH_TRUST_COOKIE_SECRET must be set and at least 32 bytes')
-}
-
-const replayBridgeSecret = process.env.REPLAY_BRIDGE_SECRET
-
-if (!replayBridgeSecret || Buffer.byteLength(replayBridgeSecret) < 32) {
-  throw new Error('REPLAY_BRIDGE_SECRET must be set and at least 32 bytes')
 }
 
 const authenticatedRefreshIpLimit = readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT)
@@ -105,7 +97,6 @@ const requestAdmission = createPostgresRequestAdmission(database, {
 
 const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
-const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
 const playerRefreshReservations = createPlayerRefreshReservations(database)
@@ -202,7 +193,7 @@ app.use(
   cors({
     origin: (origin) => (corsOrigins.includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ['Content-Type', 'Traceparent', 'X-Replay-File-Name', 'X-Request-Id'],
+    allowHeaders: ['Content-Type', 'Traceparent', 'X-Request-Id'],
   }),
 )
 
@@ -229,8 +220,6 @@ app.route(
 )
 
 app.route('/events', createRefreshEventRoutes(refreshEvents))
-app.route('/api', createReplayAnalysisRoutes({ accounts, jobs: replayAnalysisJobs, webOrigin: authConfig.webOrigin }))
-app.route('/internal/replays', createReplayBridgeRoutes({ jobs: replayAnalysisJobs, secret: replayBridgeSecret }))
 
 app.use(
   '/trpc/*',

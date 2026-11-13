@@ -9,12 +9,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@brawltome/foundation": "workspace:*",
-    "postgres": "^3.4.0"
+    "@brawltome/foundation": "workspace:*"
   },
   "devDependencies": {
     "@brawltome/accounts": "workspace:*",
     "@types/bun": "latest",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "postgres": "^3.4.0"
   }
 }
