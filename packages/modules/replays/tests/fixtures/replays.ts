@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 /** Made-up bytes that start like a replay (a zlib stream), with their digest. */
-export function fakeReplay(byteSize = 64): { bytes: Uint8Array; digest: string; hex: string } {
+export function fakeReplay(byteSize = 64): { bytes: Uint8Array<ArrayBuffer>; digest: string; hex: string } {
   const bytes = new Uint8Array(byteSize)
 
   bytes.set(randomBytes(byteSize))

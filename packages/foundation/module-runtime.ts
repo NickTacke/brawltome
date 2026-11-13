@@ -7,4 +7,6 @@ export type ModuleRuntime = {
   database: Database
   // where modules keep files outside Postgres (replay files and timelines); absent where no module needs it
   objectStore?: ObjectStore
+  // accounts allowed to upload any replay, for testing (REPLAY_OPERATOR_ACCOUNTS)
+  replayOperatorAccountIds?: readonly string[]
 }
