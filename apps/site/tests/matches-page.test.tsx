@@ -5,7 +5,12 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchesView } from '../src/components/matches/MatchesView'
 import { MatchView } from '../src/components/matches/MatchView'
-import { formatDuration, type MatchesPage, replayStatusText } from '../src/components/matches/matches-model'
+import {
+  formatDuration,
+  type MatchesPage,
+  refusedFiles,
+  replayStatusText,
+} from '../src/components/matches/matches-model'
 
 async function renderInRouter(element: ReactNode): Promise<string> {
   const rootRoute = createRootRoute({ component: () => element })
@@ -158,6 +163,25 @@ describe('match page wording', () => {
     )
 
     expect(replayStatusText(upload({ status: 'rejected', rejection: 'game-error' }))).toBe('Couldn’t read this replay')
+  })
+
+  test('files refused before they were stored are named with their reason; the others show up in the list', () => {
+    const refused = refusedFiles([
+      { uploadId: null, fileName: 'big.replay', status: 'rejected', matchId: null, rejection: 'too-large' },
+      { uploadId: null, fileName: 'one-more.replay', status: 'rejected', matchId: null, rejection: 'daily-limit' },
+      {
+        uploadId: '0b0c8f3e-1111-4a6b-9f00-123456789abc',
+        fileName: 'ok.replay',
+        status: 'queued',
+        matchId: null,
+        rejection: null,
+      },
+    ])
+
+    expect(refused).toEqual([
+      { fileName: 'big.replay', reason: 'This file is too large to be a replay' },
+      { fileName: 'one-more.replay', reason: 'You’ve uploaded the most replays for today' },
+    ])
   })
 })
 
