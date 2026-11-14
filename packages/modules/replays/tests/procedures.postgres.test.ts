@@ -170,6 +170,22 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     expect(listed.matches.map((summary) => summary.id)).toContain(matchId)
   })
 
+  test('a malformed cursor starts from the first page instead of failing', async () => {
+    const matchId = await parsedMatch()
+
+    const badCursors = [
+      `2026-11-14T00:00:00.000Z|${'-'.repeat(36)}`,
+      '2026-11-14T00:00:00.000Z|zzzz',
+      'not a date|00000000-0000-0000-0000-000000000000',
+    ].map((raw) => Buffer.from(raw).toString('base64url'))
+
+    for (const cursor of badCursors) {
+      const listed = await call(procedures.playerMatches, { brawlhallaId: 1002, cursor }, visitor())
+
+      expect(listed.matches.map((summary) => summary.id)).toContain(matchId)
+    }
+  })
+
   test('replayFile gives the bytes back, then GONE once the file is deleted', async () => {
     const matchId = await parsedMatch()
 
