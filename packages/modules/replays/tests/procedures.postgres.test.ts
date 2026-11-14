@@ -37,7 +37,13 @@ describe.skipIf(!connectionString)('replay procedures', () => {
   beforeEach(async () => {
     objectStore = createMemoryObjectStore()
     operatorAccountId = randomUUID()
-    procedures = createReplayProcedures({ database, objectStore, replayOperatorAccountIds: [operatorAccountId] })
+
+    procedures = createReplayProcedures({
+      database,
+      objectStore,
+      replayOperatorAccountIds: [operatorAccountId],
+      replaysOpen: true,
+    })
   })
 
   function visitor(sessionToken?: string) {
@@ -134,7 +140,12 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     const operator = await signIn()
 
-    procedures = createReplayProcedures({ database, objectStore, replayOperatorAccountIds: [operator.account.id] })
+    procedures = createReplayProcedures({
+      database,
+      objectStore,
+      replayOperatorAccountIds: [operator.account.id],
+      replaysOpen: true,
+    })
 
     const operatorResult = await call(procedures.upload, { files: [replayFile()] }, visitor(operator.sessionToken))
 
@@ -185,5 +196,30 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     expect(mine.replays).toHaveLength(1)
     expect(mine.replays[0]).toMatchObject({ status: 'waiting', rejection: null, matchId: null })
+  })
+
+  test('while replays are closed, only operators see them, and access says so', async () => {
+    const matchId = await parsedMatch()
+    const operator = await signIn()
+    const visitorSession = (await signIn()).sessionToken
+
+    const closed = createReplayProcedures({
+      database,
+      objectStore,
+      replayOperatorAccountIds: [operator.account.id],
+      replaysOpen: false,
+    })
+
+    expect(await call(closed.access, undefined, visitor(visitorSession))).toEqual({ isOpen: false, canSee: false })
+
+    expect(await call(closed.access, undefined, visitor(operator.sessionToken))).toEqual({
+      isOpen: false,
+      canSee: true,
+    })
+
+    expect(await errorCode(call(closed.match, { id: matchId }, visitor(visitorSession)))).toBe('NOT_FOUND')
+    expect(await errorCode(call(closed.playerMatches, { brawlhallaId: 1002 }, visitor()))).toBe('NOT_FOUND')
+    expect(await errorCode(call(closed.mine, undefined, visitor(visitorSession)))).toBe('FORBIDDEN')
+    expect((await call(closed.match, { id: matchId }, visitor(operator.sessionToken))).id).toBe(matchId)
   })
 })

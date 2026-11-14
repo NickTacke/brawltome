@@ -160,3 +160,12 @@ describe('match page wording', () => {
     expect(replayStatusText(upload({ status: 'rejected', rejection: 'game-error' }))).toBe('Couldn’t read this replay')
   })
 })
+
+describe('the matches page while closed', () => {
+  test('shows the coming-soon page', async () => {
+    const html = await renderInRouter(<MatchesView page={{ kind: 'comingSoon' }} />)
+
+    expect(html).toContain('Coming soon')
+    expect(html).not.toContain('type="file"')
+  })
+})

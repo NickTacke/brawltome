@@ -128,6 +128,13 @@ export const MAX_REPLAYS_PER_UPLOAD = 20
 
 export const replayUploadInputSchema = z.object({ files: z.array(z.file()).min(1).max(MAX_REPLAYS_PER_UPLOAD) })
 
+// whether the visitor may see replays and match pages: everyone once they're open, operators before that
+export const replayAccessSchema = z
+  .object({ isOpen: z.boolean(), canSee: z.boolean() })
+  .strict()
+  .meta({ id: 'ReplayAccess' })
+
+export type ReplayAccessContract = z.infer<typeof replayAccessSchema>
 export type MatchSummaryContract = z.infer<typeof matchSummarySchema>
 export type MatchDetailContract = z.infer<typeof matchDetailSchema>
 export type PlayerMatchesContract = z.infer<typeof playerMatchesSchema>

@@ -1,6 +1,7 @@
 import type { MyReplayContract } from '@brawltome/contracts'
 
 export type MatchesPage =
+  | { kind: 'comingSoon' }
   | { kind: 'signedOut'; signInUrl: string }
   | { kind: 'signedIn'; isVerified: boolean; verifySteamUrl: string; replays: MyReplayContract[] }
 

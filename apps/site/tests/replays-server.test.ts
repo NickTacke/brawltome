@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { ReplayUploadResultContract } from '@brawltome/contracts'
+import { loadMatchesPage } from '../src/server/load-matches-page'
 import { loadMatch, serveReplayFile, uploadForVisitor } from '../src/server/replay-data'
 import { apiUrl, useApiSettings } from './api-stub'
 
@@ -101,7 +102,10 @@ describe('reading matches', () => {
   test('a match is read and checked', async () => {
     stubApi(() => Response.json(matchDetail))
 
-    expect(await loadMatch(matchDetail.id)).toEqual(matchDetail)
+    const calls = stubApi(() => Response.json(matchDetail))
+
+    expect(await loadMatch(matchDetail.id, 'raw-session-token')).toEqual(matchDetail)
+    expect(calls[0]?.headers.get('x-visitor-session')).toBe('raw-session-token')
   })
 
   test('the replay file is passed through with its name, and 410 once it is gone', async () => {
@@ -122,5 +126,27 @@ describe('reading matches', () => {
     stubApi(() => new Response(JSON.stringify({ code: 'GONE' }), { status: 410 }))
 
     expect((await serveReplayFile(matchDetail.id)).status).toBe(410)
+  })
+})
+
+describe('the matches page while replays are closed', () => {
+  useApiSettings()
+
+  test('a visitor who may not see replays gets the coming-soon page', async () => {
+    process.env.PUBLIC_API_URL = 'https://api.test'
+
+    stubApi((path) =>
+      path === '/replays/access' ? Response.json({ isOpen: false, canSee: false }) : Response.json({}),
+    )
+
+    expect(await loadMatchesPage('raw-session-token')).toEqual({ kind: 'comingSoon' })
+  })
+
+  test('signed out while closed is the coming-soon page too, without asking about an account', async () => {
+    process.env.PUBLIC_API_URL = 'https://api.test'
+    const calls = stubApi(() => Response.json({ isOpen: false, canSee: false }))
+
+    expect(await loadMatchesPage(undefined)).toEqual({ kind: 'comingSoon' })
+    expect(calls.map((call) => call.path)).toEqual(['/replays/access'])
   })
 })

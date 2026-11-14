@@ -27,4 +27,9 @@ export const uploadReplays = createServerFn({ method: 'POST' })
 
 export const getMatch = createServerFn({ method: 'GET' })
   .validator((id: unknown) => matchIdSchema.parse(id))
-  .handler(({ data: id }) => loadMatch(id))
+  .handler(({ data: id }) => {
+    // the visitor's session decides whether they may see replays yet
+    setResponseHeader('cache-control', 'private, no-store')
+
+    return loadMatch(id, currentSession().token)
+  })

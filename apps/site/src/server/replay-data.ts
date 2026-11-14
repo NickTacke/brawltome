@@ -62,10 +62,16 @@ export async function loadMyReplays(sessionToken: string): Promise<MyReplayContr
   return answer.replays
 }
 
-/** A match, or null when there is none with that id. */
-export async function loadMatch(matchId: string): Promise<MatchDetailContract | null> {
+function visitorHeaders(sessionToken: string | undefined) {
+  return sessionToken ? { headers: { 'x-visitor-session': sessionToken } } : {}
+}
+
+/** A match, or null when there is none with that id (or the visitor may not see replays yet). */
+export async function loadMatch(matchId: string, sessionToken?: string): Promise<MatchDetailContract | null> {
   try {
-    return await readApi(`/matches/${encodeURIComponent(matchId)}`, matchDetailSchema, `load match ${matchId}`)
+    const path = `/matches/${encodeURIComponent(matchId)}`
+
+    return await readApi(path, matchDetailSchema, `load match ${matchId}`, visitorHeaders(sessionToken))
   } catch (error) {
     if (error instanceof ApiAnswerError && (error.status === 404 || error.status === 400)) return null
 
@@ -74,9 +80,10 @@ export async function loadMatch(matchId: string): Promise<MatchDetailContract | 
 }
 
 /** The replay file as a download; 410 once its patch is no longer kept, 404 for no such match. */
-export async function serveReplayFile(matchId: string): Promise<Response> {
+export async function serveReplayFile(matchId: string, sessionToken?: string): Promise<Response> {
   try {
-    const answer = await readApiFile(`/matches/${encodeURIComponent(matchId)}/replay`, `download replay ${matchId}`)
+    const path = `/matches/${encodeURIComponent(matchId)}/replay`
+    const answer = await readApiFile(path, `download replay ${matchId}`, visitorHeaders(sessionToken))
 
     return new Response(answer.body, {
       headers: {

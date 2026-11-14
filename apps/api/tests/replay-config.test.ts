@@ -24,6 +24,7 @@ describe('replay settings', () => {
         secretAccessKey: 'secret',
       },
       operatorAccountIds: [operator],
+      isOpen: false,
     })
   })
 
@@ -33,6 +34,11 @@ describe('replay settings', () => {
 
   test('half an R2 setup is refused', () => {
     expect(() => readReplayConfig({ ...complete, R2_SECRET_ACCESS_KEY: undefined })).toThrow('R2_SECRET_ACCESS_KEY')
+  })
+
+  test('replays open to everyone only when REPLAYS_OPEN is true', () => {
+    expect(readReplayConfig({ ...complete, REPLAYS_OPEN: 'true' }).isOpen).toBe(true)
+    expect(readReplayConfig({ ...complete, REPLAYS_OPEN: 'yes' }).isOpen).toBe(false)
   })
 
   test('a short worker token is refused', () => {

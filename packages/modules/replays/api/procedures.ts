@@ -5,6 +5,7 @@ import {
   myReplaysSchema,
   playerMatchesInputSchema,
   playerMatchesSchema,
+  replayAccessSchema,
   replayUploadInputSchema,
   replayUploadResultSchema,
 } from '@brawltome/contracts'
@@ -20,6 +21,20 @@ const tags = ['replays']
 export function createReplayProcedures(runtime: ModuleRuntime) {
   const { accounts } = createPostgresAccounts(runtime.database)
   const operators = new Set(runtime.replayOperatorAccountIds ?? [])
+  const isOpen = runtime.replaysOpen ?? false
+
+  // until replays open to everyone, only operators see anything; to others the pages don't exist yet
+  async function canSee(sessionToken: string | undefined): Promise<boolean> {
+    if (isOpen) return true
+
+    const authentication = await accounts.authenticate(sessionToken ?? null)
+
+    return authentication.status !== 'anonymous' && operators.has(authentication.account.id)
+  }
+
+  async function requireSight(sessionToken: string | undefined, code: 'NOT_FOUND' | 'FORBIDDEN'): Promise<void> {
+    if (!(await canSee(sessionToken))) throw new ORPCError(code)
+  }
 
   function objectStore(): ObjectStore {
     if (!runtime.objectStore) throw new Error('replays need an object store, and this process has none')
@@ -33,6 +48,9 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .output(replayUploadResultSchema)
     .handler(async ({ context, input }) => {
       const account = await requireAccount(accounts, context.visitorSessionToken)
+
+      await requireSight(context.visitorSessionToken, 'FORBIDDEN')
+
       const isOperator = operators.has(account.id)
 
       if (!isOperator && !(await hasVerifiedPlayer(accounts, account.id))) {
@@ -57,7 +75,9 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .route({ method: 'GET', path: '/matches/{id}', operationId: 'replays.match', summary: 'Match', tags })
     .input(z.object({ id: matchIdSchema }))
     .output(matchDetailSchema)
-    .handler(async ({ input }) => {
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
       const found = await getMatch(runtime.database.sql, input.id)
 
       if (!found) throw new ORPCError('NOT_FOUND')
@@ -75,7 +95,11 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     })
     .input(playerMatchesInputSchema)
     .output(playerMatchesSchema)
-    .handler(({ input }) => listPlayerMatches(runtime.database.sql, input.brawlhallaId, input.cursor))
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
+      return listPlayerMatches(runtime.database.sql, input.brawlhallaId, input.cursor)
+    })
 
   const replayFile = internalProcedure
     .route({
@@ -87,7 +111,9 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     })
     .input(z.object({ id: matchIdSchema }))
     .output(z.file())
-    .handler(async ({ input }) => {
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
       const file = await getReplayFile({ database: runtime.database, objectStore: objectStore() }, input.id)
 
       if (file === null) throw new ORPCError('NOT_FOUND')
@@ -104,10 +130,17 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .handler(async ({ context }) => {
       const account = await requireAccount(accounts, context.visitorSessionToken)
 
+      await requireSight(context.visitorSessionToken, 'FORBIDDEN')
+
       return { replays: await listMyReplays(runtime.database.sql, account.id) }
     })
 
-  return { upload, match, playerMatches, replayFile, mine }
+  const access = internalProcedure
+    .route({ method: 'GET', path: '/replays/access', operationId: 'replays.access', summary: 'Replay access', tags })
+    .output(replayAccessSchema)
+    .handler(async ({ context }) => ({ isOpen, canSee: await canSee(context.visitorSessionToken) }))
+
+  return { access, upload, match, playerMatches, replayFile, mine }
 }
 
 async function requireAccount(accounts: Accounts, sessionToken: string | undefined) {

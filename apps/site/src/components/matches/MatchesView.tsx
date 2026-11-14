@@ -2,6 +2,7 @@ import type { MyReplayContract } from '@brawltome/contracts'
 import { Link, useRouter } from '@tanstack/react-router'
 import { type ChangeEvent, type DragEvent, useEffect, useState } from 'react'
 import { uploadReplays } from '../../server/replays'
+import { ComingSoonPage } from '../coming-soon/ComingSoonPage'
 import { isUnfinished, type MatchesPage, replayStatusText } from './matches-model'
 
 // the api takes this many files per request
@@ -9,6 +10,8 @@ const filesPerRequest = 20
 const refreshEveryMs = 3000
 
 export function MatchesView({ page }: { page: MatchesPage }) {
+  if (page.kind === 'comingSoon') return <ComingSoonPage slug="matches" />
+
   return (
     <div className="mx-auto max-w-3xl py-10">
       <h1 className="text-4xl font-black tracking-tight text-strong">Matches</h1>
@@ -22,7 +25,7 @@ export function MatchesView({ page }: { page: MatchesPage }) {
   )
 }
 
-function PageBody({ page }: { page: MatchesPage }) {
+function PageBody({ page }: { page: Exclude<MatchesPage, { kind: 'comingSoon' }> }) {
   if (page.kind === 'signedOut') {
     return (
       <a href={page.signInUrl} className="text-primary underline underline-offset-4">

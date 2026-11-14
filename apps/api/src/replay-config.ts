@@ -5,6 +5,8 @@ export type ReplayConfig = {
   // null when no R2 setting is given at all: local development without a bucket, where replays stay off
   storage: S3ObjectStoreOptions | null
   operatorAccountIds: string[]
+  // replays and match pages for everyone; until then operators only (the pages are designed locally first)
+  isOpen: boolean
 }
 
 type Env = Record<string, string | undefined>
@@ -20,7 +22,12 @@ export function readReplayConfig(env: Env): ReplayConfig {
     throw new Error('REPLAY_WORKER_TOKEN must be set and at least 32 bytes')
   }
 
-  return { workerToken, storage: readStorage(env), operatorAccountIds: readOperators(env.REPLAY_OPERATOR_ACCOUNTS) }
+  return {
+    workerToken,
+    storage: readStorage(env),
+    operatorAccountIds: readOperators(env.REPLAY_OPERATOR_ACCOUNTS),
+    isOpen: env.REPLAYS_OPEN === 'true',
+  }
 }
 
 function readStorage(env: Env): S3ObjectStoreOptions | null {

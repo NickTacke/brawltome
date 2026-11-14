@@ -9,4 +9,6 @@ export type ModuleRuntime = {
   objectStore?: ObjectStore
   // accounts allowed to upload any replay, for testing (REPLAY_OPERATOR_ACCOUNTS)
   replayOperatorAccountIds?: readonly string[]
+  // whether everyone sees replays and match pages; until then only the operators do (REPLAYS_OPEN)
+  replaysOpen?: boolean
 }

@@ -111,6 +111,7 @@ const moduleRuntime: ModuleRuntime = {
   database,
   objectStore: replayFiles,
   replayOperatorAccountIds: replayConfig.operatorAccountIds,
+  replaysOpen: replayConfig.isOpen,
 }
 
 const postgresReadiness = createPostgresReadiness(
