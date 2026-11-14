@@ -127,6 +127,16 @@ describe('the bh-native process pool', () => {
     expect((await pool.play(replay('next.replay', 'ok'))).kind).toBe('line')
   })
 
+  test('the timeout counts from when the process starts a replay, not while it waits behind another', async () => {
+    const { gameRoot, replay } = setup(['11.00'])
+    // one process and a 1 s timeout; the second replay waits 0.7 s behind the first, then takes 0.7 s itself
+    const pool = await startPool(gameRoot, 1, 0)
+
+    const answers = await Promise.all([pool.play(replay('a.replay', 'slow')), pool.play(replay('b.replay', 'slow'))])
+
+    expect(answers.map((answer) => answer.kind)).toEqual(['line', 'line'])
+  })
+
   test('while a process can\u2019t start again the pool isn\u2019t ready, and it recovers on its own', async () => {
     const { gameRoot, replay } = setup(['11.00'])
     const pool = await startPool(gameRoot)

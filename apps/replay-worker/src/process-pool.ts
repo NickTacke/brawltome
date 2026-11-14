@@ -116,14 +116,12 @@ export class ProcessPool {
     slot.inFlight += 1
 
     try {
-      const answer = await withTimeout(process.play(replayPath), this.config.replayTimeoutMs)
+      const answer = await process.play(replayPath, this.config.replayTimeoutMs)
 
       if (answer === 'timed-out') {
-        // a game stuck in a loop never answers; out of the slot at once, so nothing more is sent to it, and killing
-        // it lets the slot start a fresh one
+        // the process killed itself; out of the slot at once, so nothing more is sent to it, and its exit starts a
+        // fresh one
         if (slot.live === process) slot.live = null
-
-        process.close()
 
         return { kind: 'failure', code: 'worker-error', message: `no answer within ${this.config.replayTimeoutMs} ms` }
       }
@@ -157,19 +155,5 @@ export class ProcessPool {
         await Bun.sleep(this.config.restartDelayMs)
       }
     }
-  }
-}
-
-async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T | 'timed-out'> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-
-  const timeout = new Promise<'timed-out'>((resolve) => {
-    timer = setTimeout(() => resolve('timed-out'), timeoutMs)
-  })
-
-  try {
-    return await Promise.race([work, timeout])
-  } finally {
-    clearTimeout(timer)
   }
 }
