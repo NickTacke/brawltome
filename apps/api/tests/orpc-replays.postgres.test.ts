@@ -63,6 +63,18 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
     return bytes
   }
 
+  test('a request body larger than a full upload is refused before it is read', async () => {
+    const form = new FormData()
+
+    form.append('files[0]', new File([new Uint8Array(49 * 1024 * 1024)], 'huge.replay'))
+
+    const response = await app.fetch(
+      new Request('http://api.test/v1/replays', { method: 'POST', headers: siteHeaders(), body: form }),
+    )
+
+    expect(response.status).toBe(413)
+  })
+
   test('a multipart upload queues the file', async () => {
     const form = new FormData()
 

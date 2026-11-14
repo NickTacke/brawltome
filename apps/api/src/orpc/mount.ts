@@ -7,11 +7,16 @@ import { ORPCError, onError, type Router } from '@orpc/server'
 import { RPCHandler } from '@orpc/server/fetch'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { createOrpcContext, type OrpcContext, type OrpcContextOptions } from './context'
 
 const RPC_PREFIX = '/rpc' as const
 // plain HTTP routes of the same router; /v1 is free of the other mounts in serve.ts
 const REST_PREFIX = '/v1' as const
+
+// the largest body an oRPC call needs is a full replay upload, 20 files of up to 2 MiB; bigger ones are refused
+// before the form is parsed into memory
+const MAX_REQUEST_BYTES = 48 * 1024 * 1024
 
 const openApiGenerator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],
@@ -93,6 +98,14 @@ export function createOrpcRoutes(options: OrpcContextOptions & { router: Mountab
   })
 
   const contextOptions = { telemetry, internalSecret }
+
+  routes.use(
+    '*',
+    bodyLimit({
+      maxSize: MAX_REQUEST_BYTES,
+      onError: (c) => c.json({ code: 'PAYLOAD_TOO_LARGE', message: 'The request body is too large' }, 413),
+    }),
+  )
 
   mountHandler(routes, RPC_PREFIX, rpcHandler, contextOptions)
   mountHandler(routes, REST_PREFIX, restHandler, contextOptions)

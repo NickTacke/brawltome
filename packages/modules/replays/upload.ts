@@ -5,7 +5,10 @@ import { MAX_PENDING_PER_ACCOUNT, MAX_REPLAY_BYTES, MAX_UPLOADS_PER_DAY } from '
 import type { ReplaysDeps } from './model'
 import { owningUploads, settleUploads, waitingUploads } from './ownership'
 
-export type UploadFile = { name: string; bytes: Uint8Array }
+// a File fits; its size is checked before it's read, so an oversized file never lands in memory twice
+export type UploadFile = { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> }
+
+type ReadFile = { name: string; bytes: Uint8Array }
 
 export type UploadRejectionCode = 'too-large' | 'not-a-replay' | 'too-many-pending' | 'daily-limit' | 'not-your-match'
 
@@ -31,7 +34,10 @@ export async function uploadReplays(deps: UploadDeps, input: UploadInput): Promi
   return outcomes
 }
 
-async function uploadOne(deps: UploadDeps, input: UploadInput, file: UploadFile): Promise<UploadOutcome> {
+async function uploadOne(deps: UploadDeps, input: UploadInput, upload: UploadFile): Promise<UploadOutcome> {
+  if (upload.size > MAX_REPLAY_BYTES) return rejected(upload.name, 'too-large')
+
+  const file: ReadFile = { name: upload.name, bytes: new Uint8Array(await upload.arrayBuffer()) }
   const rejection = checkFile(file.bytes)
 
   if (rejection) return rejected(file.name, rejection)
@@ -151,7 +157,7 @@ async function storeFile(deps: UploadDeps, digest: string, bytes: Uint8Array): P
 async function recordUpload(
   sql: Sql,
   input: UploadInput,
-  file: UploadFile,
+  file: ReadFile,
   digest: string,
 ): Promise<UploadRejectionCode | null> {
   return sql.begin(async (transaction) => {

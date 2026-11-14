@@ -59,13 +59,9 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
         })
       }
 
-      const files = await Promise.all(
-        input.files.map(async (file) => ({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) })),
-      )
-
       const outcomes = await uploadReplays(
         { database: runtime.database, objectStore: objectStore(), accounts },
-        { accountId: account.id, isOperator, files },
+        { accountId: account.id, isOperator, files: input.files },
       )
 
       return { outcomes }
