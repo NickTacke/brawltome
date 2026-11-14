@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Sql } from '@brawltome/foundation'
+import type { Sql, TransactionSql } from '@brawltome/foundation'
 import { replayKey } from './keys'
 import { MAX_PENDING_PER_ACCOUNT, MAX_REPLAY_BYTES, MAX_UPLOADS_PER_DAY } from './limits'
 import type { ReplaysDeps } from './model'
@@ -41,13 +41,17 @@ async function uploadOne(deps: UploadDeps, input: UploadInput, file: UploadFile)
 
   if (existing) return { ...existing, fileName: file.name }
 
+  // checked here too, so a refused file never reaches the bucket; recordUpload checks again under the lock
   const limit = await checkLimits(deps.database.sql, input.accountId)
 
   if (limit) return rejected(file.name, limit)
 
   await storeFile(deps, digest, file.bytes)
 
-  await recordUpload(deps.database.sql, input, file, digest)
+  const recordLimit = await recordUpload(deps.database.sql, input, file, digest)
+
+  if (recordLimit) return rejected(file.name, recordLimit)
+
   await joinExistingMatch(deps, digest)
 
   const recorded = await findUpload(deps.database.sql, input.accountId, digest)
@@ -90,7 +94,7 @@ function rejected(fileName: string, rejection: UploadRejectionCode): UploadOutco
 }
 
 async function findUpload(
-  sql: Sql,
+  sql: Sql | TransactionSql,
   accountId: string,
   digest: string,
 ): Promise<Omit<UploadOutcome, 'fileName'> | null> {
@@ -113,7 +117,7 @@ async function findUpload(
   }
 }
 
-async function checkLimits(sql: Sql, accountId: string): Promise<UploadRejectionCode | null> {
+async function checkLimits(sql: Sql | TransactionSql, accountId: string): Promise<UploadRejectionCode | null> {
   const [counts] = await sql<{ pending: number; today: number }[]>`
     SELECT
       (SELECT count(*)::int FROM replays.uploads AS upload
@@ -142,8 +146,23 @@ async function storeFile(deps: UploadDeps, digest: string, bytes: Uint8Array): P
   await deps.objectStore.put(replayKey(digest), bytes, 'application/octet-stream')
 }
 
-async function recordUpload(sql: Sql, input: UploadInput, file: UploadFile, digest: string): Promise<void> {
+// one account's uploads are recorded one at a time, so two requests at once can't both pass the limits or both
+// insert the same file; a file already recorded by the other request is simply kept
+async function recordUpload(
+  sql: Sql,
+  input: UploadInput,
+  file: UploadFile,
+  digest: string,
+): Promise<UploadRejectionCode | null> {
   return sql.begin(async (transaction) => {
+    await transaction`SELECT pg_advisory_xact_lock(hashtextextended(${`replay-uploads:${input.accountId}`}, 0))`
+
+    if (await findUpload(transaction, input.accountId, digest)) return null
+
+    const limit = await checkLimits(transaction, input.accountId)
+
+    if (limit) return limit
+
     await transaction`
       INSERT INTO replays.replay_files (digest, byte_size) VALUES (${digest}, ${file.bytes.byteLength})
       ON CONFLICT (digest) DO UPDATE SET deleted_at = NULL
@@ -161,5 +180,7 @@ async function recordUpload(sql: Sql, input: UploadInput, file: UploadFile, dige
       WHERE NOT EXISTS (SELECT 1 FROM replays.matches WHERE digest = ${digest})
       ON CONFLICT (digest) WHERE status IN ('pending', 'processing') DO NOTHING
     `
+
+    return null
   })
 }
