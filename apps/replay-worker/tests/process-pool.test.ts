@@ -107,15 +107,12 @@ describe('the bh-native process pool', () => {
     expect((await pool.play(replay('next.replay', 'ok'))).kind).toBe('line')
   })
 
-  test('reports the build and the patches its processes have answered for', async () => {
-    const { gameRoot, replay } = setup(['11.00', '10.09'])
+  test('reports the build and the patches of its running processes from the start', async () => {
+    const { gameRoot } = setup(['11.00', '10.09'])
     const pool = await startPool(gameRoot)
 
-    expect(pool.report()).toEqual({ build: 'dev-test', patches: [] })
-
-    await pool.play(replay('a.replay', 'ok'))
-
-    expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00'] })
+    // before any replay, so a restarted worker keeps its previous patch's files from expiring
+    expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00', '10.09'] })
   })
 
   test('a replay that never gets an answer fails with worker-error and its process is replaced', async () => {

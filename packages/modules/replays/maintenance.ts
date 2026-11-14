@@ -2,11 +2,13 @@ import type { Sql } from '@brawltome/foundation'
 import { replayKey } from './keys'
 import { FILE_GRACE_DAYS } from './limits'
 import type { ReplaysDeps } from './model'
+import { comparePatchesNewestFirst } from './patches'
 
 // replay files live as long as their patch's game folder lives on the replay vm. the worker's claims say which
 // patches it runs, and they start this cleanup; with no claims (the worker is down) nothing is ever deleted
 
-// the newest patches by when the worker first ran them; their files are never deleted, whatever the dates say
+// the newest patches by version, the ones the worker's game folders most likely still hold; their files are never
+// deleted, whatever the dates say
 const KEPT_PATCHES = 2
 
 /** Records what the worker runs; a build never seen before queues a re-parse of every match whose file is kept. */
@@ -53,13 +55,14 @@ export async function cleanupIfDue(deps: ReplaysDeps, now: Date): Promise<void> 
  */
 export async function cleanupReplayFiles(deps: ReplaysDeps, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - FILE_GRACE_DAYS * 24 * 60 * 60 * 1000)
+  const keptPatches = await newestPatches(deps.database.sql)
 
   const expired = await deps.database.sql<{ digest: string }[]>`
     SELECT file.digest FROM replays.replay_files AS file
     WHERE file.deleted_at IS NULL
       AND (
         (file.patch IN (SELECT patch FROM replays.worker_reports WHERE last_reported_at < ${cutoff})
-          AND file.patch NOT IN (SELECT patch FROM replays.worker_reports ORDER BY first_reported_at DESC LIMIT ${KEPT_PATCHES}))
+          AND NOT file.patch = ANY(${keptPatches}::text[]))
         OR (file.created_at < ${cutoff}
           AND NOT EXISTS (SELECT 1 FROM replays.matches WHERE digest = file.digest)
           AND NOT EXISTS (SELECT 1 FROM replays.jobs WHERE digest = file.digest AND status IN ('pending', 'processing')))
@@ -72,6 +75,13 @@ export async function cleanupReplayFiles(deps: ReplaysDeps, now: Date): Promise<
   }
 
   return expired.length
+}
+
+async function newestPatches(sql: Sql): Promise<string[]> {
+  const reports = await sql<{ patch: string }[]>`SELECT patch FROM replays.worker_reports`
+  const patches = reports.map((report) => report.patch).sort(comparePatchesNewestFirst)
+
+  return patches.slice(0, KEPT_PATCHES)
 }
 
 export type ReplayQueueInspection = {

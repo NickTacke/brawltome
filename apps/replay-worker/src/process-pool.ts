@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { BhnativeProcess } from './bhnative-process'
 import { listPatches } from './game-folders'
 
@@ -89,11 +89,16 @@ export class ProcessPool {
     }
   }
 
-  /** What the worker tells the api when it claims: its bh-native build and the patches its processes answered for. */
+  /**
+   * What the worker tells the api when it claims: its bh-native build and the patches it runs. A process that hasn't
+   * answered yet counts by its folder's name, so a restarted worker still reports the patch it can play.
+   */
   report(): { build: string; patches: string[] } {
     const patches = new Set<string>()
 
-    for (const slot of this.groups.flat()) if (slot.live?.patch) patches.add(slot.live.patch)
+    for (const slot of this.groups.flat()) {
+      if (slot.live) patches.add(slot.live.patch ?? basename(slot.gameFolder))
+    }
 
     return { build: this.config.build, patches: [...patches] }
   }
