@@ -70,9 +70,12 @@ export class BhnativeProcess {
     return started
   }
 
-  /** Plays one replay; calls are answered one at a time, in the order they were made. */
-  play(replayPath: string): Promise<ReplayAnswer> {
-    const answer = this.queue.then(() => this.send(replayPath))
+  /**
+   * Plays one replay; calls are answered one at a time, in the order they were made. The timeout starts when the
+   * replay reaches the game, not while it waits behind others; a replay that runs out of time kills the process.
+   */
+  play(replayPath: string, timeoutMs: number): Promise<ReplayAnswer | 'timed-out'> {
+    const answer = this.queue.then(() => this.send(replayPath, timeoutMs))
 
     this.queue = answer.catch(() => undefined)
 
@@ -83,7 +86,7 @@ export class BhnativeProcess {
     this.child.kill()
   }
 
-  private async send(replayPath: string): Promise<ReplayAnswer> {
+  private async send(replayPath: string, timeoutMs: number): Promise<ReplayAnswer | 'timed-out'> {
     if (!this.isAlive) throw new Error('bhnative is no longer running')
 
     const line = new Promise<string>((resolve, reject) => this.waiters.push({ resolve, reject }))
@@ -91,7 +94,16 @@ export class BhnativeProcess {
     this.child.stdin.write(`${replayPath}\n`)
     await this.child.stdin.flush()
 
-    return this.learnFrom(await line)
+    const answer = await withTimeout(line, timeoutMs)
+
+    if (answer !== 'timed-out') return this.learnFrom(answer)
+
+    // a game stuck in a loop never answers; killed at once, so the replays queued behind it fail fast instead of
+    // waiting on it, and a late line can't be taken for theirs
+    this.isAlive = false
+    this.close()
+
+    return 'timed-out'
   }
 
   private learnFrom(raw: string): ReplayAnswer {
@@ -160,5 +172,19 @@ async function* lines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string
 
       newline = buffered.indexOf('\n')
     }
+  }
+}
+
+async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T | 'timed-out'> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const timeout = new Promise<'timed-out'>((resolve) => {
+    timer = setTimeout(() => resolve('timed-out'), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    clearTimeout(timer)
   }
 }
