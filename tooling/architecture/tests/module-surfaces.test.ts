@@ -8,6 +8,7 @@ import * as player from '@brawltome/player'
 import * as queue from '@brawltome/queue'
 import * as ranking from '@brawltome/ranking'
 import * as replayAnalysis from '@brawltome/replay-analysis'
+import * as replays from '@brawltome/replays'
 import * as requestAdmission from '@brawltome/request-admission'
 import * as statistics from '@brawltome/statistics'
 import { Column, is, Table, View } from 'drizzle-orm'
@@ -29,6 +30,7 @@ const modulePackages: Record<string, ModulePackage> = {
   '@brawltome/ranking': { exports: ranking, module: ranking.rankingModule },
   '@brawltome/queue': { exports: queue, module: queue.queueModule },
   '@brawltome/replay-analysis': { exports: replayAnalysis, module: replayAnalysis.replayAnalysisModule },
+  '@brawltome/replays': { exports: replays, module: replays.replaysModule },
   '@brawltome/request-admission': { exports: requestAdmission, module: requestAdmission.requestAdmissionModule },
   '@brawltome/statistics': { exports: statistics, module: statistics.statisticsModule },
 }

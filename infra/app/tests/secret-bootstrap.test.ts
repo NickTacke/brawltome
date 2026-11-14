@@ -32,7 +32,9 @@ printf 'matches-preview=%s\\n' "\${MATCHES_PREVIEW_TOKEN:-}"
 printf 'metrics=%s\\n' "\${METRICS_SCRAPE_SECRET:-}"
 printf 'otel=%s\\n' "\${OTEL_EXPORTER_OTLP_AUTHORIZATION:-}"
 printf 'trust=%s\\n' "\${REFRESH_TRUST_COOKIE_SECRET:-}"
-printf 'replay-bridge=%s\\n' "\${REPLAY_BRIDGE_SECRET:-}"
+printf 'r2-key=%s\\n' "\${R2_ACCESS_KEY_ID:-}"
+printf 'r2-secret=%s\\n' "\${R2_SECRET_ACCESS_KEY:-}"
+printf 'replay-worker=%s\\n' "\${REPLAY_WORKER_TOKEN:-}"
 printf 'turnstile=%s\\n' "\${TURNSTILE_SECRET_KEY:-}"
 `
 
@@ -60,7 +62,9 @@ describe('application secret bootstrap', () => {
       metrics_scrape_secret: 'metrics-secret-value',
       otel_authorization: 'Bearer otel-secret-value',
       refresh_trust_cookie_secret: 'trust-secret-value',
-      replay_bridge_secret: 'replay-bridge-secret-value',
+      r2_access_key_id: 'r2-key-value',
+      r2_secret_access_key: 'r2-secret-value',
+      replay_worker_token: 'replay-worker-token-value',
       turnstile_secret_key: 'turnstile-secret-value',
     }
 

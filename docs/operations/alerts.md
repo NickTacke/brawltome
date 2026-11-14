@@ -184,6 +184,27 @@ docker logs --since 15m compose-program-virtual-microchip-uqxbrw-<runtime>-<n> |
 If the container is healthy but the scrape fails, check the target on the Prometheus targets page (Grafana Explore,
 `up{job="<runtime>"}`) for the scrape error, for example a 401 from a mismatched scrape secret.
 
+### ReplayQueueStuck
+
+**Severity:** warning.
+
+**Meaning:** an uploaded replay has waited over an hour to be parsed. The replay worker on VM 106 (in the private
+`ax42-infra` repo, `docs/replay.md`) claims jobs from the api and isn't doing so.
+
+**Likely causes:** the worker is stopped or crash-looping; its token no longer matches the api's
+`replay_worker_token` secret; the api can't be reached from the VM (Cloudflare blocking it, or DNS); every bh-native
+process failed to start, for example after a game patch whose folder isn't on the VM yet.
+
+**First steps:**
+
+```sh
+ssh root@10.50.0.10 -J root@10.20.0.1      # WireGuard tunnel up
+systemctl status replay-worker
+journalctl -u replay-worker --since -1h | tail -50
+```
+
+A 401 in the log means the tokens differ; a 403 with `cf-mitigated` means Cloudflare is blocking the VM again.
+
 ### RuntimeNotReady
 
 **Severity:** critical.

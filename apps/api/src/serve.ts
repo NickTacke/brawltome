@@ -3,7 +3,7 @@ import { createPostgresDailySalts } from '@brawltome/analytics'
 import { brawlhallaV0RequestLimit } from '@brawltome/bhapi'
 import { createClanRefreshReservations, createPostgresClans } from '@brawltome/clan'
 import { createPostgresDiscovery } from '@brawltome/discovery'
-import { checkModuleList, type Migration, type ModuleRuntime } from '@brawltome/foundation'
+import { checkModuleList, createS3ObjectStore, type Migration, type ModuleRuntime } from '@brawltome/foundation'
 import {
   createPlayerRefreshReservations,
   createPostgresCareerPlayers,
@@ -14,7 +14,7 @@ import {
 } from '@brawltome/player'
 import { createPostgresRefreshOperations } from '@brawltome/queue'
 import { createPostgresRanking } from '@brawltome/ranking'
-import { createPostgresReplayAnalysisJobs } from '@brawltome/replay-analysis'
+import { createReplayJobs, inspectReplayQueue } from '@brawltome/replays'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics } from '@brawltome/statistics'
 import { instrumentHttpHandler, observeSourceCall, renderPrometheus } from '@brawltome/telemetry'
@@ -43,10 +43,11 @@ import { createVisitorRefreshProcedures } from './orpc/visitor-refresh'
 import { createVisitorViewProcedures } from './orpc/visitor-views'
 import { createPostgresReadiness } from './postgres-readiness'
 import { createRefreshEventStreams } from './refresh-event-streams'
+import { readReplayConfig } from './replay-config'
 import { appRouter } from './router'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
-import { createReplayAnalysisRoutes, createReplayBridgeRoutes } from './routes/replay-analysis.routes'
+import { createReplayWorkerRoutes } from './routes/replay-worker.routes'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { createRuntimeTelemetry } from './telemetry'
@@ -64,12 +65,6 @@ const refreshTrustSecret = process.env.REFRESH_TRUST_COOKIE_SECRET
 
 if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
   throw new Error('REFRESH_TRUST_COOKIE_SECRET must be set and at least 32 bytes')
-}
-
-const replayBridgeSecret = process.env.REPLAY_BRIDGE_SECRET
-
-if (!replayBridgeSecret || Buffer.byteLength(replayBridgeSecret) < 32) {
-  throw new Error('REPLAY_BRIDGE_SECRET must be set and at least 32 bytes')
 }
 
 const authenticatedRefreshIpLimit = readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT)
@@ -105,12 +100,19 @@ const requestAdmission = createPostgresRequestAdmission(database, {
 
 const ranking = createPostgresRanking(database)
 const statistics = createPostgresStatistics(database)
-const replayAnalysisJobs = createPostgresReplayAnalysisJobs(database)
 const clanRepo = createPostgresClans(database)
 const clanRefreshReservations = createClanRefreshReservations(database)
 const playerRefreshReservations = createPlayerRefreshReservations(database)
 const dailySalts = createPostgresDailySalts(database)
-const moduleRuntime: ModuleRuntime = { database }
+const replayConfig = readReplayConfig(process.env)
+const replayFiles = replayConfig.storage ? createS3ObjectStore(replayConfig.storage) : undefined
+
+const moduleRuntime: ModuleRuntime = {
+  database,
+  objectStore: replayFiles,
+  replayOperatorAccountIds: replayConfig.operatorAccountIds,
+  replaysOpen: replayConfig.isOpen,
+}
 
 const postgresReadiness = createPostgresReadiness(
   database.sql,
@@ -202,7 +204,7 @@ app.use(
   cors({
     origin: (origin) => (corsOrigins.includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ['Content-Type', 'Traceparent', 'X-Replay-File-Name', 'X-Request-Id'],
+    allowHeaders: ['Content-Type', 'Traceparent', 'X-Request-Id'],
   }),
 )
 
@@ -229,8 +231,13 @@ app.route(
 )
 
 app.route('/events', createRefreshEventRoutes(refreshEvents))
-app.route('/api', createReplayAnalysisRoutes({ accounts, jobs: replayAnalysisJobs, webOrigin: authConfig.webOrigin }))
-app.route('/internal/replays', createReplayBridgeRoutes({ jobs: replayAnalysisJobs, secret: replayBridgeSecret }))
+
+// the replay worker on VM 106 claims parse jobs here; without a bucket (local development) there is nothing to serve
+if (replayFiles) {
+  const replayJobs = createReplayJobs({ database, objectStore: replayFiles, accounts })
+
+  app.route('/internal/replays', createReplayWorkerRoutes({ jobs: replayJobs, token: replayConfig.workerToken }))
+}
 
 app.use(
   '/trpc/*',
@@ -285,10 +292,17 @@ app.get('/metrics', async (c) => {
   }
 
   try {
-    const [operations, quota] = await Promise.all([
+    const [operations, quota, replays] = await Promise.all([
       refreshOperations.inspectTelemetry(),
       requestAdmission.inspectCurrentUsage(),
+      inspectReplayQueue(database.sql),
     ])
+
+    for (const [status, count] of Object.entries(replays.jobsByStatus)) {
+      telemetry.metrics.set('replay_jobs', count, { status })
+    }
+
+    telemetry.metrics.set('replay_oldest_pending_age_ms', replays.oldestPendingAgeMs, {})
 
     for (const item of operations.oldestPending) {
       telemetry.metrics.set('operation_oldest_pending_age_ms', item.ageMs, { work_class: item.workClass })

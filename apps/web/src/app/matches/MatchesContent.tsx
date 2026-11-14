@@ -1,10 +1,8 @@
 import { WorkInProgress } from '@/components/WorkInProgress'
 import { matchesPreviewCookieAuthorized } from '@/lib/matches-preview'
 import { MatchesPreview } from './MatchesPreview'
-import { ReplayAnalysisPage } from './ReplayAnalysisPage'
 
 export type MatchesPreviewQuery = {
-  readonly analyze?: string | readonly string[]
   readonly match?: string | readonly string[]
   readonly player?: string | readonly string[]
 }
@@ -21,8 +19,6 @@ export function MatchesContent({
   query?: MatchesPreviewQuery
 }) {
   if (!matchesPreviewCookieAuthorized(previewCookie)) return <WorkInProgress slug="matches" />
-
-  if (one(query.analyze) === '1') return <ReplayAnalysisPage />
 
   const matchId = one(query.match)
   const playerId = one(query.player)

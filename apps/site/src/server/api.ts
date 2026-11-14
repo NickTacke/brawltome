@@ -14,6 +14,16 @@ function readSetting(name: 'INTERNAL_API_URL' | 'INTERNAL_API_SECRET', descripti
   return value
 }
 
+/** The api answered, but not with 2xx; the status tells a caller what happened (403, 404, 410). */
+export class ApiAnswerError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
+
 function isTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'TimeoutError'
 }
@@ -43,13 +53,12 @@ async function withFailureMessage<T>(
   }
 }
 
-async function requestApi<T>(
+async function fetchApi(
   path: string,
   init: RequestInit,
-  schema: ZodType<T>,
   description: string,
   { timeoutMs = defaultTimeoutMs, headers: extraHeaders = {} }: RequestOptions,
-): Promise<T> {
+): Promise<Response> {
   const apiUrl = readSetting('INTERNAL_API_URL', description)
   const internalSecret = readSetting('INTERNAL_API_SECRET', description)
 
@@ -70,7 +79,20 @@ async function requestApi<T>(
     timeoutMs,
   )
 
-  if (!response.ok) throw new Error(`${description}: api answered ${response.status}`)
+  if (!response.ok) throw new ApiAnswerError(`${description}: api answered ${response.status}`, response.status)
+
+  return response
+}
+
+async function requestApi<T>(
+  path: string,
+  init: RequestInit,
+  schema: ZodType<T>,
+  description: string,
+  options: RequestOptions,
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? defaultTimeoutMs
+  const response = await fetchApi(path, init, description, options)
 
   const answer: unknown = await withFailureMessage(
     () => response.json(),
@@ -128,4 +150,20 @@ export function postApi<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   return writeApi('POST', path, body, schema, description, options)
+}
+
+/** Calls POST /v1{path} with a multipart body, for file uploads. Only for server functions. */
+export function postApiForm<T>(
+  path: string,
+  form: FormData,
+  schema: ZodType<T>,
+  description: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  return requestApi(path, { method: 'POST', body: form }, schema, description, options)
+}
+
+/** Calls GET /v1{path} and hands back the answer as it came, for files. Only for server functions. */
+export function readApiFile(path: string, description: string, options: RequestOptions = {}): Promise<Response> {
+  return fetchApi(path, { method: 'GET' }, description, options)
 }

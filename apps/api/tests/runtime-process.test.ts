@@ -43,7 +43,7 @@ function apiEnvironment(port: number) {
     INTERNAL_API_SECRET: 'runtime-process-test-secret-32-characters',
     METRICS_SCRAPE_SECRET: 'runtime-process-metrics-secret-32-chars',
     REFRESH_TRUST_COOKIE_SECRET: 'runtime-process-refresh-trust-secret-32-characters',
-    REPLAY_BRIDGE_SECRET: 'runtime-process-replay-bridge-secret-32-characters',
+    REPLAY_WORKER_TOKEN: 'replay-worker-token-for-process-tests-32-bytes',
     PORT: String(port),
     RUNTIME_SHUTDOWN_DEADLINE_MS: '2000',
     RUNTIME_CLEANUP_RESERVE_MS: '500',

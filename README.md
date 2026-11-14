@@ -91,7 +91,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Set `BRAWLHALLA_API_KEY` in `.env`. Generate independent values for `INTERNAL_API_SECRET`, `REFRESH_TRUST_COOKIE_SECRET`, and `REPLAY_BRIDGE_SECRET`:
+Set `BRAWLHALLA_API_KEY` in `.env`. Generate independent values for `INTERNAL_API_SECRET` and `REFRESH_TRUST_COOKIE_SECRET`:
 
 ```bash
 openssl rand -hex 32

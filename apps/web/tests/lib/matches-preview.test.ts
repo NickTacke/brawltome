@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server'
 import { MatchesContent } from '@/app/matches/MatchesContent'
 import { MatchesPreview } from '@/app/matches/MatchesPreview'
 import { GET } from '@/app/matches/preview/route'
-import { ReplayAnalysisPage } from '@/app/matches/ReplayAnalysisPage'
 import { WorkInProgress } from '@/components/WorkInProgress'
 import { matchesPreviewCookieAuthorized, matchesPreviewCookieName } from '@/lib/matches-preview'
 
@@ -34,7 +33,6 @@ describe('matches preview invite', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(matchesPreviewCookieAuthorized(cookieValue)).toBe(true)
     expect(MatchesContent({ previewCookie: cookieValue }).type).toBe(MatchesPreview)
-    expect(MatchesContent({ previewCookie: cookieValue, query: { analyze: '1' } }).type).toBe(ReplayAnalysisPage)
 
     const conflicting = MatchesContent({
       previewCookie: cookieValue,

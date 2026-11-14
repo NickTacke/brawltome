@@ -20,6 +20,7 @@
     "@brawltome/queue": "workspace:*",
     "@brawltome/ranking": "workspace:*",
     "@brawltome/replay-analysis": "workspace:*",
+    "@brawltome/replays": "workspace:*",
     "@brawltome/request-admission": "workspace:*",
     "@brawltome/statistics": "workspace:*",
     "@types/bun": "latest",

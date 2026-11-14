@@ -52,8 +52,10 @@ const expectedSecretFiles: Record<string, string> = {
   otel_authorization: 'otel-authorization',
   postgres_owner_password: 'postgres-owner-password',
   postgres_runtime_password: 'postgres-runtime-password',
+  r2_access_key_id: 'r2-access-key-id',
+  r2_secret_access_key: 'r2-secret-access-key',
   refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
-  replay_bridge_secret: 'replay-bridge-secret',
+  replay_worker_token: 'replay-worker-token',
   runtime_database_url: 'runtime-database-url',
   turnstile_secret_key: 'turnstile-secret-key',
 }
@@ -65,8 +67,10 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'internal_api_secret',
     'metrics_scrape_secret',
     'otel_authorization',
+    'r2_access_key_id',
+    'r2_secret_access_key',
     'refresh_trust_cookie_secret',
-    'replay_bridge_secret',
+    'replay_worker_token',
     'runtime_database_url',
     'turnstile_secret_key',
   ],
@@ -228,6 +232,16 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
 
     if (readPath(api, 'environment', 'DISCORD_REDIRECT_URI') !== 'https://api.brawltome.app/auth/discord/callback') {
       violations.push('api must use the public Discord OAuth callback')
+    }
+
+    if (readPath(api, 'environment', 'R2_BUCKET') !== 'brawltome-replays') {
+      violations.push('api must keep replays in the brawltome-replays bucket')
+    }
+
+    if (
+      !/^https:\/\/[0-9a-f]{32}\.r2\.cloudflarestorage\.com$/.test(String(readPath(api, 'environment', 'R2_ENDPOINT')))
+    ) {
+      violations.push('api must reach R2 at the account endpoint')
     }
 
     if (readPath(api, 'environment', 'STEAM_RETURN_URL') !== 'https://api.brawltome.app/auth/steam/callback') {
@@ -407,8 +421,10 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'OTEL_EXPORTER_OTLP_AUTHORIZATION',
     'POSTGRES_DEAD_LETTER_PASSWORD',
     'POSTGRES_PASSWORD',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
     'REFRESH_TRUST_COOKIE_SECRET',
-    'REPLAY_BRIDGE_SECRET',
+    'REPLAY_WORKER_TOKEN',
   ])
 
   if (Object.keys(value).some((key) => secretNames.has(key))) {

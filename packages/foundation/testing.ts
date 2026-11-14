@@ -5,6 +5,7 @@ import type { Migration } from './migration'
 import { orderMigrations } from './migrations/order'
 import { migratePostgres } from './migrations/postgres'
 import { type BrawltomeModule, checkModuleList } from './module'
+import type { ObjectStore } from './object-store'
 
 export { expectTablesMatchDatabase } from './table-drift'
 
@@ -146,4 +147,27 @@ async function migrateOrDrop(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** An object store held in memory, for tests; keys() lists what it holds, sorted. */
+export function createMemoryObjectStore(): ObjectStore & { keys(): string[] } {
+  const objects = new Map<string, Uint8Array>()
+
+  return {
+    async put(key, body) {
+      objects.set(key, body.slice())
+    },
+
+    async get(key) {
+      return objects.get(key)?.slice() ?? null
+    },
+
+    async delete(key) {
+      objects.delete(key)
+    },
+
+    keys() {
+      return [...objects.keys()].sort()
+    },
+  }
 }

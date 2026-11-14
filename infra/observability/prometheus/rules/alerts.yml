@@ -63,6 +63,19 @@ groups:
           description: "The oldest runnable operation has exceeded the initial 15-minute operator threshold."
           runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#oldestrunnablejobdelayed"
 
+      # uploads wait for the replay worker on VM 106, which nothing else watches
+      - alert: ReplayQueueStuck
+        expr: max(replay_oldest_pending_age_ms) > 3600000
+        for: 5m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: replay-queue
+        annotations:
+          summary: "Replays have waited over an hour"
+          description: "The oldest uploaded replay has waited more than an hour for the replay worker on VM 106."
+          runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#replayqueuestuck"
+
       # The leaderboard deep crawl runs for hours by design, so its schedule is always "late" while it works.
       - alert: ScheduleMaterializationLate
         expr: max by (kind) (schedule_lateness_ms{kind!="leaderboard-deep-crawl"}) > 300000

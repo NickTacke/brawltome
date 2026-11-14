@@ -23,7 +23,7 @@ one Postgres schema and the migrations that create it, and exposes one `index.ts
 | `player` | `players` | Profiles, career and ranked stats, freshness, name verification |
 | `queue` | `queue` | The job queue: leases, scheduling, dead letters |
 | `ranking` | `rankings` | Leaderboard snapshots and their retention |
-| `replay-analysis` | `replay_analysis` | Replay analysis jobs |
+| `replay-analysis` | `replay_analysis` | None left: keeps the deployed prototype migration and the one that dropped its schema |
 | `request-admission` | `request_admission` | Rate limits for visitors and for the Brawlhalla API budget |
 | `statistics` | `statistics` | Cohorts, legend meta, weapon usage, history |
 

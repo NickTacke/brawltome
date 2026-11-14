@@ -13,6 +13,7 @@ const requiredAlerts = [
   'RuntimeNotReady',
   'WorkerHeartbeatStale',
   'OldestRunnableJobDelayed',
+  'ReplayQueueStuck',
   'ScheduleMaterializationLate',
   'NewDeadLetters',
   'RefreshFailuresElevated',
