@@ -136,7 +136,9 @@ describe('the matches page while replays are closed', () => {
     process.env.PUBLIC_API_URL = 'https://api.test'
 
     stubApi((path) =>
-      path === '/replays/access' ? Response.json({ isOpen: false, canSee: false }) : Response.json({}),
+      path === '/replays/access'
+        ? Response.json({ isOpen: false, canSee: false, canUpload: false })
+        : Response.json({}),
     )
 
     expect(await loadMatchesPage('raw-session-token')).toEqual({ kind: 'comingSoon' })
@@ -144,9 +146,34 @@ describe('the matches page while replays are closed', () => {
 
   test('signed out while closed is the coming-soon page too, without asking about an account', async () => {
     process.env.PUBLIC_API_URL = 'https://api.test'
-    const calls = stubApi(() => Response.json({ isOpen: false, canSee: false }))
+    const calls = stubApi(() => Response.json({ isOpen: false, canSee: false, canUpload: false }))
 
     expect(await loadMatchesPage(undefined)).toEqual({ kind: 'comingSoon' })
     expect(calls.map((call) => call.path)).toEqual(['/replays/access'])
+  })
+})
+
+describe('the matches page for a signed-in visitor', () => {
+  useApiSettings()
+
+  test('shows the upload form when the api says they may upload, Steam link or not', async () => {
+    process.env.PUBLIC_API_URL = 'https://api.test'
+
+    const account = {
+      id: '2f1b5ca7-0c73-4ac8-93ea-a22a663cb295',
+      displayName: 'Ada',
+      avatarUrl: null,
+      createdAt: '2025-03-12T10:00:00.000Z',
+    }
+
+    const answers: Record<string, unknown> = {
+      '/replays/access': { isOpen: false, canSee: true, canUpload: true },
+      '/account': { status: 'signedIn', account, sessionExpiresAt: '2026-11-20T12:00:00.000Z' },
+      '/me/replays': { replays: [] },
+    }
+
+    stubApi((path) => Response.json(answers[path] ?? {}))
+
+    expect(await loadMatchesPage('raw-session-token')).toMatchObject({ kind: 'signedIn', canUpload: true })
   })
 })

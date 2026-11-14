@@ -128,9 +128,10 @@ export const MAX_REPLAYS_PER_UPLOAD = 20
 
 export const replayUploadInputSchema = z.object({ files: z.array(z.file()).min(1).max(MAX_REPLAYS_PER_UPLOAD) })
 
-// whether the visitor may see replays and match pages: everyone once they're open, operators before that
+// whether the visitor may see replays and match pages (everyone once they're open, operators before that), and
+// whether they may upload: a player verified with Steam, or an operator
 export const replayAccessSchema = z
-  .object({ isOpen: z.boolean(), canSee: z.boolean() })
+  .object({ isOpen: z.boolean(), canSee: z.boolean(), canUpload: z.boolean() })
   .strict()
   .meta({ id: 'ReplayAccess' })
 

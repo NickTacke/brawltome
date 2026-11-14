@@ -1,5 +1,5 @@
 import '@tanstack/react-start/server-only'
-import { accountSessionSchema, primaryPlayerVerificationStateSchema, replayAccessSchema } from '@brawltome/contracts'
+import { accountSessionSchema, replayAccessSchema } from '@brawltome/contracts'
 import type { MatchesPage } from '../components/matches/matches-model'
 import { accountLinks } from './account-links'
 import { readApi } from './api'
@@ -20,14 +20,12 @@ export async function loadMatchesPage(sessionToken: string | undefined): Promise
 
   if (current.status === 'anonymous') return { kind: 'signedOut', signInUrl: links.signIn }
 
-  const [verification, replays] = await Promise.all([
-    readApi('/account/primary-player', primaryPlayerVerificationStateSchema, 'load matches page', headers),
-    loadMyReplays(sessionToken),
-  ])
+  const replays = await loadMyReplays(sessionToken)
 
   return {
     kind: 'signedIn',
-    isVerified: verification.primaryPlayer !== null,
+    // a verified player, or an operator, who may upload without one
+    canUpload: access.canUpload,
     verifySteamUrl: links.verifySteam,
     replays,
   }
