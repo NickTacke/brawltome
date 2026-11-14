@@ -304,4 +304,66 @@ describe.skipIf(!connectionString)('replay jobs', () => {
     expect(row?.status).toBe('done')
     expect(outcome?.status).not.toBe('rejected')
   })
+
+  test('a failure from an attempt whose lease was taken over in the meantime changes nothing', async () => {
+    const upload = await uploadAs(await playerAccount(1001))
+    const claimed = await claimJob(deps, report)
+    const jobId = claimed?.jobId as string
+
+    let letTakeoverFinish = () => {}
+
+    const takeoverMayFinish = new Promise<void>((resolve) => {
+      letTakeoverFinish = resolve
+    })
+
+    let markRowLocked = () => {}
+
+    const rowLocked = new Promise<void>((resolve) => {
+      markRowLocked = resolve
+    })
+
+    // a new claim holds the row while the old attempt's failure arrives, then gives the job a new lease
+    const takeover = database.sql.begin(async (transaction) => {
+      await transaction`SELECT 1 FROM replays.jobs WHERE id = ${jobId} FOR UPDATE`
+      markRowLocked()
+      await takeoverMayFinish
+      await transaction`UPDATE replays.jobs SET lease_token = gen_random_uuid(), attempts = attempts + 1 WHERE id = ${jobId}`
+    })
+
+    await rowLocked
+
+    const failure = failJob(deps, {
+      jobId,
+      leaseToken: claimed?.leaseToken as string,
+      code: 'game-error',
+      message: 'from the old attempt',
+    })
+
+    await waitForLockWait()
+    letTakeoverFinish()
+    await takeover
+
+    expect(await failure).toBe(false)
+
+    const [job] = await database.sql<{ status: string }[]>`SELECT status FROM replays.jobs WHERE id = ${jobId}`
+
+    expect(job?.status).toBe('processing')
+    expect((await uploadStatus(upload?.uploadId ?? null))?.status).not.toBe('rejected')
+  })
+
+  // resolves once a query in this test database waits for a row lock
+  async function waitForLockWait(): Promise<void> {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const [row] = await database.sql<{ waiting: number }[]>`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+      `
+
+      if ((row?.waiting ?? 0) > 0) return
+
+      await Bun.sleep(10)
+    }
+
+    throw new Error('no query started waiting for the job row')
+  }
 })

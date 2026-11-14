@@ -59,7 +59,7 @@ export async function claimJob(deps: ReplaysDeps, report: WorkerReport): Promise
     // the file is gone (expired with its patch), so this job can never run
     await finishWithFailure(
       deps.database.sql,
-      { id: job.jobId, digest: job.digest },
+      { id: job.jobId, digest: job.digest, leaseToken: job.leaseToken },
       'unreadable',
       'the replay file is no longer stored',
       true,
@@ -110,9 +110,15 @@ export async function completeJob(
   const parsed = readLine(input.line)
 
   if ('failure' in parsed) {
-    await finishWithFailure(deps.database.sql, job, parsed.failure, parsed.message, true)
+    const isRecorded = await finishWithFailure(
+      deps.database.sql,
+      { ...job, leaseToken: input.leaseToken },
+      parsed.failure,
+      parsed.message,
+      true,
+    )
 
-    return 'failed'
+    return isRecorded ? 'failed' : 'lease-lost'
   }
 
   return storeMatch(deps, job, input.leaseToken, parsed.line, input.line)
@@ -168,7 +174,14 @@ async function storeMatch(
     const owners = await owningUploads(deps, uploads, playerIds)
 
     if (!existing && owners.size === 0) {
-      await finishWithFailure(transaction, job, 'not-your-match', 'no uploader played in this match', true)
+      await finishWithFailure(
+        transaction,
+        { ...job, leaseToken },
+        'not-your-match',
+        'no uploader played in this match',
+        true,
+      )
+
       await transaction`UPDATE replays.replay_files SET deleted_at = clock_timestamp() WHERE digest = ${job.digest}`
 
       return 'nobody-owns-it' as const
@@ -268,34 +281,46 @@ export async function failJob(
 
   const isFinal = input.code !== 'worker-error' || job.attempts >= MAX_ATTEMPTS
 
-  await finishWithFailure(deps.database.sql, job, input.code, input.message.slice(0, 500), isFinal)
-
-  return true
+  return finishWithFailure(
+    deps.database.sql,
+    { ...job, leaseToken: input.leaseToken },
+    input.code,
+    input.message.slice(0, 500),
+    isFinal,
+  )
 }
 
+// the lease is checked in the update itself: a check before it could pass just before another claim took the job
+// over, and the old attempt would then end the new one. returns whether this attempt still held the job
 async function finishWithFailure(
   sql: Sql | TransactionSql,
-  job: Pick<LiveJob, 'id' | 'digest'>,
+  job: Pick<LiveJob, 'id' | 'digest'> & { leaseToken: string },
   code: JobFailureCode,
   message: string,
   isFinal: boolean,
-): Promise<void> {
+): Promise<boolean> {
   if (!isFinal) {
-    await sql`
+    const retried = await sql`
       UPDATE replays.jobs SET status = 'pending', lease_token = NULL, lease_expires_at = NULL, updated_at = clock_timestamp()
-      WHERE id = ${job.id}
+      WHERE id = ${job.id} AND status = 'processing' AND lease_token = ${job.leaseToken}
+        AND lease_expires_at > clock_timestamp()
     `
 
-    return
+    return retried.count === 1
   }
 
-  await sql`
+  const failed = await sql`
     UPDATE replays.jobs SET status = 'failed', lease_token = NULL, lease_expires_at = NULL, updated_at = clock_timestamp(),
       failure = ${JSON.stringify({ code, message })}::text::jsonb
-    WHERE id = ${job.id}
+    WHERE id = ${job.id} AND status = 'processing' AND lease_token = ${job.leaseToken}
+      AND lease_expires_at > clock_timestamp()
   `
 
+  if (failed.count !== 1) return false
+
   await rejectWaitingUploads(sql, job.digest, code)
+
+  return true
 }
 
 export async function renewLease(deps: ReplaysDeps, jobId: string, leaseToken: string): Promise<boolean> {
