@@ -54,7 +54,11 @@ describe.skipIf(!connectionString)('replay jobs', () => {
   }
 
   async function uploadAs(accountId: string, bytes = fakeReplay().bytes, isOperator = false) {
-    const [outcome] = await uploadReplays(deps, { accountId, isOperator, files: [{ name: 'a.replay', bytes }] })
+    const [outcome] = await uploadReplays(deps, {
+      accountId,
+      isOperator,
+      files: [new File([new Uint8Array(bytes)], 'a.replay')],
+    })
 
     return outcome
   }
@@ -281,7 +285,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
         getPrimaryPlayerVerificationState: (accountId: string) => {
           teammateUpload ??= uploadReplays(
             { ...deps, accounts },
-            { accountId: teammate, isOperator: false, files: [{ name: 'b.replay', bytes: replay.bytes }] },
+            { accountId: teammate, isOperator: false, files: [new File([new Uint8Array(replay.bytes)], 'b.replay')] },
           )
 
           return accounts.getPrimaryPlayerVerificationState(accountId)

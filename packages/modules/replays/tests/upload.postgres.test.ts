@@ -5,7 +5,7 @@ import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { replaysModule } from '../index'
 import { MAX_REPLAY_BYTES } from '../limits'
-import { uploadReplays } from '../upload'
+import { type UploadFile, uploadReplays } from '../upload'
 import { fakeReplay } from './fixtures/replays'
 
 const connectionString = process.env.DATABASE_URL
@@ -35,6 +35,13 @@ describe.skipIf(!connectionString)('uploading replays', () => {
   }
 
   function upload(accountId: string, files: { name: string; bytes: Uint8Array }[]) {
+    return uploadFiles(
+      accountId,
+      files.map((file) => new File([new Uint8Array(file.bytes)], file.name)),
+    )
+  }
+
+  function uploadFiles(accountId: string, files: UploadFile[]) {
     return uploadReplays({ database, objectStore, accounts: {} as Accounts }, { accountId, isOperator: false, files })
   }
 
@@ -81,6 +88,20 @@ describe.skipIf(!connectionString)('uploading replays', () => {
 
     expect(outcome).toMatchObject({ status: 'rejected', rejection: 'too-large' })
     expect(objectStore.keys()).toEqual([])
+  })
+
+  test('a file over 2 MiB is refused without being read', async () => {
+    const accountId = await newAccount()
+
+    const unreadable: UploadFile = {
+      name: 'huge.replay',
+      size: MAX_REPLAY_BYTES + 1,
+      arrayBuffer: () => Promise.reject(new Error('an oversized file was read')),
+    }
+
+    const [outcome] = await uploadFiles(accountId, [unreadable])
+
+    expect(outcome).toMatchObject({ fileName: 'huge.replay', status: 'rejected', rejection: 'too-large' })
   })
 
   test('a re-upload by the same account is a no-op', async () => {
