@@ -210,16 +210,45 @@ describe.skipIf(!connectionString)('replay procedures', () => {
       replaysOpen: false,
     })
 
-    expect(await call(closed.access, undefined, visitor(visitorSession))).toEqual({ isOpen: false, canSee: false })
+    expect(await call(closed.access, undefined, visitor(visitorSession))).toEqual({
+      isOpen: false,
+      canSee: false,
+      canUpload: false,
+    })
 
+    // the operator has no Steam link here, and may upload all the same
     expect(await call(closed.access, undefined, visitor(operator.sessionToken))).toEqual({
       isOpen: false,
       canSee: true,
+      canUpload: true,
     })
 
     expect(await errorCode(call(closed.match, { id: matchId }, visitor(visitorSession)))).toBe('NOT_FOUND')
     expect(await errorCode(call(closed.playerMatches, { brawlhallaId: 1002 }, visitor()))).toBe('NOT_FOUND')
     expect(await errorCode(call(closed.mine, undefined, visitor(visitorSession)))).toBe('FORBIDDEN')
     expect((await call(closed.match, { id: matchId }, visitor(operator.sessionToken))).id).toBe(matchId)
+  })
+
+  test('access says who may upload: verified players and operators, not other visitors', async () => {
+    const verified = await signIn()
+    const unverified = await signIn()
+    const operator = await signIn()
+
+    await verify(verified.account.id, (brawlhallaIds += 1))
+
+    const open = createReplayProcedures({
+      database,
+      objectStore,
+      replayOperatorAccountIds: [operator.account.id],
+      replaysOpen: true,
+    })
+
+    const canUpload = async (sessionToken?: string) =>
+      (await call(open.access, undefined, visitor(sessionToken))).canUpload
+
+    expect(await canUpload(verified.sessionToken)).toBe(true)
+    expect(await canUpload(operator.sessionToken)).toBe(true)
+    expect(await canUpload(unverified.sessionToken)).toBe(false)
+    expect(await canUpload()).toBe(false)
   })
 })

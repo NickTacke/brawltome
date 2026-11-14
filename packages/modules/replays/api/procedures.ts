@@ -32,6 +32,17 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     return authentication.status !== 'anonymous' && operators.has(authentication.account.id)
   }
 
+  // the same rule the upload itself applies
+  async function canUpload(sessionToken: string | undefined): Promise<boolean> {
+    const authentication = await accounts.authenticate(sessionToken ?? null)
+
+    if (authentication.status === 'anonymous') return false
+
+    if (operators.has(authentication.account.id)) return true
+
+    return hasVerifiedPlayer(accounts, authentication.account.id)
+  }
+
   async function requireSight(sessionToken: string | undefined, code: 'NOT_FOUND' | 'FORBIDDEN'): Promise<void> {
     if (!(await canSee(sessionToken))) throw new ORPCError(code)
   }
@@ -138,7 +149,12 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
   const access = internalProcedure
     .route({ method: 'GET', path: '/replays/access', operationId: 'replays.access', summary: 'Replay access', tags })
     .output(replayAccessSchema)
-    .handler(async ({ context }) => ({ isOpen, canSee: await canSee(context.visitorSessionToken) }))
+    .handler(async ({ context }) => {
+      const sessionToken = context.visitorSessionToken
+      const isVisible = await canSee(sessionToken)
+
+      return { isOpen, canSee: isVisible, canUpload: isVisible && (await canUpload(sessionToken)) }
+    })
 
   return { access, upload, match, playerMatches, replayFile, mine }
 }
