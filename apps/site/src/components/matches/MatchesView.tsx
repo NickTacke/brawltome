@@ -125,8 +125,8 @@ function UploadPanel() {
       </label>
       {refused.length > 0 && (
         <ul role="alert" className="mt-3 space-y-1 text-sm">
-          {refused.map((file, index) => (
-            <li key={`${index}-${file.fileName}`} className="flex justify-between gap-4">
+          {refused.map((file) => (
+            <li key={`${file.fileName}-${file.reason}`} className="flex justify-between gap-4">
               <span className="truncate text-strong">{file.fileName}</span>
               <span className="shrink-0 text-red-400">{file.reason}</span>
             </li>
