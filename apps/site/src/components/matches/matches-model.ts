@@ -3,7 +3,7 @@ import type { MyReplayContract } from '@brawltome/contracts'
 export type MatchesPage =
   | { kind: 'comingSoon' }
   | { kind: 'signedOut'; signInUrl: string }
-  | { kind: 'signedIn'; isVerified: boolean; verifySteamUrl: string; replays: MyReplayContract[] }
+  | { kind: 'signedIn'; canUpload: boolean; verifySteamUrl: string; replays: MyReplayContract[] }
 
 const rejectionText: Partial<Record<NonNullable<MyReplayContract['rejection']>, string>> = {
   'not-your-match': 'You’re not in this match',

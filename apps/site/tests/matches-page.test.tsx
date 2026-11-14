@@ -86,7 +86,7 @@ describe('the matches page', () => {
   test('without a verified player, it sends the visitor to link Steam first', async () => {
     const page: MatchesPage = {
       kind: 'signedIn',
-      isVerified: false,
+      canUpload: false,
       verifySteamUrl: 'https://api.test/auth/steam/link',
       replays: [],
     }
@@ -109,7 +109,7 @@ describe('the matches page', () => {
     ]
 
     const html = await renderInRouter(
-      <MatchesView page={{ kind: 'signedIn', isVerified: true, verifySteamUrl: '', replays }} />,
+      <MatchesView page={{ kind: 'signedIn', canUpload: true, verifySteamUrl: '', replays }} />,
     )
 
     expect(html).toContain('type="file"')

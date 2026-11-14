@@ -34,7 +34,7 @@ function PageBody({ page }: { page: Exclude<MatchesPage, { kind: 'comingSoon' }>
     )
   }
 
-  if (!page.isVerified) {
+  if (!page.canUpload) {
     return (
       <p className="text-soft">
         Replays need to be your own matches, so first{' '}
