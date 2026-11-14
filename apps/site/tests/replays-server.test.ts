@@ -136,7 +136,9 @@ describe('the matches page while replays are closed', () => {
     process.env.PUBLIC_API_URL = 'https://api.test'
 
     stubApi((path) =>
-      path === '/replays/access' ? Response.json({ isOpen: false, canSee: false, canUpload: false }) : Response.json({}),
+      path === '/replays/access'
+        ? Response.json({ isOpen: false, canSee: false, canUpload: false })
+        : Response.json({}),
     )
 
     expect(await loadMatchesPage('raw-session-token')).toEqual({ kind: 'comingSoon' })

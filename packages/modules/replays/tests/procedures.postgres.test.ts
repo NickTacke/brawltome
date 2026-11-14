@@ -234,7 +234,8 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     const unverified = await signIn()
     const operator = await signIn()
 
-    await verify(verified.account.id, (brawlhallaIds += 1))
+    brawlhallaIds += 1
+    await verify(verified.account.id, brawlhallaIds)
 
     const open = createReplayProcedures({
       database,
