@@ -153,7 +153,7 @@ async function storeMatch(
   `
 
   const matchId = existing?.id ?? randomUUID()
-  const key = timelineKey(matchId, job.build)
+  const key = timelineKey(matchId, job.build, leaseToken)
 
   // written first, so a stored match always has its timeline; dropped again below if nothing is stored
   await deps.objectStore.put(key, Bun.gzipSync(new TextEncoder().encode(rawLine)), 'application/gzip')
@@ -187,7 +187,7 @@ async function storeMatch(
       return 'nobody-owns-it' as const
     }
 
-    await writeMatch(transaction, matchId, job, line)
+    await writeMatch(transaction, { matchId, timelineKey: key }, job, line)
     await settleUploads(transaction, uploads, owners, matchId)
     await transaction`UPDATE replays.replay_files SET patch = ${line.patch} WHERE digest = ${job.digest}`
 
@@ -200,7 +200,7 @@ async function storeMatch(
   })
 
   if (outcome === 'lease-lost') {
-    if (existing?.timelineKey !== key) await deps.objectStore.delete(key)
+    await deps.objectStore.delete(key)
 
     return 'lease-lost'
   }
@@ -212,15 +212,20 @@ async function storeMatch(
     return 'failed'
   }
 
-  if (existing?.timelineKey && existing.timelineKey !== key) await deps.objectStore.delete(existing.timelineKey)
+  if (existing?.timelineKey) await deps.objectStore.delete(existing.timelineKey)
 
   return 'completed'
 }
 
-async function writeMatch(transaction: TransactionSql, matchId: string, job: LiveJob, line: PlayedLine): Promise<void> {
+async function writeMatch(
+  transaction: TransactionSql,
+  stored: { matchId: string; timelineKey: string },
+  job: LiveJob,
+  line: PlayedLine,
+): Promise<void> {
+  const { matchId, timelineKey: key } = stored
   const match = line.match
   const reliability = line.reliability
-  const key = timelineKey(matchId, job.build)
 
   await transaction`
     INSERT INTO replays.matches (id, digest, candidate_key, patch, format, build, map_id, map_name, mode_name, queue,

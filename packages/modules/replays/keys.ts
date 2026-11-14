@@ -5,7 +5,10 @@ export function replayKey(digest: string): string {
   return `replays/${digest.replace(/^sha256:/, '')}.replay`
 }
 
-/** one timeline per match and bhnative build, so a re-parse never overwrites the timeline still in use */
-export function timelineKey(matchId: string, build: string): string {
-  return `timelines/${matchId}/${build}.json.gz`
+/**
+ * One timeline per parse attempt, named by its lease: a re-parse never overwrites the timeline still in use, and an
+ * attempt that lost its lease only ever deletes its own.
+ */
+export function timelineKey(matchId: string, build: string, leaseToken: string): string {
+  return `timelines/${matchId}/${build}-${leaseToken}.json.gz`
 }

@@ -105,7 +105,8 @@ describe.skipIf(!connectionString)('replay jobs', () => {
       FROM replays.matches AS match
     `
 
-    expect(match).toMatchObject({ build: 'dev-1', timelineKey: `timelines/${match?.id}/dev-1.json.gz`, players: 2 })
+    expect(match).toMatchObject({ build: 'dev-1', players: 2 })
+    expect(match?.timelineKey).toBe(`timelines/${match?.id}/dev-1-${claimed?.leaseToken}.json.gz`)
     expect(deps.objectStore.keys()).toContain(match?.timelineKey as string)
     expect(await uploadStatus(outcome?.uploadId ?? null)).toEqual({ status: 'done', code: null })
   })
@@ -259,7 +260,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
     expect(match).toMatchObject({ build: 'dev-2', isReliable: false })
 
     expect(deps.objectStore.keys().filter((key) => key.startsWith('timelines/'))).toEqual([
-      `timelines/${match?.id}/dev-2.json.gz`,
+      `timelines/${match?.id}/dev-2-${second?.leaseToken}.json.gz`,
     ])
   })
 
@@ -366,4 +367,84 @@ describe.skipIf(!connectionString)('replay jobs', () => {
 
     throw new Error('no query started waiting for the job row')
   }
+
+  test('an attempt that lost its lease mid-write leaves the timeline of the newer attempt alone', async () => {
+    const replay = fakeReplay()
+
+    await uploadAs(await playerAccount(1001), replay.bytes)
+
+    const first = await claimJob(deps, report)
+
+    await completeJob(deps, {
+      jobId: first?.jobId as string,
+      leaseToken: first?.leaseToken as string,
+      line: makeLine(),
+    })
+
+    await database.sql`INSERT INTO replays.jobs (digest, kind) VALUES (${replay.digest}, 'reparse')`
+
+    // the old attempt's timeline write stalls until the newer attempt has stored its match
+    const objectStore = deps.objectStore
+    let letOldWriteFinish = () => {}
+
+    const oldWriteMayFinish = new Promise<void>((resolve) => {
+      letOldWriteFinish = resolve
+    })
+
+    let markOldWriteStalled = () => {}
+
+    const oldWriteStalled = new Promise<void>((resolve) => {
+      markOldWriteStalled = resolve
+    })
+
+    let isFirstTimelineWrite = true
+
+    const stallingDeps: ReplaysDeps = {
+      ...deps,
+      objectStore: {
+        ...objectStore,
+        put: async (key, body, contentType) => {
+          await objectStore.put(key, body, contentType)
+
+          if (key.startsWith('timelines/') && isFirstTimelineWrite) {
+            isFirstTimelineWrite = false
+            markOldWriteStalled()
+            await oldWriteMayFinish
+          }
+        },
+      },
+    }
+
+    const newBuild = { build: 'dev-2', patches: ['11.00'] }
+    const old = await claimJob(deps, newBuild)
+
+    const oldAnswer = completeJob(stallingDeps, {
+      jobId: old?.jobId as string,
+      leaseToken: old?.leaseToken as string,
+      line: makeLine(),
+    })
+
+    await oldWriteStalled
+    await expireLease(old?.jobId as string)
+
+    const newer = await claimJob(deps, newBuild)
+
+    expect(
+      await completeJob(deps, {
+        jobId: newer?.jobId as string,
+        leaseToken: newer?.leaseToken as string,
+        line: makeLine(),
+      }),
+    ).toBe('completed')
+
+    letOldWriteFinish()
+
+    expect(await oldAnswer).toBe('lease-lost')
+
+    const [match] = await database.sql<{ timelineKey: string }[]>`
+      SELECT timeline_key AS "timelineKey" FROM replays.matches
+    `
+
+    expect(deps.objectStore.keys()).toContain(match?.timelineKey as string)
+  })
 })
