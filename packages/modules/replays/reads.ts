@@ -121,14 +121,21 @@ function encodeCursor(cursor: Cursor): string {
   return Buffer.from(`${cursor.parsedAt}|${cursor.id}`).toString('base64url')
 }
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// a cursor that doesn't decode to a date and an id starts from the first page; anything else would reach postgres
 function decodeCursor(value: string | undefined): Cursor | null {
   if (!value) return null
 
   const [parsedAt, id] = Buffer.from(value, 'base64url').toString().split('|')
 
-  if (!parsedAt || !id || Number.isNaN(Date.parse(parsedAt)) || !/^[0-9a-f-]{36}$/.test(id)) return null
+  if (!parsedAt || !id || !uuidPattern.test(id)) return null
 
-  return { parsedAt, id }
+  const time = Date.parse(parsedAt)
+
+  if (Number.isNaN(time)) return null
+
+  return { parsedAt: new Date(time).toISOString(), id }
 }
 
 /** A player's matches, newest first; the cursor continues where the previous page stopped. */
