@@ -3,7 +3,7 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { type ChangeEvent, type DragEvent, useEffect, useState } from 'react'
 import { uploadReplays } from '../../server/replays'
 import { ComingSoonPage } from '../coming-soon/ComingSoonPage'
-import { isUnfinished, type MatchesPage, replayStatusText } from './matches-model'
+import { isUnfinished, type MatchesPage, type RefusedFile, refusedFiles, replayStatusText } from './matches-model'
 
 // the api takes this many files per request
 const filesPerRequest = 20
@@ -58,6 +58,7 @@ function UploadPanel() {
   const router = useRouter()
   const [isUploading, setIsUploading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [refused, setRefused] = useState<RefusedFile[]>([])
 
   async function upload(files: File[]) {
     const replays = files.filter((file) => file.name.endsWith('.replay'))
@@ -66,6 +67,7 @@ function UploadPanel() {
 
     setIsUploading(true)
     setMessage(null)
+    setRefused([])
 
     for (let start = 0; start < replays.length; start += filesPerRequest) {
       const form = new FormData()
@@ -83,6 +85,10 @@ function UploadPanel() {
 
         break
       }
+
+      const refusedHere = refusedFiles(answer.outcomes)
+
+      setRefused((earlier) => [...earlier, ...refusedHere])
     }
 
     setIsUploading(false)
@@ -100,22 +106,34 @@ function UploadPanel() {
   }
 
   return (
-    <label
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={onDrop}
-      className="flex cursor-pointer flex-col items-center justify-center rounded-control border border-dashed border-line px-6 py-10 text-center transition-colors hover:bg-raised"
-    >
-      <span className="font-semibold text-strong">
-        {isUploading ? 'Uploading…' : 'Drop .replay files here, or pick them'}
-      </span>
-      <span className="mt-1 text-sm text-soft">They’re in Documents/BrawlhallaReplays on Windows.</span>
-      <input type="file" accept=".replay" multiple className="sr-only" onChange={onPick} disabled={isUploading} />
-      {message && (
-        <span role="alert" className="mt-3 text-sm font-medium text-red-400">
-          {message}
+    <>
+      <label
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={onDrop}
+        className="flex cursor-pointer flex-col items-center justify-center rounded-control border border-dashed border-line px-6 py-10 text-center transition-colors hover:bg-raised"
+      >
+        <span className="font-semibold text-strong">
+          {isUploading ? 'Uploading…' : 'Drop .replay files here, or pick them'}
         </span>
+        <span className="mt-1 text-sm text-soft">They’re in Documents/BrawlhallaReplays on Windows.</span>
+        <input type="file" accept=".replay" multiple className="sr-only" onChange={onPick} disabled={isUploading} />
+        {message && (
+          <span role="alert" className="mt-3 text-sm font-medium text-red-400">
+            {message}
+          </span>
+        )}
+      </label>
+      {refused.length > 0 && (
+        <ul role="alert" className="mt-3 space-y-1 text-sm">
+          {refused.map((file) => (
+            <li key={`${file.fileName}-${file.reason}`} className="flex justify-between gap-4">
+              <span className="truncate text-strong">{file.fileName}</span>
+              <span className="shrink-0 text-red-400">{file.reason}</span>
+            </li>
+          ))}
+        </ul>
       )}
-    </label>
+    </>
   )
 }
 
