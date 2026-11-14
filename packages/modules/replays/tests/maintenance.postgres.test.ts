@@ -129,6 +129,20 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
     expect(deps.objectStore.keys()).toHaveLength(2)
   })
 
+  test('the patches kept are the newest by version, not the ones the worker reported last', async () => {
+    // 11.00 first, then a late replay from 10.09, then the 11.01 update; 11.00 is still the previous patch
+    await reported('11.00', 30, 8)
+    await reported('10.09', 20, 8)
+    await reported('11.01', 1, 0)
+
+    const previous = await storedReplay({ patch: '11.00', build: 'dev-1' })
+
+    await storedReplay({ patch: '10.09', build: 'dev-1' })
+
+    expect(await cleanupReplayFiles(deps, new Date())).toBe(1)
+    expect(deps.objectStore.keys()).toEqual([`replays/${previous.hex}.replay`])
+  })
+
   test('a match keeps its timeline when its replay file is deleted', async () => {
     await reported('10.09', 60, 20)
     await reported('11.00', 10, 0)
