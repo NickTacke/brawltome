@@ -156,4 +156,27 @@ describe.skipIf(!connectionString)('uploading replays', () => {
 
     expect(outcome?.status).toBe('queued')
   })
+
+  test('two requests at once still stop at 20 pending uploads', async () => {
+    const accountId = await newAccount()
+
+    const batch = () =>
+      Array.from({ length: 15 }, (_, index) => ({ name: `${index}.replay`, bytes: fakeReplay().bytes }))
+
+    const [first, second] = await Promise.all([upload(accountId, batch()), upload(accountId, batch())])
+    const queued = [...(first ?? []), ...(second ?? [])].filter((outcome) => outcome.status === 'queued')
+
+    expect(queued).toHaveLength(20)
+  })
+
+  test('the same file sent twice at once is one upload', async () => {
+    const accountId = await newAccount()
+    const replay = fakeReplay()
+    const send = () => upload(accountId, [{ name: 'a.replay', bytes: replay.bytes }])
+
+    const [[first], [second]] = await Promise.all([send(), send()])
+
+    expect(first?.status).toBe('queued')
+    expect(second?.uploadId).toBe(first?.uploadId as string)
+  })
 })
