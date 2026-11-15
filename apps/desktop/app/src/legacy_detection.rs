@@ -7,6 +7,12 @@ use brawltome_events::{
     ScanningPayload,
 };
 
+/// 0.1.x has no replay watcher to say when a match ends, so it keeps one 4-byte read a second during a match
+pub const IN_MATCH_POLL_MS: u64 = 1_000;
+
+// between one match and the next there are only a few seconds of scoreboard and queue
+const _: () = assert!(IN_MATCH_POLL_MS <= 1_000);
+
 /// pure: one new event → the old events the 0.1.x bridge understands
 pub fn to_legacy_events(event: &Event, local_brawlhalla_id: &mut Option<u32>) -> Vec<GameEvent> {
     match event {
@@ -99,10 +105,7 @@ mod windows_service {
     };
     use tokio::sync::{mpsc, oneshot};
 
-    use super::to_legacy_events;
-
-    /// 0.1.x has no replay watcher to say when a match ends, so it keeps one light read during a match
-    const IN_MATCH_POLL_MS: u64 = 5_000;
+    use super::{to_legacy_events, IN_MATCH_POLL_MS};
 
     pub struct LegacyDetectionService;
 
