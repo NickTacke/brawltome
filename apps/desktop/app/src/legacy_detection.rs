@@ -57,12 +57,16 @@ fn match_started(snapshot: &MatchSnapshot, remembered_local_id: Option<u32>) -> 
     };
 
     let local_team = local.map(|player| player.team);
-    let opponent_bhids = snapshot
+    let opponent_bhids: Vec<u32> = snapshot
         .players
         .iter()
         .filter(|player| Some(player.team) != local_team)
         .map(|player| player.brawlhalla_id)
         .collect();
+    if opponent_bhids.is_empty() {
+        return Vec::new();
+    }
+
     let payload = MatchStartedPayload {
         match_type: legacy_match_type(&snapshot.match_type),
         local_player_bhid,
@@ -248,6 +252,20 @@ mod tests {
         };
         assert_eq!(to_legacy_events(&skipped, &mut local), vec![]);
         assert_eq!(to_legacy_events(&Event::Queueing, &mut local), vec![]);
+    }
+
+    #[test]
+    fn a_room_with_no_opponents_starts_no_match() {
+        // 0.1.x only ever sent a match with opponents; an empty one would start a lookup that never ends
+        let mut local = Some(1);
+        let solo = MatchSnapshot {
+            match_type: NewMatchType::Custom,
+            players: vec![player(1, 1)],
+        };
+        assert_eq!(
+            to_legacy_events(&Event::MatchStarted(solo), &mut local),
+            vec![]
+        );
     }
 
     #[test]
