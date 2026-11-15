@@ -48,13 +48,13 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile --network-concurrency 16 || bun install --frozen-lockfile --network-concurrency 16
 
-      - name: Check repository-owned Rust formatting
+      - name: Check Rust formatting
         working-directory: apps/desktop
-        run: cargo fmt --package brawltome-desktop --package brawltome-events -- --check
+        run: cargo fmt --package brawltome-desktop --package brawltome-events --package brawltome-detection -- --check
 
       - name: Lint Windows Rust targets
         working-directory: apps/desktop
-        run: cargo clippy --locked -p brawltome-desktop -p brawltome-events --all-targets --no-deps -- -D warnings
+        run: cargo clippy --locked -p brawltome-desktop -p brawltome-events -p brawltome-detection --all-targets --no-deps -- -D warnings
 
       - name: Test Windows Rust workspace
         working-directory: apps/desktop
