@@ -3,6 +3,7 @@
 
 pub mod api_client;
 mod detection_bridge;
+pub mod legacy_detection;
 mod log_prune;
 pub mod overlay;
 pub mod tray;

@@ -177,7 +177,7 @@ pub fn spawn(
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<GameEvent>(32);
 
         // Now inside Tokio runtime context, so the inner `tokio::spawn` in start() works.
-        let svc = brawltome_detection::WindowsDetectionService;
+        let svc = crate::legacy_detection::LegacyDetectionService;
         let _detection_handle = match svc.start(
             DetectionConfig {
                 target_process: "Brawlhalla.exe".into(),
