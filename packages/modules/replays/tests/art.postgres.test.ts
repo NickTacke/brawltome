@@ -414,7 +414,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await upload(art.mapPath)).toEqual({
       status: 'rejected',
-      reason: `${art.mapPath} names 1 sheets the art bucket lacks, such as ${platform}`,
+      reason: `${art.mapPath} names sheets the art bucket lacks (1), such as ${platform}`,
     })
 
     expect(deps.artStore.keys()).not.toContain(art.mapPath)

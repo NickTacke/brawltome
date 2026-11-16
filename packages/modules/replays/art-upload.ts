@@ -74,7 +74,7 @@ async function unstoredSheetsProblem(sql: Sql, path: string, bytes: Uint8Array):
 
   if (unstored.length === 0) return null
 
-  return `${path} names ${unstored.length} sheets the art bucket lacks, such as ${unstored[0]}`
+  return `${path} names sheets the art bucket lacks (${unstored.length}), such as ${unstored[0]}`
 }
 
 // a path is claimed when it's new, when this attempt claimed it before (a retried upload), or when the attempt that
