@@ -234,4 +234,19 @@ describe('the bh-native process pool', () => {
 
     expect(gameProcesses(gameRoot)).toBe(1)
   })
+
+  test('a replay reaching a patch whose process is starting again after the limit waits for it', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    process.env.FAKE_READY_DELAY_MS = '500'
+    pool.unlimit()
+
+    const answer = await pool.play(replay('old.replay', 'old'))
+
+    expect(answer.kind).toBe('line')
+    expect(JSON.parse(answer.kind === 'line' ? answer.raw : '{}').patch).toBe('10.09')
+  })
 })

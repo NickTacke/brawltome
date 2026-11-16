@@ -21,12 +21,14 @@ export type PlayAnswer =
   | { kind: 'line'; raw: string }
   | { kind: 'failure'; code: 'patch-not-supported' | 'worker-error'; message: string }
 
-// isParked: stopped by limitTo, so nothing plays on it and it isn't started again until unlimit
+// isParked: stopped by limitTo, so nothing plays on it and it isn't started again until unlimit. isRecovering: started
+// again by unlimit and not running yet, so a replay for its patch waits for it
 type Slot = {
   gameFolder: string
   live: BhnativeProcess | null
   inFlight: number
   isParked: boolean
+  isRecovering: boolean
   isRestarting: boolean
   // a start in progress, which settles once its process holds the slot or, started into a stopped slot, has exited
   starting: Promise<boolean> | null
@@ -69,6 +71,7 @@ export class ProcessPool {
           live: null,
           inFlight: 0,
           isParked: false,
+          isRecovering: false,
           isRestarting: false,
           starting: null,
         }),
@@ -156,6 +159,7 @@ export class ProcessPool {
       if (!slot.isParked) continue
 
       slot.isParked = false
+      slot.isRecovering = slot.live === null
       if (slot.live === null && !slot.isRestarting) void this.restart(slot)
     }
 
@@ -198,14 +202,19 @@ export class ProcessPool {
     }
   }
 
-  // a group the limit stopped entirely waits for the limit to lift and one of its processes to start again
+  // a group with no process to play on because of the limit waits for the limit to lift and one of its processes to
+  // start again. a group whose process crashed doesn't wait: that replay fails as before
   private async untilUsable(group: Slot[]): Promise<void> {
-    if (!group.every((slot) => slot.isParked)) return
+    const isUsable = (slot: Slot) => slot.live !== null && !slot.isParked
+
+    if (group.some(isUsable)) return
+
+    if (!group.some((slot) => slot.isParked || slot.isRecovering)) return
 
     await this.limitLifted
 
     for (let waitedMs = 0; waitedMs < RESTART_WAIT_MS; waitedMs += IDLE_POLL_MS) {
-      if (this.isClosing || group.some((slot) => slot.live !== null)) return
+      if (this.isClosing || group.some(isUsable)) return
 
       await Bun.sleep(IDLE_POLL_MS)
     }
@@ -229,6 +238,7 @@ export class ProcessPool {
   // puts a running process in its slot and starts a new one when it exits, unless the limit stopped it
   private watch(slot: Slot, process: BhnativeProcess): void {
     slot.live = process
+    slot.isRecovering = false
 
     void process.exited.then(() => {
       slot.live = null
