@@ -2,6 +2,7 @@ import { type JobFailureCode, MAX_LINE_BYTES, MAX_LINE_GZIP_BYTES, type ReplayJo
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { internalSecretValid } from '../auth/internal-secret'
+import { createReplayWorkerArtRoutes } from './replay-worker-art.routes'
 import { leaseOf, readBounded, workerReportSchema } from './replay-worker-requests'
 
 // the replay worker on VM 106 is the only caller: it claims a job, plays the replay with bh-native and answers.
@@ -29,6 +30,8 @@ export function createReplayWorkerRoutes(deps: { jobs: ReplayJobs; token: string
 
     await next()
   })
+
+  app.route('/art', createReplayWorkerArtRoutes(deps.jobs.art))
 
   app.post('/claim', async (c) => {
     const report = workerReportSchema.safeParse(await c.req.json().catch(() => null))
