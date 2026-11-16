@@ -48,8 +48,17 @@ export async function queueFirstWarmArt(sql: Sql, patch: string): Promise<void> 
 }
 
 /** Queues an art export for every match with a line whose art was drawn in another format, or never. */
-export async function queueArtForFormat(sql: Sql, format: number): Promise<void> {
-  await sql`
+export async function queueArtForFormat(transaction: TransactionSql, format: number): Promise<void> {
+  // the matches first, in id order: a re-parse locks its match before it queues art, so taking the job rows first
+  // could leave each waiting on the other
+  await transaction`
+    SELECT id FROM replays.matches
+    WHERE art_format IS DISTINCT FROM ${format} AND timeline_key IS NOT NULL AND merged_into IS NULL
+    ORDER BY id
+    FOR UPDATE
+  `
+
+  await transaction`
     WITH queued AS (
       INSERT INTO replays.art_jobs (kind, match_id, patch)
       SELECT 'match', id, patch FROM replays.matches

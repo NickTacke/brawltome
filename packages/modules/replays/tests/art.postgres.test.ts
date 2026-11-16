@@ -488,4 +488,33 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(pending.sort()).toEqual([outdated, never].sort())
     expect((await artOf(outdated))?.state).toBe('queued')
   })
+
+  test('a new art format is only recorded once its matches are queued', async () => {
+    const matchId = await parsedMatch()
+
+    await database.sql`UPDATE replays.art_jobs SET status = 'completed'`
+
+    await database.sql.unsafe(`
+      CREATE FUNCTION replays.refuse_art_job() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'art job refused'; END $$
+    `)
+
+    await database.sql.unsafe(`
+      CREATE TRIGGER refuse_art_job BEFORE INSERT ON replays.art_jobs
+      FOR EACH ROW EXECUTE FUNCTION replays.refuse_art_job()
+    `)
+
+    try {
+      await expect(noteWorkerReport(deps, { ...report, artFormat: 3 })).rejects.toThrow('art job refused')
+    } finally {
+      await database.sql.unsafe('DROP TRIGGER refuse_art_job ON replays.art_jobs')
+      await database.sql.unsafe('DROP FUNCTION replays.refuse_art_job()')
+    }
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    const pending = (await artJobs()).filter((job) => job.status === 'pending')
+
+    expect(pending).toEqual([{ kind: 'match', matchId, patch: '11.00', status: 'pending' }])
+  })
 })

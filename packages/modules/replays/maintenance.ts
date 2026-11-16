@@ -42,10 +42,16 @@ async function notePatch(sql: Sql, patch: string): Promise<void> {
   `
 }
 
+// one transaction, so a format is only recorded once its matches are queued, and a failed re-queue runs again on
+// the next report
 async function noteArtFormat(sql: Sql, format: number): Promise<void> {
-  const inserted = await sql`INSERT INTO replays.art_formats (format) VALUES (${format}) ON CONFLICT DO NOTHING`
+  await sql.begin(async (transaction) => {
+    const inserted = await transaction`
+      INSERT INTO replays.art_formats (format) VALUES (${format}) ON CONFLICT DO NOTHING
+    `
 
-  if (inserted.count === 1) await queueArtForFormat(sql, format)
+    if (inserted.count === 1) await queueArtForFormat(transaction, format)
+  })
 }
 
 async function noteBuild(sql: Sql, build: string): Promise<{ isNewBuild: boolean }> {
