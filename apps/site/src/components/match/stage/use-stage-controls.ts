@@ -2,8 +2,8 @@ import { type MouseEvent, type PointerEvent, useEffect, useRef, useState } from 
 
 // how long the controls stay after the pointer last moved over the stage
 const idleMs = 2500
-// a press on one of these is its own, not a press on the stage
-const ownPress = 'button, a, [data-stage-controls]'
+// only a press on the picture plays or pauses, not one on the controls that lie on it
+const picture = '[data-stage-window]'
 
 /**
  * When the controls on the stage show, like a video player's: always while paused, and while playing for as long as
@@ -38,9 +38,9 @@ export function useStageControls(isPlaying: boolean, onToggle: () => void) {
   }
 
   function click(event: MouseEvent) {
-    const isOwnPress = event.target instanceof Element && event.target.closest(ownPress) !== null
+    const isOnPicture = event.target instanceof Element && event.target.closest(picture) !== null
 
-    if (!isOwnPress && wasShownOnPress.current) onToggle()
+    if (isOnPicture && wasShownOnPress.current) onToggle()
   }
 
   // the timer must not outlive the replay

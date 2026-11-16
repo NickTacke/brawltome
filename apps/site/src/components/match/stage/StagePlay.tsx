@@ -19,6 +19,7 @@ const StillStage = memo(StagePicture)
 const noTrails: StageTrail[] = []
 const noSlots: number[] = []
 const ignoreBuffering = () => undefined
+const stageWindow = 'relative overflow-hidden rounded-lg bg-black/[0.14]'
 
 type StagePlayProps = {
   insights: MatchInsights
@@ -105,23 +106,26 @@ export function StagePlay(props: StagePlayProps) {
 
   return (
     <StageCameraContext.Provider value={camera}>
-      <div className="relative overflow-hidden rounded-lg bg-black/[0.14]">
-        {backgroundUrl ? <StageBackdrop imageUrl={backgroundUrl} /> : null}
-        {/* the level, moved by the camera over the fixed background */}
-        <div className="relative origin-top-left" style={pictureStyle(camera)}>
-          <StillStage
-            stage={stage}
-            trails={props.trails ?? noTrails}
-            shownSlots={props.shownSlots ?? noSlots}
-            window={props.window ?? null}
-          />
+      {/* the deck lies beside the window that crops the picture, so it can be laid out on its own */}
+      <div className="relative">
+        <div data-stage-window className={stageWindow}>
+          {backgroundUrl ? <StageBackdrop imageUrl={backgroundUrl} /> : null}
+          {/* the level, moved by the camera over the fixed background */}
+          <div className="relative origin-top-left" style={pictureStyle(camera)}>
+            <StillStage
+              stage={stage}
+              trails={props.trails ?? noTrails}
+              shownSlots={props.shownSlots ?? noSlots}
+              window={props.window ?? null}
+            />
+          </div>
+          <div className="absolute" style={markLayerStyle(camera)}>
+            <PlayEffects hits={stage.marks.hits} kos={stage.marks.kos} timeMs={timeMs} />
+            {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} timeMs={timeMs} />}
+          </div>
+          <Players {...props} poses={poses} camera={camera} />
+          {legends.state === 'loading' && legends.isDownloading ? <StageSpinner label="Loading legends" /> : null}
         </div>
-        <div className="absolute" style={markLayerStyle(camera)}>
-          <PlayEffects hits={stage.marks.hits} kos={stage.marks.kos} timeMs={timeMs} />
-          {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} timeMs={timeMs} />}
-        </div>
-        <Players {...props} poses={poses} camera={camera} />
-        {legends.state === 'loading' && legends.isDownloading ? <StageSpinner label="Loading legends" /> : null}
         {props.deck ? props.deck(note) : <div className="absolute top-2 left-2">{note}</div>}
       </div>
     </StageCameraContext.Provider>
