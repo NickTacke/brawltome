@@ -4,6 +4,7 @@ import type { Bubble, CameraTrack, PlayerPose, Replay, Timeline } from '@brawlto
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
+import { placedArtOf } from '../src/components/match/stage/map-art'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
 import { cameraOf, inFrame, levelToCanvas, viewOf, wholeStage } from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
@@ -274,5 +275,27 @@ describe('the clock', () => {
     expect(frameElapsedMs(1000, null)).toBe(0)
     expect(frameElapsedMs(1016, 1000)).toBe(16)
     expect(frameElapsedMs(61_000, 1000)).toBe(100)
+  })
+})
+
+describe('platform art', () => {
+  const piece = (file: string) => ({ file, x: 0.1, y: 0.5, width: 0.3, height: 0.2, rotation: 0 })
+  const urls: Record<string, string> = { 'Space.Platform_Space1.png': 'https://art.test/sheets/10a43fccdae5677c.webp' }
+
+  test('a piece whose file the map file names gets its image; one without is skipped', () => {
+    const placed = placedArtOf(
+      [piece('Space.Platform_Space1.png'), piece('Space.Missing.png')],
+      (file) => urls[file] ?? null,
+    )
+
+    expect(placed).toEqual([{ ...piece('Space.Platform_Space1.png'), url: urls['Space.Platform_Space1.png'] }])
+  })
+
+  test('a piece whose image lies outside the art store is skipped too', () => {
+    const outside = () => {
+      throw new Error('outside the art store')
+    }
+
+    expect(placedArtOf([piece('Space.Platform_Space1.png')], outside)).toEqual([])
   })
 })

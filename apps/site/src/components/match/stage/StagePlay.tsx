@@ -13,6 +13,7 @@ import { cameraNow, cameraPathKey } from './stage-camera'
 import { TokenPoses } from './TokenPoses'
 import { useCameraBlend } from './use-camera-blend'
 import type { Legends } from './use-legends'
+import { useMapArt } from './use-map-art'
 
 // the stage is drawn once; only what sits on top of it changes from frame to frame
 const StillStage = memo(StagePicture)
@@ -103,6 +104,7 @@ export function StagePlay(props: StagePlayProps) {
   const camera = useCameraBlend(cameraNow(source, timeMs), cameraPathKey(source))
   const poses = legends.timeline ? posesAt(legends.timeline, stage.box, timeMs) : []
   const backgroundUrl = backgroundUrlOf(legends.replay)
+  const art = useMapArt(legends.replay, stage.art)
   const note = legends.state === 'unavailable' ? <LegendsNote /> : null
 
   return (
@@ -115,6 +117,7 @@ export function StagePlay(props: StagePlayProps) {
           <div className="relative origin-top-left" style={pictureStyle(camera)}>
             <StillStage
               stage={stage}
+              art={art}
               trails={props.trails ?? noTrails}
               shownSlots={props.shownSlots ?? noSlots}
               window={props.window ?? null}

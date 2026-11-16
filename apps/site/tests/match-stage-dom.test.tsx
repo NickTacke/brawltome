@@ -18,7 +18,16 @@ const loadedManifests: string[] = []
 
 // a replay with nothing to draw, loaded at once for the first match and never for the second, so the second match
 // would show the first one's art if anything of it were kept
-const firstReplay = { manifest: {}, players: new Map(), loaded: Promise.resolve() } as unknown as Replay
+const firstReplay = {
+  manifest: { map: { layout: 'maps/4444.json' } },
+  players: new Map(),
+  loaded: Promise.resolve(),
+  assetUrl: (path: string) => `https://art.test/${path}`,
+} as unknown as Replay
+
+// the first match's map file, which names an image for one of its two platforms
+const platformImage = 'sheets/10a43fccdae5677c.webp'
+const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
 
 mock.module('@brawltome/replay-player', () => ({
   ...realPlayer,
@@ -66,7 +75,8 @@ beforeAll(() => {
   GlobalRegistrator.register()
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-  globalThis.fetch = (async () => new Response(timelineJson)) as unknown as typeof fetch
+  globalThis.fetch = (async (url: string) =>
+    new Response(String(url).includes('/maps/') ? mapFileJson : timelineJson)) as unknown as typeof fetch
 
   // frames never come, so the clock and the camera stand still between the steps a test takes, and nothing renders
   // outside act
@@ -145,6 +155,27 @@ describe('the stage in a browser', () => {
     expect(press({ key: 'ArrowLeft', altKey: true })).toBe(false)
     expect(press({ key: 'ArrowRight', ctrlKey: true })).toBe(false)
     expect(press({ key: 'ArrowRight' })).toBe(true)
+
+    await unmount()
+  })
+
+  test('once the map file is in, the platforms it names an image for are drawn and the rest are skipped', async () => {
+    const match = matchNamed('first')
+    const insights = readInsights('duel-a')
+    const piece = { x: 0.25, y: 0.5, width: 0.5, height: 0.25, rotation: 0 }
+
+    const art = [
+      { ...piece, file: 'Space.Platform_Space1.png' },
+      { ...piece, file: 'Space.Platform_Space1B.png' },
+    ]
+
+    const withArt = { ...insights, insights: { ...insights.insights, stage: { ...insights.insights.stage, art } } }
+
+    await mount(<ReplayWithArt insights={withArt} art={match.art} playbackPath={match.playbackPath} selectedSlot={1} />)
+
+    const images = [...container.querySelectorAll('svg image')].map((image) => image.getAttribute('href'))
+
+    expect(images).toEqual([`https://art.test/${platformImage}`])
 
     await unmount()
   })

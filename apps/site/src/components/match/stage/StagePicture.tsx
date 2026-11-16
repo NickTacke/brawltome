@@ -1,6 +1,7 @@
 import type { Stage, StageTrail } from '@brawltome/contracts'
 import { useId } from 'react'
 import { slotColour } from '../match-styles'
+import type { PlacedArt } from './map-art'
 import { StageGround, stageWidth } from './StageGround'
 
 // a part of the match, for drawing where players stood only then
@@ -25,6 +26,8 @@ const onePlayerColour = 'var(--color-primary)'
 
 type StagePictureProps = {
   stage: Stage
+  // the platforms whose image the art store has
+  art: PlacedArt[]
   // the players whose positions are drawn as a density; empty when another layer is shown
   trails: StageTrail[]
   shownSlots: number[]
@@ -72,7 +75,7 @@ function Trail({ trail, colour, height, window, blurId }: TrailProps) {
 }
 
 /** The visible part of the stage: its platforms and walls, and where the shown players spent their time. */
-export function StagePicture({ stage, trails, shownSlots, window }: StagePictureProps) {
+export function StagePicture({ stage, art, trails, shownSlots, window }: StagePictureProps) {
   const blurId = useId()
   const height = stageWidth / stage.aspect
   const colourOf = (slot: number) => (shownSlots.length > 1 ? slotColour(slot) : onePlayerColour)
@@ -92,7 +95,7 @@ export function StagePicture({ stage, trails, shownSlots, window }: StagePicture
           </feComponentTransfer>
         </filter>
       </defs>
-      <StageGround stage={stage} height={height} />
+      <StageGround stage={stage} art={art} height={height} />
       {trails.map((trail) => (
         <Trail
           key={trail.slot}

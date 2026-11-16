@@ -5,6 +5,7 @@ import { MatchPage } from '../src/components/match/MatchPage'
 import { cameraModeOptions } from '../src/components/match/stage/camera-mode'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
+import { StagePicture } from '../src/components/match/stage/StagePicture'
 import { StagePlay } from '../src/components/match/stage/StagePlay'
 import { initialLegends } from '../src/components/match/stage/use-legends'
 import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
@@ -101,6 +102,48 @@ const shownControls = {
   },
   bar: { onPointerEnter: () => undefined, onPointerLeave: () => undefined },
 }
+
+describe('the level on the stage', () => {
+  const stage = readInsights('duel-a').insights.stage
+
+  const withLines = {
+    ...stage,
+    segments: [{ fromX: 0.2, fromY: 0.6, toX: 0.8, toY: 0.6, isSoft: false }],
+  }
+
+  const platform = {
+    file: 'Space.Platform_Space1.png',
+    x: 0.25,
+    y: 0.5,
+    width: 0.5,
+    height: 0.25,
+    rotation: 10,
+    url: 'https://art.test/sheets/10a43fccdae5677c.webp',
+  }
+
+  const renderPicture = (art: (typeof platform)[]) =>
+    renderToStaticMarkup(<StagePicture stage={withLines} art={art} trails={[]} shownSlots={[]} window={null} />)
+
+  test('a platform with art is drawn as its image over its box, under the collision lines', () => {
+    const markup = renderPicture([platform])
+    const height = 160 / stage.aspect
+
+    expect(markup).toContain(`href="${platform.url}"`)
+    expect(markup).toContain('x="40"')
+    expect(markup).toContain(`y="${platform.y * height}"`)
+    expect(markup).toContain('width="80"')
+    expect(markup).toContain(`height="${platform.height * height}"`)
+    expect(markup).toContain(`transform="rotate(10 40 ${platform.y * height})"`)
+    expect(markup.indexOf('<image')).toBeLessThan(markup.indexOf('<line'))
+  })
+
+  test('without art the stage keeps its collision lines alone', () => {
+    const markup = renderPicture([])
+
+    expect(markup).not.toContain('<image')
+    expect(markup).toContain('<line')
+  })
+})
 
 describe('the stage in fullscreen', () => {
   test('the legends note lies under the tools in the top left corner, never on them', () => {
