@@ -190,6 +190,38 @@ describe.skipIf(!connectionString)('match insights', () => {
     expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
   })
 
+  test('an art bucket that fails to answer leaves the match its insights without a layout', async () => {
+    const matchId = await storedMatch()
+
+    await addMapFile()
+    spyOn(deps.artStore, 'get').mockRejectedValue(new Error('the art bucket is down'))
+
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+    const logged = errors.mock.calls.map(([message]) => String(message))
+
+    errors.mockRestore()
+
+    expect(match?.insights?.version).toBe(1)
+    expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
+    expect(logged).toEqual([expect.stringContaining(mapPath)])
+  })
+
+  test('insights that fail still leave the match its playback', async () => {
+    const matchId = await storedMatch()
+
+    await deps.objectStore.delete(`insights/${matchId}/dev-1/1-none.json.gz`)
+    spyOn(deps.objectStore, 'put').mockRejectedValue(new Error('the replays bucket is down'))
+
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+
+    errors.mockRestore()
+
+    expect(match?.insights).toBeNull()
+    expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
+  })
+
   test('a failed export keeps the address of the last good manifest', async () => {
     const matchId = await storedMatch()
     const manifestKey = `matches/${matchId}/dev-1-lease/manifest.json`

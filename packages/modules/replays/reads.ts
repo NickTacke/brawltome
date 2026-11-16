@@ -63,14 +63,21 @@ function artOf(row: StoredMatchRow, artBaseUrl: string | null): MatchDetailContr
   return { state: row.artState, manifestUrl, baseUrl: artBaseUrl }
 }
 
-// a match whose insights fail still has its page, without them
-async function insightsOrNull(deps: MatchReadDeps, row: StoredMatchRow): Promise<MatchDetailContract['insights']> {
+type PageReads = Pick<MatchDetailContract, 'insights' | 'playbackPath'>
+
+// insights and playback are read apart: a match whose insights fail is still played back from its line. a match
+// the page isn't designed for has neither
+async function pageReadsOf(deps: MatchReadDeps, row: StoredMatchRow): Promise<PageReads> {
+  const playbackPath = row.timelineKey ? playbackPathOf(row) : null
+
   try {
-    return await insightsOf(deps, row)
+    const insights = await insightsOf(deps, row)
+
+    return { insights, playbackPath: insights ? playbackPath : null }
   } catch (error) {
     logInsightsFailure(row.id, error)
 
-    return null
+    return { insights: null, playbackPath }
   }
 }
 
@@ -81,9 +88,7 @@ export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDe
   if (!row) return null
 
   const players = await playersOf(sql, [row.id])
-  const insights = await insightsOrNull(deps, row)
-  // the page only plays back the matches it has insights for
-  const playbackPath = insights ? playbackPathOf(row) : null
+  const { insights, playbackPath } = await pageReadsOf(deps, row)
 
   return {
     ...summaryOf(row, players),
