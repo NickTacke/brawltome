@@ -1,7 +1,10 @@
-import { type CSSProperties, useEffect, useState } from 'react'
+import { type CSSProperties, type ReactNode, useEffect, useState } from 'react'
 import { type BannerSide, Overlay } from '../overlay/Overlay'
 import type { OverlayView } from '../overlay/overlay-view'
+import { PostMatchCard } from '../overlay/PostMatchCard'
+import type { PostMatchView } from '../overlay/post-match'
 import { overlayFixture, type StateCell, stateCells, tierCells } from './fixtures'
+import { postMatchCells } from './post-match-fixtures'
 
 const FRAME_HEIGHT_PX = 1080
 const OVERLAY_TOP_PX = 24
@@ -11,6 +14,19 @@ type OverlayPreviewProps = { card: string; bannerSide: BannerSide }
 // ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=tiers one
 // 1v1 card per tier; &side=right puts the cards in the middle of the right edge, mirrored like the app does there
 export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
+  if (card === 'post-match') return <PostMatchSheet bannerSide={bannerSide} />
+
+  if (card === 'post-match-won') {
+    const first = postMatchCells().find((cell) => cell.match.matchPage === 'ready')
+
+    return (
+      <GameFrame
+        bannerSide={bannerSide}
+        renderCards={() => <PostMatchCards match={first?.match} bannerSide={bannerSide} />}
+      />
+    )
+  }
+
   if (card === 'states' || card === 'tiers') {
     return <StatesSheet cells={card === 'states' ? stateCells() : tierCells()} bannerSide={bannerSide} />
   }
@@ -19,12 +35,21 @@ export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
 
   if (view === null) return <p className="preview-missing">No fixture named overlay-view-{card}.json</p>
 
-  return <GameFrame view={view} bannerSide={bannerSide} />
+  return (
+    <GameFrame
+      bannerSide={bannerSide}
+      renderCards={(monitorHeightPx) => (
+        <PreviewOverlay view={view} monitorHeightPx={monitorHeightPx} bannerSide={bannerSide} />
+      )}
+    />
+  )
 }
 
 // the frame scales with the window height like the game does, and the cards scale on their own the way the app
 // scales them, so a wrong scale shows up as a card that drifts from the frame
-function GameFrame({ view, bannerSide }: { view: OverlayView; bannerSide: BannerSide }) {
+type GameFrameProps = { bannerSide: BannerSide; renderCards: (monitorHeightPx: number) => ReactNode }
+
+function GameFrame({ bannerSide, renderCards }: GameFrameProps) {
   const windowHeightPx = useWindowHeight()
   const scale = windowHeightPx / FRAME_HEIGHT_PX
 
@@ -35,11 +60,7 @@ function GameFrame({ view, bannerSide }: { view: OverlayView; bannerSide: Banner
         <div className="preview-dim" />
       </div>
       <div className="preview-overlay" data-side={bannerSide} style={overlayStyle(bannerSide, scale)}>
-        <PreviewOverlay
-          view={view}
-          monitorHeightPx={windowHeightPx * window.devicePixelRatio}
-          bannerSide={bannerSide}
-        />
+        {renderCards(windowHeightPx * window.devicePixelRatio)}
       </div>
     </>
   )
@@ -110,5 +131,31 @@ function PreviewOverlay({ view, monitorHeightPx, bannerSide }: PreviewOverlayPro
         document.body.dataset.cardsSize = `${widthPx}x${heightPx}`
       }}
     />
+  )
+}
+
+// the post-match card has no app data yet, so the preview draws it on its own at the 1080p size
+function PostMatchSheet({ bannerSide }: { bannerSide: BannerSide }) {
+  return (
+    <div className="preview-sheet">
+      {postMatchCells().map((cell) => (
+        <div className="preview-cell" key={cell.title}>
+          <h2>{cell.title}</h2>
+          <PostMatchCards match={cell.match} bannerSide={bannerSide} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+type PostMatchCardsProps = { match: PostMatchView | undefined; bannerSide: BannerSide }
+
+function PostMatchCards({ match, bannerSide }: PostMatchCardsProps) {
+  if (match === undefined) return null
+
+  return (
+    <div className="cards" data-banner-side={bannerSide}>
+      <PostMatchCard match={match} onOpenMatchPage={() => console.info('open match page')} />
+    </div>
   )
 }

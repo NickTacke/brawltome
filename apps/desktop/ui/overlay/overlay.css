@@ -404,6 +404,140 @@ button.card {
   justify-self: end;
 }
 
+/* ---------- after the match ---------- */
+
+/* one line for who won, so the card stays short */
+.result-head {
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.result-head .portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+}
+
+.post-match .figures {
+  padding: 7px 14px 9px;
+}
+
+.result {
+  flex: none;
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.result.won {
+  color: hsl(var(--won));
+}
+
+.result.lost {
+  color: hsl(var(--lost));
+}
+
+.versus {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--soft));
+  white-space: nowrap;
+}
+
+.opponent-names {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  color: hsl(var(--strong));
+  text-overflow: ellipsis;
+}
+
+/* the hint that the card opens the match page, or how far the replay has got */
+.match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  font-size: 13px;
+  font-weight: 700;
+  color: hsl(var(--soft));
+}
+
+.match-row .spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.match-row.is-ready {
+  color: hsl(var(--primary));
+}
+
+.arrow {
+  font-size: 16px;
+  transition: transform 120ms ease-out;
+}
+
+button.card:hover .arrow {
+  transform: translateX(3px);
+}
+
+.change {
+  margin-left: 6px;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.change.up {
+  color: hsl(var(--won));
+}
+
+.change.down {
+  color: hsl(var(--lost));
+}
+
+.tier-up {
+  color: hsl(var(--primary));
+}
+
+.tier-down {
+  color: hsl(var(--soft));
+}
+
+/* two opponents share the portrait's square, one tucked behind the other */
+.portrait-pair {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 40px;
+}
+
+.result-head .portrait-pair .portrait {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.portrait-pair .portrait:first-child {
+  top: 0;
+  left: 0;
+}
+
+.portrait-pair .portrait:last-child {
+  right: 0;
+  bottom: 0;
+}
+
 /* ---------- states, last so they win over the parts above ---------- */
 
 .player:hover .name,
