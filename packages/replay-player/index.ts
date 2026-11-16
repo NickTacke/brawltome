@@ -25,6 +25,7 @@ export {
   type Progress,
   type Replay,
 } from './src/load.ts'
+export { mapArtUrl } from './src/map-art.ts'
 export {
   type Bubble,
   bubbleMatrix,

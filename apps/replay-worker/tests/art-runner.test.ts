@@ -240,6 +240,17 @@ describe('the art runner', () => {
     expect(received.authorizations.every((value) => value === `Bearer ${token}`)).toBe(true)
   })
 
+  // the api refuses a map file whose sheets it doesn't hold yet
+  test('sends the files that name others after them: sheets and packs, then art groups, then map files', async () => {
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    const folders = received.puts.map((path) => path.slice(0, path.indexOf('/')))
+
+    expect(folders).toEqual(['sheets', 'sheets', 'sheets', 'anims', 'art', 'art', 'maps'])
+  })
+
   test('only files the art bucket lacks are sent', async () => {
     const sharedSheet = fakeSheet(fakeMap)
 

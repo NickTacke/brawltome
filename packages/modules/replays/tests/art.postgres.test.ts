@@ -398,6 +398,32 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect((await artOf(matchId))?.state).toBe('failed')
   })
 
+  test('a map file naming a sheet the bucket lacks is refused, and stored once the sheet is', async () => {
+    const claimed = await claimedMatchJob()
+    const art = fakeArtExport()
+
+    const upload = (path: string) =>
+      storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, art.files.get(path) as Uint8Array)
+
+    const [background, platform] = [...art.files.keys()].filter((path) => path.startsWith('sheets/')) as [
+      string,
+      string,
+    ]
+
+    await upload(background)
+
+    expect(await upload(art.mapPath)).toEqual({
+      status: 'rejected',
+      reason: `${art.mapPath} names sheets the art bucket lacks (1), such as ${platform}`,
+    })
+
+    expect(deps.artStore.keys()).not.toContain(art.mapPath)
+
+    await upload(platform)
+
+    expect(await upload(art.mapPath)).toEqual({ status: 'stored' })
+  })
+
   test('a manifest of another format fails the job', async () => {
     const claimed = await claimedMatchJob()
     const art = fakeArtExport()
@@ -796,7 +822,10 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(claimed).toMatchObject({ kind: 'warm', matchId: null, line: null })
 
-    await storeArtFile(deps, claimed.jobId, claimed.leaseToken, art.mapPath, art.files.get(art.mapPath) as Uint8Array)
+    // the map file after the sheets it names
+    const warmed = [...art.files].filter(([path]) => path.startsWith('sheets/') || path === art.mapPath)
+
+    for (const [path, bytes] of warmed) await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)
 
     const outcome = await completeArtJob(deps, claimed.jobId, claimed.leaseToken, {
       manifest: null,

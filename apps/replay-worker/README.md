@@ -10,9 +10,10 @@ run for the newest patch and one for the previous patch; a replay from the previ
 With the brawlhalla-anims export bundle mounted, one more loop draws art. It claims an art job from
 `/internal/replays/art`, runs the bundle's `export.ts plan` on the match's line, asks the api which of the planned
 files the art bucket lacks, downloads the art groups and map file it has (the render reads them), then runs `render`
-for the rest. A warm job runs `warm` for a whole patch instead. Every new file goes up through the api, then the
-manifest. While the export draws, only `REPLAY_PROCESSES_DURING_ART` bh-native processes run, so the export has the
-memory. The worker never holds storage keys.
+for the rest. A warm job runs `warm` for a whole patch instead. Every new file goes up through the api, sheets and
+packs first and map files last, since the api refuses a map file before the sheets it names; then the manifest. While
+the export draws, only `REPLAY_PROCESSES_DURING_ART` bh-native processes run, so the export has the memory. The worker
+never holds storage keys.
 
 | Setting | Default |
 | --- | --- |

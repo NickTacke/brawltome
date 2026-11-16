@@ -10,6 +10,7 @@ import {
 } from './art-lease'
 import { parseArtPath } from './art-paths'
 import { queueArtJob, queueWarmJob } from './art-queue'
+import { unstoredArtPaths } from './art-stored'
 import { type StoreArtOutcome, storeArtFile } from './art-upload'
 import type { CompleteOutcome } from './jobs'
 import { LEASE_SECONDS, MAX_ART_PATHS_PER_CALL, MAX_ATTEMPTS } from './limits'
@@ -109,15 +110,7 @@ export async function missingArtFiles(
 
   if (job === 'not-found' || job === 'lease-lost') return 'lease-lost'
 
-  const uniquePaths = [...new Set(paths)]
-
-  const stored = await deps.database.sql<{ path: string }[]>`
-    SELECT path FROM replays.art_files WHERE path = ANY(${uniquePaths}::text[]) AND state = 'stored'
-  `
-
-  const storedPaths = new Set(stored.map(({ path }) => path))
-
-  return uniquePaths.filter((path) => !storedPaths.has(path))
+  return unstoredArtPaths(deps.database.sql, paths)
 }
 
 /**

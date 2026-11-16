@@ -80,8 +80,6 @@ export function fakeArtExport(seed = 'one') {
     return path
   }) as ArtNames['groups']
 
-  files.set(fixedNames.map, json({ format: 3, mapId: 136, patch: '11.00', layout: fakeLayout }))
-
   const sheets = ['background', 'sheet'].map((body) => {
     const bytes = webp(`${body}-${seed}`)
     const path = `sheets/${nameOf(bytes)}.webp`
@@ -99,6 +97,20 @@ export function fakeArtExport(seed = 'one') {
 
     return path
   }) as ArtNames['packs']
+
+  // the map file names the background and a platform's art, so it comes after the sheets, as the worker sends it
+  const [background, platform] = sheets
+
+  const mapFile = {
+    format: 3,
+    mapId: 136,
+    patch: '11.00',
+    background: { asset: background },
+    artAssets: { 'Test.Plat.png': platform },
+    layout: fakeLayout,
+  }
+
+  files.set(fixedNames.map, json(mapFile))
 
   const manifest = fakeManifest({ groups, map: fixedNames.map, sheets, packs })
 

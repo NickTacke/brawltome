@@ -109,5 +109,8 @@ export type MapFile = {
   collisionBounds: Rect | null
   // the background image as a sheets/<hash>.webp, at the size the level gives it
   background: { asset: string; width: number; height: number } | null
+  // each platform art file the layout draws (layout.art's file) as a sheets/<hash>.webp, at the image's own size. A
+  // file the game folder lacked isn't here, and its pieces aren't drawn; exports before platform art have none
+  artAssets?: Record<string, string>
   layout: LevelLayout
 }

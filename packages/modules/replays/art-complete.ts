@@ -2,6 +2,7 @@ import type { ObjectStore, Sql, TransactionSql } from '@brawltome/foundation'
 import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartArtJob } from './art-lease'
 import { readManifestPaths } from './art-manifest'
 import { parseArtPath } from './art-paths'
+import { unstoredArtPaths } from './art-stored'
 import type { CompleteOutcome } from './jobs'
 import { manifestKey } from './keys'
 import { MAX_ART_FILE_BYTES, MAX_MERGE_HOPS } from './limits'
@@ -63,7 +64,7 @@ async function resultProblem(sql: Sql, job: LiveArtJob, result: ArtResult): Prom
 
   if ('reason' in manifestPaths) return manifestPaths.reason
 
-  const missing = await notStored(sql, [...manifestPaths.paths, ...result.maps.map((map) => map.path)])
+  const missing = await unstoredArtPaths(sql, [...manifestPaths.paths, ...result.maps.map((map) => map.path)])
 
   if (missing.length > 0) return `the art bucket lacks ${missing.length} named files, such as ${missing[0]}`
 
@@ -85,16 +86,6 @@ function isMapEntry(map: ArtMap, patch: string): boolean {
   const isMapId = Number.isInteger(map.mapId) && map.mapId >= 0 && map.mapId <= MAX_MAP_ID
 
   return map.patch === patch && isMapId && parseArtPath(map.path)?.kind === 'map'
-}
-
-async function notStored(sql: Sql, paths: string[]): Promise<string[]> {
-  const stored = await sql<{ path: string }[]>`
-    SELECT path FROM replays.art_files WHERE path = ANY(${paths}::text[]) AND state = 'stored'
-  `
-
-  const storedPaths = new Set(stored.map(({ path }) => path))
-
-  return paths.filter((path) => !storedPaths.has(path))
 }
 
 async function storeMaps(
