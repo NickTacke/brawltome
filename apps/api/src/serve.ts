@@ -13,7 +13,7 @@ import {
   createPostgresRankedPlayers,
 } from '@brawltome/player'
 import { createPostgresRefreshOperations } from '@brawltome/queue'
-import { createPostgresRanking } from '@brawltome/ranking'
+import { createPostgresRanking, readPlayerBoardRanks } from '@brawltome/ranking'
 import { createReplayJobs, inspectReplayQueue } from '@brawltome/replays'
 import { createPostgresRequestAdmission } from '@brawltome/request-admission'
 import { createPostgresStatistics } from '@brawltome/statistics'
@@ -34,6 +34,8 @@ import { verifyTurnstileResult } from './auth/turnstile'
 import { isBotUserAgent } from './bot-user-agent'
 import { readClientIp, requestWithVerifiedClientIp } from './client-ip'
 import { createApiDatabase } from './database-pools'
+import { readMinimumDesktopVersion } from './desktop/desktop-version'
+import { createDesktopRefresher } from './desktop/request-refresh'
 import { createHealthRoutes } from './health-routes'
 import { apiModules } from './modules'
 import { createOrpcRoutes } from './orpc/mount'
@@ -46,6 +48,7 @@ import { createRefreshEventStreams } from './refresh-event-streams'
 import { readReplayConfig } from './replay-config'
 import { appRouter } from './router'
 import { createDesktopRankedRoutes } from './routes/desktop-ranked.routes'
+import { createDesktopV1Routes, lobbiesPerMinute } from './routes/desktop-v1.routes'
 import { createRefreshEventRoutes } from './routes/refresh-events.routes'
 import { createReplayWorkerRoutes } from './routes/replay-worker.routes'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig, readShutdownAnnounceMs } from './runtime-config'
@@ -68,6 +71,7 @@ if (!refreshTrustSecret || Buffer.byteLength(refreshTrustSecret) < 32) {
 }
 
 const authenticatedRefreshIpLimit = readAuthenticatedRefreshIpLimit(process.env.AUTHENTICATED_REFRESH_IP_LIMIT)
+const desktopMinimumVersion = readMinimumDesktopVersion(process.env.DESKTOP_MINIMUM_VERSION)
 
 checkModuleList(apiModules)
 
@@ -227,6 +231,22 @@ app.route(
     rankedPlayers: rankedPlayerQueries,
     playerRefreshReservations,
     requestAdmission,
+  }),
+)
+
+app.route(
+  '/desktop/v1',
+  createDesktopV1Routes({
+    minimumVersion: desktopMinimumVersion,
+    lobbyReads: {
+      rankedPlayers: rankedPlayerQueries,
+      playerReferences: playerReferenceQueries,
+      leaderboardStandings,
+      readBoardRanks: (input) => readPlayerBoardRanks(database.sql, input),
+    },
+    refresher: createDesktopRefresher({ playerRefreshReservations, requestAdmission, telemetry }),
+    lobbyLimiter: createVisitLimiter(lobbiesPerMinute, Date.now),
+    telemetry,
   }),
 )
 
