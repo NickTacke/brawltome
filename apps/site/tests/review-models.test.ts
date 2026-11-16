@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { MatchInsights, ReviewStop } from '@brawltome/contracts'
 import { placeCard } from '../src/components/match/review/callout-place'
+import { reviewPhaseOf } from '../src/components/match/review/review-phase'
+import { reviewChoicesOf } from '../src/components/match/review/review-stops'
 import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
@@ -219,5 +221,60 @@ describe('the card at a review stop', () => {
     const covering = checkEveryStop(name).filter((check) => check.width >= 780 && !check.isClear)
 
     expect(covering).toEqual([])
+  })
+})
+
+describe('the review’s stops', () => {
+  test.each(['duel-a', 'duel-b', 'doubles-a', 'doubles-b'] as const)(
+    'in %s every player gets the insights’ stops, in order',
+    (name) => {
+      const insights = readInsights(name)
+
+      for (const { slot } of insights.summary.players) {
+        const choices = reviewChoicesOf(insights, slot)
+        const listed = insights.reviewStops.filter((stop) => stop.slot === slot)
+
+        expect(choices.map((choice) => choice.label)).toEqual(['Key moments', 'Hits taken', 'Punishes landed', 'KOs'])
+
+        for (const choice of choices) {
+          const keys = listed.filter((stop) => stop.scope === choice.key).map((stop) => stop.momentKey)
+          const times = choice.stops.map((stop) => stop.timeMs)
+
+          expect(choice.stops.map((stop) => stop.key)).toEqual(keys)
+          expect(times).toEqual([...times].sort((left, right) => left - right))
+        }
+      }
+    },
+  )
+})
+
+describe('where a review stands', () => {
+  const stops = readInsights('duel-a').insights.moments.slice(0, 3)
+  const first = stops[0]?.timeMs ?? 0
+  const heading = { stops, index: 0, isArriving: true, timeMs: first - 2000, isPlaying: true, isOn: true }
+
+  test('heading for a stop, it slows down just before the hit and arrives a few frames after it', () => {
+    expect(reviewPhaseOf(heading)).toMatchObject({ hasArrived: false, isEasing: false })
+    expect(reviewPhaseOf({ ...heading, timeMs: first - 300 })).toMatchObject({ hasArrived: false, isEasing: true })
+    expect(reviewPhaseOf({ ...heading, timeMs: first + 60 })).toMatchObject({ hasArrived: true, isEasing: false })
+  })
+
+  test('stopped on it, it explains it, and playing on past it heads for the next', () => {
+    const stopped = { ...heading, isArriving: false, isPlaying: false, timeMs: first + 60 }
+
+    expect(reviewPhaseOf(stopped)).toMatchObject({ isStopped: true, hasPlayedOn: false, backIndex: -1 })
+
+    expect(reviewPhaseOf({ ...stopped, isPlaying: true, timeMs: first + 700 })).toMatchObject({
+      isStopped: false,
+      hasPlayedOn: true,
+    })
+  })
+
+  test('watching, it never stops', () => {
+    expect(reviewPhaseOf({ ...heading, isOn: false, timeMs: first + 60 })).toMatchObject({
+      hasArrived: false,
+      isStopped: false,
+      hasPlayedOn: false,
+    })
   })
 })
