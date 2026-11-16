@@ -5,6 +5,7 @@ import {
   MAX_ART_PATHS_PER_CALL,
   parseArtPath,
   type ReplayArtJobs,
+  type StoreArtOutcome,
 } from '@brawltome/replays'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
@@ -15,6 +16,8 @@ import { type Lease, leaseOf, readBounded, workerReportSchema } from './replay-w
 
 // 2000 quoted paths of at most 64 characters
 const MAX_MISSING_BODY_BYTES = 256 * 1024
+// how long a worker waits before it sends a file another attempt is uploading again
+const UPLOAD_RETRY_AFTER_SECONDS = 5
 // the manifest, plus the list of map files a warm job made
 const MAX_RESULT_BODY_BYTES = MAX_ART_FILE_BYTES + 1024 * 1024
 
@@ -87,9 +90,7 @@ export function createReplayWorkerArtRoutes(art: ReplayArtJobs): Hono {
 
     const outcome = await art.store(lease.jobId, lease.leaseToken, path, bytes)
 
-    if (outcome.status === 'rejected') return c.text(outcome.reason, 422)
-
-    return c.body(null, outcome.status === 'stored' ? 204 : 409)
+    return storeAnswer(c, outcome)
   })
 
   app.get('/:id/files/:path{.+}', async (c) => {
@@ -143,6 +144,18 @@ export function createReplayWorkerArtRoutes(art: ReplayArtJobs): Hono {
   })
 
   return app
+}
+
+// 423 while another attempt holds the path: the worker tries the file again later. it isn't 409, which tells the
+// worker its own lease is gone, nor 503, which a proxy in front of the api may answer too
+function storeAnswer(c: Context, outcome: StoreArtOutcome): Response {
+  if (outcome.status === 'rejected') return c.text(outcome.reason, 422)
+
+  if (outcome.status === 'in-progress') return c.body(null, 423, { 'retry-after': String(UPLOAD_RETRY_AFTER_SECONDS) })
+
+  if (outcome.status === 'lease-lost') return c.body(null, 409)
+
+  return c.body(null, 204)
 }
 
 function leaseFrom(c: Context): Lease | null {

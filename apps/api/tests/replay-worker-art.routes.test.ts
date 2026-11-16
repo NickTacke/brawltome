@@ -136,6 +136,31 @@ describe('replay worker art routes', () => {
     expect(art.store).not.toHaveBeenCalled()
   })
 
+  test('a file stored before answers 204 like a new one', async () => {
+    const { app } = routes({ store: mock(async () => ({ status: 'exists' as const })) })
+
+    const response = await app.request(`/art/${jobId}/files/${groupPath}`, {
+      method: 'PUT',
+      headers: leased,
+      body: '{}',
+    })
+
+    expect(response.status).toBe(204)
+  })
+
+  test('a file another attempt is uploading answers 423 with a retry-after, not a lost lease', async () => {
+    const inProgress = routes({ store: mock(async () => ({ status: 'in-progress' as const })) })
+    const lost = routes({ store: mock(async () => ({ status: 'lease-lost' as const })) })
+    const request = { method: 'PUT', headers: leased, body: '{}' }
+
+    const locked = await inProgress.app.request(`/art/${jobId}/files/${groupPath}`, request)
+    const gone = await lost.app.request(`/art/${jobId}/files/${groupPath}`, { ...request, body: '{}' })
+
+    expect(locked.status).toBe(423)
+    expect(locked.headers.get('retry-after')).toBe('5')
+    expect(gone.status).toBe(409)
+  })
+
   test('a file the check rejects answers 422 with the reason', async () => {
     const { app } = routes({ store: mock(async () => ({ status: 'rejected' as const, reason: 'not valid json' })) })
 
