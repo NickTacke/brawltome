@@ -1,7 +1,8 @@
 import type { MatchDetailContract, MatchInsights } from '@brawltome/contracts'
 import { useRef } from 'react'
 import { MatchIdentity } from './MatchIdentity'
-import { columnPiece, mainColumn, pageColumns, sideColumn } from './match-layout'
+import { columnPiece, mainColumn, modulesColumn, pageColumns, sideColumn } from './match-layout'
+import { MatchModules } from './modules/MatchModules'
 import { NeutralByStock } from './NeutralByStock'
 import { ReviewReplay } from './review/ReviewReplay'
 import { Scoreboard } from './Scoreboard'
@@ -18,8 +19,8 @@ const widePage =
 type MatchPageProps = { match: MatchDetailContract; insights: MatchInsights }
 
 /**
- * The review page of a stock 1v1 or 2v2: who played down the side, and the replay beside them. Picking a player turns
- * the whole page to them without reloading the replay.
+ * The review page of a stock 1v1 or 2v2: who played down the side, the replay first, the numbers behind it underneath.
+ * Picking a player turns the whole page to them without reloading the replay.
  */
 export function MatchPage({ match, insights }: MatchPageProps) {
   const { players, picked, pick } = usePickedPlayer(insights)
@@ -53,6 +54,9 @@ export function MatchPage({ match, insights }: MatchPageProps) {
         <div className={mainColumn}>
           <div className={`${columnPiece} max-xl:order-2`}>
             <ReviewReplay insights={insights} legends={legends} selectedSlot={picked.slot} />
+          </div>
+          <div className={`max-xl:order-4 ${modulesColumn}`}>
+            <MatchModules insights={insights} players={players} picked={picked} onPick={pick} />
           </div>
         </div>
       </div>
