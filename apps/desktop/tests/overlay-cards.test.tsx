@@ -175,7 +175,7 @@ describe('overlay cards', () => {
   test('a team card shows the team Elo and each personal 2v2 Elo', () => {
     const html = render(fixture('team'))
 
-    expect(textOf(partOf(html, 'team-figures'))).toBe('22842v2 team57%90 games')
+    expect(textOf(partOf(html, 'team-figures'))).toBe('2284/ 2301Team Elo / peak57%90 games')
     expect(partOf(html, 'banner-slot')).toContain('src="/banners/Diamond.png"')
     expect(textOf(partOf(html, 'players'))).toBe('Shinigami2190tidecaller2075')
     expect(html).toContain('src="/legends/petra.png"')

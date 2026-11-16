@@ -58,7 +58,7 @@ function TeamFigures({ data }: { data: TeamData }) {
   )
 }
 
-// the team's elo and win rate; the banner already says the tier, and a team we hold no rating for shows a dash
+// the team's elo, peak and win rate; the banner already says the tier, and a team we hold no rating for shows a dash
 function TeamStanding({ data }: { data: TeamData }) {
   if (data.state === 'loading') {
     return (
@@ -76,8 +76,9 @@ function TeamStanding({ data }: { data: TeamData }) {
       <span className="stat">
         <span className="stat-value">
           <span className="elo">{standing?.rating ?? '—'}</span>
+          {standing !== null && <span className="peak">{`/ ${standing.peakRating}`}</span>}
         </span>
-        <span className="stat-label">2v2 team</span>
+        <span className="stat-label">{standing === null ? '2v2 team' : 'Team Elo / peak'}</span>
       </span>
       {standing !== null && <WinRate wins={standing.wins} games={standing.games} />}
     </>

@@ -76,6 +76,7 @@ pub enum TeamData {
 pub struct TeamStanding {
     pub tier: Option<String>,
     pub rating: u32,
+    pub peak_rating: u32,
     pub wins: u32,
     pub games: u32,
 }
@@ -266,6 +267,7 @@ fn answered_team_card(
         .map(|standing| TeamStanding {
             tier: standing.tier.clone(),
             rating: standing.rating,
+            peak_rating: standing.peak_rating,
             wins: standing.wins,
             games: standing.games,
         });
