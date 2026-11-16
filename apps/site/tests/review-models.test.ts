@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
 import { tagHeightPx, tagLifts, tagWidthPx } from '../src/components/match/stage/tag-stack'
@@ -71,5 +72,64 @@ describe('the replay clock', () => {
 
   test('stops at the end of the match', () => {
     expect(advanceClockMs(4990, 100, { speed: 4, scale: 1 }, 5000)).toBe(5000)
+  })
+})
+
+// the damage the timeline itself gives a player at a time of the clock: at the step the time falls in, rounded to a
+// whole number, and a dash while the player is out of play
+function timelineDamageText(pose: Pose | undefined): string {
+  if (!pose?.isInPlay) return '–'
+
+  return String(Math.round(pose.damage))
+}
+
+describe('the readout over the lanes', () => {
+  test.each(['duel-a', 'doubles-b'] as const)('in %s every damage it shows is the timeline’s', (name) => {
+    const insights = readInsights(name)
+    const timeline = readPlaybackTimeline(readPlayback(name))
+    const { box, durationMs, stepMs } = insights.insights.stage
+
+    for (let share = 0; share <= 1; share += 0.0005) {
+      const timeMs = pointerTimeMs(share, durationMs, stepMs)
+      const poses = posesAt(timeline, box, timeMs)
+
+      for (const player of insights.insights.players) {
+        const want = timelineDamageText(poses.find((pose) => pose.slot === player.slot))
+
+        expect({ share, slot: player.slot, text: damageText(player.stocks, timeMs) }).toEqual({
+          share,
+          slot: player.slot,
+          text: want,
+        })
+      }
+    }
+  })
+
+  test.each(['duel-a', 'doubles-b'] as const)('in %s it reads every KO as the timeline does', (name) => {
+    const insights = readInsights(name)
+    const timeline = readPlaybackTimeline(readPlayback(name))
+    const { box, stepMs } = insights.insights.stage
+
+    for (const knockout of insights.insights.knockouts) {
+      const stocks = insights.insights.players.find((player) => player.slot === knockout.victim)?.stocks ?? []
+
+      for (const timeMs of [knockout.timeMs - stepMs, knockout.timeMs]) {
+        const pose = posesAt(timeline, box, timeMs).find((entry) => entry.slot === knockout.victim)
+
+        expect({ timeMs, text: damageText(stocks, timeMs) }).toEqual({ timeMs, text: timelineDamageText(pose) })
+      }
+    }
+  })
+
+  test('a pointer between two steps reads the step it is in, as the timeline does', () => {
+    const { insights } = readInsights('duel-b')
+    const { durationMs, stepMs } = insights.stage
+    // 38% of the way through duel-b, while Player B takes a three hit string whose damage changes every few steps
+    const timeMs = pointerTimeMs(0.38, durationMs, stepMs)
+    const playerB = insights.players.find((player) => player.slot === 2)
+
+    expect(timeMs).toBe(102_368)
+    expect(damageText(playerB?.stocks ?? [], timeMs)).toBe('11')
+    expect(damageText(playerB?.stocks ?? [], 102_064 - 1)).toBe('3')
   })
 })

@@ -1,6 +1,7 @@
-import type { MatchDetailContract, MatchInsights } from '@brawltome/contracts'
+import type { MatchDetailContract, MatchInsights, Moment } from '@brawltome/contracts'
 import { useRef, useState } from 'react'
 import { sectionTitle } from '../../player/player-styles'
+import { MatchTimeline } from '../review/MatchTimeline'
 import { CameraSelect } from './CameraSelect'
 import { type CameraMode, defaultCameraMode } from './camera-mode'
 import { SpeedButton, type Stepping, TransportColumn } from './ReviewControls'
@@ -15,6 +16,9 @@ import { useStageKeys } from './use-stage-keys'
 
 const stepMs = 2000
 const longStepMs = 10_000
+const ignoreStop = () => undefined
+// watching has no stops; one list, so the timeline isn't handed a new one every frame
+const noStops: Moment[] = []
 
 type MatchStageProps = {
   insights: MatchInsights
@@ -54,6 +58,20 @@ export function MatchStage({ insights, art, playbackPath, selectedSlot = 1 }: Ma
   const transport = <TransportColumn playback={playback} stepping={steppingOf(playback, step)} count={null} />
   const speed = <SpeedButton playback={playback} />
 
+  const timeline = (
+    <MatchTimeline
+      insights={insights}
+      timeline={legends.timeline}
+      selectedSlot={selectedSlot}
+      timeMs={playback.timeMs}
+      onSeek={playback.seek}
+      stops={noStops}
+      stopIndex={-1}
+      onGoTo={ignoreStop}
+      opensBelow={false}
+    />
+  )
+
   return (
     // a container, so what sits on the stage can ask how wide the replay is
     <section aria-labelledby="replay" className="@container">
@@ -75,7 +93,7 @@ export function MatchStage({ insights, art, playbackPath, selectedSlot = 1 }: Ma
               controls={controls}
               fullscreen={fullscreen}
               transport={transport}
-              timeline={null}
+              timeline={timeline}
               speed={speed}
               tools={tools}
               note={note}
