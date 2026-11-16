@@ -373,7 +373,7 @@ async fn a_new_preview_drops_the_slow_lookup_of_the_old_one() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_profile_clicked_during_loading_opens_when_the_match_ends() {
+async fn a_profile_clicked_during_loading_opens_at_once() {
     let harness = Harness::start(vec![Scripted {
         delay_ms: 0,
         result: Ok(answer_for(SHINIGAMI, false)),
@@ -383,15 +383,15 @@ async fn a_profile_clicked_during_loading_opens_when_the_match_ends() {
     harness.handle.send(Input::ProfileClicked {
         brawlhalla_id: SHINIGAMI,
     });
-    wait_ms(30_000).await;
-    let urls_during_match = harness.opener.urls();
+    wait_ms(10).await;
+    let urls_while_loading = harness.opener.urls();
     harness.detect(Event::MatchEnded).await;
 
-    assert_eq!(urls_during_match, Vec::<String>::new());
     assert_eq!(
-        harness.opener.urls(),
+        urls_while_loading,
         vec![format!("https://brawltome.app/player/{SHINIGAMI}")]
     );
+    assert_eq!(harness.opener.urls(), urls_while_loading);
 }
 
 #[tokio::test(start_paused = true)]

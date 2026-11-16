@@ -443,7 +443,6 @@ mod tests {
             lobby_id,
             cards: Vec::new(),
             visible_ms: 12_000,
-            deferred_profile_ids: Vec::new(),
         };
         let shown = ShownCards {
             envelope: OverlayEnvelope {
