@@ -4,6 +4,7 @@ import { insightsOf, logInsightsFailure } from './insights'
 import { replayKey } from './keys'
 import { findMatchRow, type MatchRow, type StoredMatchRow } from './match-row'
 import type { ReplaysDeps } from './model'
+import { playbackPathOf } from './playback'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
 
@@ -82,7 +83,7 @@ export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDe
   const players = await playersOf(sql, [row.id])
   const insights = await insightsOrNull(deps, row)
   // the page only plays back the matches it has insights for
-  const playbackPath = insights ? `/match/${row.id}/playback/${encodeURIComponent(row.build)}` : null
+  const playbackPath = insights ? playbackPathOf(row) : null
 
   return {
     ...summaryOf(row, players),

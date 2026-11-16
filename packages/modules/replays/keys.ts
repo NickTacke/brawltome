@@ -33,7 +33,10 @@ export function insightsKey(matchId: string, build: string, version: number, lay
   return `insights/${matchId}/${build}/${version}-${layoutName}.json.gz`
 }
 
-/** The part of a match's timeline the page plays the match back from, trimmed from the line of one build. */
-export function playbackKey(matchId: string, build: string): string {
-  return `playback/${matchId}/${build}.json.gz`
+/**
+ * The part of a match's timeline the page plays the match back from, trimmed from the line of one build by one
+ * version of the trim. A new version gives a new key, so a timeline trimmed the old way is never read again.
+ */
+export function playbackKey(matchId: string, build: string, version: number): string {
+  return `playback/${matchId}/${build}/${version}.json.gz`
 }

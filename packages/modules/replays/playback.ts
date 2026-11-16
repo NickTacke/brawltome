@@ -9,6 +9,10 @@ import { gzipJson, readStoredLine } from './stored-json'
 // positions, the game's objects, and the state each player is drawn with. about a fifth of the line; the events and
 // the rest of the state are already worked into the insights
 
+// bumped when the trimmed timeline changes shape. it is in the key and in the address the site serves it at, which
+// is cached for good, so a new shape always has a new address
+export const PLAYBACK_VERSION = 1
+
 // the animation shown, which way the player faces, what they hold, their status (which the camera frames them by),
 // their damage and stocks left, and what the game tints them by: hits, dodges, respawns and air jumps
 const drawnState = [
@@ -64,20 +68,27 @@ export function trimPlaybackTimeline(line: unknown): PlaybackTimeline {
   return { ...timeline, stepZeroTime: stepZeroTime ?? null, state: Object.fromEntries(slots) }
 }
 
+/** Where the site serves a match's playback timeline, for the build its line came from and the current trim. */
+export function playbackPathOf(match: { id: string; build: string }): string {
+  return `/match/${match.id}/playback/${encodeURIComponent(match.build)}/${PLAYBACK_VERSION}`
+}
+
 /**
  * A match's playback timeline, gzipped, trimmed from its line on the first read. Null when the match wasn't parsed
- * with that build, or isn't one the page plays back.
+ * with that build, the version isn't the current one, or the match isn't one the page plays back.
  */
 export async function readPlaybackFor(
   deps: Pick<ReplaysDeps, 'database' | 'objectStore'>,
   matchId: string,
-  build: string,
+  wanted: { build: string; version: number },
 ): Promise<Uint8Array | null> {
+  if (wanted.version !== PLAYBACK_VERSION) return null
+
   const match = await findMatchRow(deps.database.sql, matchId)
 
-  if (!match?.timelineKey || match.build !== build) return null
+  if (!match?.timelineKey || match.build !== wanted.build) return null
 
-  const key = playbackKey(match.id, build)
+  const key = playbackKey(match.id, match.build, PLAYBACK_VERSION)
   const stored = await deps.objectStore.get(key)
 
   if (stored) return stored

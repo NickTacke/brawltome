@@ -21,6 +21,12 @@ const tags = ['replays']
 // the worker reports its build in at most 64 characters
 const buildSchema = z.string().min(1).max(64)
 
+const playbackInputSchema = z.object({
+  id: matchIdSchema,
+  build: buildSchema,
+  version: z.coerce.number().pipe(z.number().int().min(0).max(1000)),
+})
+
 // the site keeps a playback timeline private while replays are closed, and caches it for good once they're open
 const playbackOutputSchema = z.object({
   headers: z.object({ 'x-replays-open': z.enum(['true', 'false']) }),
@@ -149,22 +155,21 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
   const playback = internalProcedure
     .route({
       method: 'GET',
-      path: '/matches/{id}/playback/{build}',
+      path: '/matches/{id}/playback/{build}/{version}',
       operationId: 'replays.playback',
       summary: 'Playback timeline',
       tags,
       outputStructure: 'detailed',
     })
-    .input(z.object({ id: matchIdSchema, build: buildSchema }))
+    .input(playbackInputSchema)
     .output(playbackOutputSchema)
     .handler(async ({ context, input }) => {
       await requireSight(context.visitorSessionToken, 'NOT_FOUND')
 
-      const bytes = await readPlaybackFor(
-        { database: runtime.database, objectStore: objectStore() },
-        input.id,
-        input.build,
-      )
+      const bytes = await readPlaybackFor({ database: runtime.database, objectStore: objectStore() }, input.id, {
+        build: input.build,
+        version: input.version,
+      })
 
       if (!bytes) throw new ORPCError('NOT_FOUND')
 

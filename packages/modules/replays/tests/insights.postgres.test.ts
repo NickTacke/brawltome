@@ -187,7 +187,7 @@ describe.skipIf(!connectionString)('match insights', () => {
 
     expect(match?.insights?.version).toBe(1)
     expect(match?.art).toEqual({ state: 'queued', manifestUrl: null, baseUrl: artBaseUrl })
-    expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1`)
+    expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
   })
 
   test('a failed export keeps the address of the last good manifest', async () => {

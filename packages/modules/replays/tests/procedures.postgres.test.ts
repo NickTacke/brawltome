@@ -233,10 +233,10 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     const match = await call(procedures.match, { id: matchId }, visitor())
 
-    expect(match.playbackPath).toBe(`/match/${matchId}/playback/dev-1`)
+    expect(match.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
     expect(match.art).toEqual({ state: 'none', manifestUrl: null, baseUrl: null })
 
-    const playback = await call(procedures.playback, { id: matchId, build: 'dev-1' }, visitor())
+    const playback = await call(procedures.playback, { id: matchId, build: 'dev-1', version: 1 }, visitor())
     const timeline = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(await playback.body.bytes())))
 
     expect(playback.headers).toEqual({ 'x-replays-open': 'true' })
@@ -247,7 +247,27 @@ describe.skipIf(!connectionString)('replay procedures', () => {
   test('playback answers NOT_FOUND for a build the match was not parsed with', async () => {
     const matchId = await insightMatch()
 
-    expect(await errorCode(call(procedures.playback, { id: matchId, build: 'dev-0' }, visitor()))).toBe('NOT_FOUND')
+    const input = { id: matchId, build: 'dev-0', version: 1 }
+
+    expect(await errorCode(call(procedures.playback, input, visitor()))).toBe('NOT_FOUND')
+  })
+
+  test('a playback timeline trimmed by an older version is neither served nor asked for', async () => {
+    const matchId = await insightMatch()
+    const stale = Bun.gzipSync(new TextEncoder().encode('{"stale":true}'))
+
+    await objectStore.put(`playback/${matchId}/dev-1.json.gz`, stale, 'application/gzip')
+    await objectStore.put(`playback/${matchId}/dev-1/0.json.gz`, stale, 'application/gzip')
+
+    const playback = await call(procedures.playback, { id: matchId, build: 'dev-1', version: 1 }, visitor())
+    const timeline = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(await playback.body.bytes())))
+
+    expect(timeline).toMatchObject({ stepMs: 16 })
+    expect(objectStore.keys()).toContain(`playback/${matchId}/dev-1/1.json.gz`)
+
+    const olderInput = { id: matchId, build: 'dev-1', version: 0 }
+
+    expect(await errorCode(call(procedures.playback, olderInput, visitor()))).toBe('NOT_FOUND')
   })
 
   test('mine lists the visitor’s uploads with their state', async () => {
@@ -289,7 +309,7 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     expect(await errorCode(call(closed.match, { id: matchId }, visitor(visitorSession)))).toBe('NOT_FOUND')
 
-    const playable = { id: await insightMatch(), build: 'dev-1' }
+    const playable = { id: await insightMatch(), build: 'dev-1', version: 1 }
 
     expect(await errorCode(call(closed.playback, playable, visitor(visitorSession)))).toBe('NOT_FOUND')
 
