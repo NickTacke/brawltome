@@ -175,7 +175,7 @@ describe('overlay cards', () => {
   test('a team card shows the team Elo and each personal 2v2 Elo', () => {
     const html = render(fixture('team'))
 
-    expect(textOf(partOf(html, 'team-head'))).toBe('22842v2 team')
+    expect(textOf(partOf(html, 'team-figures'))).toBe('22842v2 team57%90 games')
     expect(partOf(html, 'banner-slot')).toContain('src="/banners/Diamond.png"')
     expect(textOf(partOf(html, 'players'))).toBe('Shinigami2190tidecaller2075')
     expect(html).toContain('src="/legends/petra.png"')
@@ -185,7 +185,7 @@ describe('overlay cards', () => {
   test('a team card without memory ratings falls back to 1v1 Elo, then to nothing', () => {
     const html = render(fixture('team-bare'))
 
-    expect(textOf(partOf(html, 'team-head'))).toBe('—2v2 team')
+    expect(textOf(partOf(html, 'team-figures'))).toBe('—2v2 team')
     expect(html).not.toContain('/banners/')
     expect(textOf(partOf(html, 'players'))).toBe('Shinigami21301v1tidecaller')
   })

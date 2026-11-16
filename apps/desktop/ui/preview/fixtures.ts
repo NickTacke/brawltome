@@ -101,7 +101,11 @@ export function stateCells(): StateCell[] {
     { title: '2v2 loading', view: withTeamData({ state: 'loading' }) },
     {
       title: '2v2 refreshing',
-      view: withTeamData({ state: 'ready', standing: { tier: 'Diamond', rating: 2284 }, isRefreshing: true }),
+      view: withTeamData({
+        state: 'ready',
+        standing: { tier: 'Diamond', rating: 2284, wins: 51, games: 90 },
+        isRefreshing: true,
+      }),
     },
     {
       title: '2v2 server down',
