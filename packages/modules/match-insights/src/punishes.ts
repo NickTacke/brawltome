@@ -1,5 +1,7 @@
 import type { Punish } from '@brawltome/contracts'
 import type { Blow } from './blows'
+import { kosOf } from './events'
+import type { KoEvent } from './line'
 import { openingCause, tradeSteps } from './punish-cause'
 import { type MatchRecord, stateOf, toMs } from './record'
 import { lastBecameWithin, valueAt } from './series'
@@ -70,30 +72,44 @@ function reverseOpenPunishes(open: Map<string, Punish>, blow: Blow): boolean {
   return isReversal
 }
 
-// the KO goes to the killer's last punish on the victim, when it ended at most the reset gap before
-function markKos(record: MatchRecord, punishes: Punish[]) {
-  for (const event of record.events) {
-    if (event.type !== 'ko' || event.killer === null) continue
+// the KO goes to the killer's last punish on the victim, when it ended at most the reset gap before and no earlier
+// KO took it
+function koPunishOf(event: KoEvent, punishes: Punish[], taken: Set<number>): number | null {
+  const { killer, player, step } = event
 
-    const { killer, player, step } = event
+  const index = punishes.findLastIndex(
+    (punish) =>
+      punish.target === player &&
+      punish.attacker === killer &&
+      punish.endStep <= step &&
+      step - punish.endStep <= resetSteps,
+  )
 
-    const last = punishes.findLast(
-      (punish) =>
-        punish.target === player &&
-        punish.attacker === killer &&
-        punish.endStep <= step &&
-        step - punish.endStep <= resetSteps,
-    )
-
-    if (!last) continue
-
-    last.isKo = true
-    last.targetDamageTo = event.damage
-  }
+  return index < 0 || taken.has(index) ? null : index
 }
 
-/** Every punish in the match, in the order they began. */
-export function readPunishes(record: MatchRecord, blows: Blow[]): Punish[] {
+// one entry per KO of the match, in order: the index of the punish that ended in it, or null
+function linkKos(record: MatchRecord, punishes: Punish[]): (number | null)[] {
+  const taken = new Set<number>()
+
+  return kosOf(record).map((event) => {
+    const index = event.killer === null ? null : koPunishOf(event, punishes, taken)
+    const punish = index === null ? undefined : punishes[index]
+
+    if (index === null || !punish) return null
+
+    taken.add(index)
+    punish.isKo = true
+    punish.targetDamageTo = event.damage
+
+    return index
+  })
+}
+
+export type PunishReading = { punishes: Punish[]; koPunishes: (number | null)[] }
+
+/** Every punish in the match, in the order they began, and which one each KO ended. */
+export function readPunishes(record: MatchRecord, blows: Blow[]): PunishReading {
   const punishes: Punish[] = []
   const open = new Map<string, Punish>()
 
@@ -113,9 +129,7 @@ export function readPunishes(record: MatchRecord, blows: Blow[]): Punish[] {
     punishes.push(punish)
   }
 
-  markKos(record, punishes)
-
-  return punishes
+  return { punishes, koPunishes: linkKos(record, punishes) }
 }
 
 /** The punish a blow belongs to, by its index in the match's punishes, or null. */

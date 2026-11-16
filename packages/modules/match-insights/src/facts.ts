@@ -11,13 +11,15 @@ export type MatchFacts = {
   strikes: Strike[]
   blows: Blow[]
   punishes: Punish[]
+  // one entry per KO of the match, in order: the index of the punish that ended in it, or null
+  koPunishes: (number | null)[]
 }
 
 export function readFacts(record: MatchRecord): MatchFacts {
   const strikes = readStrikes(record)
   const blows = readBlows(strikes)
 
-  return { record, strikes, blows, punishes: readPunishes(record, blows) }
+  return { record, strikes, blows, ...readPunishes(record, blows) }
 }
 
 // costStep names the punish, so two moments that led to the same one can be told apart

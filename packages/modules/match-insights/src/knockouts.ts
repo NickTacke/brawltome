@@ -52,7 +52,7 @@ function zoneOf(record: MatchRecord, centre: Centre, victim: number, step: numbe
   return down < 0 ? 'top' : 'bottom'
 }
 
-function readKnockout(facts: MatchFacts, centre: Centre, event: KoEvent): Knockout {
+function readKnockout(facts: MatchFacts, centre: Centre, event: KoEvent, koIndex: number): Knockout {
   const { record } = facts
   const { player: victim, killer, step } = event
 
@@ -60,11 +60,8 @@ function readKnockout(facts: MatchFacts, centre: Centre, event: KoEvent): Knocko
     (entry) => entry.target === victim && entry.attacker === killer && entry.step <= step,
   )
 
-  const punishIndex = facts.punishes.findLastIndex(
-    (punish) => punish.target === victim && punish.attacker === killer && punish.isKo && punish.endStep <= step,
-  )
-
-  const punish = facts.punishes[punishIndex]
+  const punishIndex = facts.koPunishes[koIndex] ?? null
+  const punish = punishIndex === null ? undefined : facts.punishes[punishIndex]
   const state = stateOf(record, victim)
   const hitStep = blow ? blow.step - 1 : step - 1
 
@@ -77,7 +74,7 @@ function readKnockout(facts: MatchFacts, centre: Centre, event: KoEvent): Knocko
     move: blow?.move ?? null,
     weapon: blow?.weapon ?? null,
     zone: zoneOf(record, centre, victim, step),
-    punishIndex: punish ? punishIndex : null,
+    punishIndex,
     sinceOpeningMs: punish ? toMs(record, step) - punish.startMs : null,
     airJumpsUsed: valueAt(state.airJumpsUsed, hitStep, 0),
     wasAirborne: valueAt(state.inAir, hitStep, false),
@@ -87,5 +84,5 @@ function readKnockout(facts: MatchFacts, centre: Centre, event: KoEvent): Knocko
 export function readKnockouts(facts: MatchFacts): Knockout[] {
   const centre = stageCentre(facts.record)
 
-  return kosOf(facts.record).map((event) => readKnockout(facts, centre, event))
+  return kosOf(facts.record).map((event, koIndex) => readKnockout(facts, centre, event, koIndex))
 }
