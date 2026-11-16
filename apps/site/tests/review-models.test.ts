@@ -159,6 +159,8 @@ function trackedPoses(insights: MatchInsights, timeMs: number): Pose[] {
 // the stage at the widths a desktop page gives it, the cards as tall as their longest stop, and the lanes' band as
 // high as the panel of lanes with its gap: two lanes in a duel, four with a gap between the teams in doubles
 const stageWidthsPx = [640, 780, 1040, 1300]
+// fullscreen keeps the lanes on the bottom edge
+const fullscreenWidthsPx = [1640, 1920, 2040]
 const uprightCard: Size = { width: 288, height: 196 }
 const wideCard = (stage: Size): Size => ({ width: Math.min(480, stage.width - 16), height: 84 })
 
@@ -200,10 +202,18 @@ function checkStop(insights: MatchInsights, stop: ReviewStop, stage: Size, edge:
 
 function checkEveryStop(name: InsightsFixture): Check[] {
   const insights = readInsights(name)
-  const stages = stageWidthsPx.map((width) => ({ width, height: width / insights.insights.stage.aspect }))
+  const stageOf = (width: number) => ({ width, height: width / insights.insights.stage.aspect })
+
+  const onPage = stageWidthsPx.flatMap((width) => [
+    { stage: stageOf(width), edge: 'top' as const },
+    { stage: stageOf(width), edge: 'bottom' as const },
+  ])
+
+  const fullscreen = fullscreenWidthsPx.map((width) => ({ stage: stageOf(width), edge: 'bottom' as const }))
+  const layouts = [...onPage, ...fullscreen]
 
   return insights.reviewStops.flatMap((stop) =>
-    stages.flatMap((stage) => (['top', 'bottom'] as const).map((edge) => checkStop(insights, stop, stage, edge))),
+    layouts.map(({ stage, edge }) => checkStop(insights, stop, stage, edge)),
   )
 }
 
