@@ -32,12 +32,16 @@ describe('the art runner', () => {
   // the art bucket, as the api's missing and files routes see it
   let bucket: Map<string, Uint8Array>
   let received: Received
+  // paths a lying api adds to every missing answer
+  let extraMissing: string[]
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
     mkdirSync(join(root, 'games', '11.00'), { recursive: true })
     // the fake export's warm never ends for this patch
     mkdirSync(join(root, 'games', '11.01'), { recursive: true })
+    // and its warm --list names a path outside the store for this one
+    mkdirSync(join(root, 'games', '11.02'), { recursive: true })
     mkdirSync(join(root, 'work'))
 
     server = Bun.serve({ port: 0, fetch: (request) => answer(request) })
@@ -50,6 +54,7 @@ describe('the art runner', () => {
 
   beforeEach(() => {
     nextJob = null
+    extraMissing = []
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
   })
@@ -110,7 +115,7 @@ describe('the art runner', () => {
   function missing(body: { paths: string[] }): Response {
     received.calls.push('missing')
 
-    return Response.json({ missing: body.paths.filter((path) => !bucket.has(path)) })
+    return Response.json({ missing: [...body.paths.filter((path) => !bucket.has(path)), ...extraMissing] })
   }
 
   function fileOf(path: string): Response {
@@ -220,6 +225,35 @@ describe('the art runner', () => {
     expect(received.puts).not.toContain(sharedSheet.path)
     expect(received.puts).toContain(fakeMap)
     expect(received.results).toHaveLength(1)
+  })
+
+  test('a file the api says is missing is only sent when the export wrote it', async () => {
+    extraMissing = ['../../../etc/hosts', `art/${'e'.repeat(32)}.json`]
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.puts).not.toContain('../../../etc/hosts')
+    expect(received.puts).not.toContain(`art/${'e'.repeat(32)}.json`)
+    expect(received.results).toHaveLength(1)
+  })
+
+  test('a plan naming a path outside the store layout fails the job before anything is read or written', async () => {
+    nextJob = { kind: 'match', fake: 'bad-plan' }
+
+    await runner().runOnce()
+
+    expect(received.calls).toEqual(['claim', 'plan', 'failure'])
+    expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('../') }])
+  })
+
+  test('a warm list naming a path outside the store layout fails the job', async () => {
+    nextJob = { kind: 'warm', patch: '11.02' }
+
+    await runner().runOnce()
+
+    expect(received.calls).toEqual(['claim', 'warm --list', 'failure'])
+    expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('../') }])
   })
 
   test('a line without animations reports no-animations and renders nothing', async () => {

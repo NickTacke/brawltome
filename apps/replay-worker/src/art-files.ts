@@ -10,6 +10,13 @@ export type JobFiles = { line: string; have: string; manifest: string; store: st
 // the folders the export writes into a store
 const STORE_FOLDERS = ['art', 'maps', 'sheets', 'anims']
 
+// a file in a store, as the export names it; checked before the worker reads or writes any path it was handed
+const STORE_PATH = /^(art|maps|sheets|anims)\/[0-9a-f]+\.(json|webp|bin)$/
+
+export function isStorePath(path: string): boolean {
+  return STORE_PATH.test(path)
+}
+
 export function jobFiles(artDir: string, jobId: string): JobFiles {
   return {
     line: join(artDir, `${jobId}.line`),
@@ -45,7 +52,9 @@ export function listStore(store: string): string[] {
 
     if (!existsSync(folderPath)) return []
 
-    return readdirSync(folderPath).map((name) => `${folder}/${name}`)
+    return readdirSync(folderPath)
+      .map((name) => `${folder}/${name}`)
+      .filter(isStorePath)
   })
 }
 

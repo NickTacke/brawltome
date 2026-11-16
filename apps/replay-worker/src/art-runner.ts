@@ -11,6 +11,7 @@ import {
 } from './art-client'
 import type { Exporter } from './art-export'
 import {
+  isStorePath,
   type JobFiles,
   jobFiles,
   listStore,
@@ -113,7 +114,12 @@ export class ArtRunner {
     if (planned.kind === 'failure') return planned
 
     const plan = JSON.parse(planned.stdout) as ExportPlan
-    const present = await this.presentOf(job, [...plan.groups.map((group) => group.path), plan.map.path])
+    const planPaths = [...plan.groups.map((group) => group.path), plan.map.path]
+    const strayPath = planPaths.find((path) => !isStorePath(path))
+
+    if (strayPath !== undefined) return failure('export-failed', `the plan names ${strayPath}, not a store path`)
+
+    const present = await this.presentOf(job, planPaths)
 
     // the render reads the art groups and map file it doesn't draw again, to name their sheets; it needs no sheets
     await this.download(job, present, files.store)
@@ -139,7 +145,12 @@ export class ArtRunner {
 
     if (listed.kind === 'failure') return listed
 
-    const present = await this.presentOf(job, listed.stdout.split('\n').filter(Boolean))
+    const listedPaths = listed.stdout.split('\n').filter(Boolean)
+    const strayPath = listedPaths.find((path) => !isStorePath(path))
+
+    if (strayPath !== undefined) return failure('export-failed', `warm --list names ${strayPath}, not a store path`)
+
+    const present = await this.presentOf(job, listedPaths)
 
     // the result names every map file of the patch, so those already stored come down to tell their map ids
     const storedMaps = present.filter((path) => path.startsWith('maps/'))
@@ -170,12 +181,15 @@ export class ArtRunner {
     for (const path of paths) writeStoreFile(store, path, await this.deps.art.readFile(job, path))
   }
 
-  // sends what the export wrote that the bucket still lacks: a sheet shared with another match may be there already
+  // sends what the export wrote that the bucket still lacks: a sheet shared with another match may be there already.
+  // only a path the export wrote is read, whatever the api answers
   private async upload(job: ArtJob, store: string, downloaded: string[]): Promise<void> {
     const downloadedPaths = new Set(downloaded)
     const written = listStore(store).filter((path) => !downloadedPaths.has(path))
+    const writtenPaths = new Set(written)
+    const missing = await this.deps.art.missing(job, written)
 
-    for (const path of await this.deps.art.missing(job, written)) {
+    for (const path of missing.filter((path) => writtenPaths.has(path))) {
       await this.deps.art.putFile(job, path, readFileSync(join(store, path)))
     }
   }

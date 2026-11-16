@@ -1,6 +1,6 @@
 // stands in for the brawlhalla-anims export (`export.ts plan|render|warm`, see its README) in tests. The line's
-// `fake` field says what to do: ok (the default), no-animations, crash-render, hang-render; a warm for patch 11.01
-// never ends. It writes files named the way the export names them, with tiny bodies
+// `fake` field says what to do: ok (the default), no-animations, bad-plan, crash-render, hang-render. A warm for
+// patch 11.01 never ends, and one for 11.02 lists a path outside the store. It writes files named the way the export names them, with tiny bodies
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  if (command === 'plan') return plan(basename(gameFolder))
+  if (command === 'plan') return plan(basename(gameFolder), line.fake === 'bad-plan')
 
   if (line.fake === 'crash-render') fail('boom')
 
@@ -68,8 +68,9 @@ async function main(): Promise<void> {
   render(store, values.have ?? '', values.manifest ?? '')
 }
 
-function plan(patch: string): void {
-  const groups = fakeGroups.map((path) => ({ fingerprint: path.slice(4, 36), path, kind: 'core' }))
+function plan(patch: string, isBad: boolean): void {
+  const paths = isBad ? [...fakeGroups, '../../outside.json'] : fakeGroups
+  const groups = paths.map((path) => ({ fingerprint: path.slice(4, 36), path, kind: 'core' }))
 
   console.log(JSON.stringify({ format: 3, patch, mapId: fakeMapId, groups, map: { fingerprint: '4', path: fakeMap } }))
 }
@@ -93,7 +94,8 @@ function render(store: string, haveFile: string, manifestPath: string): void {
 
 async function warm(store: string, values: { have?: string; patch?: string; list?: boolean }): Promise<void> {
   const have = readHave(values.have)
-  const paths = [warmGroup, ...warmMaps].filter((path) => !have.has(path))
+  const listed = values.patch === '11.02' ? [warmGroup, '../../outside.json'] : [warmGroup, ...warmMaps]
+  const paths = listed.filter((path) => !have.has(path))
 
   if (values.list) {
     for (const path of paths) console.log(path)
