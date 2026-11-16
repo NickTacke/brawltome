@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Sql, TransactionSql } from '@brawltome/foundation'
 import { createReplayArtJobs, type ReplayArtJobs } from './art'
 import { queueMatchArt } from './art-queue'
+import { logInsightsFailure, readMatchInsightsFor } from './insights'
 import { replayKey, timelineKey } from './keys'
 import { LEASE_SECONDS, MAX_ATTEMPTS } from './limits'
 import { candidateKey, type PlayedLine, parseReplayLine, UnknownFormatError } from './line'
@@ -218,6 +219,9 @@ async function storeMatch(
   }
 
   if (existing?.timelineKey) await deps.objectStore.delete(existing.timelineKey)
+
+  // best effort, outside the transaction: a match whose insights fail is still stored, and its next read tries again
+  await readMatchInsightsFor(deps, matchId).catch((error: unknown) => logInsightsFailure(matchId, error))
 
   return 'completed'
 }

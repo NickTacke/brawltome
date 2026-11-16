@@ -81,7 +81,8 @@ function readArtBaseUrl(value: string): string {
     throw new Error(`ART_BASE_URL must be an https address, not ${value}`)
   }
 
-  return value
+  // the api joins art paths to it with a slash of its own
+  return value.replace(/\/+$/, '')
 }
 
 function readOperators(value: string | undefined): string[] {

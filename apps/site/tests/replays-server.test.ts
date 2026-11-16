@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { ReplayUploadResultContract } from '@brawltome/contracts'
 import { loadMatchesPage } from '../src/server/load-matches-page'
-import { loadMatch, serveReplayFile, uploadForVisitor } from '../src/server/replay-data'
+import { loadMatch, servePlaybackTimeline, serveReplayFile, uploadForVisitor } from '../src/server/replay-data'
 import { apiUrl, useApiSettings } from './api-stub'
 
 type Call = { path: string; method: string; headers: Headers; body: BodyInit | null | undefined }
@@ -48,6 +48,9 @@ const matchDetail = {
   failedChecks: [],
   players: [],
   replay: { available: true, patch: '11.00', fileName: '[11.00] BigCrystalTemple.replay' },
+  insights: null,
+  art: { state: 'none' as const, manifestUrl: null, baseUrl: null },
+  playbackPath: null,
 }
 
 describe('uploading replays for a visitor', () => {
@@ -126,6 +129,64 @@ describe('reading matches', () => {
     stubApi(() => new Response(JSON.stringify({ code: 'GONE' }), { status: 410 }))
 
     expect((await serveReplayFile(matchDetail.id)).status).toBe(410)
+  })
+})
+
+describe('serving a match playback timeline', () => {
+  useApiSettings()
+
+  const gzipped = Bun.gzipSync(JSON.stringify({ stepMs: 16 }))
+
+  const timeline = (isOpen: boolean) =>
+    new Response(gzipped, { headers: { 'content-type': 'application/gzip', 'x-replays-open': String(isOpen) } })
+
+  test('passes the gzip bytes through as json, keeping them private while replays are closed', async () => {
+    const calls = stubApi(() => timeline(false))
+
+    const answer = await servePlaybackTimeline(matchDetail.id, 'dev-1', '1', 'raw-session-token')
+
+    expect(calls[0]?.path).toBe(`/matches/${matchDetail.id}/playback/dev-1/1`)
+    expect(calls[0]?.headers.get('x-visitor-session')).toBe('raw-session-token')
+    expect(answer.status).toBe(200)
+    expect(answer.headers.get('content-type')).toBe('application/json')
+    expect(answer.headers.get('content-encoding')).toBe('gzip')
+    expect(answer.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
+    expect(new Uint8Array(await answer.arrayBuffer())).toEqual(gzipped)
+  })
+
+  test('lets everything cache it for good once replays are open', async () => {
+    stubApi(() => timeline(true))
+
+    const answer = await servePlaybackTimeline(matchDetail.id, 'dev-1', '1')
+
+    expect(answer.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+  })
+
+  test('spells a build with odd characters safely in the api address', async () => {
+    const calls = stubApi(() => timeline(false))
+
+    await servePlaybackTimeline(matchDetail.id, 'dev 1/../x', '1')
+
+    expect(calls[0]?.path).toBe(`/matches/${matchDetail.id}/playback/dev%201%2F..%2Fx/1`)
+  })
+
+  test('passes the api 404 through as 404', async () => {
+    stubApi(() => new Response(JSON.stringify({ code: 'NOT_FOUND' }), { status: 404 }))
+
+    const answer = await servePlaybackTimeline(matchDetail.id, 'dev-1', '1')
+
+    expect(answer.status).toBe(404)
+    expect(answer.headers.get('content-encoding')).toBeNull()
+  })
+
+  test('answers 502 without details for any other api failure', async () => {
+    stubApi(() => new Response('secret detail', { status: 500 }))
+
+    const answer = await servePlaybackTimeline(matchDetail.id, 'dev-1', '1')
+
+    expect(answer.status).toBe(502)
+    expect(await answer.text()).not.toContain('secret')
   })
 })
 
