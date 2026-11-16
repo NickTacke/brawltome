@@ -502,6 +502,29 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(await storeArtFile(deps, first.jobId, first.leaseToken, path, bytes)).toEqual({ status: 'stored' })
   })
 
+  test('a duplicate upload from the same attempt finds the path already stored', async () => {
+    const [first] = await twoClaimedJobs()
+    const path = `art/${'f'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{}')
+    const stalling = stallingArtStore()
+
+    const stalledUpload = storeArtFile(
+      { ...deps, artStore: stalling.store },
+      first.jobId,
+      first.leaseToken,
+      path,
+      bytes,
+    )
+
+    await stalling.writeStarted
+
+    expect(await storeArtFile(deps, first.jobId, first.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+
+    stalling.letWritesFinish()
+
+    expect(await stalledUpload).toEqual({ status: 'exists' })
+  })
+
   test('a manifest naming a file still being uploaded is refused', async () => {
     const claimed = await claimedMatchJob()
     const art = fakeArtExport()

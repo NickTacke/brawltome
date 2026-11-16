@@ -46,10 +46,12 @@ export async function storeArtFile(
 
   const isMarked = await markStored(sql, path, uploader)
 
-  // this attempt's lease ran out during the upload, and another attempt took the path over
-  if (!isMarked) return { status: 'lease-lost' }
+  if (isMarked) return { status: 'stored' }
 
-  return { status: 'stored' }
+  // a duplicate upload stored the path first, or this attempt's lease ran out and another attempt took it over
+  const held = await heldOutcome(sql, path)
+
+  return held.status === 'exists' ? held : { status: 'lease-lost' }
 }
 
 // a path is claimed when it's new, when this attempt claimed it before (a retried upload), or when the attempt that
