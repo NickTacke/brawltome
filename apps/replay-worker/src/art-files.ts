@@ -7,8 +7,9 @@ import type { ArtMap } from './art-client'
 
 export type JobFiles = { line: string; have: string; manifest: string; store: string }
 
-// the folders the export writes into a store
-const STORE_FOLDERS = ['art', 'maps', 'sheets', 'anims']
+// the folders the export writes into a store, in the order their files are sent: a file after the files it names, as
+// the api refuses a map file whose sheets it doesn't hold yet
+const STORE_FOLDERS = ['sheets', 'anims', 'art', 'maps']
 
 // a file in a store, as the export names it; checked before the worker reads or writes any path it was handed
 const STORE_PATH = /^(art|maps|sheets|anims)\/[0-9a-f]+\.(json|webp|bin)$/
