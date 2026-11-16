@@ -43,8 +43,3 @@ export function toShare(box: StageBox, spot: Position): [number, number] {
 
   return [clamp((spot.x - box.minX) / box.width), clamp((spot.y - box.minY) / box.height)]
 }
-
-/** Where a spot sits in the box, as shares that may leave it, for a player launched off screen. */
-export function toOpenShare(box: StageBox, spot: Position): [number, number] {
-  return [roundShare((spot.x - box.minX) / box.width), roundShare((spot.y - box.minY) / box.height)]
-}

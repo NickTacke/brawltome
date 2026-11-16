@@ -1,8 +1,7 @@
 import type { LevelLayout, Stage } from '@brawltome/contracts'
 import type { MatchFacts } from '../facts'
 import { type Position, positionAt } from '../positions'
-import { isLive, type MatchRecord } from '../record'
-import { readPlayback } from './playback'
+import { isLive, type MatchRecord, toMs } from '../record'
 import { tracedBox } from './stage-box'
 import { cameraBox, layoutArt, layoutSegments, rectOf } from './stage-layout'
 import { readStageMarks } from './stage-marks'
@@ -40,6 +39,10 @@ export function readStage(facts: MatchFacts, layout: LevelLayout | null): Stage 
     art: layout ? layoutArt(box, layout) : [],
     isTraced: layout === null,
     marks: readStageMarks(facts, box),
-    playback: readPlayback(record, box),
+    box,
+    durationMs: toMs(record, record.endStep),
+    sampleMs: record.positionEvery * record.stepMs,
+    stepMs: record.stepMs,
+    hasAnimations: record.hasAnimations,
   }
 }

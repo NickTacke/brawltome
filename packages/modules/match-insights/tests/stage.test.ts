@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { LevelLayout } from '@brawltome/contracts'
 import { readMatchInsights } from '../index'
-import { eventsOf, msOf, stateSeries } from './derive'
+import { eventsOf, msOf, type RawEvent } from './derive'
 import { isEnemyHit } from './derive-openings'
 import { isLiveAt } from './derive-state'
 import { readFixtureLine } from './fixtures'
@@ -70,23 +70,32 @@ describe.each(fixtures())('stage of $name without a layout', (fixture) => {
     }
   })
 
-  test('plays back each player from their state', () => {
-    const { playback } = stage
+  test('carries the clock and the box the playback timeline is drawn in, not the playback itself', () => {
     const every = (line.timeline as unknown as { positions: { every: number } }).positions.every
-    const samples = Math.ceil((line.timeline.endStep - line.timeline.startStep) / every)
 
-    expect(playback.sampleMs).toBe(every * line.timeline.stepMs)
-    expect(playback.hasAnimations).toBe(true)
+    expect(stage).not.toHaveProperty('playback')
+    expect(stage.sampleMs).toBe(every * line.timeline.stepMs)
+    expect(stage.stepMs).toBe(line.timeline.stepMs)
+    expect(stage.durationMs).toBe(msOf(line, line.timeline.endStep))
+    expect(stage.hasAnimations).toBe(true)
+    expect(stage.box.width / stage.box.height).toBeCloseTo(stage.aspect, 9)
+  })
 
-    for (const player of playback.players) {
-      const damage = stateSeries(line, player.slot, 'damage')
+  // a share to three decimals, a spot outside the box on its edge
+  test('places every hit mark where its first hit landed in the box', () => {
+    const { box } = stage
+    const share = (value: number) => Math.round(Math.min(Math.max(value, 0), 1) * 1000) / 1000
+    const hits = eventsOf(line, 'hit') as (RawEvent & { x: number; y: number })[]
 
-      expect(player.x).toHaveLength(samples)
-      expect(player.y).toHaveLength(samples)
-
-      expect(player.damage).toEqual(
-        damage.map(([step, value]): [number, number] => [msOf(line, step), value as number]),
+    for (const mark of stage.marks.hits) {
+      const first = hits.find(
+        (hit) => msOf(line, hit.step) === mark.timeMs && hit.attacker === mark.attacker && hit.target === mark.target,
       )
+
+      expect([mark.x, mark.y]).toEqual([
+        share(((first?.x ?? Number.NaN) - box.minX) / box.width),
+        share(((first?.y ?? Number.NaN) - box.minY) / box.height),
+      ])
     }
   })
 })

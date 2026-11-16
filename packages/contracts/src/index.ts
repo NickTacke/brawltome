@@ -141,9 +141,6 @@ export type {
   Stock,
 } from './match-insights-players'
 export type {
-  AnimationShown,
-  Playback,
-  PlaybackPlayer,
   Stage,
   StageArt,
   StageBox,

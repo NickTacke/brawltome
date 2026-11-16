@@ -54,7 +54,6 @@ describe('which matches get insights', () => {
 
     expect(insights?.insights.stage.marks.hits.length).toBeGreaterThan(0)
     expect(insights?.insights.stage.marks.tracks.length).toBe(4)
-    expect(insights?.insights.stage.playback.hasAnimations).toBe(false)
-    expect(insights?.insights.stage.playback.players.every((player) => player.animation.length === 0)).toBe(true)
+    expect(insights?.insights.stage.hasAnimations).toBe(false)
   })
 })

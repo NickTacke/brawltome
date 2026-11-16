@@ -1,15 +1,11 @@
 import { z } from './zod'
 
 // the match drawn on its stage. every coordinate is a share of the stage box: 0,0 is its top left, 1,1 its bottom
-// right; a spot outside the box sits on its edge, except in playback, where a launched player keeps flying
+// right; a spot outside the box sits on its edge. playing the match back reads the separate playback timeline, drawn
+// in the same box
 
 const slot = z.number().int().min(1)
 const timeMs = z.number().int().nonnegative()
-
-// [ms, value from then on]
-function changesOf<Value extends z.ZodType>(value: Value) {
-  return z.array(z.tuple([z.number().int(), value]))
-}
 
 const stageSegmentSchema = z
   .object({ fromX: z.number(), fromY: z.number(), toX: z.number(), toY: z.number(), isSoft: z.boolean() })
@@ -19,7 +15,6 @@ const stageRectSchema = z.object({ x: z.number(), y: z.number(), width: z.number
 
 const stageArtSchema = stageRectSchema.extend({ file: z.string(), rotation: z.number() }).strict()
 
-// the level coordinates the shares are measured against
 const stageBoxSchema = z.object({ minX: z.number(), minY: z.number(), width: z.number(), height: z.number() }).strict()
 
 const stageHitSchema = z
@@ -53,43 +48,6 @@ const stageMarksSchema = z
   })
   .strict()
 
-// [animation index, first frame, frames per step]; null while the player shows no animation
-const animationShownSchema = z.tuple([z.number().int(), z.number(), z.number()]).nullable()
-
-const playbackPlayerSchema = z
-  .object({
-    slot,
-    // one entry per position sample, from the start of the match
-    x: z.array(z.number()),
-    y: z.array(z.number()),
-    isLive: changesOf(z.boolean()),
-    facingRight: changesOf(z.boolean()),
-    weapon: changesOf(z.string()),
-    move: changesOf(z.string()),
-    damage: changesOf(z.number()),
-    stocksLeft: changesOf(z.number().int()),
-    isInAir: changesOf(z.boolean()),
-    isHitstun: changesOf(z.boolean()),
-    isDodging: changesOf(z.boolean()),
-    // empty when the line records no animations. the times are not clamped to the match start, so the frame shown
-    // can be counted from when an animation began
-    animation: changesOf(animationShownSchema),
-  })
-  .strict()
-
-const playbackSchema = z
-  .object({
-    sampleMs: z.number().int().positive(),
-    stepMs: z.number().int().positive(),
-    durationMs: timeMs,
-    players: z.array(playbackPlayerSchema),
-    // the replay's file name without its extension
-    replay: z.string(),
-    hasAnimations: z.boolean(),
-    box: stageBoxSchema,
-  })
-  .strict()
-
 export const stageSchema = z
   .object({
     // the map's background, when its layout is known
@@ -104,7 +62,14 @@ export const stageSchema = z
     // the box was traced around where players stood, as the map's layout wasn't known
     isTraced: z.boolean(),
     marks: stageMarksSchema,
-    playback: playbackSchema,
+    // the level coordinates the shares are measured against
+    box: stageBoxSchema,
+    // the clock of the match and of the playback timeline's position samples
+    durationMs: timeMs,
+    sampleMs: z.number().int().positive(),
+    stepMs: z.number().int().positive(),
+    // whether the line names its animations, so the playback can draw the legends
+    hasAnimations: z.boolean(),
   })
   .strict()
 
@@ -117,7 +82,4 @@ export type StageKo = z.infer<typeof stageKoSchema>
 export type StageSpot = z.infer<typeof stageSpotSchema>
 export type StageTrail = z.infer<typeof stageTrailSchema>
 export type StageMarks = z.infer<typeof stageMarksSchema>
-export type AnimationShown = z.infer<typeof animationShownSchema>
-export type PlaybackPlayer = z.infer<typeof playbackPlayerSchema>
-export type Playback = z.infer<typeof playbackSchema>
 export type Stage = z.infer<typeof stageSchema>

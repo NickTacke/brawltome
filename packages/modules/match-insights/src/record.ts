@@ -6,8 +6,6 @@ import { valueAt } from './series'
 
 export type MatchRecord = {
   line: Line
-  // the replay's file name without its extension
-  replay: string
   // whether the line names the animations its state points at, so the legends can be drawn
   hasAnimations: boolean
   stepMs: number
@@ -38,7 +36,6 @@ export function readRecord(line: Line): MatchRecord {
 
   return {
     line,
-    replay: (line.replay ?? '').replace(/\.replay$/, ''),
     hasAnimations: timeline.animations !== undefined,
     stepMs: timeline.stepMs,
     startStep: timeline.startStep,

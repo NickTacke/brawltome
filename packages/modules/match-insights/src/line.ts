@@ -93,7 +93,6 @@ const eventsSchema = z.preprocess(
 
 const playerStateSchema = z.object({
   damage: seriesOf(z.number()),
-  stocks: seriesOf(z.number().int()),
   status: seriesOf(z.string()),
   inAir: seriesOf(z.boolean()),
   onWall: seriesOf(z.boolean()),
@@ -101,11 +100,8 @@ const playerStateSchema = z.object({
   move: seriesOf(z.string()),
   hitstun: seriesOf(z.boolean()),
   dodging: seriesOf(z.boolean()),
-  facingRight: seriesOf(z.boolean()),
   airJumpsUsed: seriesOf(z.number().int()),
   input: seriesOf(z.number().int()),
-  // [step, animation index, first frame, frames per step]; no index while the player shows none
-  animation: z.array(z.tuple([step, z.number().int().nullable(), z.number(), z.number()])).optional(),
 })
 
 // one position sample every `every` steps, from step `from`
@@ -123,7 +119,6 @@ const timelineSchema = z.object({
 })
 
 export const lineSchema = z.object({
-  replay: z.string().optional(),
   patch: z.string(),
   format: z.literal(1),
   stats: z.object({ GameDuration: z.number().int().nonnegative() }).catchall(z.unknown()),
