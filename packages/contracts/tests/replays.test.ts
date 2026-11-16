@@ -55,8 +55,8 @@ const art = {
 }
 
 describe('match detail', () => {
-  test('an answer without insights, art and playback still reads', () => {
-    expect(matchDetailSchema.safeParse(earlierMatch).success).toBe(true)
+  test('every answer carries insights, art and playback', () => {
+    expect(matchDetailSchema.safeParse(earlierMatch).success).toBe(false)
   })
 
   test('an answer with insights, art and playback reads', () => {
@@ -66,13 +66,14 @@ describe('match detail', () => {
   })
 
   test('art without a bucket has no addresses', () => {
-    const match = { ...earlierMatch, art: { state: 'none', manifestUrl: null, baseUrl: null } }
+    const art = { state: 'none', manifestUrl: null, baseUrl: null }
+    const match = { ...earlierMatch, insights: null, art, playbackPath: null }
 
     expect(matchDetailSchema.safeParse(match).success).toBe(true)
   })
 
   test('an art state the api never sends is refused', () => {
-    const match = { ...earlierMatch, art: { ...art, state: 'exporting' } }
+    const match = { ...earlierMatch, insights: null, art: { ...art, state: 'exporting' }, playbackPath: null }
 
     expect(matchDetailSchema.safeParse(match).success).toBe(false)
   })

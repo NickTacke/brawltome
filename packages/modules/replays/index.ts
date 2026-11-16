@@ -10,6 +10,7 @@ export type { ArtMap, ArtResult } from './art-complete'
 export type { ArtFailure, ArtFailureCode } from './art-lease'
 export { parseArtPath } from './art-paths'
 export type { StoreArtOutcome } from './art-upload'
+export { readMatchInsightsFor } from './insights'
 export {
   type ClaimedJob,
   type CompleteOutcome,
@@ -21,6 +22,7 @@ export * from './keys'
 export * from './limits'
 export { inspectReplayQueue, type ReplayQueueInspection } from './maintenance'
 export type { ReplaysDeps, WorkerReport } from './model'
+export { type PlaybackTimeline, trimPlaybackTimeline } from './playback'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
 const migrations = [createReplays, addWorkerReports, addArt, allowNoScore] as const

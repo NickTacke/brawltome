@@ -1,58 +1,18 @@
 import type { MatchDetailContract, MatchSummaryContract, MyReplayContract } from '@brawltome/contracts'
 import type { ObjectStore, Sql } from '@brawltome/foundation'
+import { insightsOf, logInsightsFailure } from './insights'
 import { replayKey } from './keys'
-import { MAX_MERGE_HOPS } from './limits'
+import { findMatchRow, type MatchRow, type StoredMatchRow } from './match-row'
+import type { ReplaysDeps } from './model'
+import { playbackPathOf } from './playback'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
-
-type MatchRow = {
-  id: string
-  mergedInto: string | null
-  digest: string
-  patch: string
-  mapName: string
-  modeName: string
-  queue: string | null
-  isRanked: boolean
-  isCustom: boolean
-  hasTeams: boolean
-  hasTeamDamage: boolean
-  stocks: number | null
-  durationMs: number
-  isReliable: boolean
-  failedChecks: string[]
-  parsedAt: Date
-  fileDeleted: boolean
-}
 
 type PlayerRow = MatchDetailContract['players'][number] & { matchId: string }
 
 /** The game's own replay file names: `[11.00] BigCrystalTemple.replay`. */
 export function replayFileName(patch: string, mapName: string): string {
   return `[${patch}] ${mapName.replace(/\s+/g, '')}.replay`
-}
-
-async function findMatchRow(sql: Sql, id: string): Promise<MatchRow | null> {
-  let currentId = id
-
-  for (let hop = 0; hop <= MAX_MERGE_HOPS; hop++) {
-    const [row] = await sql<MatchRow[]>`
-      SELECT match.id, match.merged_into AS "mergedInto", match.digest, match.patch, match.map_name AS "mapName",
-        match.mode_name AS "modeName", match.queue, match.is_ranked AS "isRanked", match.is_custom AS "isCustom",
-        match.has_teams AS "hasTeams", match.has_team_damage AS "hasTeamDamage", match.stocks,
-        match.duration_ms AS "durationMs", match.is_reliable AS "isReliable", match.failed_checks AS "failedChecks",
-        match.parsed_at AS "parsedAt", file.deleted_at IS NOT NULL AS "fileDeleted"
-      FROM replays.matches AS match
-      JOIN replays.replay_files AS file ON file.digest = match.digest
-      WHERE match.id = ${currentId}
-    `
-
-    if (!row?.mergedInto) return row ?? null
-
-    currentId = row.mergedInto
-  }
-
-  return null
 }
 
 async function playersOf(sql: Sql, matchIds: string[]): Promise<PlayerRow[]> {
@@ -93,12 +53,42 @@ function summaryOf(row: MatchRow, players: PlayerRow[]): MatchSummaryContract {
   }
 }
 
-export async function getMatch(sql: Sql, id: string): Promise<MatchDetailContract | null> {
+/** What reading a match needs: the art bucket's address is null when this process has no art bucket. */
+export type MatchReadDeps = Pick<ReplaysDeps, 'database' | 'objectStore' | 'artStore'> & { artBaseUrl: string | null }
+
+// a queued or failed export keeps the last good manifest, so its address is given whatever the state
+function artOf(row: StoredMatchRow, artBaseUrl: string | null): MatchDetailContract['art'] {
+  const manifestUrl = artBaseUrl && row.artManifestKey ? `${artBaseUrl}/${row.artManifestKey}` : null
+
+  return { state: row.artState, manifestUrl, baseUrl: artBaseUrl }
+}
+
+type PageReads = Pick<MatchDetailContract, 'insights' | 'playbackPath'>
+
+// insights and playback are read apart: a match whose insights fail is still played back from its line. a match
+// the page isn't designed for has neither
+async function pageReadsOf(deps: MatchReadDeps, row: StoredMatchRow): Promise<PageReads> {
+  const playbackPath = row.timelineKey ? playbackPathOf(row) : null
+
+  try {
+    const insights = await insightsOf(deps, row)
+
+    return { insights, playbackPath: insights ? playbackPath : null }
+  } catch (error) {
+    logInsightsFailure(row.id, error)
+
+    return { insights: null, playbackPath }
+  }
+}
+
+export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDetailContract | null> {
+  const sql = deps.database.sql
   const row = await findMatchRow(sql, id)
 
   if (!row) return null
 
   const players = await playersOf(sql, [row.id])
+  const { insights, playbackPath } = await pageReadsOf(deps, row)
 
   return {
     ...summaryOf(row, players),
@@ -110,6 +100,9 @@ export async function getMatch(sql: Sql, id: string): Promise<MatchDetailContrac
     failedChecks: row.failedChecks,
     players: players.map(({ matchId: _matchId, ...player }) => player),
     replay: { available: !row.fileDeleted, patch: row.patch, fileName: replayFileName(row.patch, row.mapName) },
+    insights,
+    art: artOf(row, deps.artBaseUrl),
+    playbackPath,
   }
 }
 

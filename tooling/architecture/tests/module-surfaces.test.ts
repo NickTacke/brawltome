@@ -95,10 +95,15 @@ describe('module package surfaces', () => {
     expect(findDrizzleExports(exports, packageName)).toEqual([])
   })
 
-  // an import is only safe when the imported module is loaded wherever the importer is
+  // an import is only safe when the imported module is loaded wherever the importer is. a capability without a
+  // schema (match-insights) is plain code with nothing to load
   test.each(Object.keys(modulePackages))('%s lists every capability it imports in dependsOn', (packageName) => {
     const { module } = modulePackages[packageName] as ModulePackage
-    const importedPackages = currentArchitecturePolicy.capabilityDependencies[packageName] ?? []
+    const packagesWithSchema = new Set(Object.values(currentArchitecturePolicy.moduleSchemas))
+
+    const importedPackages = (currentArchitecturePolicy.capabilityDependencies[packageName] ?? []).filter(
+      (importedPackage) => packagesWithSchema.has(importedPackage),
+    )
 
     const missingPackages = importedPackages.filter((importedPackage) => {
       const importedModuleName = modulePackages[importedPackage]?.module.name

@@ -48,6 +48,9 @@ const matchDetail = {
   failedChecks: [],
   players: [],
   replay: { available: true, patch: '11.00', fileName: '[11.00] BigCrystalTemple.replay' },
+  insights: null,
+  art: { state: 'none' as const, manifestUrl: null, baseUrl: null },
+  playbackPath: null,
 }
 
 describe('uploading replays for a visitor', () => {
