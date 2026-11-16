@@ -52,6 +52,7 @@ COPY packages/modules/replay-analysis/package.json packages/modules/replay-analy
 COPY packages/modules/replays/package.json packages/modules/replays/
 COPY packages/modules/statistics/package.json packages/modules/statistics/
 COPY packages/modules/discovery/package.json packages/modules/discovery/
+COPY packages/modules/match-insights/package.json packages/modules/match-insights/
 COPY packages/game-data/package.json packages/game-data/
 COPY packages/replay-player/package.json packages/replay-player/
 COPY packages/foundation/package.json packages/foundation/
