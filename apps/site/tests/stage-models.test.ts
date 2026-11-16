@@ -12,6 +12,7 @@ import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-ca
 import { tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
 import { initialLegends, type Legends, legendsStateOf } from '../src/components/match/stage/use-legends'
+import { frameElapsedMs } from '../src/components/match/stage/use-playback'
 import { weaponIconName } from '../src/components/match/weapon-icon'
 import { readInsights, readPlayback } from './match-fixtures'
 
@@ -257,5 +258,13 @@ describe('what the stage shows of a player', () => {
   test('the clock reads in minutes and seconds', () => {
     expect(formatClock(0)).toBe('0:00')
     expect(formatClock(168_832)).toBe('2:49')
+  })
+})
+
+describe('the clock', () => {
+  test('moves by the time since the last frame, and no more than a frame’s worth after the tab was hidden', () => {
+    expect(frameElapsedMs(1000, null)).toBe(0)
+    expect(frameElapsedMs(1016, 1000)).toBe(16)
+    expect(frameElapsedMs(61_000, 1000)).toBe(100)
   })
 })
