@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, releaseArtJob, storeArtFile } from '../art'
+import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, releaseArtJob } from '../art'
 import { completeArtJob } from '../art-complete'
 import { queueArtJob, queueWarmJob } from '../art-queue'
+import { storeArtFile } from '../art-upload'
 import { replaysModule } from '../index'
 import { claimJob, completeJob, type WorkerReport } from '../jobs'
 import { noteWorkerReport } from '../maintenance'
@@ -368,6 +369,141 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)).toEqual({ status: 'lease-lost' })
     expect(deps.artStore.keys()).toEqual([])
+  })
+
+  // two stored matches, each with its art job claimed by its own attempt
+  async function twoClaimedJobs(): Promise<[ClaimedArtJob, ClaimedArtJob]> {
+    await parsedMatch()
+    await parsedMatch()
+
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const second = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    return [first, second]
+  }
+
+  // an art store whose writes wait until the test lets them finish
+  function stallingArtStore() {
+    const artStore = deps.artStore
+    let letWritesFinish = () => {}
+
+    const writesMayFinish = new Promise<void>((resolve) => {
+      letWritesFinish = resolve
+    })
+
+    let markWriteStarted = () => {}
+
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve
+    })
+
+    const store = {
+      ...artStore,
+      put: async (key: string, body: Uint8Array, contentType: string) => {
+        markWriteStarted()
+        await writesMayFinish
+        await artStore.put(key, body, contentType)
+      },
+    }
+
+    return { store, writeStarted, letWritesFinish: () => letWritesFinish() }
+  }
+
+  test('of two overlapping uploads of one path, only the first is stored', async () => {
+    const [first, second] = await twoClaimedJobs()
+    const path = `art/${'c'.repeat(32)}.json`
+    const firstBytes = new TextEncoder().encode('{"from":"first"}')
+    const stalling = stallingArtStore()
+
+    const firstUpload = storeArtFile(
+      { ...deps, artStore: stalling.store },
+      first.jobId,
+      first.leaseToken,
+      path,
+      firstBytes,
+    )
+
+    await stalling.writeStarted
+
+    const secondBytes = new TextEncoder().encode('{"from":"second"}')
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, secondBytes)).toEqual({
+      status: 'in-progress',
+    })
+
+    expect(await missingArtFiles(deps, second.jobId, second.leaseToken, [path])).toEqual([path])
+
+    stalling.letWritesFinish()
+
+    expect(await firstUpload).toEqual({ status: 'stored' })
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, secondBytes)).toEqual({ status: 'exists' })
+    expect(await deps.artStore.get(path)).toEqual(firstBytes)
+    expect(await missingArtFiles(deps, second.jobId, second.leaseToken, [path])).toEqual([])
+  })
+
+  test('an upload left unfinished is taken over once its attempt has lost its lease', async () => {
+    const [first, second] = await twoClaimedJobs()
+    const path = `maps/${'d'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{"mapId":136}')
+
+    const failingStore = {
+      ...deps.artStore,
+      put: async () => {
+        throw new Error('connection reset')
+      },
+    }
+
+    await expect(
+      storeArtFile({ ...deps, artStore: failingStore }, first.jobId, first.leaseToken, path, bytes),
+    ).rejects.toThrow()
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, bytes)).toEqual({ status: 'in-progress' })
+
+    await database.sql`
+      UPDATE replays.art_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ${first.jobId}
+    `
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+    expect(await deps.artStore.get(path)).toEqual(bytes)
+  })
+
+  test('the same attempt may retry an upload that failed', async () => {
+    const [first] = await twoClaimedJobs()
+    const path = `art/${'e'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{}')
+
+    const failingStore = {
+      ...deps.artStore,
+      put: async () => {
+        throw new Error('connection reset')
+      },
+    }
+
+    await expect(
+      storeArtFile({ ...deps, artStore: failingStore }, first.jobId, first.leaseToken, path, bytes),
+    ).rejects.toThrow()
+
+    expect(await storeArtFile(deps, first.jobId, first.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+  })
+
+  test('a manifest naming a file still being uploaded is refused', async () => {
+    const claimed = await claimedMatchJob()
+    const art = fakeArtExport()
+
+    for (const [path, bytes] of art.files) await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)
+
+    await database.sql`
+      UPDATE replays.art_files SET state = 'uploading', job_id = ${claimed.jobId}, lease_token = ${claimed.leaseToken}
+      WHERE path = ${art.mapPath}
+    `
+
+    const outcome = await completeArtJob(deps, claimed.jobId, claimed.leaseToken, {
+      manifest: art.manifest,
+      maps: [{ patch: '11.00', mapId: 136, path: art.mapPath }],
+      artFormat: 3,
+    })
+
+    expect(outcome).toBe('failed')
   })
 
   test('no-animations marks the art failed with that code', async () => {

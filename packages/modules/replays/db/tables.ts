@@ -164,6 +164,9 @@ export const artJobs = replaysSchema.table('art_jobs', {
 export const artFiles = replaysSchema.table('art_files', {
   path: varchar('path', { length: 80 }).primaryKey(),
   bytes: integer('bytes').notNull(),
+  state: varchar('state', { length: 9 }).notNull(),
+  jobId: uuid('job_id'),
+  leaseToken: uuid('lease_token'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 })
 

@@ -37,11 +37,17 @@ CREATE UNIQUE INDEX replays_art_jobs_one_active_idx
 -- every worker report asks whether each of its patches was ever warmed
 CREATE INDEX replays_art_jobs_warm_patch_idx ON replays.art_jobs (patch) WHERE kind = 'warm';
 
--- every file the art bucket holds; they are named by their content or their inputs, so a stored path never changes
+-- every file the art bucket holds; they are named by their content or their inputs, so a stored path never changes.
+-- one upload attempt claims a path before its bytes go to the bucket, and holds it while its job's lease runs
 CREATE TABLE replays.art_files (
   path varchar(80) PRIMARY KEY,
   bytes integer NOT NULL CHECK (bytes >= 0),
-  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  state varchar(9) NOT NULL CHECK (state IN ('uploading', 'stored')),
+  job_id uuid,
+  lease_token uuid,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CHECK ((state = 'uploading') = (lease_token IS NOT NULL)),
+  CHECK ((job_id IS NULL) = (lease_token IS NULL))
 );
 
 -- the map file (maps/<fingerprint>.json) a patch draws each map with
@@ -62,7 +68,7 @@ CREATE TABLE replays.art_formats (
 export const addArt = {
   identity: 'replays/0003',
   predecessor: 'replays/0002',
-  checksum: '7bb925d114cf4898f5e246363e56cc7f0f6dccb3906d7f7d9a3474795159b6db',
+  checksum: '986f0da0691942e748dd4adb05a520164cf64ed978ef29a46875df631977c26a',
   requires: [],
   sql,
 } as const

@@ -88,7 +88,10 @@ function isMapEntry(map: ArtMap, patch: string): boolean {
 }
 
 async function notStored(sql: Sql, paths: string[]): Promise<string[]> {
-  const stored = await sql<{ path: string }[]>`SELECT path FROM replays.art_files WHERE path = ANY(${paths}::text[])`
+  const stored = await sql<{ path: string }[]>`
+    SELECT path FROM replays.art_files WHERE path = ANY(${paths}::text[]) AND state = 'stored'
+  `
+
   const storedPaths = new Set(stored.map(({ path }) => path))
 
   return paths.filter((path) => !storedPaths.has(path))
