@@ -428,6 +428,7 @@ dependencies = [
  "chrono",
  "log",
  "minisign-verify",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
