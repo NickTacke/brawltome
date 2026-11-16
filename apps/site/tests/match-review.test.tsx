@@ -6,8 +6,8 @@ import { MatchTimeline } from '../src/components/match/review/MatchTimeline'
 import { classLabels } from '../src/components/match/review/moment-class'
 import { ReviewCard } from '../src/components/match/review/ReviewCard'
 import { HitString } from '../src/components/match/review/ReviewFacts'
-import { ReviewReplay } from '../src/components/match/review/ReviewReplay'
 import { type InsightsFixture, readInsights } from './match-fixtures'
+import { ReplayWithArt } from './replay-with-art'
 
 type Art = MatchDetailContract['art']
 
@@ -86,7 +86,7 @@ describe('the lanes', () => {
 
   test('the stage puts the lanes in its controls', () => {
     const markup = renderToStaticMarkup(
-      <ReviewReplay insights={readInsights('duel-a')} art={queuedArt} playbackPath={playbackPath} selectedSlot={1} />,
+      <ReplayWithArt insights={readInsights('duel-a')} art={queuedArt} playbackPath={playbackPath} selectedSlot={1} />,
     )
 
     const controls = markup.slice(markup.indexOf('data-stage-controls'))

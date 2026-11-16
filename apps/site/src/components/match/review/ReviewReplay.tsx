@@ -1,9 +1,9 @@
-import type { MatchDetailContract, MatchInsights } from '@brawltome/contracts'
+import type { MatchInsights } from '@brawltome/contracts'
 import { useMemo, useRef, useState } from 'react'
 import { type CameraMode, defaultCameraMode } from '../stage/camera-mode'
 import { type Pose, posesAt } from '../stage/pose'
 import { useFullscreen } from '../stage/use-fullscreen'
-import { useLegends } from '../stage/use-legends'
+import type { Legends } from '../stage/use-legends'
 import { usePlayback } from '../stage/use-playback'
 import { useStageControls } from '../stage/use-stage-controls'
 import { useStageKeys } from '../stage/use-stage-keys'
@@ -17,8 +17,8 @@ const noPoses: Pose[] = []
 
 type ReviewReplayProps = {
   insights: MatchInsights
-  art: MatchDetailContract['art']
-  playbackPath: string | null
+  // the match's art and playback timeline, loaded by the page, which shows the map's picture from them too
+  legends: Legends
   // the player the review is about; picking another restarts a running review but keeps the replay
   selectedSlot: number
 }
@@ -27,9 +27,8 @@ type ReviewReplayProps = {
  * The match's replay, with its controls and lanes on the stage like a video player's. Watching, it plays; reviewing,
  * it stops on each of the picked player's key moments and explains them on the stage.
  */
-export function ReviewReplay({ insights, art, playbackPath, selectedSlot }: ReviewReplayProps) {
+export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayProps) {
   const { stage } = insights.insights
-  const legends = useLegends(art, playbackPath)
   const playback = usePlayback(stage.durationMs)
   const controls = useStageControls(playback.isPlaying, playback.toggle)
   const frameRef = useRef<HTMLDivElement>(null)

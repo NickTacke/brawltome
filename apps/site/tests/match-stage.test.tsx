@@ -2,13 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import type { MatchDetailContract } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
-import { ReviewReplay } from '../src/components/match/review/ReviewReplay'
 import { cameraModeOptions } from '../src/components/match/stage/camera-mode'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
 import { StagePlay } from '../src/components/match/stage/StagePlay'
 import { initialLegends } from '../src/components/match/stage/use-legends'
 import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
+import { ReplayWithArt } from './replay-with-art'
 
 type Art = MatchDetailContract['art']
 
@@ -74,7 +74,7 @@ describe('the match stage', () => {
 
   test('the fullscreen button sits in the top right of the controls on the stage', () => {
     const markup = renderToStaticMarkup(
-      <ReviewReplay insights={readInsights('duel-a')} art={failedArt} playbackPath={playbackPath} selectedSlot={1} />,
+      <ReplayWithArt insights={readInsights('duel-a')} art={failedArt} playbackPath={playbackPath} selectedSlot={1} />,
     )
 
     const group = elementWith(markup, 'data-stage-controls-group')
@@ -126,7 +126,7 @@ describe('the stage in fullscreen', () => {
 
   test('on the page, the note is part of that corner', () => {
     const markup = renderToStaticMarkup(
-      <ReviewReplay insights={readInsights('duel-a')} art={failedArt} playbackPath={playbackPath} selectedSlot={1} />,
+      <ReplayWithArt insights={readInsights('duel-a')} art={failedArt} playbackPath={playbackPath} selectedSlot={1} />,
     )
 
     expect(elementWith(markup, 'data-stage-top-left')).toContain(unavailableNote)

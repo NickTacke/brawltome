@@ -38,7 +38,7 @@ mock.module('../src/components/match/stage/draw-moment', () => ({
 }))
 
 const { MatchByKind } = await import('../src/components/match/MatchByKind')
-const { ReviewReplay } = await import('../src/components/match/review/ReviewReplay')
+const { ReplayWithArt } = await import('./replay-with-art')
 
 const timelineJson = JSON.stringify(readPlayback('duel-a'))
 
@@ -121,7 +121,7 @@ describe('the stage in a browser', () => {
     const match = matchNamed('first')
 
     await mount(
-      <ReviewReplay
+      <ReplayWithArt
         insights={readInsights('duel-a')}
         art={match.art}
         playbackPath={match.playbackPath}
@@ -153,7 +153,7 @@ describe('the stage in a browser', () => {
     loadedManifests.length = 0
 
     await mount(
-      <ReviewReplay insights={readInsights('duel-a')} art={artAt('first')} playbackPath={null} selectedSlot={1} />,
+      <ReplayWithArt insights={readInsights('duel-a')} art={artAt('first')} playbackPath={null} selectedSlot={1} />,
     )
 
     expect(loadedManifests).toEqual([])
@@ -209,7 +209,7 @@ describe('the review in a browser', () => {
   const match = matchNamed('first')
 
   const replayFor = (slot: number) => (
-    <ReviewReplay
+    <ReplayWithArt
       insights={readInsights('duel-a')}
       art={match.art}
       playbackPath={match.playbackPath}
