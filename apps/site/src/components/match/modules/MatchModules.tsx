@@ -17,7 +17,8 @@ export function MatchModules({ insights, players, picked, onPick }: MatchModules
   return (
     <>
       <PlayerHabits matchPlayer={picked} players={players} durationMs={insights.summary.durationMs} />
-      <OpeningLists moments={insights.insights.moments} slot={picked.slot} />
+      {/* keyed by the player, so an opened way of opening, which was about the player before, closes */}
+      <OpeningLists key={picked.slot} moments={insights.insights.moments} slot={picked.slot} />
       <MoveLeaders players={players} selectedSlot={picked.slot} onPick={onPick} />
       <MovementTable players={players} selectedSlot={picked.slot} onSelect={onPick} />
     </>

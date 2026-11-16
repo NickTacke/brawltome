@@ -276,6 +276,16 @@ function sectionText(heading: string): string {
   return section?.textContent ?? ''
 }
 
+function playerRow(name: string): HTMLElement {
+  const row = [...container.querySelectorAll('button[aria-pressed]')].find(
+    (button) => !button.hasAttribute('aria-label') && button.textContent?.startsWith(name),
+  )
+
+  if (!(row instanceof HTMLElement)) throw new Error(`pick ${name}: no such row`)
+
+  return row
+}
+
 describe('the match page in a browser', () => {
   test('picking another player turns the page and the review to them and keeps the loaded replay', async () => {
     loadedManifests.length = 0
@@ -292,11 +302,7 @@ describe('the match page in a browser', () => {
     expect(sectionText('Neutral')).toContain('Player B')
     expect(stopLabels()).toEqual(labelsOf(stopTimes(2, 'taken')))
 
-    const pick = [...container.querySelectorAll('button[aria-pressed]')].find(
-      (button) => !button.hasAttribute('aria-label') && button.textContent?.startsWith('Player A'),
-    )
-
-    if (!(pick instanceof HTMLElement)) throw new Error('pick Player A: no such row')
+    const pick = playerRow('Player A')
 
     await act(async () => pick.click())
     await settle()
@@ -305,6 +311,31 @@ describe('the match page in a browser', () => {
     expect(sectionText('Neutral')).toContain(`${openingsOf(1)?.openingsWon} won`)
     expect(stopLabels()).toEqual(labelsOf(stopTimes(1, 'taken')))
     expect(loadedManifests).toEqual([match.art.manifestUrl ?? ''])
+
+    await unmount()
+  })
+
+  test('picking another player closes an opened way of opening, which was about the player before', async () => {
+    await mount(<MatchByKind match={matchNamed('first')} />)
+
+    const openings = () => container.querySelector('section[aria-labelledby="openings"]')
+    const openedRows = () => openings()?.querySelectorAll('button[aria-expanded="true"]').length ?? 0
+    const firstKind = openings()?.querySelector('button[aria-expanded]')
+
+    if (!(firstKind instanceof HTMLElement)) throw new Error('open an opening kind: none listed')
+
+    await act(async () => firstKind.click())
+    await settle()
+
+    expect(openedRows()).toBeGreaterThan(0)
+
+    const pick = playerRow('Player A')
+
+    await act(async () => pick.click())
+    await settle()
+
+    expect(openedRows()).toBe(0)
+    expect(openings()?.querySelector('[aria-label="Close details"]')).toBeNull()
 
     await unmount()
   })
