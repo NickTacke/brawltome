@@ -10,7 +10,45 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_EX_NOACTIVATE,
 };
 
+use tauri::WebviewWindow;
+
 use super::placement::Rect;
+
+/// tao rewrites the extended style on some window changes and can drop the no-focus flag, so it is checked first
+pub fn place(window: &WebviewWindow, rect: Rect) -> Result<(), String> {
+    let handle = window_handle(window)?;
+
+    if ensure_never_activates(handle) {
+        log::warn!("the overlay window lost its no-focus style; it is back before placing");
+    }
+
+    place_without_activating(handle, rect)
+}
+
+pub fn hide(window: &WebviewWindow) -> Result<(), String> {
+    let handle = window_handle(window)?;
+
+    hide_without_activating(handle)
+}
+
+/// logs when the window could take focus, which focusable(false) should have ruled out
+pub fn make_never_activate(window: &WebviewWindow) {
+    match window_handle(window) {
+        Ok(handle) if ensure_never_activates(handle) => {
+            log::warn!("the overlay window could take focus at start; it no longer can");
+        }
+        Ok(_) => {}
+        Err(error) => log::warn!("{error}"),
+    }
+}
+
+fn window_handle(window: &WebviewWindow) -> Result<isize, String> {
+    let handle = window
+        .hwnd()
+        .map_err(|error| format!("find the overlay window handle: {error}"))?;
+
+    Ok(handle.0 as isize)
+}
 
 /// moves, sizes, raises and shows in one call that cannot activate the window
 pub fn place_without_activating(window_handle: isize, rect: Rect) -> Result<(), String> {

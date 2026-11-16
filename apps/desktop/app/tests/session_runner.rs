@@ -410,12 +410,15 @@ async fn the_status_follows_the_game() {
     assert_eq!(status.borrow().game, GameStatus::NotRunning);
 }
 
-#[tokio::test(start_paused = true)]
-async fn recent_matches_carry_wall_clock_time() {
-    let epoch_before_ms = SystemTime::now()
+fn epoch_now_ms() -> u64 {
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis() as u64;
+        .as_millis() as u64
+}
+
+#[tokio::test(start_paused = true)]
+async fn recent_matches_are_dated_by_how_long_ago_they_started() {
     let harness = Harness::start(vec![Scripted {
         delay_ms: 0,
         result: Ok(answer_for(SHINIGAMI, false)),
@@ -423,13 +426,21 @@ async fn recent_matches_carry_wall_clock_time() {
 
     wait_ms(5_000).await;
     harness.detect(ranked_1v1_against(SHINIGAMI)).await;
+    let first_age_ms = epoch_now_ms()
+        .saturating_sub(harness.handle.status().borrow().recent_matches[0].started_at_ms);
+    wait_ms(15_000).await;
+    harness.detect(Event::MatchEnded).await;
+    let later_age_ms = epoch_now_ms()
+        .saturating_sub(harness.handle.status().borrow().recent_matches[0].started_at_ms);
 
-    let started_at_ms = harness.handle.status().borrow().recent_matches[0].started_at_ms;
-    let since_test_start_ms = started_at_ms.saturating_sub(epoch_before_ms);
-    // the session clock says 5 s, and the wall clock barely moves while tokio's is paused
+    // the wall clock barely moves while tokio's is paused, so the age is the session's 15 s
     assert!(
-        (5_000..6_000).contains(&since_test_start_ms),
-        "started {since_test_start_ms} ms after the test"
+        first_age_ms < 1_000,
+        "started {first_age_ms} ms ago at first"
+    );
+    assert!(
+        (15_000..16_000).contains(&later_age_ms),
+        "started {later_age_ms} ms ago after the match"
     );
 }
 

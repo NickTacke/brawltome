@@ -1,13 +1,23 @@
 //! Show, size and place the overlay window without taking focus from the game.
 
+#[cfg(not(windows))]
+mod dev_platform;
 mod placement;
 #[cfg(windows)]
 mod win32;
 
+// on windows, never call tauri's window setters on the overlay (show, hide, set_always_on_top, set_focusable, …):
+// tao still thinks the window is hidden, so its apply_diff would hide it and rewrite its extended style. every
+// window call goes through `platform`
+#[cfg(not(windows))]
+use dev_platform as platform;
+#[cfg(windows)]
+use win32 as platform;
+
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, Monitor, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Monitor, State, WindowEvent};
 
 use crate::overlay_view::{Card, OverlayView};
 use crate::session::Input;
@@ -81,7 +91,7 @@ impl OverlayWindow {
             log::error!("set up the overlay window: there is no window labelled {OVERLAY_LABEL}");
             return overlay;
         };
-        make_never_activate(&window);
+        platform::make_never_activate(&window);
         let for_events = Arc::clone(&overlay);
         window.on_window_event(move |event| {
             if let WindowEvent::ScaleFactorChanged { .. } = event {
@@ -175,7 +185,7 @@ impl OverlayWindow {
 
     /// the monitor showing the game; the primary one when the game has no window on any monitor
     fn game_monitor(&self, game_process_id: Option<u32>) -> Option<Rect> {
-        let game_centre = game_process_id.and_then(game_window_center);
+        let game_centre = game_process_id.and_then(platform::game_window_center);
         let monitors = self.monitors_primary_first();
 
         monitor_for(game_centre, &monitors)
@@ -294,8 +304,13 @@ impl OverlayState {
         )
     }
 
-    /// the rect for the measured size; none when the cards on screen are of another lobby
+    /// the rect for the measured size; none when the cards on screen are of another lobby or the size is empty
     fn resize_shown(&mut self, lobby_id: u64, size_px: (u32, u32)) -> Option<Rect> {
+        // an empty report would cancel the first-frame placement and spoil the next first frame
+        if size_px.0 == 0 || size_px.1 == 0 {
+            return None;
+        }
+
         let position = self.position;
         let shown = self
             .shown
@@ -362,7 +377,7 @@ fn place_window(app: &AppHandle, rect: Rect) {
     };
 
     let scale_before = window.scale_factor().ok();
-    if let Err(error) = place_once(&window, rect) {
+    if let Err(error) = platform::place(&window, rect) {
         log::warn!("{error}");
         return;
     }
@@ -371,90 +386,19 @@ fn place_window(app: &AppHandle, rect: Rect) {
     if window.scale_factor().ok() == scale_before {
         return;
     }
-    if let Err(error) = place_once(&window, rect) {
+    if let Err(error) = platform::place(&window, rect) {
         log::warn!("{error}");
     }
 }
 
-#[cfg(windows)]
-fn window_handle(window: &WebviewWindow) -> Result<isize, String> {
-    let handle = window
-        .hwnd()
-        .map_err(|error| format!("find the overlay window handle: {error}"))?;
-
-    Ok(handle.0 as isize)
-}
-
-#[cfg(windows)]
-fn make_never_activate(window: &WebviewWindow) {
-    match window_handle(window) {
-        Ok(handle) if win32::ensure_never_activates(handle) => {
-            log::warn!("the overlay window could take focus at start; it no longer can");
-        }
-        Ok(_) => {}
-        Err(error) => log::warn!("{error}"),
-    }
-}
-
-#[cfg(windows)]
-fn place_once(window: &WebviewWindow, rect: Rect) -> Result<(), String> {
-    let handle = window_handle(window)?;
-
-    // tao rewrites the extended style on some window changes and can drop the flag
-    if win32::ensure_never_activates(handle) {
-        log::warn!("the overlay window lost its no-focus style; it is back before placing");
-    }
-
-    win32::place_without_activating(handle, rect)
-}
-
-#[cfg(windows)]
 fn hide_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(OVERLAY_LABEL) else {
         return;
     };
 
-    let hidden = window_handle(&window).and_then(win32::hide_without_activating);
-    if let Err(error) = hidden {
+    if let Err(error) = platform::hide(&window) {
         log::warn!("{error}");
     }
-}
-
-#[cfg(windows)]
-fn game_window_center(process_id: u32) -> Option<(i32, i32)> {
-    win32::game_window_center(process_id)
-}
-
-// the mac versions only let the app run during development
-#[cfg(not(windows))]
-fn make_never_activate(_window: &WebviewWindow) {}
-
-#[cfg(not(windows))]
-fn place_once(window: &WebviewWindow, rect: Rect) -> Result<(), String> {
-    let size = tauri::PhysicalSize::new(rect.width, rect.height);
-    let position = tauri::PhysicalPosition::new(rect.x, rect.y);
-
-    window
-        .set_size(size)
-        .and_then(|()| window.set_position(position))
-        .and_then(|()| window.show())
-        .map_err(|error| format!("place the overlay window at {},{}: {error}", rect.x, rect.y))
-}
-
-#[cfg(not(windows))]
-fn hide_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(OVERLAY_LABEL) else {
-        return;
-    };
-
-    if let Err(error) = window.hide() {
-        log::warn!("hide the overlay window: {error}");
-    }
-}
-
-#[cfg(not(windows))]
-fn game_window_center(_process_id: u32) -> Option<(i32, i32)> {
-    None
 }
 
 #[tauri::command]
@@ -481,4 +425,82 @@ pub fn open_player_profile(brawlhalla_id: u32, session: State<'_, SessionHandle>
 #[tauri::command]
 pub fn retry_lookup(session: State<'_, SessionHandle>) {
     session.send(Input::RetryClicked);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MONITOR: Rect = Rect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+
+    fn showing_lobby(lobby_id: u64, rect: Rect) -> OverlayState {
+        let view = OverlayView {
+            lobby_id,
+            cards: Vec::new(),
+            visible_ms: 12_000,
+            deferred_profile_ids: Vec::new(),
+        };
+        let shown = ShownCards {
+            envelope: OverlayEnvelope {
+                view,
+                monitor_height_px: MONITOR.height,
+            },
+            monitor: MONITOR,
+            kind: CardKind::Solo,
+            rect: Some(rect),
+        };
+
+        OverlayState {
+            shown: Some(shown),
+            ..OverlayState::default()
+        }
+    }
+
+    #[test]
+    fn an_empty_size_report_keeps_the_placement() {
+        let first_frame = Rect {
+            x: 790,
+            y: 24,
+            width: 340,
+            height: 131,
+        };
+        let mut state = showing_lobby(7, first_frame);
+
+        let zero_width = state.resize_shown(7, (0, 131));
+        let zero_height = state.resize_shown(7, (340, 0));
+
+        assert_eq!((zero_width, zero_height), (None, None));
+        assert_eq!(
+            state.shown.as_ref().and_then(|shown| shown.rect),
+            Some(first_frame)
+        );
+        assert!(state.measured_solo.is_none());
+    }
+
+    #[test]
+    fn a_size_report_moves_the_cards_and_is_remembered() {
+        let mut state = showing_lobby(7, MONITOR);
+
+        let rect = state.resize_shown(7, (340, 150));
+        let other_lobby = state.resize_shown(8, (340, 131));
+
+        let expected = Rect {
+            x: 790,
+            y: 24,
+            width: 340,
+            height: 150,
+        };
+        assert_eq!(rect, Some(expected));
+        assert_eq!(other_lobby, None);
+        assert_eq!(
+            state.shown.as_ref().and_then(|shown| shown.rect),
+            Some(expected)
+        );
+        assert_eq!(state.first_frame_size(CardKind::Solo, 1080), (340, 150));
+    }
 }

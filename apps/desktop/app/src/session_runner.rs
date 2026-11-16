@@ -79,18 +79,12 @@ pub fn spawn<L: LobbyLookup>(
 /// the session's clock never goes backwards; the wall clock is only for what people read
 struct SessionClock {
     started: Instant,
-    started_at_epoch_ms: u64,
 }
 
 impl SessionClock {
     fn start() -> Self {
-        let since_epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-
         Self {
             started: Instant::now(),
-            started_at_epoch_ms: u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX),
         }
     }
 
@@ -98,8 +92,15 @@ impl SessionClock {
         u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 
+    /// dated back from now by how long ago it was, so a clock change or a sleep doesn't shift it
     fn to_epoch_ms(&self, session_ms: u64) -> u64 {
-        self.started_at_epoch_ms.saturating_add(session_ms)
+        let since_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        let now_epoch_ms = u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX);
+        let age_ms = self.now_ms().saturating_sub(session_ms);
+
+        now_epoch_ms.saturating_sub(age_ms)
     }
 }
 
