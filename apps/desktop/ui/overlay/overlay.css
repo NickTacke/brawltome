@@ -30,8 +30,8 @@ body {
 .card {
   position: relative;
   display: grid;
-  grid-template-columns: 10px 106px 1fr;
-  width: 440px;
+  grid-template-columns: 10px 96px 1fr;
+  width: 392px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -53,7 +53,7 @@ button.card {
   grid-column: 1 / -1;
   align-self: start;
   min-width: 0;
-  padding-left: 124px;
+  padding-left: 114px;
   overflow: hidden;
   border: 1px solid hsl(var(--line) / 0.9);
   border-radius: 10px;
@@ -100,11 +100,11 @@ button.card {
 
 /* on the right of the screen the card is mirrored, so the banner hangs on the outer edge */
 [data-banner-side="right"] .card {
-  grid-template-columns: 1fr 106px 10px;
+  grid-template-columns: 1fr 96px 10px;
 }
 
 [data-banner-side="right"] .main {
-  padding-right: 124px;
+  padding-right: 114px;
   padding-left: 0;
 }
 
@@ -187,7 +187,7 @@ button.card {
 .figures {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 16px;
+  column-gap: 14px;
   align-items: end;
   padding: 9px 14px 11px;
   border-top: 1px solid hsl(var(--line) / 0.6);
@@ -202,7 +202,7 @@ button.card {
 }
 
 .stat + .stat {
-  padding-left: 16px;
+  padding-left: 14px;
   border-left: 1px solid hsl(var(--line) / 0.6);
 }
 
@@ -216,8 +216,8 @@ button.card {
 }
 
 .peak {
-  margin-left: 6px;
-  font-size: 17px;
+  margin-left: 5px;
+  font-size: 16px;
   font-weight: 700;
   color: hsl(var(--soft) / 0.8);
 }
@@ -239,7 +239,7 @@ button.card {
 }
 
 .elo {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 900;
   line-height: 30px;
   letter-spacing: -0.02em;

@@ -24,7 +24,7 @@ export function TeamCard({ data, players, onOpenProfile, onRetry }: TeamCardProp
         </span>
         <TeamFigures data={data} />
         {data.state === 'failed' && (
-          <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />
+          <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
         )}
       </span>
     </div>
@@ -37,14 +37,6 @@ function teamCardClass(data: TeamData): string {
   if (data.state === 'ready' && data.isRefreshing) return 'card is-refreshing'
 
   return 'card'
-}
-
-// a team card has no sub line, so the reason goes in the retry row
-function teamFailureNote(data: Extract<TeamData, { state: 'failed' }>): string {
-  const countdown = retryCountdown(data.retryInSeconds)
-  const reason = failureText(data.reason)
-
-  return countdown === null ? reason : `${reason} · ${countdown}`
 }
 
 function TeamFigures({ data }: { data: TeamData }) {
@@ -78,7 +70,7 @@ function TeamStanding({ data }: { data: TeamData }) {
           <span className="elo">{standing?.rating ?? '—'}</span>
           {standing !== null && <span className="peak">{`/ ${standing.peakRating}`}</span>}
         </span>
-        <span className="stat-label">{standing === null ? '2v2 team' : 'Team Elo / peak'}</span>
+        <span className="stat-label">{standingLabel(data, standing !== null)}</span>
       </span>
       {standing !== null && <WinRate wins={standing.wins} games={standing.games} />}
     </>
@@ -109,4 +101,11 @@ function PlayerRating({ player }: { player: TeamPlayer }) {
       <span className="label">1v1</span>
     </span>
   )
+}
+
+// a failed lookup says why under the dash, the way the 1v1 card says it under the name
+function standingLabel(data: TeamData, hasStanding: boolean): string {
+  if (data.state === 'failed') return failureText(data.reason)
+
+  return hasStanding ? 'Team Elo / peak' : '2v2 team'
 }
