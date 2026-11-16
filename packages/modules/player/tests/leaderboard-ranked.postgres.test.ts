@@ -354,6 +354,45 @@ describe('Ranked standings observed on leaderboards', () => {
   })
 })
 
+describe('Stored fixed team standings', () => {
+  test('reads a team standing whichever way round the pair is asked for', async () => {
+    const standings = createPostgresLeaderboardRanked(database)
+    const observedAt = new Date('2026-10-07T12:00:00Z')
+
+    await standings.applyLeaderboardTeams({
+      observedAt,
+      teams: [
+        {
+          brawlhallaIdOne: 711,
+          brawlhallaIdTwo: 710,
+          region: 'EU',
+          rating: 1975,
+          peakRating: 2010,
+          tier: 'Diamond',
+          wins: 30,
+          games: 50,
+        },
+      ],
+    })
+
+    expect(await standings.teamStandingByPair(711, 710)).toEqual({
+      brawlhallaIdOne: 710,
+      brawlhallaIdTwo: 711,
+      region: 'EU',
+      rating: 1975,
+      peakRating: 2010,
+      tier: 'Diamond',
+      wins: 30,
+      games: 50,
+      observedAt,
+    })
+
+    expect(await standings.teamStandingByPair(710, 711)).toEqual(await standings.teamStandingByPair(711, 710))
+    expect(await standings.teamStandingByPair(710, 712)).toBeNull()
+    expect(await standings.teamStandingByPair(710, 710)).toBeNull()
+  })
+})
+
 describe('Solo queue and fixed teams only the deep crawl has seen', () => {
   const team = (brawlhallaIdOne: number, brawlhallaIdTwo: number, rating: number, tier: string | null = 'Gold 2') => ({
     brawlhallaIdOne,

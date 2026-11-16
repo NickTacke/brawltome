@@ -88,6 +88,8 @@ export type LeaderboardTeamObservation = {
   games: number
 }
 
+export type LeaderboardTeamStanding = LeaderboardTeamObservation & { observedAt: Date }
+
 // One observation per unordered pair, stored with the lower id first.
 function teamObservations(teams: readonly LeaderboardTeamObservation[]): LeaderboardTeamObservation[] {
   const byPair = new Map<string, LeaderboardTeamObservation>()
@@ -185,6 +187,48 @@ export function createPostgresLeaderboardRanked(database: Database) {
       return row
         ? {
             brawlhallaId,
+            region: row.region,
+            rating: row.rating,
+            peakRating: row.peak_rating,
+            tier: row.tier,
+            wins: row.wins,
+            games: row.games,
+            observedAt: row.observed_at,
+          }
+        : null
+    },
+
+    // the fixed team of these two players, whichever way round they are given. null for the same id twice, which is
+    // not a team. pairs are stored lower id first, so this reads by the primary key
+    async teamStandingByPair(
+      brawlhallaIdOne: number,
+      brawlhallaIdTwo: number,
+    ): Promise<LeaderboardTeamStanding | null> {
+      if (brawlhallaIdOne === brawlhallaIdTwo) return null
+
+      const lowerId = Math.min(brawlhallaIdOne, brawlhallaIdTwo)
+      const higherId = Math.max(brawlhallaIdOne, brawlhallaIdTwo)
+
+      const [row] = await client<
+        {
+          region: string
+          rating: number
+          peak_rating: number
+          tier: string | null
+          wins: number
+          games: number
+          observed_at: Date
+        }[]
+      >`
+        SELECT region, rating, peak_rating, tier, wins, games, observed_at
+        FROM players.leaderboard_team_observations
+        WHERE brawlhalla_id_one = ${lowerId} AND brawlhalla_id_two = ${higherId}
+      `
+
+      return row
+        ? {
+            brawlhallaIdOne: lowerId,
+            brawlhallaIdTwo: higherId,
             region: row.region,
             rating: row.rating,
             peakRating: row.peak_rating,
