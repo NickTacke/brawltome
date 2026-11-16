@@ -267,3 +267,45 @@ describe('the review in a browser', () => {
     await unmount()
   })
 })
+
+// the text of the page's section under a heading
+function sectionText(heading: string): string {
+  const sections = [...container.querySelectorAll('section')]
+  const section = sections.find((entry) => entry.querySelector('h2')?.textContent === heading)
+
+  return section?.textContent ?? ''
+}
+
+describe('the match page in a browser', () => {
+  test('picking another player turns the page and the review to them and keeps the loaded replay', async () => {
+    loadedManifests.length = 0
+
+    const match = matchNamed('first')
+    const insights = readInsights('duel-a')
+    const openingsOf = (slot: number) => insights.insights.players.find((entry) => entry.slot === slot)?.neutral
+
+    await mount(<MatchByKind match={match} />)
+    await press('Review')
+    await pressLabelled(`Review: Key moments · ${stopTimes(2, 'key').length}`)
+    await press(`Hits taken · ${stopTimes(2, 'taken').length}`)
+
+    expect(sectionText('Neutral')).toContain('Player B')
+    expect(stopLabels()).toEqual(labelsOf(stopTimes(2, 'taken')))
+
+    const pick = [...container.querySelectorAll('button[aria-pressed]')].find(
+      (button) => !button.hasAttribute('aria-label') && button.textContent?.startsWith('Player A'),
+    )
+
+    if (!(pick instanceof HTMLElement)) throw new Error('pick Player A: no such row')
+
+    await act(async () => pick.click())
+    await settle()
+
+    expect(sectionText('Neutral')).toContain('Player A')
+    expect(sectionText('Neutral')).toContain(`${openingsOf(1)?.openingsWon} won`)
+    expect(stopLabels()).toEqual(labelsOf(stopTimes(1, 'taken')))
+    expect(loadedManifests).toEqual([match.art.manifestUrl ?? ''])
+
+    await unmount()
+  })
+})

@@ -10,3 +10,13 @@ export function formatClock(timeMs: number): string {
 export function formatDamage(damage: number): string {
   return String(Math.round(damage))
 }
+
+/** A share as a whole percent; a dash where there was nothing to share. */
+export function formatShare(share: number | null): string {
+  return share === null ? '–' : `${Math.round(share * 100)}%`
+}
+
+/** A figure to one decimal; a dash where there is none. */
+export function formatDecimal(value: number | null): string {
+  return value === null ? '–' : value.toFixed(1)
+}

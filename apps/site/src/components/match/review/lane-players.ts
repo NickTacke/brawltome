@@ -3,7 +3,8 @@ import type { MatchInsights, Stock, SummaryPlayer } from '@brawltome/contracts'
 // a player of the timeline: who they are, and their lives along the match
 export type LanePlayer = { player: SummaryPlayer; stocks: Stock[] }
 
-function compareLanes(left: SummaryPlayer, right: SummaryPlayer): number {
+/** Winners first, then by side and slot, so teammates stand next to each other. */
+export function comparePlayers(left: SummaryPlayer, right: SummaryPlayer): number {
   const byWinner = Number(right.isWinner) - Number(left.isWinner)
 
   return byWinner || left.side - right.side || left.slot - right.slot
@@ -11,7 +12,7 @@ function compareLanes(left: SummaryPlayer, right: SummaryPlayer): number {
 
 /** The timeline's players, winners first, then by side and slot, so teammates lie next to each other. */
 export function lanePlayersOf(insights: MatchInsights): LanePlayer[] {
-  const players = [...insights.summary.players].sort(compareLanes)
+  const players = [...insights.summary.players].sort(comparePlayers)
 
   return players.map((player) => ({
     player,
