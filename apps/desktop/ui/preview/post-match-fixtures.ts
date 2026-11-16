@@ -38,7 +38,7 @@ export function postMatchCells(): PostMatchCell[] {
     { title: 'Up a tier', match: { ...won, tierChange: 'up', rating: 2003, ratingChange: 21 } },
     {
       title: 'Down a tier',
-      match: { ...won, isWin: false, tier: 'Platinum 5', tierChange: 'down', rating: 1996, ratingChange: -19 },
+      match: { ...won, isWin: false, tier: 'Platinum 1', tierChange: 'down', rating: 1712, ratingChange: -14 },
     },
     {
       title: 'Long name',
