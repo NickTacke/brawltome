@@ -91,13 +91,11 @@ export const matchDetailSchema = matchSummarySchema
     failedChecks: z.array(z.string()),
     players: z.array(matchPlayerSchema),
     replay: z.object({ available: z.boolean(), patch: z.string(), fileName: z.string() }).strict(),
-    // the next three are optional until the api sends them, so the site reads answers from before and after that
-    // release. insights are null for a match the page isn't designed for: anything but a stock 1v1 or 2v2 with a
-    // timeline
-    insights: matchInsightsSchema.nullable().optional(),
-    art: matchArtSchema.optional(),
+    // null for a match the page isn't designed for: anything but a stock 1v1 or 2v2 with a timeline
+    insights: matchInsightsSchema.nullable(),
+    art: matchArtSchema,
     // where the site serves the match's trimmed timeline for playback; null whenever insights are
-    playbackPath: z.string().nullable().optional(),
+    playbackPath: z.string().nullable(),
   })
   .strict()
   .meta({ id: 'MatchDetail' })
