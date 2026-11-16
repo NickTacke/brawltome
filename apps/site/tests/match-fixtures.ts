@@ -44,6 +44,6 @@ export function matchDetailOf(name: InsightsFixture, art: MatchDetailContract['a
     replay: { available: true, patch: summary.patch, fileName: 'match.replay' },
     insights,
     art,
-    playbackPath: `/match/6f9a7f4e-3c1d-4b2a-9e8f-1a2b3c4d5e6f/playback/main-1/1`,
+    playbackPath: '/match/6f9a7f4e-3c1d-4b2a-9e8f-1a2b3c4d5e6f/playback/main-1/1',
   }
 }

@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { MatchPage } from '../components/match/MatchPage'
 import { pageKindOf } from '../components/match/match-page-model'
 import { MatchView } from '../components/matches/MatchView'
 import { NotFound } from '../components/NotFound'
@@ -19,9 +20,9 @@ export const Route = createFileRoute('/match/$id')({
 
 function MatchRoute() {
   const match = Route.useLoaderData()
+  const { insights } = match
 
-  // the review page replaces MatchView for stock matches in the next change; until then both kinds get MatchView
-  if (pageKindOf(match) === 'review') return <MatchView match={match} />
+  if (pageKindOf(match) === 'review' && insights) return <MatchPage match={match} insights={insights} />
 
   return <MatchView match={match} />
 }

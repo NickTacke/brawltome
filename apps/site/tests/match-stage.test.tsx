@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { MatchDetailContract } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MatchPage } from '../src/components/match/MatchPage'
 import { cameraModeOptions } from '../src/components/match/stage/camera-mode'
 import { MatchStage } from '../src/components/match/stage/MatchStage'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { StagePlay } from '../src/components/match/stage/StagePlay'
 import { initialLegends } from '../src/components/match/stage/use-legends'
-import { readInsights, readPlayback } from './match-fixtures'
+import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
 
 type Art = MatchDetailContract['art']
 
@@ -77,5 +78,16 @@ describe('the match stage', () => {
     expect(button).toContain('<button')
     expect(button).toContain('top-2')
     expect(button).toContain('right-2')
+  })
+})
+
+describe('the review page', () => {
+  test('shows the map and plays the match back on its stage', () => {
+    const match = matchDetailOf('doubles-b', { state: 'queued', manifestUrl: null, baseUrl: null })
+    const markup = renderToStaticMarkup(<MatchPage match={match} insights={readInsights('doubles-b')} />)
+
+    expect(markup).toContain(`>${match.mapName}</h1>`)
+    expect(markup).toContain('aria-label="The match on its stage"')
+    expect(markup).toContain('data-stage-controls-group')
   })
 })
