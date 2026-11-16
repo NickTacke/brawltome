@@ -15,6 +15,7 @@ import { PlayerPick } from '../src/components/match/PlayerPick'
 import { lanePlayersOf } from '../src/components/match/review/lane-players'
 import { MatchTimeline } from '../src/components/match/review/MatchTimeline'
 import { ReviewCardSlot } from '../src/components/match/review/ReviewCardSlot'
+import { ReviewTools } from '../src/components/match/review/ReviewTools'
 import { TimelineScrubber } from '../src/components/match/review/TimelineScrubber'
 import { SpeedButton, TransportColumn } from '../src/components/match/stage/ReviewControls'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
@@ -229,6 +230,22 @@ describe('tap targets on a phone', () => {
     expectFingerSized(renderToStaticMarkup(<TransportColumn playback={playback} stepping={stepping} count={null} />))
     expectFingerSized(renderToStaticMarkup(<TransportColumn playback={playback} stepping={stepping} count={count} />))
     expectFingerSized(renderToStaticMarkup(<SpeedButton playback={playback} />))
+  })
+
+  test('watching or reviewing', () => {
+    const markup = renderToStaticMarkup(
+      <ReviewTools
+        isReview={false}
+        onReview={ignore}
+        choices={[]}
+        scope="key"
+        onScope={ignore}
+        cameraMode={null}
+        onCameraMode={ignore}
+      />,
+    )
+
+    expectFingerSized(markup)
   })
 
   test('the fullscreen button', () => {

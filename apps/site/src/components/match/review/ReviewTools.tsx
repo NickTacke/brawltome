@@ -5,7 +5,7 @@ import type { CameraMode } from '../stage/camera-mode'
 import type { ReviewChoice } from './review-stops'
 
 const toolButton =
-  'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors phone:min-h-10 phone:px-3.5'
+  'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors phone:min-h-11 phone:px-3.5'
 
 function toolButtonState(isOn: boolean): string {
   return isOn ? 'bg-raised text-strong' : 'text-soft hover:text-strong'
