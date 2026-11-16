@@ -11,7 +11,7 @@ import { makeLine } from './fixtures/lines'
 import { fakeReplay } from './fixtures/replays'
 
 const connectionString = process.env.DATABASE_URL
-const report = { build: 'dev-1', patches: ['11.00'] }
+const report = { build: 'dev-1', patches: ['11.00'], artFormat: null }
 
 describe.skipIf(!connectionString)('replay jobs', () => {
   let database: TestDatabase
@@ -41,7 +41,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
       },
     } as unknown as Accounts
 
-    deps = { database, objectStore: createMemoryObjectStore(), accounts }
+    deps = { database, objectStore: createMemoryObjectStore(), artStore: null, accounts }
   })
 
   async function playerAccount(brawlhallaId: number | null): Promise<string> {
@@ -247,7 +247,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
 
     await database.sql`INSERT INTO replays.jobs (digest, kind) VALUES (${replay.digest}, 'reparse')`
 
-    const second = await claimJob(deps, { build: 'dev-2', patches: ['11.00'] })
+    const second = await claimJob(deps, { build: 'dev-2', patches: ['11.00'], artFormat: null })
 
     const result = await completeJob(deps, {
       jobId: second?.jobId as string,
@@ -419,7 +419,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
       },
     }
 
-    const newBuild = { build: 'dev-2', patches: ['11.00'] }
+    const newBuild = { build: 'dev-2', patches: ['11.00'], artFormat: null }
     const old = await claimJob(deps, newBuild)
 
     const oldAnswer = completeJob(stallingDeps, {

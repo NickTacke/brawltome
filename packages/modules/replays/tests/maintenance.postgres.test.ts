@@ -34,7 +34,7 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
     `
 
     await database.sql`UPDATE replays.maintenance SET last_run_at = 'epoch'`
-    deps = { database, objectStore: createMemoryObjectStore(), accounts: {} as Accounts }
+    deps = { database, objectStore: createMemoryObjectStore(), artStore: null, accounts: {} as Accounts }
   })
 
   // a stored file and, when parsed, its match built by `build`
@@ -83,7 +83,7 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
 
     await database.sql`UPDATE replays.replay_files SET deleted_at = clock_timestamp() WHERE digest = ${expired.digest}`
 
-    const report = await noteWorkerReport(database.sql, { build: 'dev-2', patches: ['11.00'] })
+    const report = await noteWorkerReport(deps, { build: 'dev-2', patches: ['11.00'], artFormat: null })
 
     expect(report.isNewBuild).toBe(true)
     expect(await reparseJobs()).toBe(1)
@@ -91,9 +91,9 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
 
   test('the same build reported twice queues nothing more', async () => {
     await storedReplay({ patch: '11.00', build: 'dev-1' })
-    await noteWorkerReport(database.sql, { build: 'dev-1', patches: ['11.00'] })
+    await noteWorkerReport(deps, { build: 'dev-1', patches: ['11.00'], artFormat: null })
 
-    const again = await noteWorkerReport(database.sql, { build: 'dev-1', patches: ['11.00'] })
+    const again = await noteWorkerReport(deps, { build: 'dev-1', patches: ['11.00'], artFormat: null })
 
     expect(again.isNewBuild).toBe(false)
     expect(await reparseJobs()).toBe(0)
@@ -174,13 +174,13 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
     await reported('11.01', 1, 0)
     await storedReplay({ patch: '10.09', build: 'dev-1' })
 
-    await claimJob(deps, { build: 'dev-1', patches: ['11.00', '11.01'] })
+    await claimJob(deps, { build: 'dev-1', patches: ['11.00', '11.01'], artFormat: null })
 
     expect(deps.objectStore.keys()).toEqual([])
 
     // a file that expires later the same day waits for tomorrow's run
     await storedReplay({ patch: '10.09', build: 'dev-1' })
-    await claimJob(deps, { build: 'dev-1', patches: ['11.00', '11.01'] })
+    await claimJob(deps, { build: 'dev-1', patches: ['11.00', '11.01'], artFormat: null })
 
     expect(deps.objectStore.keys()).toHaveLength(1)
 

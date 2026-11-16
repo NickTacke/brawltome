@@ -1,7 +1,8 @@
 import type { Sql } from '@brawltome/foundation'
+import { queueArtForFormat, queueWarmArt } from './art-queue'
 import { replayKey } from './keys'
 import { FILE_GRACE_DAYS } from './limits'
-import type { ReplaysDeps } from './model'
+import type { ReplaysDeps, WorkerReport } from './model'
 import { comparePatchesNewestFirst } from './patches'
 
 // replay files live as long as their patch's game folder lives on the replay vm. the worker's claims say which
@@ -11,19 +12,52 @@ import { comparePatchesNewestFirst } from './patches'
 // deleted, whatever the dates say
 const KEPT_PATCHES = 2
 
-/** Records what the worker runs; a build never seen before queues a re-parse of every match whose file is kept. */
+/**
+ * Records what the worker runs. A build never seen before queues a re-parse of every match whose file is kept; with
+ * an art bucket, a new patch queues its warm art job and a new art format re-exports the matches drawn in another.
+ */
 export async function noteWorkerReport(
-  sql: Sql,
-  report: { build: string; patches: string[] },
+  deps: Pick<ReplaysDeps, 'database' | 'artStore'>,
+  report: WorkerReport,
 ): Promise<{ isNewBuild: boolean }> {
-  for (const patch of report.patches) {
-    await sql`
-      INSERT INTO replays.worker_reports (patch) VALUES (${patch})
-      ON CONFLICT (patch) DO UPDATE SET last_reported_at = clock_timestamp()
-    `
+  const sql = deps.database.sql
+  const newPatches = await notePatches(sql, report.patches)
+
+  if (deps.artStore) {
+    for (const patch of newPatches) await queueWarmArt(sql, patch)
+
+    if (report.artFormat !== null) await noteArtFormat(sql, report.artFormat)
   }
 
-  const inserted = await sql`INSERT INTO replays.builds (build) VALUES (${report.build}) ON CONFLICT DO NOTHING`
+  return noteBuild(sql, report.build)
+}
+
+// returns the patches never reported before
+async function notePatches(sql: Sql, patches: string[]): Promise<string[]> {
+  const newPatches: string[] = []
+
+  for (const patch of patches) {
+    const inserted = await sql`INSERT INTO replays.worker_reports (patch) VALUES (${patch}) ON CONFLICT DO NOTHING`
+
+    if (inserted.count === 1) {
+      newPatches.push(patch)
+      continue
+    }
+
+    await sql`UPDATE replays.worker_reports SET last_reported_at = clock_timestamp() WHERE patch = ${patch}`
+  }
+
+  return newPatches
+}
+
+async function noteArtFormat(sql: Sql, format: number): Promise<void> {
+  const inserted = await sql`INSERT INTO replays.art_formats (format) VALUES (${format}) ON CONFLICT DO NOTHING`
+
+  if (inserted.count === 1) await queueArtForFormat(sql, format)
+}
+
+async function noteBuild(sql: Sql, build: string): Promise<{ isNewBuild: boolean }> {
+  const inserted = await sql`INSERT INTO replays.builds (build) VALUES (${build}) ON CONFLICT DO NOTHING`
 
   if (inserted.count === 0) return { isNewBuild: false }
 
@@ -32,7 +66,7 @@ export async function noteWorkerReport(
     SELECT match.digest, 'reparse'
     FROM replays.matches AS match
     JOIN replays.replay_files AS file ON file.digest = match.digest
-    WHERE file.deleted_at IS NULL AND match.merged_into IS NULL AND match.build <> ${report.build}
+    WHERE file.deleted_at IS NULL AND match.merged_into IS NULL AND match.build <> ${build}
     ON CONFLICT (digest) WHERE status IN ('pending', 'processing') DO NOTHING
   `
 

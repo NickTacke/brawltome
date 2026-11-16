@@ -20,7 +20,8 @@ export type UploadOutcome = {
   rejection: UploadRejectionCode | null
 }
 
-type UploadDeps = ReplaysDeps
+// an upload never exports art
+type UploadDeps = Omit<ReplaysDeps, 'artStore'>
 
 type UploadInput = { accountId: string; isOperator: boolean; files: UploadFile[] }
 
