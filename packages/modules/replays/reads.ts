@@ -1,6 +1,7 @@
 import type { MatchDetailContract, MatchSummaryContract, MyReplayContract } from '@brawltome/contracts'
 import type { ObjectStore, Sql } from '@brawltome/foundation'
 import { replayKey } from './keys'
+import { MAX_MERGE_HOPS } from './limits'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
 
@@ -25,9 +26,6 @@ type MatchRow = {
 }
 
 type PlayerRow = MatchDetailContract['players'][number] & { matchId: string }
-
-// a merged match keeps answering under its old id
-const MAX_MERGE_HOPS = 3
 
 /** The game's own replay file names: `[11.00] BigCrystalTemple.replay`. */
 export function replayFileName(patch: string, mapName: string): string {

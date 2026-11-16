@@ -7,7 +7,13 @@ import { internalSecretValid } from '../auth/internal-secret'
 // nothing here is public; the worker authenticates with its own token
 
 const idSchema = z.uuid()
-const reportSchema = z.object({ build: z.string().min(1).max(64), patches: z.array(z.string().max(16)).max(10) })
+
+// artFormat is the art export format the worker runs; a worker without the export sends none
+const reportSchema = z.object({
+  build: z.string().min(1).max(64),
+  patches: z.array(z.string().max(16)).max(10),
+  artFormat: z.number().int().min(1).max(32767).nullable().default(null),
+})
 
 const failureCodes = [
   'game-error',

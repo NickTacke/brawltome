@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import type { Sql, TransactionSql } from '@brawltome/foundation'
+import { createReplayArtJobs, type ReplayArtJobs } from './art'
+import { queueMatchArt } from './art-queue'
 import { replayKey, timelineKey } from './keys'
 import { LEASE_SECONDS, MAX_ATTEMPTS } from './limits'
 import { candidateKey, type PlayedLine, parseReplayLine, UnknownFormatError } from './line'
 import { cleanupIfDue, noteWorkerReport } from './maintenance'
-import type { ReplaysDeps } from './model'
+import type { ReplaysDeps, WorkerReport } from './model'
 import { owningUploads, rejectWaitingUploads, settleUploads, waitingUploads } from './ownership'
 
 // the worker on VM 106 claims a job, plays the replay with bh-native, and answers with the line or a failure.
 // every answer is fenced by the lease, so a worker that lost its lease can't overwrite a newer attempt
 
-export type WorkerReport = { build: string; patches: string[] }
+export type { WorkerReport } from './model'
 
 export type ClaimedJob = {
   jobId: string
@@ -43,7 +45,7 @@ const exitFailures: Record<number, JobFailureCode> = {
 
 /** The next job for the worker, oldest parse first, then re-parses; null when there is nothing to do. */
 export async function claimJob(deps: ReplaysDeps, report: WorkerReport): Promise<ClaimedJob | null> {
-  await noteWorkerReport(deps.database.sql, report)
+  await noteWorkerReport(deps, report)
   await cleanupIfDue(deps, new Date())
   await failExhaustedJobs(deps.database.sql)
 
@@ -189,6 +191,9 @@ async function storeMatch(
 
     await writeMatch(transaction, { matchId, timelineKey: key }, job, line)
     await settleUploads(transaction, uploads, owners, matchId)
+
+    if (deps.artStore) await queueMatchArt(transaction, matchId)
+
     await transaction`UPDATE replays.replay_files SET patch = ${line.patch} WHERE digest = ${job.digest}`
 
     await transaction`
@@ -357,6 +362,7 @@ export type ReplayJobs = {
   fail(input: { jobId: string; leaseToken: string; code: JobFailureCode; message: string }): Promise<boolean>
   renew(jobId: string, leaseToken: string): Promise<boolean>
   release(jobId: string, leaseToken: string): Promise<boolean>
+  art: ReplayArtJobs
 }
 
 export function createReplayJobs(deps: ReplaysDeps): ReplayJobs {
@@ -366,5 +372,6 @@ export function createReplayJobs(deps: ReplaysDeps): ReplayJobs {
     fail: (input) => failJob(deps, input),
     renew: (jobId, leaseToken) => renewLease(deps, jobId, leaseToken),
     release: (jobId, leaseToken) => releaseJob(deps, jobId, leaseToken),
+    art: createReplayArtJobs(deps),
   }
 }

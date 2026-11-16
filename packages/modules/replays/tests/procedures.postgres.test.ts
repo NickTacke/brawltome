@@ -92,8 +92,8 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     await verify(account.id, brawlhallaId)
     await call(procedures.upload, { files: [replayFile()] }, visitor(sessionToken))
 
-    const deps = { database, objectStore, accounts }
-    const claimed = await claimJob(deps, { build: 'dev-1', patches: ['11.00'] })
+    const deps = { database, objectStore, artStore: null, accounts }
+    const claimed = await claimJob(deps, { build: 'dev-1', patches: ['11.00'], artFormat: null })
 
     await completeJob(deps, {
       jobId: claimed?.jobId as string,

@@ -21,6 +21,7 @@ export const replaysSchema = pgSchema('replays')
 export type UploadRejection = { code: string }
 export type JobFailure = { code: string; message: string }
 export type WeaponStats = Record<string, Record<string, number>>
+export type ArtFailure = { code: string; message: string }
 
 export const replayFiles = replaysSchema.table('replay_files', {
   digest: varchar('digest', { length: 71 }).primaryKey(),
@@ -82,6 +83,10 @@ export const matches = replaysSchema.table('matches', {
   playedAt: timestamp('played_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  artState: varchar('art_state', { length: 8 }).notNull().default('none'),
+  artManifestKey: varchar('art_manifest_key', { length: 200 }),
+  artFormat: smallint('art_format'),
+  artFailure: jsonb<ArtFailure>('art_failure'),
 })
 
 export const matchPlayers = replaysSchema.table(
@@ -139,4 +144,44 @@ export const builds = replaysSchema.table('builds', {
 export const maintenance = replaysSchema.table('maintenance', {
   name: varchar('name', { length: 32 }).primaryKey(),
   lastRunAt: timestamp('last_run_at', { withTimezone: true }).notNull(),
+})
+
+export const artJobs = replaysSchema.table('art_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  matchId: uuid('match_id'),
+  patch: varchar('patch', { length: 16 }).notNull(),
+  status: varchar('status', { length: 16 }).notNull().default('pending'),
+  attempts: smallint('attempts').notNull().default(0),
+  leaseToken: uuid('lease_token'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  timelineKey: varchar('timeline_key', { length: 200 }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  failure: jsonb<ArtFailure>('failure'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+})
+
+export const artFiles = replaysSchema.table('art_files', {
+  path: varchar('path', { length: 80 }).primaryKey(),
+  bytes: integer('bytes').notNull(),
+  state: varchar('state', { length: 9 }).notNull(),
+  jobId: uuid('job_id'),
+  leaseToken: uuid('lease_token'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+})
+
+export const mapFiles = replaysSchema.table(
+  'map_files',
+  {
+    patch: varchar('patch', { length: 16 }).notNull(),
+    mapId: integer('map_id').notNull(),
+    path: varchar('path', { length: 80 }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.patch, table.mapId] })],
+)
+
+export const artFormats = replaysSchema.table('art_formats', {
+  format: smallint('format').primaryKey(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 })

@@ -9,3 +9,9 @@ export const FILE_GRACE_DAYS = 7
 // a line is 180-485 KB raw and a few tens of KB gzipped
 export const MAX_LINE_GZIP_BYTES = 8 * 1024 * 1024
 export const MAX_LINE_BYTES = 32 * 1024 * 1024
+// bounds what one art file upload from the worker holds in memory
+export const MAX_ART_FILE_BYTES = 8 * 1024 * 1024
+// bounds one missing-files question from the worker
+export const MAX_ART_PATHS_PER_CALL = 2000
+// a merged match keeps answering under its old id, through at most this many merges
+export const MAX_MERGE_HOPS = 3
