@@ -32,6 +32,12 @@ export type ClaimedArtJob = {
 
 export type StoreArtOutcome = { status: 'stored' } | { status: 'rejected'; reason: string } | { status: 'lease-lost' }
 
+export type ReadArtOutcome =
+  | { status: 'found'; bytes: Uint8Array }
+  | { status: 'not-found' }
+  | { status: 'refused'; reason: string }
+  | { status: 'lease-lost' }
+
 /** The next art job, warm jobs first, then the newest match; null when there is nothing to do. */
 export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Promise<ClaimedArtJob | null> {
   if (!deps.artStore) return null
@@ -149,6 +155,32 @@ export async function storeArtFile(
   return { status: 'stored' }
 }
 
+/**
+ * A stored art group or map file. A render reads those it doesn't make again to name their sheets in the manifest,
+ * so only these two kinds are handed out; the sheets and packs they name stay in the bucket.
+ */
+export async function readArtFile(
+  deps: ReplaysDeps,
+  jobId: string,
+  leaseToken: string,
+  path: string,
+): Promise<ReadArtOutcome> {
+  const artStore = requireArtStore(deps.artStore, `read art file ${path} for job ${jobId}`)
+  const kind = parseArtPath(path)?.kind
+
+  if (kind !== 'art' && kind !== 'map') return { status: 'refused', reason: `${path} is not an art group or map file` }
+
+  const job = await findLiveArtJob(deps.database.sql, jobId, leaseToken)
+
+  if (job === 'not-found' || job === 'lease-lost') return { status: 'lease-lost' }
+
+  const bytes = await artStore.get(path)
+
+  if (!bytes) return { status: 'not-found' }
+
+  return { status: 'found', bytes }
+}
+
 /** Records the worker's failure; only worker-error is retried, and only while attempts are left. */
 export async function failArtJob(
   deps: ReplaysDeps,
@@ -195,6 +227,7 @@ export type ReplayArtJobs = {
   claim(report: WorkerReport): Promise<ClaimedArtJob | null>
   missing(jobId: string, leaseToken: string, paths: string[]): Promise<string[] | 'lease-lost'>
   store(jobId: string, leaseToken: string, path: string, bytes: Uint8Array): Promise<StoreArtOutcome>
+  read(jobId: string, leaseToken: string, path: string): Promise<ReadArtOutcome>
   complete(jobId: string, leaseToken: string, result: ArtResult): Promise<CompleteOutcome>
   fail(jobId: string, leaseToken: string, failure: ArtFailure): Promise<boolean>
   renew(jobId: string, leaseToken: string): Promise<boolean>
@@ -208,6 +241,7 @@ export function createReplayArtJobs(deps: ReplaysDeps): ReplayArtJobs {
     claim: (report) => claimArtJob(deps, report),
     missing: (jobId, leaseToken, paths) => missingArtFiles(deps, jobId, leaseToken, paths),
     store: (jobId, leaseToken, path, bytes) => storeArtFile(deps, jobId, leaseToken, path, bytes),
+    read: (jobId, leaseToken, path) => readArtFile(deps, jobId, leaseToken, path),
     complete: (jobId, leaseToken, result) => completeArtJob(deps, jobId, leaseToken, result),
     fail: (jobId, leaseToken, failure) => failArtJob(deps, jobId, leaseToken, failure),
     renew: (jobId, leaseToken) => renewArtLease(deps, jobId, leaseToken),

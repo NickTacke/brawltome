@@ -3,7 +3,15 @@ import { randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, releaseArtJob, storeArtFile } from '../art'
+import {
+  type ClaimedArtJob,
+  claimArtJob,
+  failArtJob,
+  missingArtFiles,
+  readArtFile,
+  releaseArtJob,
+  storeArtFile,
+} from '../art'
 import { completeArtJob } from '../art-complete'
 import { queueArtJob, queueWarmJob } from '../art-queue'
 import { replaysModule } from '../index'
@@ -255,6 +263,31 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)).toEqual({ status: 'lease-lost' })
     expect(deps.artStore.keys()).toEqual([])
+  })
+
+  test('a stored art group or map file can be read back, a sheet cannot', async () => {
+    await exportArt(await claimedMatchJob())
+
+    const claimed = await claimedMatchJob()
+    const art = fakeArtExport()
+    const [groupPath] = art.files.keys()
+    const sheetPath = art.manifest.sheetOrder[0] as string
+    const read = (path: string) => readArtFile(deps, claimed.jobId, claimed.leaseToken, path)
+
+    expect(await read(groupPath as string)).toEqual({ status: 'found', bytes: art.files.get(groupPath as string) })
+    expect(await read(art.mapPath)).toEqual({ status: 'found', bytes: art.files.get(art.mapPath) })
+    expect(await read(sheetPath)).toMatchObject({ status: 'refused' })
+    expect(await read(`art/${'f'.repeat(32)}.json`)).toEqual({ status: 'not-found' })
+  })
+
+  test('a read from an attempt that lost its lease is refused', async () => {
+    const claimed = await claimedMatchJob()
+
+    await releaseArtJob(deps, claimed.jobId, claimed.leaseToken)
+
+    const read = await readArtFile(deps, claimed.jobId, claimed.leaseToken, fakeArtExport().mapPath)
+
+    expect(read).toEqual({ status: 'lease-lost' })
   })
 
   test('no-animations marks the art failed with that code', async () => {
