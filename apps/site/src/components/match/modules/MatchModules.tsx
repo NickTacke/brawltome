@@ -1,5 +1,6 @@
 import type { MatchInsights } from '@brawltome/contracts'
 import type { MatchPlayer } from '../match-players'
+import { OpeningLists } from './OpeningLists'
 import { PlayerHabits } from './PlayerHabits'
 
 type MatchModulesProps = {
@@ -14,6 +15,7 @@ export function MatchModules({ insights, players, picked, onPick }: MatchModules
   return (
     <>
       <PlayerHabits matchPlayer={picked} players={players} durationMs={insights.summary.durationMs} />
+      <OpeningLists moments={insights.insights.moments} slot={picked.slot} />
     </>
   )
 }
