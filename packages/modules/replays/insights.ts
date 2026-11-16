@@ -76,30 +76,17 @@ async function storedInsights(
   return gunzipJson(bytes) as MatchInsights | null
 }
 
-type MapFileRead = { layout: LevelLayout } | { reason: string }
-
-// a map file that's missing, doesn't read, or that the art bucket fails to hand over is logged, and the match is read
-// without a layout
 async function readLayout(artStore: ObjectStore | null, path: string): Promise<MapLayout | null> {
-  const mapFile = await readMapFile(artStore, path)
+  const bytes = await artStore?.get(path)
+  const mapFile = bytes ? mapFileSchema.safeParse(parseJson(bytes)) : null
 
-  if ('layout' in mapFile) return { path, layout: mapFile.layout }
+  if (mapFile?.success) return { path, layout: mapFile.data.layout }
 
-  console.error(`read the layout in map file ${path}: ${mapFile.reason}`)
+  const reason = mapFile ? mapFile.error.message : 'the art bucket has no such file'
+
+  console.error(`read the layout in map file ${path}: ${reason}`)
 
   return null
-}
-
-async function readMapFile(artStore: ObjectStore | null, path: string): Promise<MapFileRead> {
-  const bytes = await artStore?.get(path).catch((error: unknown) => new Error(String(error)))
-
-  if (bytes instanceof Error) return { reason: `the art bucket failed: ${bytes.message}` }
-
-  if (!bytes) return { reason: 'the art bucket has no such file' }
-
-  const mapFile = mapFileSchema.safeParse(parseJson(bytes))
-
-  return mapFile.success ? { layout: mapFile.data.layout } : { reason: mapFile.error.message }
 }
 
 function parseJson(bytes: Uint8Array): unknown {
