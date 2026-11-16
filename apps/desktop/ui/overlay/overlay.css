@@ -89,13 +89,13 @@ button.card {
   }
 }
 
-/* a pennant without a tier, inside the panel, so loading and failed cards keep their shape */
+/* without a tier the slot shows the diamond banner's outline, so loading and failed cards keep their shape */
 .banner-empty {
   display: block;
   width: 100%;
-  height: 104px;
-  background: hsl(var(--raised) / 0.55);
-  clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
+  aspect-ratio: 190 / 326;
+  background: hsl(var(--raised) / 0.8);
+  mask: url("/banners/Diamond.png") top / 100% auto no-repeat;
 }
 
 /* on the right of the screen the card is mirrored, so the banner hangs on the outer edge */
