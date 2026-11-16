@@ -36,6 +36,8 @@ export function damageAt(line: RawLine, slot: number, step: number): number {
 }
 
 const stockDamage = 165
+// a stock still in play is never worth nothing, however deep in damage
+const mostSpentShare = 0.95
 
 // stocks left, less the damage on the one in play as a share of a stock; nothing once all are gone
 export function standingAt(line: RawLine, slot: number, timeMs: number): number {
@@ -44,11 +46,22 @@ export function standingAt(line: RawLine, slot: number, timeMs: number): number 
   const lost = fallsOf(line, slot).filter((ko) => ko.step <= step).length
   const status = valueAt<string>(stateSeries(line, slot, 'status'), step, '')
   const isInPlay = status === 'live' || status === 'held'
-  const damage = isInPlay ? Math.min(damageAt(line, slot, step), stockDamage) : 0
+  const spent = isInPlay ? Math.min(damageAt(line, slot, step) / stockDamage, mostSpentShare) : 0
 
   if (lost >= stocks) return 0
 
-  return stocks - lost - damage / stockDamage
+  return stocks - lost - spent
+}
+
+/** Every half second from the start, and the end of the match when it falls between two. */
+export function leadTimes(durationMs: number, sampleMs: number): number[] {
+  const times: number[] = []
+
+  for (let timeMs = 0; timeMs <= durationMs; timeMs += sampleMs) times.push(timeMs)
+
+  if (times.at(-1) !== durationMs) times.push(durationMs)
+
+  return times
 }
 
 export function leadAt(line: RawLine, side: number, timeMs: number): number {

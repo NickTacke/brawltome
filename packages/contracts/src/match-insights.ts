@@ -41,8 +41,9 @@ export const matchInsightsSchema = z
     summary: insightSummarySchema,
     extras: insightExtrasSchema,
     insights: insightsSchema,
-    // the first player's side's lead in stocks, one sample every ADVANTAGE_SAMPLE_MS: their stocks left minus the
-    // damage on the current one, against the other side's
+    // the first player's side's lead in stocks: their stocks left minus the damage on the current one, against the
+    // other side's. a stock in play counts at most 0.95 spent. one sample every ADVANTAGE_SAMPLE_MS from the start,
+    // and a last one at durationMs, after the final KO, when it falls between two
     advantage: z.array(z.number()),
     reviewStops: z.array(reviewStopSchema),
   })
