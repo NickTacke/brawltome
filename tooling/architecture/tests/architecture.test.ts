@@ -87,6 +87,18 @@ describe('dependency architecture', () => {
     expect(rulesFor(fixture)).toContain('role-dependency')
   })
 
+  it('lets applications draw with browser packages', () => {
+    const fixture = withImport('@fixture/web', '@fixture/replay-player', { dependency: '@fixture/replay-player' })
+
+    expect(checkArchitecture(fixture, policy).violations).toEqual([])
+  })
+
+  it('keeps browser packages from depending on other workspaces', () => {
+    const fixture = withImport('@fixture/replay-player', '@fixture/game-data', { dependency: '@fixture/game-data' })
+
+    expect(rulesFor(fixture)).toContain('role-dependency')
+  })
+
   it('rejects unapproved package exports', () => {
     const fixture = structuredClone(validFixture)
     const players = fixture.workspaces.find(({ name }) => name === '@fixture/players')
