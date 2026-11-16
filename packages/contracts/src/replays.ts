@@ -1,3 +1,4 @@
+import { matchInsightsSchema } from './match-insights'
 import { brawlhallaIdSchema } from './player-reference'
 import { z } from './zod'
 
@@ -70,6 +71,16 @@ const matchPlayerSchema = matchPlayerSummarySchema
   })
   .strict()
 
+// the art the replay worker exported for a match, drawn from the public art bucket. a queued or failed export keeps
+// the last good manifest, so its address is there whatever the state; both addresses are null without a bucket
+const matchArtSchema = z
+  .object({
+    state: z.enum(['none', 'queued', 'ready', 'failed']),
+    manifestUrl: z.string().url().nullable(),
+    baseUrl: z.string().url().nullable(),
+  })
+  .strict()
+
 export const matchDetailSchema = matchSummarySchema
   .extend({
     queue: z.string().nullable(),
@@ -80,6 +91,13 @@ export const matchDetailSchema = matchSummarySchema
     failedChecks: z.array(z.string()),
     players: z.array(matchPlayerSchema),
     replay: z.object({ available: z.boolean(), patch: z.string(), fileName: z.string() }).strict(),
+    // the next three are optional until the api sends them, so the site reads answers from before and after that
+    // release. insights are null for a match the page isn't designed for: anything but a stock 1v1 or 2v2 with a
+    // timeline
+    insights: matchInsightsSchema.nullable().optional(),
+    art: matchArtSchema.optional(),
+    // where the site serves the match's trimmed timeline for playback; null whenever insights are
+    playbackPath: z.string().nullable().optional(),
   })
   .strict()
   .meta({ id: 'MatchDetail' })
