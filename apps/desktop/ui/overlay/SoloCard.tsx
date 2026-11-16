@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { BannerSlot, CardHead } from './CardHead'
-import { failureText, tierLabel } from './card-format'
+import { failureText, shownPeak, tierLabel } from './card-format'
 import type { CardData, PlayerHead } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
 import { WinRate } from './WinRate'
@@ -89,7 +89,7 @@ function RankedFigures({ data }: { data: Ranked }) {
       <span className="stat">
         <span className="stat-value">
           <span className="elo">{data.rating}</span>
-          <span className="peak">{`/ ${data.peakRating}`}</span>
+          <span className="peak">{`/ ${shownPeak(data.rating, data.peakRating)}`}</span>
         </span>
         <span className="stat-label">Elo / peak</span>
       </span>

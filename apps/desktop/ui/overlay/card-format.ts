@@ -1,6 +1,8 @@
 import type { FailureReason } from './overlay-view'
 
 const REFERENCE_HEIGHT_PX = 1080
+// the cards are drawn at 392 px wide; on a real screen three quarters of that is enough
+const CARD_SIZE = 0.75
 
 const countFormat = new Intl.NumberFormat('en-US')
 
@@ -50,7 +52,19 @@ export function tierBannerPath(tier: string | null): string | null {
 export function legendPortraitPath(legend: string | null): string | null {
   if (legend === null) return null
 
-  return `/legends/${legend.toLowerCase()}.png`
+  return `/legends/${legendFileName(legend)}.png`
+}
+
+// the game writes names like BÖDVAR; the art files are plain lowercase, like bodvar
+function legendFileName(legend: string): string {
+  const withoutAccents = legend.normalize('NFD').replace(/\p{Mark}/gu, '')
+
+  return withoutAccents.toLowerCase()
+}
+
+// a peak below the current elo means the server has none yet, as for a player new to the season
+export function shownPeak(rating: number, peakRating: number): number {
+  return Math.max(rating, peakRating)
 }
 
 export function failureText(reason: FailureReason): string {
@@ -59,5 +73,5 @@ export function failureText(reason: FailureReason): string {
 
 // css pixels already include the display scaling, so it is taken back out to size by the monitor alone
 export function cardScale(monitorHeightPx: number, devicePixelRatio: number): number {
-  return monitorHeightPx / REFERENCE_HEIGHT_PX / devicePixelRatio
+  return (monitorHeightPx / REFERENCE_HEIGHT_PX / devicePixelRatio) * CARD_SIZE
 }
