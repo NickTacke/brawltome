@@ -1,0 +1,378 @@
+* {
+  box-sizing: border-box;
+}
+
+/* the window is exactly the cards, so whatever the cards don't cover shows the game */
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font-family: var(--sans);
+  color: hsl(var(--text));
+  -webkit-font-smoothing: antialiased;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: max-content;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  position: relative;
+  display: block;
+  width: 340px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--line) / 0.9);
+  border-radius: 10px;
+  background: hsl(var(--ink) / 0.9);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+button.card {
+  cursor: pointer;
+}
+
+/* the clickable head of a card that also holds a retry button */
+.card-link {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.portrait {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 2px solid hsl(var(--line));
+  border-radius: 10px;
+  background: hsl(var(--raised));
+  object-fit: cover;
+}
+
+.portrait.small {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.who {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  display: block;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+  color: hsl(var(--strong));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* kept at one line when empty, so a loading card is as tall as the card that replaces it */
+.sub {
+  display: block;
+  min-height: 18px;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: hsl(var(--soft));
+  white-space: nowrap;
+}
+
+.sub b {
+  font-weight: 800;
+  color: hsl(var(--strong));
+  font-variant-numeric: tabular-nums;
+}
+.sub .dot {
+  margin: 0 6px;
+  opacity: 0.5;
+}
+
+/* the banner hangs from the top edge of the card, like it does in game */
+.banner {
+  flex: none;
+  align-self: flex-start;
+  width: 38px;
+  height: 60px;
+  margin: -12px 2px -4px 0;
+  object-fit: contain;
+  object-position: top;
+  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.5));
+}
+
+.figures {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  white-space: nowrap;
+}
+
+.elo {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+  color: hsl(var(--strong));
+  font-variant-numeric: tabular-nums;
+}
+
+.peak {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: hsl(var(--soft) / 0.75);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--soft) / 0.75);
+}
+
+.record {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--soft));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.record b {
+  font-weight: 700;
+}
+.rate-high {
+  color: hsl(var(--won));
+}
+.rate-mid {
+  color: hsl(var(--primary));
+}
+.rate-low {
+  color: hsl(var(--soft));
+}
+
+/* the same height as a filled figures row: 1 + 10 + 30 + 12 */
+.figures.placeholder {
+  align-items: center;
+  height: 53px;
+}
+
+.bar {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: hsl(var(--raised));
+  opacity: 0.7;
+}
+
+.bar.wide {
+  width: 132px;
+  height: 22px;
+}
+.bar.narrow {
+  width: 116px;
+}
+
+/* time left before the card hides */
+.timer {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: block;
+  height: 2px;
+  background: hsl(var(--raised));
+}
+
+.timer i {
+  display: block;
+  height: 100%;
+  background: hsl(var(--primary));
+  transform-origin: left;
+  animation-name: drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.refresh {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 10%, hsl(var(--primary)) 45%, transparent 80%);
+}
+
+.note {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--soft));
+}
+
+.plain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 12px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+}
+
+.text-button {
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 6px;
+  background: hsl(var(--raised) / 0.7);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: hsl(var(--strong));
+  cursor: pointer;
+}
+
+.text-button:hover {
+  border-color: hsl(var(--primary) / 0.8);
+}
+
+.unknown {
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: hsl(var(--soft) / 0.6);
+}
+
+.unknown.small {
+  font-size: 16px;
+}
+
+/* ---------- 2v2 ---------- */
+
+/* the height the banner gives it, so a loading team or one without a rating doesn't jump when it fills in */
+.team-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 10px 14px;
+}
+
+.team-head .banner {
+  width: 30px;
+  height: 46px;
+  margin: -10px 0 -6px 0;
+}
+.team-head .elo {
+  font-size: 26px;
+  line-height: 26px;
+}
+.team-head .label {
+  margin-left: auto;
+}
+.team-head .bar {
+  height: 20px;
+}
+
+.players {
+  display: block;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  padding: 6px 0 8px;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.player .name {
+  flex: 1;
+  font-size: 15px;
+}
+
+.player .rating {
+  font-size: 16px;
+  font-weight: 800;
+  color: hsl(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+/* community notation, so it stays lowercase unlike the other labels */
+.rating .label {
+  margin-left: 4px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- states, last so they win over the parts above ---------- */
+
+.player:hover .name,
+.card-link:hover .name {
+  color: hsl(var(--primary));
+}
+
+.is-refreshing .figures,
+.is-refreshing .team-head .elo,
+.is-refreshing .rating {
+  opacity: 0.6;
+}
+
+button.card:hover {
+  border-color: hsl(var(--primary) / 0.8);
+}
+
+button.card:hover .name {
+  color: hsl(var(--primary));
+}

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BrawlTome desktop preview</title>
+    <style>
+      html body.preview {
+        overflow: auto;
+        min-height: 100vh;
+        background: #0b0d12;
+      }
+
+      .preview-frame {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        transform-origin: 0 0;
+        background: radial-gradient(ellipse at 50% 30%, #2a2f3d 0%, #151821 55%, #0b0d12 100%);
+      }
+
+      .preview-stage {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 50% 30%;
+      }
+
+      .preview-dim {
+        position: absolute;
+        inset: 0;
+        background: rgb(8 10 16 / 0.35);
+      }
+
+      .preview-overlay {
+        position: absolute;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .preview-sheet {
+        display: grid;
+        grid-template-columns: repeat(5, 340px);
+        gap: 28px 32px;
+        align-content: start;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 40px 0;
+        background:
+          linear-gradient(rgb(8 10 16 / 0.72), rgb(8 10 16 / 0.72)),
+          url(/preview-stage.png) center / cover,
+          #0b0d12;
+      }
+
+      .preview-cell h2 {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgb(255 255 255 / 0.6);
+      }
+
+      .preview-missing {
+        margin: 40px;
+        font-size: 15px;
+        color: #fff;
+      }
+
+      /* &elapsedMs= holds every timer bar at that point */
+      [style*="--preview-timer-delay"] .timer i {
+        /* biome-ignore lint/complexity/noImportantStyles: the bar carries its own delay inline */
+        animation-delay: var(--preview-timer-delay) !important;
+        animation-play-state: paused;
+      }
+    </style>
+  </head>
+  <body class="preview">
+    <div id="root"></div>
+    <script type="module" src="./ui/preview/main.tsx"></script>
+  </body>
+</html>

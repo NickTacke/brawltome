@@ -1,0 +1,15 @@
+/* colours are hsl channels, so a rule can add its own alpha: hsl(var(--line) / 0.6) */
+:root {
+  --ink: 224 19.5% 13.5%;
+  --raised: 222 19.6% 21%;
+  --line: 221.5 20.3% 25.1%;
+  --text: 210 22% 86%;
+  --strong: 207 26% 95%;
+  --soft: 213.3 16% 68%;
+  --primary: 212 92% 65%;
+  --won: 158 64% 52%;
+  --lost: 0 91% 71%;
+  --warn: 40 90% 60%;
+  --sans: Inter, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+}

@@ -1,0 +1,12 @@
+{
+  "lobbyId": 7,
+  "cards": [
+    {
+      "kind": "solo",
+      "player": { "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" },
+      "data": { "state": "loading" }
+    }
+  ],
+  "visibleMs": 12000,
+  "deferredProfileIds": []
+}

@@ -1,0 +1,28 @@
+{
+  "lobbyId": 7,
+  "cards": [
+    {
+      "kind": "team",
+      "team": 2,
+      "data": { "state": "ready", "standing": { "tier": "Diamond", "rating": 2284 }, "isRefreshing": false },
+      "players": [
+        {
+          "brawlhallaId": 91913839,
+          "name": "Shinigami",
+          "legend": "Hattori",
+          "personalRating2v2": 2190,
+          "oneVsOneRating": null
+        },
+        {
+          "brawlhallaId": 50427113,
+          "name": "tidecaller",
+          "legend": "Petra",
+          "personalRating2v2": 2075,
+          "oneVsOneRating": null
+        }
+      ]
+    }
+  ],
+  "visibleMs": 12000,
+  "deferredProfileIds": []
+}

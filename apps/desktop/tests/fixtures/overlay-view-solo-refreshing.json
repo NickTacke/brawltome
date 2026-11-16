@@ -1,0 +1,21 @@
+{
+  "lobbyId": 7,
+  "cards": [
+    {
+      "kind": "solo",
+      "player": { "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" },
+      "data": {
+        "state": "ranked",
+        "tier": "Diamond",
+        "rating": 2130,
+        "peakRating": 2204,
+        "regionRank": 48,
+        "wins": 734,
+        "games": 1204,
+        "isRefreshing": true
+      }
+    }
+  ],
+  "visibleMs": 12000,
+  "deferredProfileIds": []
+}
