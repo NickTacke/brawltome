@@ -103,7 +103,7 @@ export function stateCells(): StateCell[] {
       title: '2v2 refreshing',
       view: withTeamData({
         state: 'ready',
-        standing: { tier: 'Diamond', rating: 2284, wins: 51, games: 90 },
+        standing: { tier: 'Diamond', rating: 2284, peakRating: 2301, wins: 51, games: 90 },
         isRefreshing: true,
       }),
     },
