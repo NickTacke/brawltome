@@ -29,7 +29,7 @@ describe.skipIf(!connectionString)('replay maintenance', () => {
 
   beforeEach(async () => {
     await database.sql`
-      TRUNCATE replays.jobs, replays.match_uploads, replays.match_players, replays.matches, replays.uploads,
+      TRUNCATE replays.art_jobs, replays.jobs, replays.match_uploads, replays.match_players, replays.matches, replays.uploads,
         replays.replay_files, replays.worker_reports, replays.builds
     `
 

@@ -28,7 +28,7 @@ describe.skipIf(!connectionString)('replay jobs', () => {
 
   beforeEach(async () => {
     // each test starts with an empty queue, so "the next job" is always one this test made
-    await database.sql`TRUNCATE replays.jobs, replays.match_uploads, replays.match_players, replays.matches, replays.uploads, replays.replay_files`
+    await database.sql`TRUNCATE replays.art_jobs, replays.jobs, replays.match_uploads, replays.match_players, replays.matches, replays.uploads, replays.replay_files`
 
     const accounts = {
       getPrimaryPlayerVerificationState: async (accountId: string) => {

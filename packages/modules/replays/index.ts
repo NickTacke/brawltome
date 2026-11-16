@@ -2,6 +2,7 @@ import type { BrawltomeModule } from '@brawltome/foundation'
 import { createReplayProcedures } from './api/procedures'
 import { createReplays } from './migrations/0001-create-replays'
 import { addWorkerReports } from './migrations/0002-add-worker-reports'
+import { addArt } from './migrations/0003-add-art'
 
 export {
   type ClaimedJob,
@@ -17,7 +18,7 @@ export { inspectReplayQueue, type ReplayQueueInspection } from './maintenance'
 export type { ReplaysDeps } from './model'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
-const migrations = [createReplays, addWorkerReports] as const
+const migrations = [createReplays, addWorkerReports, addArt] as const
 
 export const replaysModule = {
   name: 'replays' as const,
