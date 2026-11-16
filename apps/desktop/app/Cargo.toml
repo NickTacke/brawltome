@@ -13,7 +13,6 @@ name = "brawltome-desktop"
 path = "src/main.rs"
 
 [dependencies]
-brawltome-events.workspace = true
 brawltome-detection.workspace = true
 brawltome-contracts = { path = "../../../packages/contracts/rust" }
 reqwest = "=0.13.2"
@@ -40,6 +39,7 @@ windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { workspace = true, features = ["test-util"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

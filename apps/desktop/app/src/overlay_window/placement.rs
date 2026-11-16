@@ -64,6 +64,18 @@ pub fn monitor_for(point: Option<(i32, i32)>, monitors: &[Rect]) -> Option<Rect>
     Some(holding_point.copied().unwrap_or(first))
 }
 
+/// the monitors with the primary one first, so monitor_for falls back to it
+pub fn primary_first(mut monitors: Vec<Rect>, primary: Option<Rect>) -> Vec<Rect> {
+    let Some(primary) = primary else {
+        return monitors;
+    };
+
+    monitors.retain(|monitor| *monitor != primary);
+    monitors.insert(0, primary);
+
+    monitors
+}
+
 /// where the cards go, in physical pixels; None for an empty content size
 pub fn overlay_rect(
     monitor: Rect,
@@ -104,6 +116,21 @@ pub fn physical_size(
     let height = to_physical_px(height_css_px, device_pixel_ratio)?;
 
     Some((width, height))
+}
+
+/// a size measured on a monitor of one height, as big relative to a monitor of another height, rounded up
+pub fn rescaled_size(size_px: (u32, u32), from_height_px: u32, to_height_px: u32) -> (u32, u32) {
+    if from_height_px == 0 {
+        return size_px;
+    }
+
+    let rescale = |length_px: u32| {
+        let scaled =
+            (u64::from(length_px) * u64::from(to_height_px)).div_ceil(u64::from(from_height_px));
+        u32::try_from(scaled).unwrap_or(u32::MAX)
+    };
+
+    (rescale(size_px.0), rescale(size_px.1))
 }
 
 fn to_physical_px(css_px: f64, device_pixel_ratio: f64) -> Option<u32> {
@@ -233,12 +260,37 @@ mod tests {
     }
 
     #[test]
+    fn a_minimized_game_puts_the_cards_on_the_primary_monitor() {
+        let left = rect(-2560, 0, 2560, 1440);
+        let primary = rect(0, 0, 1920, 1080);
+        let monitors = primary_first(vec![left, primary], Some(primary));
+
+        // windows parks a minimized window at -32000,-32000
+        let minimized_centre = Some((-32_000 + 80, -32_000 + 14));
+
+        assert_eq!(monitors, vec![primary, left]);
+        assert_eq!(monitor_for(minimized_centre, &monitors), Some(primary));
+        assert_eq!(
+            primary_first(vec![left, primary], None),
+            vec![left, primary]
+        );
+    }
+
+    #[test]
     fn css_pixels_become_physical_pixels() {
         assert_eq!(physical_size(340.0, 130.5, 1.25), Some((425, 164)));
         assert_eq!(physical_size(340.0, 130.0, f64::NAN), None);
         assert_eq!(physical_size(340.0, 130.0, 0.0), None);
         assert_eq!(physical_size(340.0, 130.0, -1.0), None);
         assert_eq!(physical_size(f64::NAN, 130.0, 1.0), None);
+    }
+
+    #[test]
+    fn a_size_measured_on_one_monitor_fits_another() {
+        assert_eq!(rescaled_size((340, 131), 1080, 1080), (340, 131));
+        assert_eq!(rescaled_size((340, 155), 1080, 1440), (454, 207));
+        assert_eq!(rescaled_size((454, 175), 1440, 1080), (341, 132));
+        assert_eq!(rescaled_size((340, 131), 0, 1080), (340, 131));
     }
 
     #[test]

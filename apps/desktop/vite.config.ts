@@ -1,10 +1,9 @@
 import path from 'node:path'
-import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   server: {
     port: 1420,
     strictPort: true,
@@ -16,5 +15,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      // index.html stays empty until the main window has a page
+      input: path.resolve(__dirname, 'overlay.html'),
+    },
   },
 })

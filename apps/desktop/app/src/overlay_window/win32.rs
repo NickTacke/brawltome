@@ -2,11 +2,12 @@
 
 use std::mem;
 
-use windows_sys::Win32::Foundation::{GetLastError, SetLastError, BOOL, HWND, LPARAM, RECT};
+use windows_sys::core::BOOL;
+use windows_sys::Win32::Foundation::{GetLastError, SetLastError, HWND, LPARAM, RECT};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
-    SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_EX_NOACTIVATE,
+    SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_HIDEWINDOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_EX_NOACTIVATE,
 };
 
 use super::placement::Rect;
@@ -44,6 +45,34 @@ pub fn place_without_activating(window_handle: isize, rect: Rect) -> Result<(), 
         return Err(format!(
             "place the overlay window at {},{} size {}x{}: SetWindowPos failed with error {error_code}",
             rect.x, rect.y, rect.width, rect.height
+        ));
+    }
+
+    Ok(())
+}
+
+/// hides the window without handing activation to anything
+///
+/// tauri's own hide only acts when tao thinks the window is visible, and tao never learns that
+/// place_without_activating showed it
+pub fn hide_without_activating(window_handle: isize) -> Result<(), String> {
+    // SAFETY: SetWindowPos only reads its arguments; a stale handle makes it fail, not crash
+    let succeeded = unsafe {
+        SetWindowPos(
+            window_handle as HWND,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_HIDEWINDOW | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+        )
+    };
+    if succeeded == 0 {
+        // SAFETY: GetLastError reads the calling thread's own error code
+        let error_code = unsafe { GetLastError() };
+        return Err(format!(
+            "hide the overlay window: SetWindowPos failed with error {error_code}"
         ));
     }
 
@@ -262,6 +291,25 @@ mod tests {
         assert_eq!(foreground_after, foreground_before);
         assert_ne!(foreground_after, window.0);
         assert_ne!(extended_style & WS_EX_TOPMOST, 0);
+    }
+
+    #[test]
+    fn hiding_takes_a_placed_window_off_screen() {
+        let window = TestWindow::new();
+        let rect = Rect {
+            x: 40,
+            y: 50,
+            width: 340,
+            height: 131,
+        };
+        place_without_activating(window.handle(), rect).expect("place the test window");
+
+        let hidden = hide_without_activating(window.handle());
+
+        // SAFETY: the handle is the live test window
+        let is_visible = unsafe { IsWindowVisible(window.0) } != 0;
+        assert_eq!(hidden, Ok(()));
+        assert!(!is_visible);
     }
 
     #[test]
