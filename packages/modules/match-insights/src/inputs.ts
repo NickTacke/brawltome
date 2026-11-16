@@ -3,7 +3,8 @@
 export function countSetBits(bits: number): number {
   let count = 0
 
-  for (let rest = bits; rest; rest >>= 1) count += rest & 1
+  // unsigned, so a value with the top bit set still runs out of bits
+  for (let rest = bits >>> 0; rest; rest >>>= 1) count += rest & 1
 
   return count
 }

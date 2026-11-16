@@ -91,6 +91,15 @@ const eventsSchema = z.preprocess(
   z.array(eventSchema),
 )
 
+// one bit per button bh-native records, from up (1) to taunt7 (8192)
+const buttonCount = 14
+
+const inputBitsSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(2 ** buttonCount - 1)
+
 const playerStateSchema = z.object({
   damage: seriesOf(z.number()),
   status: seriesOf(z.string()),
@@ -101,7 +110,7 @@ const playerStateSchema = z.object({
   hitstun: seriesOf(z.boolean()),
   dodging: seriesOf(z.boolean()),
   airJumpsUsed: seriesOf(z.number().int()),
-  input: seriesOf(z.number().int()),
+  input: seriesOf(inputBitsSchema),
 })
 
 // one position sample every `every` steps, from step `from`
