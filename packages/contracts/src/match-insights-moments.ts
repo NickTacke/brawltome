@@ -83,12 +83,14 @@ const momentHitSchema = z
 
 const momentSchema = z
   .object({
+    // punish-<index>, or knockout-<victim>-<ms> for a KO no punish led to
     key: z.string(),
     // what it cost first, then how it began
     class: z.enum(momentClasses),
     // the first hit, or the KO when no hit led to it
     timeMs,
     endMs: timeMs,
+    // the punisher, or for a KO no punish led to whoever the game credits; nobody for a fall
     attacker: slot.nullable(),
     victim: slot,
     damage: z.number(),

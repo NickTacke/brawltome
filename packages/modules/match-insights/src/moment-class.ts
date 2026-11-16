@@ -9,9 +9,23 @@ export const bigDamage = 30
 
 type Classified = { lead: Lead | null; knockout: Knockout | null; damage: number }
 
+/** Whether the game credits the KO to someone other than the victim. */
+export function hasKiller(knockout: Knockout): boolean {
+  return knockout.killer !== null && knockout.killer !== knockout.victim
+}
+
+// with no punish behind a KO, the game's own credit still says who killed whom: a fall is a KO it credits to nobody
+function unpunishedClass(knockout: Knockout | null): MomentClass {
+  if (!knockout || !hasKiller(knockout)) return 'fall'
+
+  if (knockout.isByTeammate) return 'team-ko'
+
+  return knockout.damage < earlyKoDamage ? 'early-ko' : 'ko'
+}
+
 /** One class per exchange: a KO or a big punish says more than how it began, so those come first. */
 export function classOf(moment: Classified): MomentClass {
-  if (!moment.lead) return moment.knockout?.isByTeammate ? 'team-ko' : 'fall'
+  if (!moment.lead) return unpunishedClass(moment.knockout)
 
   if (moment.knockout && moment.knockout.damage < earlyKoDamage) return 'early-ko'
 

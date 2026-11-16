@@ -1,16 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import type { Moment, ReviewScope } from '@brawltome/contracts'
-import { msOf } from './derive'
+import { eventsOf, msOf } from './derive'
 import { fixtures } from './insights'
 
 // a KO below this damage came early; a punish from this damage up is a big one
 const earlyKoDamage = 100
 const bigDamage = 30
 
+// with no punish behind a KO, the game's own credit still says who killed whom: nobody, or the victim, is a fall
 function expectedClass(moment: Moment): Moment['class'] {
-  if (!moment.lead) return moment.knockout?.isByTeammate ? 'team-ko' : 'fall'
+  const killer = moment.knockout?.killer ?? null
+  const isFall = killer === null || killer === moment.victim
+
+  if (!moment.lead && isFall) return 'fall'
+
+  if (!moment.lead && moment.knockout?.isByTeammate) return 'team-ko'
 
   if (moment.knockout) return moment.knockout.damage < earlyKoDamage ? 'early-ko' : 'ko'
+
+  if (!moment.lead) return 'fall'
 
   return moment.damage >= bigDamage ? 'big' : moment.lead.kind
 }
@@ -67,6 +75,23 @@ describe.each(fixtures())('moments of $name', (fixture) => {
     expect(new Set(moments.map((moment) => moment.key)).size).toBe(moments.length)
     expect(times).toEqual([...times].sort((left, right) => left - right))
     expect(moments.every((moment) => moment.timeMs <= moment.endMs && moment.endMs <= durationMs)).toBe(true)
+  })
+
+  test('every KO names the killer the game credits, and is a fall only when it credits nobody', () => {
+    for (const event of eventsOf(fixture.line, 'ko')) {
+      const victim = event.player as number
+      const killer = event.killer ?? null
+      const isFall = killer === null || killer === victim
+
+      const moment = moments.find(
+        (entry) => entry.knockout?.victim === victim && entry.knockout.timeMs === msOf(fixture.line, event.step),
+      )
+
+      expect(moment?.attacker ?? null).toBe(isFall ? null : killer)
+      expect(moment?.class === 'fall').toBe(isFall)
+
+      if (moment?.lead === null) expect(moment.key).toBe(`knockout-${victim}-${moment.timeMs}`)
+    }
   })
 
   test('each has the class its rules give it', () => {

@@ -32,7 +32,7 @@ const insights = readMatchInsights(line, layout) // layout: LevelLayout | null
 - `src/strikes.ts`, `src/blows.ts`, `src/punishes.ts`, `src/punish-cause.ts`, `src/facts.ts`: swings and throws, what
   each did to each target, and the punishes they add up to.
 - `src/habits/`: one file per kind of habit.
-- `src/stage/`: the stage box, the map layout in it, the marks on it and the playback.
+- `src/stage/`: the stage box, the map layout in it and the marks on it. Playback is served from its own timeline.
 - `src/read-match-insights.ts`: puts it all together.
 
 ## Tests

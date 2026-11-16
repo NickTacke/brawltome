@@ -1,6 +1,6 @@
 import type { Knockout, Moment, Punish, StageHit } from '@brawltome/contracts'
 import type { MatchFacts } from './facts'
-import { classOf } from './moment-class'
+import { classOf, hasKiller } from './moment-class'
 import { readLead } from './moment-lead'
 import { weaponLabel } from './weapon-names'
 
@@ -33,14 +33,15 @@ function punishMoment(sources: Sources, punish: Punish, index: number): Moment {
   }
 }
 
-function fallMoment(knockout: Knockout): Moment {
+// a KO no punish led to. its key doesn't say what kind it was: the class does, from the game's own credit
+function knockoutMoment(knockout: Knockout): Moment {
   return {
-    key: `fall-${knockout.victim}-${knockout.timeMs}`,
+    key: `knockout-${knockout.victim}-${knockout.timeMs}`,
     class: classOf({ lead: null, knockout, damage: 0 }),
     timeMs: knockout.timeMs,
     endMs: knockout.timeMs,
-    // a teammate who sent them out, or nobody: an SD has no one to name
-    attacker: knockout.isByTeammate ? knockout.killer : null,
+    // whoever the game credits, enemy or teammate; a fall credited to nobody has no one to name
+    attacker: hasKiller(knockout) ? knockout.killer : null,
     victim: knockout.victim,
     damage: 0,
     hits: [],
@@ -53,7 +54,7 @@ function fallMoment(knockout: Knockout): Moment {
 /** Every punish and KO of a match in the order they happened. */
 export function readMoments(sources: Sources): Moment[] {
   const punished = sources.facts.punishes.map((punish, index) => punishMoment(sources, punish, index))
-  const falls = sources.knockouts.filter((knockout) => knockout.punishIndex === null).map(fallMoment)
+  const unpunished = sources.knockouts.filter((knockout) => knockout.punishIndex === null).map(knockoutMoment)
 
-  return [...punished, ...falls].sort((left, right) => left.timeMs - right.timeMs)
+  return [...punished, ...unpunished].sort((left, right) => left.timeMs - right.timeMs)
 }
