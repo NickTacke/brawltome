@@ -2,9 +2,6 @@ import type { FailureReason } from './overlay-view'
 
 const REFERENCE_HEIGHT_PX = 1080
 
-// shown where a clicked profile waits, since links only open once the match is over
-export const DEFERRED_PROFILE_TEXT = 'Opens after the match'
-
 const countFormat = new Intl.NumberFormat('en-US')
 
 const failureTexts: Record<FailureReason, string> = {

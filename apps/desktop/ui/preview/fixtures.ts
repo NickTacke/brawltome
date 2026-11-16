@@ -54,15 +54,10 @@ function withTeamData(data: TeamData): OverlayView {
   return { ...view, cards: [{ ...teamCard(view), data }] }
 }
 
-function withDeferred(view: OverlayView, brawlhallaId: number): OverlayView {
-  return { ...view, deferredProfileIds: [brawlhallaId] }
-}
-
 export type StateCell = { title: string; view: OverlayView }
 
 export function stateCells(): StateCell[] {
   const team = requireFixture('team')
-  const teammate = teamCard(team).players[1]?.brawlhallaId ?? 0
 
   const zeroGames: CardData = {
     state: 'ranked',
@@ -101,7 +96,6 @@ export function stateCells(): StateCell[] {
     { title: 'Long name', view: withSoloPlayer('xX_TheLongestNameInValhallaEver_Xx', 'Lord Vraxx') },
     { title: 'Name with markup', view: withSoloPlayer('<img src=x onerror=alert(1)>', 'Petra') },
     { title: 'Legend without art', view: withSoloPlayer('newcomer', 'Not A Legend') },
-    { title: 'Clicked, opens after the match', view: withDeferred(requireFixture('solo-ranked'), 91913839) },
     { title: '2v2', view: team },
     { title: '2v2 without team rating', view: requireFixture('team-bare') },
     { title: '2v2 loading', view: withTeamData({ state: 'loading' }) },
@@ -113,6 +107,5 @@ export function stateCells(): StateCell[] {
       title: '2v2 server down',
       view: withTeamData({ state: 'failed', reason: 'unavailable', retryInSeconds: 4, canRetry: true }),
     },
-    { title: '2v2, teammate clicked', view: withDeferred(team, teammate) },
   ]
 }

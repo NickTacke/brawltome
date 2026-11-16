@@ -7,6 +7,5 @@
       "data": { "state": "failed", "reason": "unavailable", "retryInSeconds": 4, "canRetry": true }
     }
   ],
-  "visibleMs": 12000,
-  "deferredProfileIds": []
+  "visibleMs": 12000
 }
