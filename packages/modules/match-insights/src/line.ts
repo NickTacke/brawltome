@@ -91,14 +91,13 @@ const eventsSchema = z.preprocess(
   z.array(eventSchema),
 )
 
-// one bit per button bh-native records, from up (1) to taunt7 (8192)
-const buttonCount = 14
-
+// the buttons held, one bit each; which bit is which button is the timeline's inputBits map. the game's input is a
+// set of 32 bits, so a sample with the top bit set may come as a negative number
 const inputBitsSchema = z
   .number()
   .int()
-  .min(0)
-  .max(2 ** buttonCount - 1)
+  .min(-(2 ** 31))
+  .max(2 ** 32 - 1)
 
 const playerStateSchema = z.object({
   damage: seriesOf(z.number()),
@@ -122,6 +121,8 @@ const timelineSchema = z.object({
   endStep: step,
   // the names of the animations the state's indices point at, in the lines that record them
   animations: z.array(z.unknown()).optional(),
+  // each button's bit in the input samples, by the button's name
+  inputBits: z.record(z.string(), z.number().int()).optional(),
   events: eventsSchema,
   state: z.record(z.string(), playerStateSchema),
   positions: z.object({ every: z.number().int().positive() }).catchall(trackSchema),

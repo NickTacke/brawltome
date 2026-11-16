@@ -67,7 +67,7 @@ function readPlayerExtras(record: MatchRecord, player: LinePlayer): PlayerExtras
     suicides: stats.Suicides,
     pickups: countOwnEvents(record, slot, 'pickup'),
     throws: countOwnEvents(record, slot, 'throw'),
-    inputsPerMinute: minutes > 0 ? countPresses(state.input) / minutes : 0,
+    inputsPerMinute: minutes > 0 ? countPresses(state.input, record.buttonMask) / minutes : 0,
     spotDodges: countSpotDodges(record, slot),
     ...loadoutOf(record, slot),
     damageTakenByWeapon: damageTakenByWeapon(record, slot),

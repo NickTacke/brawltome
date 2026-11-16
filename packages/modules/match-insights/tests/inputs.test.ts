@@ -3,18 +3,38 @@ import { readMatchInsights } from '../index'
 import { countSetBits } from '../src/inputs'
 import { readFixtureLine } from './fixtures'
 
-// bh-native names 14 input bits, from up (1) to taunt7 (8192). a line with an input outside them isn't one this
-// module knows how to read, so it is rejected; the bit count itself stays safe for any 32 bits
+// a press counts only for a button the line's own inputBits map names, so a bh-native build that records one more
+// button still reads, and the extra bit is left out until the map names it. any 32 bit input is read, negative ones
+// included, as the game's input is a set of bits
 
-type EditableLine = { timeline: { state: Record<string, { input: [number, number][] }> } }
+type EditableLine = {
+  stats: { GameDuration: number }
+  timeline: { inputBits?: Record<string, number>; state: Record<string, { input: [number, number][] }> }
+}
 
-function lineWithInput(bits: number): EditableLine {
+// up (1) and the bit above taunt7 (16384), each pressed once, then everything at once
+const presses: [number, number][] = [
+  [0, 0],
+  [500, 1],
+  [510, 0],
+  [600, 16_384],
+  [610, 0],
+]
+
+function lineWithInput(input: [number, number][]): EditableLine {
   const line = readFixtureLine('duel-a') as EditableLine
-  const input = line.timeline.state['1']?.input ?? []
+  const state = line.timeline.state['1']
 
-  input[1] = [input[1]?.[0] ?? 1, bits]
+  if (state) state.input = input
 
   return line
+}
+
+function pressesRead(line: EditableLine): number | undefined {
+  const extras = readMatchInsights(line, null)?.extras.players.find((player) => player.slot === 1)
+  const minutes = line.stats.GameDuration / 60_000
+
+  return extras === undefined ? undefined : Math.round(extras.inputsPerMinute * minutes)
 }
 
 describe('input bits', () => {
@@ -24,13 +44,47 @@ describe('input bits', () => {
     expect(countSetBits(16_383)).toBe(14)
   })
 
-  test('outside the 14 buttons reject the line', () => {
-    expect(() => readMatchInsights(lineWithInput(2_147_483_648), null)).toThrow(/format 1 timeline/)
-    expect(() => readMatchInsights(lineWithInput(-1), null)).toThrow(/format 1 timeline/)
-    expect(() => readMatchInsights(lineWithInput(16_384), null)).toThrow(/format 1 timeline/)
+  test('outside the buttons the line names still read, and only its buttons count', () => {
+    expect(pressesRead(lineWithInput(presses))).toBe(1)
+
+    expect(
+      pressesRead(
+        lineWithInput([
+          [0, 0],
+          [500, 2_147_483_648],
+          [510, 0],
+        ]),
+      ),
+    ).toBe(0)
+
+    expect(
+      pressesRead(
+        lineWithInput([
+          [0, 0],
+          [500, -1],
+          [510, 0],
+        ]),
+      ),
+    ).toBe(14)
   })
 
-  test('with every button down still read', () => {
-    expect(readMatchInsights(lineWithInput(16_383), null)).not.toBeNull()
+  test('a button the map adds counts', () => {
+    const line = lineWithInput(presses)
+
+    line.timeline.inputBits = { ...line.timeline.inputBits, taunt9: 16_384 }
+
+    expect(pressesRead(line)).toBe(2)
+  })
+
+  test('without a map every bit counts', () => {
+    const line = lineWithInput([
+      [0, 0],
+      [500, -1],
+      [510, 0],
+    ])
+
+    delete line.timeline.inputBits
+
+    expect(pressesRead(line)).toBe(32)
   })
 })

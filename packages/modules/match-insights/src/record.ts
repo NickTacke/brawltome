@@ -1,3 +1,4 @@
+import { buttonMaskOf } from './inputs'
 import type { Line, LineEvent, LinePlayer, PlayerState, Track } from './line'
 import { type PlayerStats, readPlayerStats } from './player-stats'
 import { valueAt } from './series'
@@ -18,6 +19,8 @@ export type MatchRecord = {
   states: Map<number, PlayerState>
   tracks: Map<number, Track>
   positionEvery: number
+  // the input bits of the buttons the line names
+  buttonMask: number
   stats: Map<number, PlayerStats>
 }
 
@@ -47,6 +50,7 @@ export function readRecord(line: Line): MatchRecord {
     states: new Map(slots.map((slot) => [slot, stateOfLine(line, slot)])),
     tracks: new Map(slots.flatMap((slot) => (tracks[String(slot)] ? [[slot, tracks[String(slot)] as Track]] : []))),
     positionEvery: every,
+    buttonMask: buttonMaskOf(timeline.inputBits),
     stats: new Map(slots.map((slot) => [slot, readPlayerStats(line, slot)])),
   }
 }

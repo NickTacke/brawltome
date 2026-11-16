@@ -27,7 +27,7 @@ function mashPerSecond(facts: MatchFacts, slot: number): number {
   let previousBits = 0
 
   for (const [step, bits] of state.input) {
-    if (valueAt(state.hitstun, step, false)) presses += pressesBetween(previousBits, bits)
+    if (valueAt(state.hitstun, step, false)) presses += pressesBetween(previousBits, bits, facts.record.buttonMask)
 
     previousBits = bits
   }

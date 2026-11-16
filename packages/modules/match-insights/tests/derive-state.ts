@@ -72,8 +72,15 @@ export function leadAt(line: RawLine, side: number, timeMs: number): number {
   }, 0)
 }
 
-function pressedBits(previousBits: number, bits: number): number {
-  return (bits & ~previousBits).toString(2).replaceAll('0', '').length
+// the bits of the buttons the line's map names; every bit without a map
+function knownButtons(line: RawLine): number {
+  const named = (line.timeline as { inputBits?: Record<string, number> }).inputBits
+
+  return named ? Object.values(named).reduce((mask, bit) => mask | bit, 0) : -1
+}
+
+function pressedBits(previousBits: number, bits: number, buttons: number): number {
+  return ((bits & ~previousBits & buttons) >>> 0).toString(2).replaceAll('0', '').length
 }
 
 /** Buttons pressed over the match, and while stunned, with the seconds spent stunned. */
@@ -87,7 +94,7 @@ export function pressesOf(
   let previousBits = 0
 
   for (const [step, bits] of stateSeries(line, slot, 'input') as [number, number][]) {
-    const pressed = pressedBits(previousBits, bits)
+    const pressed = pressedBits(previousBits, bits, knownButtons(line))
 
     presses += pressed
     stunnedPresses += valueAt(hitstun, step, false) ? pressed : 0
