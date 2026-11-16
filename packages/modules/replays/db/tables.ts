@@ -115,7 +115,8 @@ export const matchPlayers = replaysSchema.table(
     timeInAirMs: integer('time_in_air_ms').notNull(),
     timeOnGroundMs: integer('time_on_ground_ms').notNull(),
     timeOnWallMs: integer('time_on_wall_ms').notNull(),
-    score: integer('score').notNull(),
+    // null for a stock match: only a timed match's stats dump has a score
+    score: integer('score'),
     weapons: jsonb<WeaponStats>('weapons').notNull(),
   },
   (table) => [primaryKey({ columns: [table.matchId, table.slot] })],

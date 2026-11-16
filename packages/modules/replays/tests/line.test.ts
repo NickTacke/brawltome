@@ -1,8 +1,18 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 import { candidateKey, type PlayedLine, parseReplayLine, UnknownFormatError } from '../line'
 import { makeLine } from './fixtures/lines'
 
 const played = (json: string) => parseReplayLine(json) as PlayedLine
+
+// real anonymised ranked lines, shared with the match-insights module's tests
+function realLine(name: 'duel-a' | 'doubles-a'): string {
+  const path = resolve(import.meta.dir, `../../match-insights/tests/fixtures/${name}.line.gz`)
+
+  return gunzipSync(readFileSync(path)).toString('utf8')
+}
 
 describe('reading a bh-native line', () => {
   test('reads the match, its players and their stats', () => {
@@ -28,6 +38,21 @@ describe('reading a bh-native line', () => {
     })
 
     expect(line.reliability).toEqual({ isReliable: true, failedChecks: [], unchecked: ['weapon', 'move'] })
+  })
+
+  test('reads real stock lines, whose stats dump has no score', () => {
+    for (const name of ['duel-a', 'doubles-a'] as const) {
+      const line = played(realLine(name))
+
+      expect(line.match.modeName).toBe('Stock')
+      expect(line.players.map((player) => player.score)).toEqual(line.players.map(() => null))
+    }
+  })
+
+  test('keeps the score of a timed match', () => {
+    const line = played(makeLine({ timed: true }))
+
+    expect(line.players.map((player) => player.score)).toEqual([38, 38])
   })
 
   test('lists the failed checks of an unreliable match', () => {

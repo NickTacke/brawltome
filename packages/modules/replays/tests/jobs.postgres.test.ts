@@ -115,6 +115,34 @@ describe.skipIf(!connectionString)('replay jobs', () => {
     expect(await uploadStatus(outcome?.uploadId ?? null)).toEqual({ status: 'done', code: null })
   })
 
+  async function storedScores(line: string): Promise<(number | null)[]> {
+    await uploadAs(await playerAccount(null), fakeReplay().bytes, true)
+
+    const claimed = await claimJob(deps, report)
+
+    const result = await completeJob(deps, {
+      jobId: claimed?.jobId as string,
+      leaseToken: claimed?.leaseToken as string,
+      line,
+    })
+
+    expect(result).toBe('completed')
+
+    const players = await database.sql<{ score: number | null }[]>`
+      SELECT score FROM replays.match_players ORDER BY slot
+    `
+
+    return players.map((player) => player.score)
+  }
+
+  test('a stock match is stored without scores, which its line has none of', async () => {
+    expect(await storedScores(makeLine())).toEqual([null, null])
+  })
+
+  test('a timed match keeps its players’ scores', async () => {
+    expect(await storedScores(makeLine({ timed: true }))).toEqual([38, 38])
+  })
+
   test('an uploader not in the match is rejected, and the file deleted when nobody owns it', async () => {
     const replay = fakeReplay()
     const outcome = await uploadAs(await playerAccount(5555), replay.bytes)

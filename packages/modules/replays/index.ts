@@ -3,6 +3,7 @@ import { createReplayProcedures } from './api/procedures'
 import { createReplays } from './migrations/0001-create-replays'
 import { addWorkerReports } from './migrations/0002-add-worker-reports'
 import { addArt } from './migrations/0003-add-art'
+import { allowNoScore } from './migrations/0004-allow-no-score'
 
 export type { ClaimedArtJob, ReplayArtJobs } from './art'
 export type { ArtMap, ArtResult } from './art-complete'
@@ -21,7 +22,7 @@ export { inspectReplayQueue, type ReplayQueueInspection } from './maintenance'
 export type { ReplaysDeps, WorkerReport } from './model'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
-const migrations = [createReplays, addWorkerReports, addArt] as const
+const migrations = [createReplays, addWorkerReports, addArt, allowNoScore] as const
 
 export const replaysModule = {
   name: 'replays' as const,
