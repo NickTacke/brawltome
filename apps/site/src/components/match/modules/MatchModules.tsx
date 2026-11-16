@@ -1,6 +1,7 @@
 import type { MatchInsights } from '@brawltome/contracts'
 import type { MatchPlayer } from '../match-players'
 import { MoveLeaders } from './MoveLeaders'
+import { MovementTable } from './MovementTable'
 import { OpeningLists } from './OpeningLists'
 import { PlayerHabits } from './PlayerHabits'
 
@@ -18,6 +19,7 @@ export function MatchModules({ insights, players, picked, onPick }: MatchModules
       <PlayerHabits matchPlayer={picked} players={players} durationMs={insights.summary.durationMs} />
       <OpeningLists moments={insights.insights.moments} slot={picked.slot} />
       <MoveLeaders players={players} selectedSlot={picked.slot} onPick={onPick} />
+      <MovementTable players={players} selectedSlot={picked.slot} onSelect={onPick} />
     </>
   )
 }
