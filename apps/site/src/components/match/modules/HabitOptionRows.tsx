@@ -1,7 +1,8 @@
 import type { Habit } from '@brawltome/contracts'
 import { statLabel } from '../../player/player-styles'
-import { formatDamage, formatShare } from '../match-format'
+import { formatShare } from '../match-format'
 import { accentOf } from './habit-text'
+import { optionDamages } from './option-damage'
 
 // narrower on a phone, where the panel is as wide as the screen
 const optionColumns =
@@ -12,6 +13,7 @@ export function HabitOptionRows({ habit }: { habit: Habit }) {
   const used = habit.options.filter((option) => option.count > 0).sort((left, right) => right.count - left.count)
   const accent = accentOf(habit)
   const isSeconds = habit.unit === 'seconds'
+  const damages = optionDamages(habit)
 
   return (
     <div className="min-w-0">
@@ -32,7 +34,7 @@ export function HabitOptionRows({ habit }: { habit: Habit }) {
             {formatShare(option.count / habit.total)}
           </span>
           <span className="text-right font-mono text-soft">{option.punished}</span>
-          <span className="text-right font-mono text-soft">{formatDamage(option.costDamage)}</span>
+          <span className="text-right font-mono text-soft">{damages.get(option.key)}</span>
         </div>
       ))}
     </div>

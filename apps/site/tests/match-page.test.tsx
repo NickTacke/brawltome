@@ -268,6 +268,13 @@ function detailTextsOf(insights: MatchInsights, habit: Habit, slot: number): str
     .filter((text) => text !== '')
 }
 
+// the header's damage, from `16 of 29 · 3 punished · 58 damage taken after`
+function headerDamage(texts: string[]): number {
+  const note = texts.find((text) => text.endsWith('damage taken after')) ?? ''
+
+  return Number(/· (\d+) damage taken after$/.exec(note)?.[1])
+}
+
 function shownRowsOf(texts: string[], habit: Habit) {
   const used = habit.options.filter((option) => option.count > 0)
 
@@ -303,4 +310,35 @@ describe.each(fixtures)('an opened habit of %s', (name) => {
       }
     }
   })
+
+  test('adds its options’ damage up to the damage in its header', () => {
+    for (const { slot, habit } of habits) {
+      const texts = detailTextsOf(insights, habit, slot)
+      const shown = shownRowsOf(texts, habit).map(({ option, row }) => ({ key: option.key, damage: Number(row[4]) }))
+      // a habit counted in seconds puts the top option's damage in its header, a habit counted in times all of it
+      const counted = habit.unit === 'seconds' ? shown.filter((entry) => entry.key === habit.top?.key) : shown
+      const total = counted.reduce((sum, entry) => sum + entry.damage, 0)
+
+      expect({ habit: `${slot} ${habit.key}`, total }).toEqual({
+        habit: `${slot} ${habit.key}`,
+        total: headerDamage(texts),
+      })
+    }
+  })
+})
+
+test('the dodge direction of duel-a’s second player adds up to its 58, where rounding each row alone gives 59', () => {
+  const insights = readInsights('duel-a')
+
+  const habit = insights.insights.players
+    .find((player) => player.slot === 2)
+    ?.habits.find((entry) => entry.key === 'dodge-direction') as Habit
+
+  const texts = detailTextsOf(insights, habit, 2)
+  const shown = shownRowsOf(texts, habit).map(({ row }) => Number(row[4]))
+  const roundedAlone = habit.options.reduce((sum, option) => sum + Math.round(option.costDamage), 0)
+
+  expect(roundedAlone).toBe(59)
+  expect(headerDamage(texts)).toBe(58)
+  expect(shown.reduce((sum, damage) => sum + damage, 0)).toBe(58)
 })
