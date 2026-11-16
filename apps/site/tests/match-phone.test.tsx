@@ -15,6 +15,7 @@ import { PlayerPick } from '../src/components/match/PlayerPick'
 import { lanePlayersOf } from '../src/components/match/review/lane-players'
 import { MatchTimeline } from '../src/components/match/review/MatchTimeline'
 import { ReviewCardSlot } from '../src/components/match/review/ReviewCardSlot'
+import { TimelineScrubber } from '../src/components/match/review/TimelineScrubber'
 import { SpeedButton, TransportColumn } from '../src/components/match/stage/ReviewControls'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
 import { phoneQuery } from '../src/components/match/use-phone-layout'
@@ -301,13 +302,97 @@ describe('under a finger', () => {
     return plot
   }
 
-  async function touch(target: Element, type: string, buttons: number) {
-    const event = new PointerEvent(type, { bubbles: true, pointerType: 'touch', clientX: 150, clientY: 20, buttons })
+  type Press = { buttons: number; x?: number; y?: number; pointerType?: string }
+
+  async function press(target: Element, type: string, { buttons, x = 150, y = 20, pointerType = 'touch' }: Press) {
+    const event = new PointerEvent(type, { bubbles: true, pointerType, clientX: x, clientY: y, buttons })
 
     await act(async () => {
       target.dispatchEvent(event)
     })
   }
+
+  async function touch(target: Element, type: string, buttons: number) {
+    await press(target, type, { buttons })
+  }
+
+  // a scrubber 300 px wide over a match of 100 s, which writes down every time it seeks
+  async function mountScrubber(seeks: number[]): Promise<Element> {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    const seek = (timeMs: number) => seeks.push(timeMs)
+
+    await act(async () =>
+      root.render(<TimelineScrubber label="Match time" timeMs={0} durationMs={100_000} onSeek={seek} />),
+    )
+
+    const slider = container.querySelector('[role="slider"]')
+
+    if (!slider) throw new Error('the scrubber has no slider')
+
+    slider.getBoundingClientRect = () =>
+      ({ left: 0, right: 300, top: 0, bottom: 60, width: 300, height: 60 }) as DOMRect
+
+    slider.setPointerCapture = ignore
+
+    return slider
+  }
+
+  async function unmount() {
+    await act(async () => root.unmount())
+    container.remove()
+  }
+
+  test('a thumb that starts to scroll the page over a scrubber leaves the clock where it is', async () => {
+    const seeks: number[] = []
+    const slider = await mountScrubber(seeks)
+
+    expect(slider.className).toContain('touch-pan-y')
+
+    await press(slider, 'pointerdown', { buttons: 1, x: 150, y: 20 })
+    // mostly down the page, before the browser takes the gesture over as a scroll and cancels it
+    await press(slider, 'pointermove', { buttons: 1, x: 152, y: 34 })
+    await press(slider, 'pointercancel', { buttons: 0, x: 152, y: 34 })
+
+    expect(seeks).toEqual([])
+
+    await unmount()
+  })
+
+  test('a finger seeks once it moves along a scrubber, and where it taps', async () => {
+    const seeks: number[] = []
+    const slider = await mountScrubber(seeks)
+
+    await press(slider, 'pointerdown', { buttons: 1, x: 150, y: 20 })
+
+    expect(seeks).toEqual([])
+
+    await press(slider, 'pointermove', { buttons: 1, x: 180, y: 22 })
+    await press(slider, 'pointerup', { buttons: 0, x: 180, y: 22 })
+
+    expect(seeks.at(0)).toBe(60_000)
+    expect(seeks.at(-1)).toBe(60_000)
+
+    await press(slider, 'pointerdown', { buttons: 1, x: 90, y: 20 })
+    await press(slider, 'pointerup', { buttons: 0, x: 90, y: 20 })
+
+    expect(seeks.at(-1)).toBe(30_000)
+
+    await unmount()
+  })
+
+  test('a mouse seeks as soon as it presses a scrubber', async () => {
+    const seeks: number[] = []
+    const slider = await mountScrubber(seeks)
+
+    await press(slider, 'pointerdown', { buttons: 1, x: 150, y: 20, pointerType: 'mouse' })
+
+    expect(seeks).toEqual([50_000])
+
+    await unmount()
+  })
 
   // where an opened kind's detail lies among the two lists, as the dom orders them
   function detailAfter(): string | undefined {
