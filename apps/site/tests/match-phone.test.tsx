@@ -6,7 +6,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
 import { matchPlayersOf } from '../src/components/match/match-players'
+import { HabitOptionRows } from '../src/components/match/modules/HabitOptionRows'
 import { PlayerMoves } from '../src/components/match/modules/PlayerMoves'
+import type { NumberRow } from '../src/components/match/number-rows'
 import { PlayerNumbers } from '../src/components/match/PlayerNumbers'
 import { PlayerPick } from '../src/components/match/PlayerPick'
 import { lanePlayersOf } from '../src/components/match/review/lane-players'
@@ -171,6 +173,37 @@ describe('the match page on a phone', () => {
   })
 })
 
+describe('long names on a phone', () => {
+  // the name's own cell, with the classes that let it wrap instead of cutting it short
+  const wraps = ['phone:whitespace-normal', 'phone:leading-tight']
+
+  test('a row of the players’ numbers wraps its name', () => {
+    const insights = readInsights('doubles-b')
+    const rows = [{ label: 'Damage per opening', value: () => '19.8' }] as unknown as NumberRow[]
+
+    const markup = renderToStaticMarkup(
+      <PlayerNumbers rows={rows} players={matchPlayersOf(insights)} selectedSlot={1} onSelect={ignore} />,
+    )
+
+    const label = tagsWith(markup, 'class="[^"]*truncate').find((tag) => classOf(tag).includes('border-t'))
+
+    expect(classOf(label ?? '')).toEqual(expect.arrayContaining(wraps))
+  })
+
+  test('an option of a habit wraps its name', () => {
+    const habit = readInsights('doubles-b').insights.players[0]?.habits.find((entry) => entry.unit === 'seconds')
+
+    if (!habit) throw new Error('doubles-b has no habit counted in seconds')
+
+    const markup = renderToStaticMarkup(<HabitOptionRows habit={habit} />)
+    const names = tagsWith(markup, 'class="[^"]*truncate')
+
+    expect(names.length).toBeGreaterThan(0)
+
+    for (const name of names) expect(classOf(name)).toEqual(expect.arrayContaining(wraps))
+  })
+})
+
 describe('tap targets on a phone', () => {
   // 44 px, as the guidelines for touch ask
   const fingerSized = ['phone:size-11', 'phone:min-h-11', 'min-h-11']
@@ -223,7 +256,7 @@ describe('tap targets on a phone', () => {
   })
 })
 
-describe('the timeline readout under a finger', () => {
+describe('under a finger', () => {
   let root: Root
   let container: HTMLElement
 

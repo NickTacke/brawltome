@@ -25,8 +25,11 @@ export function HabitOptionRows({ habit }: { habit: Habit }) {
         <span className="text-right">Damage</span>
       </div>
       {used.map((option) => (
-        <div key={option.key} className={`${optionColumns} h-7 items-center border-t border-line/30 text-sm`}>
-          <span className={`truncate font-semibold ${option.key === habit.top?.key ? accent.text : 'text-text'}`}>
+        // on a phone a long option wraps and its row grows, as five columns leave its name little room
+        <div key={option.key} className={`${optionColumns} min-h-7 items-center border-t border-line/30 text-sm`}>
+          <span
+            className={`truncate font-semibold phone:py-1 phone:leading-tight phone:whitespace-normal ${option.key === habit.top?.key ? accent.text : 'text-text'}`}
+          >
             {option.label}
           </span>
           <span className="text-right font-mono text-soft">{option.count}</span>
