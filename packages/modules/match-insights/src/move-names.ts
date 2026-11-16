@@ -19,6 +19,8 @@ const counterLabels: Record<string, string> = {
 // first match wins, so the longer prefixes come first
 const moveShapes: [RegExp, string][] = [
   [/^SmashNeutral/, 'Neutral sig'],
+  // a neutral sig some legends throw upwards; the game counts it as one
+  [/^SmashUp/, 'Neutral sig'],
   [/^SmashSide/, 'Side sig'],
   [/^SmashDown/, 'Down sig'],
   [/^AirUpHeavy/, 'Recovery'],
@@ -55,4 +57,22 @@ export function moveLabel(move: string): string {
   const shape = moveShapes.find(([pattern]) => pattern.test(rest))
 
   return shape?.[1] ?? (rest || move)
+}
+
+const lightKeys: Record<string, string> = { Neutral: 'nLight', Side: 'sLight', Down: 'dLight' }
+
+/**
+ * The counter key a move named by moveLabel is counted under, or null for one the game doesn't count, like a clash. A
+ * greatsword string counts as the light attack of its own direction: `Neutral bridge` is `nLight`.
+ */
+export function counterKeyOf(label: string): string | null {
+  const counted = Object.entries(counterLabels).find(([, name]) => name === label)
+
+  if (counted) return counted[0]
+
+  const [direction, part] = label.split(' ')
+
+  if (part !== 'bridge' && part !== 'ender') return null
+
+  return lightKeys[direction ?? ''] ?? null
 }

@@ -1,11 +1,22 @@
 import type { MoveRow, WeaponRow } from '@brawltome/contracts'
-import { counterLabel } from './move-names'
+import { counterKeyOf, counterLabel } from './move-names'
 import type { PlayerStats } from './player-stats'
+import type { Strike } from './strikes'
 import { isRealWeapon, weaponLabel } from './weapon-names'
 
-// the game's counters per weapon and per move, as rows: weapons most held first, moves most damage first
+// the game's counters per weapon and per move, as rows: weapons most held first, moves most damage first. the game
+// counts a multi-hit move's every hit, so the uses that landed come from the player's own strikes instead
 
-export function readMoveRows(stats: PlayerStats): MoveRow[] {
+// a throw lands when it hits; any other use when the swing hit an enemy
+function isLandedUse(strike: Strike, weapon: string, key: string): boolean {
+  if (strike.weapon !== weapon || strike.hits.length === 0) return false
+
+  if (key === 'Throw') return strike.isThrow
+
+  return !strike.isThrow && counterKeyOf(strike.move) === key
+}
+
+export function readMoveRows(stats: PlayerStats, strikes: Strike[]): MoveRow[] {
   const rows = stats.weapons.flatMap(({ weapon, moves }) =>
     moves.map(
       ([key, counters]): MoveRow => ({
@@ -13,7 +24,7 @@ export function readMoveRows(stats: PlayerStats): MoveRow[] {
         label: counterLabel(key),
         weapon,
         uses: counters.Uses,
-        hits: counters.EnemyHits,
+        usesLanded: strikes.filter((strike) => isLandedUse(strike, weapon, key)).length,
         damage: counters.EnemyDamage,
         kos: counters.EnemyKOs,
         gravityCancels: counters.GCUses,

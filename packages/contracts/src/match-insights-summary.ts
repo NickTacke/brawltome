@@ -6,15 +6,16 @@ const count = z.number().int().nonnegative()
 const slot = z.number().int().min(1)
 const timeMs = z.number().int().nonnegative()
 
-// one move of one weapon, under the game's counters. hits counts every enemy hit, so a multi-hit move can have more
-// hits than uses
+// one move of one weapon: its uses, damage and KOs are the game's counters; the uses that landed come from the
+// timeline, as the game counts a multi-hit move's every hit. accuracy over all swings is in the player's oddities
 const moveRowSchema = z
   .object({
     key: z.string(),
     label: z.string(),
     weapon: z.string(),
     uses: count,
-    hits: count,
+    // a swing that hit an enemy, or a throw that hit one
+    usesLanded: count,
     damage: z.number(),
     kos: count,
     gravityCancels: count,
@@ -42,9 +43,6 @@ const summaryPlayerSchema = z
     falls: count,
     damageDealt: z.number(),
     damageTaken: z.number(),
-    attacks: count,
-    // the moves' hits, each move's counted at most once per use
-    hits: count,
     dodges: count,
     dodgeDirections: z.record(z.string(), count),
     airShare: z.number(),

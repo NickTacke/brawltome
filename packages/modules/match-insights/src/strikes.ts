@@ -25,8 +25,15 @@ function isSwingHit(hit: HitEvent, swing: Strike | undefined): swing is Strike {
   return swing !== undefined && (hit.weapon === swing.weapon || hit.move.startsWith('Clash'))
 }
 
+// a thrown weapon names itself after its icon, so a thrown Rocket Lance hits as ThrowLance
+const thrownWeapons: Record<string, string> = { Lance: 'RocketLance' }
+
 function thrownName(hit: HitEvent): { weapon: string; move: string } {
-  if (hit.weapon.startsWith('Throw')) return { weapon: hit.weapon.slice('Throw'.length), move: 'Throw' }
+  if (hit.weapon.startsWith('Throw')) {
+    const name = hit.weapon.slice('Throw'.length)
+
+    return { weapon: thrownWeapons[name] ?? name, move: 'Throw' }
+  }
 
   return { weapon: hit.weapon, move: moveLabel(hit.move) }
 }

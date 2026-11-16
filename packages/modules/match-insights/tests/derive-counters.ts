@@ -2,9 +2,9 @@ import { eventsOf, type RawLine, statsOf } from './derive'
 
 // the game's own counters per move and weapon, read straight from a player's stats, and the events counted beside them
 
-type MoveCounters = { Uses?: number; EnemyHits?: number; EnemyDamage?: number; EnemyKOs?: number; GCUses?: number }
+type MoveCounters = { Uses?: number; EnemyDamage?: number; EnemyKOs?: number; GCUses?: number }
 
-export type CountedMove = { key: string; uses: number; hits: number; damage: number; kos: number }
+export type CountedMove = { key: string; uses: number; damage: number; kos: number }
 
 export type CountedWeapon = { weapon: string; heldMs: number; damage: number }
 
@@ -25,7 +25,6 @@ function movesOfWeapon(weapon: string, counters: Record<string, unknown>): Count
       return {
         key: `${weapon}.${key}`,
         uses,
-        hits: move.EnemyHits ?? 0,
         damage: move.EnemyDamage ?? 0,
         kos: move.EnemyKOs ?? 0,
       }

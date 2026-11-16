@@ -1,4 +1,5 @@
 import type { InsightSummary, SummaryKo, SummaryPlayer } from '@brawltome/contracts'
+import type { MatchFacts } from './facts'
 import type { LinePlayer } from './line'
 import { readMoveRows, readWeaponRows } from './moves'
 import { type MatchRecord, sideOf, statsOf, toMs } from './record'
@@ -40,9 +41,11 @@ function legendNames(player: LinePlayer): { legendKey: string; legendName: strin
   return { legendKey: name.toLowerCase(), legendName: name.charAt(0) + name.slice(1).toLowerCase() }
 }
 
-function readPlayer(record: MatchRecord, result: SideResult, player: LinePlayer): SummaryPlayer {
+function readPlayer(facts: MatchFacts, result: SideResult, player: LinePlayer): SummaryPlayer {
+  const { record } = facts
   const stats = statsOf(record, player.slot)
-  const moves = readMoveRows(stats)
+  const strikes = facts.strikes.filter((strike) => strike.attacker === player.slot)
+  const moves = readMoveRows(stats, strikes)
   const directions = dodgeDirections(record, player.slot)
   const dodges = Object.values(directions).reduce((total, count) => total + count, 0)
   const timeTotal = stats.TimeInAir + stats.TimeOnGround + stats.TimeOnWall
@@ -62,9 +65,6 @@ function readPlayer(record: MatchRecord, result: SideResult, player: LinePlayer)
     falls: stats.Deaths,
     damageDealt: stats.DamageDealt,
     damageTaken: stats.DamageTaken,
-    attacks: moves.reduce((total, move) => total + move.uses, 0),
-    // a multi-hit move counts every hit, so a use counts at most once
-    hits: moves.reduce((total, move) => total + Math.min(move.hits, move.uses), 0),
     dodges,
     dodgeDirections: directions,
     airShare: shareOf(stats.TimeInAir),
@@ -78,7 +78,8 @@ function readPlayer(record: MatchRecord, result: SideResult, player: LinePlayer)
   }
 }
 
-export function readSummary(record: MatchRecord): InsightSummary {
+export function readSummary(facts: MatchFacts): InsightSummary {
+  const { record } = facts
   const { match } = record.line
   const result = readSideResult(record)
 
@@ -88,7 +89,7 @@ export function readSummary(record: MatchRecord): InsightSummary {
     modeName: match.rules.mode.name,
     patch: record.line.patch,
     durationMs: record.durationMs,
-    players: match.players.map((player) => readPlayer(record, result, player)),
+    players: match.players.map((player) => readPlayer(facts, result, player)),
     kos: readKos(record),
   }
 }

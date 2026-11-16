@@ -26,7 +26,7 @@ export function readMatchInsights(line: unknown, layout: LevelLayout | null): Ma
 
   const record = readRecord(parsed.data)
   const facts = readFacts(record)
-  const summary = readSummary(record)
+  const summary = readSummary(facts)
   const insights = readInsights(facts, layout)
   const firstSide = summary.players[0]?.side ?? 0
   const standings = summary.players.map((player) => ({ side: player.side, stocks: stocksOf(insights, player.slot) }))

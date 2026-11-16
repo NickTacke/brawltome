@@ -3,6 +3,7 @@ import { matchInsightsSchema } from '@brawltome/contracts'
 import { enemyHits, enemyKos, eventsOf, fallsOf, msOf, sideOf, statsOf, sumDamage, winningSides } from './derive'
 import { countedGravityCancels, countedMovement, countedMoves, countedWeapons } from './derive-counters'
 import { swingsOf, thrownHits } from './derive-swings'
+import { countedUses } from './derive-uses'
 import { type Fixture, fixtures, insightOf } from './insights'
 
 function playerOf(fixture: Fixture, slot: number) {
@@ -91,16 +92,39 @@ describe.each(cases)('player numbers of $label', ({ fixture, slot }) => {
     for (const move of player.moves) {
       const expected = counted.find((entry) => entry.key === move.key)
 
-      expect({ key: move.key, uses: move.uses, hits: move.hits, damage: move.damage, kos: move.kos }).toEqual(
-        expected as (typeof counted)[number],
-      )
+      expect(move).not.toHaveProperty('hits')
+
+      expect({ key: move.key, uses: move.uses, damage: move.damage, kos: move.kos }).toEqual({
+        key: expected?.key as string,
+        uses: expected?.uses as number,
+        damage: expected?.damage as number,
+        kos: expected?.kos as number,
+      })
     }
 
     const damages = player.moves.map((move) => move.damage)
 
     expect(damages).toEqual([...damages].sort((left, right) => right - left))
-    expect(player.attacks).toBe(counted.reduce((total, move) => total + move.uses, 0))
-    expect(player.hits).toBe(counted.reduce((total, move) => total + Math.min(move.hits, move.uses), 0))
+    expect(player).not.toHaveProperty('attacks')
+    expect(player).not.toHaveProperty('hits')
+  })
+
+  // the uses counted from the events match the game's own counter for every move, which proves the events are keyed
+  // right; the uses that landed then come from the same events
+  test('every move row has the uses that landed, from the events', () => {
+    const counted = countedUses(fixture.line, slot)
+
+    for (const move of player.moves) {
+      expect(counted.get(move.key)?.uses ?? 0).toBe(move.uses)
+      expect(move.usesLanded).toBe(counted.get(move.key)?.landed ?? 0)
+      expect(move.usesLanded).toBeLessThanOrEqual(move.uses)
+    }
+
+    const swings = player.moves.filter((move) => !move.key.endsWith('.Throw'))
+    const oddities = insightOf(fixture, slot).oddities
+
+    expect(swings.reduce((total, move) => total + move.uses, 0)).toBe(oddities.swings)
+    expect(swings.reduce((total, move) => total + move.usesLanded, 0)).toBe(oddities.swingsHit)
   })
 
   test('every weapon row has the time held and damage of its counters, most held first', () => {
