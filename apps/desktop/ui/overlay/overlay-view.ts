@@ -25,7 +25,7 @@ export type TeamData =
   | { state: 'loading' }
   | {
       state: 'ready'
-      standing: { tier: string | null; rating: number; wins: number; games: number } | null
+      standing: { tier: string | null; rating: number; peakRating: number; wins: number; games: number } | null
       isRefreshing: boolean
     }
   | Failed

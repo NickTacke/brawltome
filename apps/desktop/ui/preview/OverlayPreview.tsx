@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import { type BannerSide, Overlay } from '../overlay/Overlay'
 import type { OverlayView } from '../overlay/overlay-view'
 import { overlayFixture, type StateCell, stateCells, tierCells } from './fixtures'
@@ -9,7 +9,7 @@ const OVERLAY_TOP_PX = 24
 type OverlayPreviewProps = { card: string; bannerSide: BannerSide }
 
 // ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=tiers one
-// 1v1 card per tier; &side=right puts the cards top right, mirrored like the app does there
+// 1v1 card per tier; &side=right puts the cards in the middle of the right edge, mirrored like the app does there
 export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
   if (card === 'states' || card === 'tiers') {
     return <StatesSheet cells={card === 'states' ? stateCells() : tierCells()} bannerSide={bannerSide} />
@@ -45,11 +45,14 @@ function GameFrame({ view, bannerSide }: { view: OverlayView; bannerSide: Banner
   )
 }
 
-// the app's edge margin is the same 24 px at 1080p as the top offset, scaled with the frame
-function overlayStyle(bannerSide: BannerSide, scale: number) {
+// the app's edge margin is the same 24 px at 1080p as the top offset, scaled with the frame; the right side is
+// drawn in the middle of the right edge, the app's default spot
+function overlayStyle(bannerSide: BannerSide, scale: number): CSSProperties {
   const edgePx = OVERLAY_TOP_PX * scale
 
-  return bannerSide === 'right' ? { top: edgePx, paddingRight: edgePx } : { top: edgePx }
+  if (bannerSide === 'right') return { top: '50%', transform: 'translateY(-50%)', paddingRight: edgePx }
+
+  return { top: edgePx }
 }
 
 function useWindowHeight(): number {
