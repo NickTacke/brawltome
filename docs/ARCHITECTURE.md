@@ -141,6 +141,13 @@ plain routes live in `apps/api/src/routes`. oRPC (`apps/api/src/orpc`) runs besi
 at a time: `/rpc/*` speaks the oRPC protocol, `/v1/*` is the same router as plain HTTP, and `/openapi.json` is the
 generated OpenAPI document, which lists only what `/v1` serves. tRPC stays until each module's routes have moved.
 
+The desktop app has its own routes under `/desktop/v1` (`apps/api/src/routes/desktop-v1.routes.ts`, logic in
+`apps/api/src/desktop`). They are public, answer from stored data only and never wait on Brawlhalla. Every request
+names the app version in `X-Desktop-Version`; an app older than `DESKTOP_MINIMUM_VERSION` gets `426` with
+`{ minimumVersion }`. Their schemas are in `packages/contracts/src/desktop-v1.ts` and are open on purpose: fields
+are only added, and the generated Rust types ignore fields they don't know. `/api/overlay` is the route app 0.1.4
+uses and stays as it is until that version is gone.
+
 The API's own `status` procedure lives in `apps/api/src/orpc`. Everything else comes from the modules. A module
 contributes procedures through its module object:
 

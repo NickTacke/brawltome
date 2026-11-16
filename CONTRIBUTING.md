@@ -101,6 +101,8 @@ change. Check each workflow's `paths` before assuming a change is covered.
 - Postgres data is on its own loop-mounted ext4 image (`/srv/brawltome/postgres`); host `df` does not show it.
 - Brawlhalla V0 rate-limits short bursts well below its 180/15 min budget: smooth new V0 traffic, don't just budget it.
   V0 returns 503 during maintenance; the worker pauses the source.
+- Never add `.strict()` to a `/desktop/v1` schema or an enum to one of its answers: the generated Rust types would
+  then fail on a field or value that installed apps don't know yet. Add a field instead.
 
 ## Modules
 
