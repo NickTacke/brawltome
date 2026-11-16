@@ -11,7 +11,6 @@ pub struct OverlayView {
     pub lobby_id: u64,
     pub cards: Vec<Card>,
     pub visible_ms: u64,
-    pub deferred_profile_ids: Vec<u32>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -213,8 +212,6 @@ fn view(lobby_id: u64, visible_ms: u64, card: Card) -> OverlayView {
         lobby_id,
         cards: vec![card],
         visible_ms,
-        // the session adds the clicks it holds back
-        deferred_profile_ids: Vec::new(),
     }
 }
 

@@ -66,8 +66,6 @@ pub struct Session {
     status: AppStatus,
     phase: Phase,
     last_lobby_id: u64,
-    /// profiles clicked while the game loads or plays, opened when the match is over
-    deferred_profile_ids: Vec<u32>,
 }
 
 #[derive(Debug, Default)]
@@ -353,17 +351,13 @@ impl Session {
             return Vec::new();
         }
 
-        if matches!(self.phase, Phase::Menus) {
-            return vec![Effect::OpenLinks(vec![profile_url(brawlhalla_id)])];
-        }
-
-        // a browser would take focus from the game, so it waits for the match to end
-        if self.deferred_profile_ids.contains(&brawlhalla_id) {
+        // the cards are already down, so this click raced the hide; a browser now would cost the player the match
+        if matches!(self.phase, Phase::InMatch) {
             return Vec::new();
         }
-        self.deferred_profile_ids.push(brawlhalla_id);
 
-        self.show_lobby_view()
+        // players want the profile during the loading screen, even though the browser takes focus from the game
+        vec![Effect::OpenLinks(vec![profile_url(brawlhalla_id)])]
     }
 
     fn on_overlay_paused(&mut self, is_paused: bool) -> Vec<Effect> {
@@ -388,18 +382,7 @@ impl Session {
     }
 
     fn leave_match(&mut self) -> Vec<Effect> {
-        let mut effects = self.change_phase(Phase::Menus);
-
-        if !self.deferred_profile_ids.is_empty() {
-            let links = self
-                .deferred_profile_ids
-                .drain(..)
-                .map(profile_url)
-                .collect();
-            effects.push(Effect::OpenLinks(links));
-        }
-
-        effects
+        self.change_phase(Phase::Menus)
     }
 
     fn loading_lobby(&mut self, lobby_id: u64) -> Option<&mut Lobby> {
@@ -409,13 +392,11 @@ impl Session {
         }
     }
 
-    /// shows the loading lobby's view with the clicks held back so far
-    fn show_lobby_view(&mut self) -> Vec<Effect> {
-        let Phase::Loading(lobby) = &mut self.phase else {
+    /// shows the loading lobby's view
+    fn show_lobby_view(&self) -> Vec<Effect> {
+        let Phase::Loading(lobby) = &self.phase else {
             return Vec::new();
         };
-
-        lobby.view.deferred_profile_ids = self.deferred_profile_ids.clone();
 
         vec![Effect::ShowCards(lobby.view.clone())]
     }
@@ -926,7 +907,6 @@ mod tests {
                 data: CardData::Loading,
             }],
             visible_ms: 12_000,
-            deferred_profile_ids: vec![],
         };
         let request = LobbyRequest {
             kind: LobbyKind::OneVsOne,
@@ -1368,43 +1348,30 @@ mod tests {
     }
 
     #[test]
-    fn a_click_while_loading_opens_after_the_match() {
+    fn a_click_while_loading_opens_the_profile_at_once() {
         let mut session = Session::new();
         start(&mut session, ranked_1v1(), 0);
 
-        let first_click = session.handle(clicked(SHINIGAMI), 1_000);
+        let effects = session.handle(clicked(SHINIGAMI), 1_000);
+
         assert_eq!(
-            only_shown(&first_click).deferred_profile_ids,
-            vec![SHINIGAMI]
+            effects,
+            vec![Effect::OpenLinks(vec![
+                "https://brawltome.app/player/91913839".to_string()
+            ])]
         );
-        assert_eq!(opened(&first_click), Vec::<String>::new());
-
-        let second_click = session.handle(clicked(SHINIGAMI), 1_500);
-        assert_eq!(opened(&second_click), Vec::<String>::new());
-        let deferred = session
-            .overlay_view()
-            .map(|view| view.deferred_profile_ids.clone());
-        assert_eq!(deferred, Some(vec![SHINIGAMI]));
-
-        let ended = session.handle(detection(Event::MatchEnded), 200_000);
-        assert_eq!(
-            opened(&ended),
-            vec!["https://brawltome.app/player/91913839".to_string()]
-        );
-
-        let ended_again = session.handle(detection(Event::MatchEnded), 200_500);
-        assert_eq!(opened(&ended_again), Vec::<String>::new());
+        assert!(session.overlay_view().is_some());
     }
 
     #[test]
-    fn a_click_waits_through_a_closed_game_too() {
+    fn the_end_of_a_match_opens_nothing() {
         let mut session = Session::new();
         start(&mut session, ranked_1v1(), 0);
         session.handle(clicked(SHINIGAMI), 1_000);
 
-        let closed = session.handle(detection(Event::GameClosed), 5_000);
+        let ended = session.handle(detection(Event::MatchEnded), 200_000);
 
-        assert_eq!(opened(&closed), vec![profile_url(SHINIGAMI)]);
+        assert_eq!(opened(&ended), Vec::<String>::new());
     }
 
     #[test]
@@ -1650,7 +1617,7 @@ mod tests {
     }
 
     #[test]
-    fn a_click_during_the_match_waits_and_draws_nothing() {
+    fn a_click_that_lands_after_the_cards_hid_does_nothing() {
         let mut session = Session::new();
         let lobby_id = start(&mut session, ranked_1v1(), 0);
         session.handle(fired(lobby_id, Timer::HideCards), 12_000);
@@ -1660,7 +1627,7 @@ mod tests {
         assert_eq!(session.overlay_view(), None);
 
         let ended = session.handle(detection(Event::MatchEnded), 200_000);
-        assert_eq!(opened(&ended), vec![profile_url(SHINIGAMI)]);
+        assert_eq!(opened(&ended), Vec::<String>::new());
     }
 
     #[test]
