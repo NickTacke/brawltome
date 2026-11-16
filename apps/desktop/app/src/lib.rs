@@ -6,6 +6,7 @@ mod detection_bridge;
 pub mod legacy_detection;
 mod log_prune;
 pub mod overlay;
+pub mod overlay_window;
 pub mod tray;
 pub mod updater_artifact;
 
