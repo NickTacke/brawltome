@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, releaseArtJob } from '../art'
+import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, readArtFile, releaseArtJob } from '../art'
 import { completeArtJob } from '../art-complete'
 import { queueArtJob, queueWarmJob } from '../art-queue'
 import { storeArtFile } from '../art-upload'
@@ -433,6 +433,31 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)).toEqual({ status: 'lease-lost' })
     expect(deps.artStore.keys()).toEqual([])
+  })
+
+  test('a stored art group or map file can be read back, a sheet cannot', async () => {
+    await exportArt(await claimedMatchJob())
+
+    const claimed = await claimedMatchJob()
+    const art = fakeArtExport()
+    const [groupPath, groupBytes] = [...art.files][0] as [string, Uint8Array]
+    const sheetPath = art.manifest.sheetOrder[0] as string
+    const read = (path: string) => readArtFile(deps, claimed.jobId, claimed.leaseToken, path)
+
+    expect(await read(groupPath)).toEqual({ status: 'found', bytes: groupBytes })
+    expect(await read(art.mapPath)).toEqual({ status: 'found', bytes: art.files.get(art.mapPath) as Uint8Array })
+    expect(await read(sheetPath)).toMatchObject({ status: 'refused' })
+    expect(await read(`art/${'f'.repeat(32)}.json`)).toEqual({ status: 'not-found' })
+  })
+
+  test('a read from an attempt that lost its lease is refused', async () => {
+    const claimed = await claimedMatchJob()
+
+    await releaseArtJob(deps, claimed.jobId, claimed.leaseToken)
+
+    const read = await readArtFile(deps, claimed.jobId, claimed.leaseToken, fakeArtExport().mapPath)
+
+    expect(read).toEqual({ status: 'lease-lost' })
   })
 
   // two stored matches, each with its art job claimed by its own attempt

@@ -66,7 +66,8 @@ const matchPlayerSchema = matchPlayerSummarySchema
     timeInAirMs: z.number().int(),
     timeOnGroundMs: z.number().int(),
     timeOnWallMs: z.number().int(),
-    score: z.number().int(),
+    // null for a stock match, which the game doesn't score
+    score: z.number().int().nullable(),
     weapons: z.record(z.string(), z.record(z.string(), z.number())),
   })
   .strict()

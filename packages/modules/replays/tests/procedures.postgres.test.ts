@@ -189,6 +189,7 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     expect(match).toMatchObject({ id: matchId, mapName: 'Big Crystal Temple', isReliable: true })
     expect(match.players.map((player) => player.brawlhallaId)).toEqual([brawlhallaIds, 1002])
+    expect(match.players.map((player) => player.score)).toEqual([null, null])
     expect(match.replay).toEqual({ available: true, patch: '11.00', fileName: '[11.00] BigCrystalTemple.replay' })
 
     const listed = await call(procedures.playerMatches, { brawlhallaId: 1002 }, visitor())
