@@ -242,13 +242,19 @@ export class ProcessPool {
     slot.isRestarting = false
   }
 
-  // whether a process started; one that starts after the limit stopped its slot is closed again at once
+  // whether a process started and took the slot. one that starts after the limit stopped the slot is closed again at
+  // once, and the loop above starts another should the limit lift meanwhile
   private async startIn(slot: Slot): Promise<boolean> {
     try {
       const process = await BhnativeProcess.start(this.config.command, slot.gameFolder)
 
-      if (slot.isParked) process.close()
-      else this.watch(slot, process)
+      if (slot.isParked) {
+        process.close()
+
+        return false
+      }
+
+      this.watch(slot, process)
 
       return true
     } catch (error) {
