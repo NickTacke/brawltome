@@ -89,6 +89,7 @@ export {
   type LeaderboardRankedObservation,
   type LeaderboardRankedStanding,
   type LeaderboardTeamObservation,
+  type LeaderboardTeamStanding,
   type PostgresLeaderboardRanked,
 } from './leaderboard-ranked'
 export {
