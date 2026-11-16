@@ -121,7 +121,6 @@ describe('observability deployment contract', () => {
             source?: string
             target?: string
             read_only?: boolean
-            bind?: { create_host_path?: boolean }
           }>
         }
       >
@@ -185,21 +184,24 @@ describe('observability deployment contract', () => {
       '--collector.textfile.directory=/textfile',
     ])
 
-    expect(nodeExporter?.volumes).toContainEqual({
-      type: 'bind',
-      source: '/srv/brawltome/postgres',
-      target: '/storage/postgres',
-      read_only: true,
-      bind: { create_host_path: true },
-    })
+    expect(nodeExporter?.volumes).toContainEqual(
+      // newer compose leaves out the bind defaults, so only the mount itself is checked
+      expect.objectContaining({
+        type: 'bind',
+        source: '/srv/brawltome/postgres',
+        target: '/storage/postgres',
+        read_only: true,
+      }),
+    )
 
-    expect(nodeExporter?.volumes).toContainEqual({
-      type: 'bind',
-      source: '/srv/brawltome-observability/backup-integrity',
-      target: '/textfile',
-      read_only: true,
-      bind: { create_host_path: true },
-    })
+    expect(nodeExporter?.volumes).toContainEqual(
+      expect.objectContaining({
+        type: 'bind',
+        source: '/srv/brawltome-observability/backup-integrity',
+        target: '/textfile',
+        read_only: true,
+      }),
+    )
   }, 20_000)
 
   test('fixes retention and requires explicit quota-backed mounts', () => {
