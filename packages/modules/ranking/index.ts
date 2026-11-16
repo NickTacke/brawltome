@@ -19,6 +19,7 @@ export { enrichLeaderboardEntries } from './api/enrich-leaderboard-entries'
 export { readNamedLeaderboard } from './api/read-named-leaderboard'
 export { readNamedRecentActivity } from './api/read-named-recent-activity'
 export { readAppliedLeaderboardEffects } from './db/leaderboard-effects'
+export { type PlayerBoardRanks, readPlayerBoardRanks } from './db/player-board-ranks'
 export { createLeaderboardDeepCrawlProgress } from './jobs/deep-crawl-progress'
 export {
   createLeaderboardCollectionJob,
