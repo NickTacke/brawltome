@@ -290,6 +290,22 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect((await claimArtJob(deps, report))?.matchId).toBe(matchId)
   })
 
+  test('a worker rolled back to an older format exports each match once', async () => {
+    const matchId = await parsedMatch()
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    // format 4 is reported once while the job runs, then the worker goes back to 3
+    await noteWorkerReport(deps, { ...report, artFormat: 4 })
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    expect(await exportArt(first)).toBe('completed')
+    expect((await artOf(matchId))?.state).toBe('queued')
+
+    expect(await exportArt((await claimArtJob(deps, report)) as ClaimedArtJob)).toBe('completed')
+    expect(await artOf(matchId)).toMatchObject({ state: 'ready', format: 3 })
+    expect(await claimArtJob(deps, report)).toBeNull()
+  })
+
   test('an export in the newest format reported stays ready', async () => {
     const matchId = await parsedMatch()
 

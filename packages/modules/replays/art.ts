@@ -78,7 +78,7 @@ async function takeNextArtJob(sql: Sql): Promise<(LiveArtJob & { leaseToken: str
     UPDATE replays.art_jobs AS job SET status = 'processing', attempts = job.attempts + 1,
       lease_token = gen_random_uuid(), lease_expires_at = clock_timestamp() + ${LEASE_SECONDS} * interval '1 second',
       timeline_key = (SELECT timeline_key FROM replays.matches WHERE id = job.match_id),
-      updated_at = clock_timestamp()
+      claimed_at = clock_timestamp(), updated_at = clock_timestamp()
     FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.kind, job.match_id AS "matchId", job.patch, job.attempts, job.timeline_key AS "timelineKey",
       job.lease_token AS "leaseToken"

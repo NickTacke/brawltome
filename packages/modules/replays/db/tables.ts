@@ -156,6 +156,7 @@ export const artJobs = replaysSchema.table('art_jobs', {
   leaseToken: uuid('lease_token'),
   leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
   timelineKey: varchar('timeline_key', { length: 200 }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
   failure: jsonb<ArtFailure>('failure'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),

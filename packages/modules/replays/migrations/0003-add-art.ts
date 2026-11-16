@@ -23,6 +23,8 @@ CREATE TABLE replays.art_jobs (
   lease_expires_at timestamptz,
   -- the line the worker was handed, so art for a line a re-parse has since replaced is refused
   timeline_key varchar(200),
+  -- when the running attempt was claimed, so only a format first reported after it makes its art outdated
+  claimed_at timestamptz,
   failure jsonb,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -68,7 +70,7 @@ CREATE TABLE replays.art_formats (
 export const addArt = {
   identity: 'replays/0003',
   predecessor: 'replays/0002',
-  checksum: '986f0da0691942e748dd4adb05a520164cf64ed978ef29a46875df631977c26a',
+  checksum: '3f6b010971f7c8b17360571411f301aef496e9a83929ee8d8e22d2b1a347724b',
   requires: [],
   sql,
 } as const

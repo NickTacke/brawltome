@@ -152,10 +152,10 @@ async function storeManifest(
 }
 
 // line-replaced when a re-parse replaced the line since the check before the manifest was written. art in a format
-// older than the newest reported is kept but stays queued: the format re-queue passed this match by while its job ran
+// older than one first reported while its job ran is kept but stays queued: the format re-queue passed this match by
 async function markReady(
   transaction: TransactionSql,
-  job: { matchId: string; survivorId: string; timelineKey: string | null },
+  job: { id: string; matchId: string; survivorId: string; timelineKey: string | null },
   key: string,
   result: ArtResult,
 ): Promise<{ replacedKeys: string[]; isOutdated: boolean } | 'line-replaced'> {
@@ -172,7 +172,7 @@ async function markReady(
 
   if (exported?.timelineKey !== job.timelineKey) return 'line-replaced'
 
-  const isOutdated = await isOlderThanNewestFormat(transaction, result.artFormat)
+  const isOutdated = await isOutdatedWhileRunning(transaction, job.id, result.artFormat)
   const state = isOutdated ? 'queued' : 'ready'
 
   await saveMaps(transaction, result)
@@ -190,14 +190,17 @@ async function markReady(
   return { replacedKeys: [...new Set(replacedKeys)], isOutdated }
 }
 
-async function isOlderThanNewestFormat(transaction: TransactionSql, format: number): Promise<boolean> {
-  const [newest] = await transaction<{ format: number | null }[]>`SELECT max(format) AS format FROM replays.art_formats`
+// only a newer format first reported after the claim counts: one reported before it is a format the worker no longer
+// runs (a rollback), and comparing with it would export the match again forever
+async function isOutdatedWhileRunning(transaction: TransactionSql, jobId: string, format: number): Promise<boolean> {
+  const [outdated] = await transaction<{ isOutdated: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM replays.art_formats AS newer, replays.art_jobs AS job
+      WHERE job.id = ${jobId} AND newer.format > ${format} AND newer.first_seen_at > job.claimed_at
+    ) AS "isOutdated"
+  `
 
-  const newestFormat = newest?.format ?? null
-
-  if (newestFormat === null) return false
-
-  return format < newestFormat
+  return outdated?.isOutdated ?? false
 }
 
 async function lineOf(sql: Sql, matchId: string): Promise<MatchLine | null> {
