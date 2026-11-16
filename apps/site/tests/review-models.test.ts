@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+import type { MatchInsights, ReviewStop } from '@brawltome/contracts'
+import { placeCard } from '../src/components/match/review/callout-place'
 import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
+import { transportCornerPx } from '../src/components/match/stage/StageControls'
 import { tagHeightPx, tagLifts, tagWidthPx } from '../src/components/match/stage/tag-stack'
 import { advanceClockMs } from '../src/components/match/stage/use-playback'
-import { readInsights, readPlayback } from './match-fixtures'
+import { type InsightsFixture, readInsights, readPlayback } from './match-fixtures'
 
 // a player standing at a spot of the frame, in shares
 function poseAt(slot: number, x: number, y: number): Pose {
@@ -131,5 +134,90 @@ describe('the readout over the lanes', () => {
     expect(timeMs).toBe(102_368)
     expect(damageText(playerB?.stocks ?? [], timeMs)).toBe('11')
     expect(damageText(playerB?.stocks ?? [], 102_064 - 1)).toBe('3')
+  })
+})
+
+type Size = { width: number; height: number }
+
+// every player where the insights' position tracks have them at a time; out of play where a track has no sample near it
+function trackedPoses(insights: MatchInsights, timeMs: number): Pose[] {
+  const { marks, sampleMs } = insights.insights.stage
+
+  return marks.tracks.flatMap((track) => {
+    const spot = track.spots.findLast(([atMs]) => atMs <= timeMs)
+
+    if (!spot) return []
+
+    const pose = poseAt(track.slot, spot[1], spot[2])
+
+    return [{ ...pose, isInPlay: timeMs - spot[0] <= sampleMs * 4 }]
+  })
+}
+
+// the stage at the widths a desktop page gives it, the cards as tall as their longest stop, and the lanes' band as
+// high as the panel of lanes with its gap: two lanes in a duel, four with a gap between the teams in doubles
+const stageWidthsPx = [640, 780, 1040, 1300]
+const uprightCard: Size = { width: 288, height: 196 }
+const wideCard = (stage: Size): Size => ({ width: Math.min(480, stage.width - 16), height: 84 })
+
+const corners = (stage: Size) => [
+  { left: stage.width - 48, top: 0, right: stage.width, bottom: 48 },
+  { left: 0, top: stage.height - transportCornerPx.height, right: transportCornerPx.width, bottom: stage.height },
+  { left: 0, top: 0, right: 240, bottom: 30 },
+]
+
+function isInside(place: { x: number; y: number }, card: Size, stage: Size): boolean {
+  return place.x >= 0 && place.y >= 0 && place.x + card.width <= stage.width && place.y + card.height <= stage.height
+}
+
+type Edge = 'top' | 'bottom'
+type Check = { key: string; width: number; edge: Edge; isInside: boolean; isOffLanes: boolean; isClear: boolean }
+
+// the card a review stop gets, as the page picks it: upright where it has a place clear of the stop's players, wide
+// where it hasn't
+function checkStop(insights: MatchInsights, stop: ReviewStop, stage: Size, edge: Edge): Check {
+  const moment = insights.insights.moments.find((entry) => entry.key === stop.momentKey)
+  const poses = trackedPoses(insights, stop.timeMs)
+  const players = { victim: moment?.victim ?? null, attacker: moment?.attacker ?? null }
+  const bandPx = insights.summary.players.length > 2 ? 130 : 74
+  const space = (card: Size) => ({ card, stage, panel: { edge, bandPx }, obstacles: corners(stage) })
+  const upright = placeCard(poses, space(uprightCard), players)
+  const card = upright.isOnStopPlayers ? wideCard(stage) : uprightCard
+  const place = upright.isOnStopPlayers ? placeCard(poses, space(card), players) : upright
+  const isOffLanes = edge === 'top' ? place.y >= bandPx : place.y + card.height <= stage.height - bandPx
+
+  return {
+    key: stop.momentKey,
+    width: stage.width,
+    edge,
+    isInside: isInside(place, card, stage),
+    isOffLanes,
+    isClear: !place.isOnStopPlayers,
+  }
+}
+
+function checkEveryStop(name: InsightsFixture): Check[] {
+  const insights = readInsights(name)
+  const stages = stageWidthsPx.map((width) => ({ width, height: width / insights.insights.stage.aspect }))
+
+  return insights.reviewStops.flatMap((stop) =>
+    stages.flatMap((stage) => (['top', 'bottom'] as const).map((edge) => checkStop(insights, stop, stage, edge))),
+  )
+}
+
+describe('the card at a review stop', () => {
+  const fixtures: InsightsFixture[] = ['duel-a', 'duel-b', 'doubles-a', 'doubles-b']
+
+  test.each(fixtures)('in %s it lies inside the stage and off the lanes at every stop', (name) => {
+    const misplaced = checkEveryStop(name).filter((check) => !check.isInside || !check.isOffLanes)
+
+    expect(misplaced).toEqual([])
+  })
+
+  // on the narrowest stage a few stops leave even the wide card no room clear of both players
+  test.each(fixtures)('in %s it leaves the stop’s players clear on a laptop’s stage and wider', (name) => {
+    const covering = checkEveryStop(name).filter((check) => check.width >= 780 && !check.isClear)
+
+    expect(covering).toEqual([])
   })
 })
