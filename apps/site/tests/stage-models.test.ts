@@ -21,6 +21,7 @@ type Art = MatchDetailContract['art']
 const box: StageBox = { minX: -1000, minY: -500, width: 4000, height: 2250 }
 const manifestUrl = 'https://art.test/manifests/match.json'
 const baseUrl = 'https://art.test/'
+const playbackPath = '/match/6f9a7f4e-3c1d-4b2a-9e8f-1a2b3c4d5e6f/playback/main-1/1'
 
 function art(state: Art['state'], hasManifest: boolean): Art {
   return hasManifest ? { state, manifestUrl, baseUrl } : { state, manifestUrl: null, baseUrl: null }
@@ -169,16 +170,23 @@ describe('the legends’ state', () => {
 
   test('art shows whenever there is a manifest, whatever the export’s state', () => {
     for (const state of ['none', 'queued', 'ready', 'failed'] as const) {
-      expect(initialLegends(art(state, true)).state).toBe('loading')
+      expect(initialLegends(art(state, true), playbackPath).state).toBe('loading')
       expect(legendsStateOf(art(state, true), loaded(replay), loaded(timeline))).toBe('ready')
     }
   })
 
   test('without a manifest, failed or missing art is unavailable and queued art is on its way', () => {
-    expect(initialLegends(art('failed', false)).state).toBe('unavailable')
-    expect(initialLegends(art('none', false)).state).toBe('unavailable')
-    expect(initialLegends(art('queued', false)).state).toBe('loading')
-    expect(initialLegends(art('queued', false)).isDownloading).toBe(false)
+    expect(initialLegends(art('failed', false), playbackPath).state).toBe('unavailable')
+    expect(initialLegends(art('none', false), playbackPath).state).toBe('unavailable')
+    expect(initialLegends(art('queued', false), playbackPath).state).toBe('loading')
+    expect(initialLegends(art('queued', false), playbackPath).isDownloading).toBe(false)
+  })
+
+  test('a match without a timeline downloads no art, as nothing could play it', () => {
+    const legends = initialLegends(art('ready', true), null)
+
+    expect(legends.state).toBe('unavailable')
+    expect(legends.isDownloading).toBe(false)
   })
 
   test('art or a timeline that fails to load makes the legends unavailable', () => {

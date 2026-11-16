@@ -20,7 +20,7 @@ const bothInPlayMs = 20_000
 
 function renderStagePlay(art: Art): string {
   const insights = readInsights('duel-a')
-  const legends = { ...initialLegends(art), timeline: readPlaybackTimeline(readPlayback('duel-a')) }
+  const legends = { ...initialLegends(art, playbackPath), timeline: readPlaybackTimeline(readPlayback('duel-a')) }
 
   return renderToStaticMarkup(
     <StagePlay insights={insights} legends={legends} timeMs={bothInPlayMs} cameraMode="game" selectedSlot={1} />,

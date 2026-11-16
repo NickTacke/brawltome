@@ -38,9 +38,10 @@ type Load<Value> =
 const framesPerSecond = 60
 
 // a queued or failed export keeps the last good manifest, so art shows whenever there is one; without one, only a
-// match whose art is queued is still waiting for its legends
-function manifestOf(art: Art): { manifestUrl: string; baseUrl: string } | null {
-  if (!art.manifestUrl || !art.baseUrl) return null
+// match whose art is queued is still waiting for its legends. without a timeline nothing could play the art, so none
+// is downloaded
+function manifestOf(art: Art, playbackPath: string | null): { manifestUrl: string; baseUrl: string } | null {
+  if (!playbackPath || !art.manifestUrl || !art.baseUrl) return null
 
   return { manifestUrl: art.manifestUrl, baseUrl: art.baseUrl }
 }
@@ -57,9 +58,10 @@ export function legendsStateOf(art: Art, replay: Load<Replay>, timeline: Load<Ti
 }
 
 /** The legends before anything has loaded, as the server renders them. */
-export function initialLegends(art: Art): Legends {
-  const replay: Load<Replay> = manifestOf(art) ? { status: 'loading' } : { status: 'idle' }
-  const state = legendsStateOf(art, replay, { status: 'loading' })
+export function initialLegends(art: Art, playbackPath: string | null): Legends {
+  const replay: Load<Replay> = manifestOf(art, playbackPath) ? { status: 'loading' } : { status: 'idle' }
+  const timeline: Load<Timeline> = playbackPath ? { status: 'loading' } : { status: 'failed' }
+  const state = legendsStateOf(art, replay, timeline)
 
   return { replay: null, timeline: null, track: null, state, isDownloading: replay.status === 'loading' }
 }
@@ -73,8 +75,8 @@ function reportUnlessAborted(what: string, error: unknown): void {
   if (!isAbort(error)) console.error(`${what}:`, error)
 }
 
-function useReplayArt(art: Art): Load<Replay> {
-  const manifest = manifestOf(art)
+function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
+  const manifest = manifestOf(art, playbackPath)
   const manifestUrl = manifest?.manifestUrl ?? null
   const baseUrl = manifest?.baseUrl ?? null
   const [load, setLoad] = useState<Load<Replay>>(manifest ? { status: 'loading' } : { status: 'idle' })
@@ -146,7 +148,7 @@ function trackOf(replay: Replay | null, timeline: Timeline | null): CameraTrack 
 
 /** The match's legends and timeline, once the first seconds of the art can be drawn; the rest goes on loading after. */
 export function useLegends(art: Art, playbackPath: string | null): Legends {
-  const replayLoad = useReplayArt(art)
+  const replayLoad = useReplayArt(art, playbackPath)
   const timelineLoad = usePlaybackTimeline(playbackPath)
   const replay = replayLoad.status === 'loaded' ? replayLoad.value : null
   const timeline = timelineLoad.status === 'loaded' ? timelineLoad.value : null

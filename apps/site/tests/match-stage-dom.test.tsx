@@ -132,4 +132,14 @@ describe('the stage in a browser', () => {
 
     await unmount()
   })
+
+  test('a match without a timeline downloads no art', async () => {
+    loadedManifests.length = 0
+
+    await mount(<MatchStage insights={readInsights('duel-a')} art={artAt('first')} playbackPath={null} />)
+
+    expect(loadedManifests).toEqual([])
+
+    await unmount()
+  })
 })
