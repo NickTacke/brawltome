@@ -58,6 +58,8 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
 - `cameraTrack(timeline, bounds, options)` plays the game's camera over the match; `cameraAt(track, step)` is its
   rectangle at a step and `viewToCanvas(rect, width, height)` the matrix that shows it on a canvas.
   `backgroundToCanvas(image, width, height)` places the level's background, which the camera never moves.
+- `mapArtUrl(replay, mapFile, file)` is where a platform art piece's image is, by the `file` of a `layout.art` piece
+  and the map file's `artAssets`; it's null for a file the export left out, so skip that piece.
 - `bubblesAt(view, offscreenPlayersAt(timeline, step))` gives the off-screen bubbles for a view.
 
 ## Files
@@ -66,6 +68,7 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
 | --- | --- |
 | `src/format.ts` | the types of the export's files, and `FORMAT` |
 | `src/load.ts` | loads a match's manifest, art groups, packs and sheets |
+| `src/map-art.ts` | finds a map's platform art in the art store |
 | `src/draw.ts` | draws players and objects on a canvas |
 | `src/placement.ts` | finds the piece each draw of a frame shows, and where (no DOM) |
 | `src/pack.ts` | reads animation packs |

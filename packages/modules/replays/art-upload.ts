@@ -1,6 +1,8 @@
 import type { Sql } from '@brawltome/foundation'
 import { findLiveArtJob } from './art-lease'
+import { readMapFileSheets } from './art-map-file'
 import { parseArtPath, verifyArtFile } from './art-paths'
+import { unstoredArtPaths } from './art-stored'
 import type { ReplaysDeps } from './model'
 
 // the worker sends the art files the bucket lacks, one at a time. an upload first claims its path in art_files, so
@@ -37,6 +39,10 @@ export async function storeArtFile(
 
   if (job === 'not-found' || job === 'lease-lost') return { status: 'lease-lost' }
 
+  const unstored = await unstoredSheetsProblem(sql, path, bytes)
+
+  if (unstored) return { status: 'rejected', reason: unstored }
+
   const uploader = { jobId, leaseToken }
   const isClaimed = await claimPath(sql, path, bytes.byteLength, uploader)
 
@@ -52,6 +58,23 @@ export async function storeArtFile(
   const held = await heldOutcome(sql, path)
 
   return held.status === 'exists' ? held : { status: 'lease-lost' }
+}
+
+// a map file names sheets of its own, which the bucket must hold first: the worker sends a match's sheets before its
+// map file. null for any other file
+async function unstoredSheetsProblem(sql: Sql, path: string, bytes: Uint8Array): Promise<string | null> {
+  if (parseArtPath(path)?.kind !== 'map') return null
+
+  // verifyArtFile already found it a json object
+  const sheets = readMapFileSheets(JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>)
+
+  if ('reason' in sheets) return `${path}: ${sheets.reason}`
+
+  const unstored = await unstoredArtPaths(sql, sheets.paths)
+
+  if (unstored.length === 0) return null
+
+  return `${path} names sheets the art bucket lacks (${unstored.length}), such as ${unstored[0]}`
 }
 
 // a path is claimed when it's new, when this attempt claimed it before (a retried upload), or when the attempt that

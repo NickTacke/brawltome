@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { loadReplay, type Manifest } from '..'
+import { loadReplay, type Manifest, mapArtUrl } from '..'
 import { writePack } from './pack-writer.ts'
 
 const groupPath = 'art/0123456789abcdef0123456789abcdef.json'
@@ -110,4 +110,33 @@ test.each(escapingPaths)('assetUrl refuses a path into %s', async (_, path) => {
   const replay = await loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })
 
   expect(() => replay.assetUrl(path)).toThrow(`load replay file ${path}: outside the art store`)
+})
+
+const sheetPath = 'sheets/0123456789abcdef.webp'
+
+test('mapArtUrl resolves a platform art file the map file lists against baseUrl', async () => {
+  const { fetch } = stubFetch(manifestOf(3), manifestUrl, 'https://art.test/store/')
+  const replay = await loadReplay(manifestUrl, { baseUrl: 'https://art.test/store/', fetch })
+
+  const map = { artAssets: { 'BP8.MainPlat.png': sheetPath } }
+
+  expect(mapArtUrl(replay, map, 'BP8.MainPlat.png')).toBe(`https://art.test/store/${sheetPath}`)
+})
+
+test('mapArtUrl gives null for a file the map file leaves out', async () => {
+  const { fetch } = stubFetch(manifestOf(3), manifestUrl, 'https://art.test/')
+  const replay = await loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })
+
+  expect(mapArtUrl(replay, { artAssets: { 'BP8.MainPlat.png': sheetPath } }, 'BP8.Gone.png')).toBeNull()
+  expect(mapArtUrl(replay, { artAssets: {} }, 'constructor')).toBeNull()
+  expect(mapArtUrl(replay, {}, 'BP8.MainPlat.png')).toBeNull()
+})
+
+test('mapArtUrl refuses an asset path outside the art store', async () => {
+  const { fetch } = stubFetch(manifestOf(3), manifestUrl, 'https://art.test/')
+  const replay = await loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })
+
+  const map = { artAssets: { 'BP8.MainPlat.png': '../x' } }
+
+  expect(() => mapArtUrl(replay, map, 'BP8.MainPlat.png')).toThrow('load replay file ../x: outside the art store')
 })
