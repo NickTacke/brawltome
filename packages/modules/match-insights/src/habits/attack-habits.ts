@@ -20,7 +20,7 @@ const mostlyMissingShare = 0.7
 const fewestSignatures = 5
 
 function swingsOf(facts: MatchFacts, slot: number): Strike[] {
-  return facts.strikes.filter((strike) => strike.attacker === slot && !strike.isThrow)
+  return facts.strikes.filter((strike) => strike.attacker === slot && strike.kind === 'swing')
 }
 
 function whiffCost(facts: MatchFacts, strike: Strike): Cost {

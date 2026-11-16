@@ -6,7 +6,7 @@ export type Swing = { attack: RawEvent; isLanded: boolean }
 
 /** Whether a hit came from the swing itself: its own weapon, or a clash, which names none. */
 export function isFromSwing(hit: RawEvent, attack: RawEvent | undefined): boolean {
-  return attack !== undefined && (hit.weapon === attack.weapon || String(hit.move).startsWith('Clash'))
+  return attack !== undefined && (hit.weapon === attack.weapon || isClash(hit))
 }
 
 // a swing landed when an enemy took a hit from the swung weapon before the player's next swing began; a spike ball or
@@ -40,7 +40,11 @@ export function topShare(first: number, second: number): number | null {
   return total > 0 ? Math.max(first, second) / total : null
 }
 
-/** The enemy hits a player landed with something thrown rather than the swing in play. */
+export function isClash(hit: RawEvent): boolean {
+  return String(hit.move).startsWith('Clash')
+}
+
+/** The enemy hits a player landed with something thrown rather than the swing in play; a clash is never thrown. */
 export function thrownHits(line: RawLine, slot: number): RawEvent[] {
   const events = line.timeline.events
 
@@ -48,6 +52,6 @@ export function thrownHits(line: RawLine, slot: number): RawEvent[] {
     const index = events.indexOf(hit)
     const attack = events.findLast((event, at) => at < index && event.type === 'attack' && event.player === slot)
 
-    return !isFromSwing(hit, attack)
+    return !isClash(hit) && !isFromSwing(hit, attack)
   })
 }

@@ -63,7 +63,7 @@ function friendlyDamage(facts: MatchFacts, slot: number): number {
 
 export function readOddities(facts: MatchFacts, slot: number): Oddities {
   const own = facts.strikes.filter((strike) => strike.attacker === slot)
-  const swings = own.filter((strike) => !strike.isThrow)
+  const swings = own.filter((strike) => strike.kind === 'swing')
 
   return {
     chaseDodges: dodgesOf(facts.record, slot).filter(isChaseDodge).length,
@@ -72,7 +72,7 @@ export function readOddities(facts: MatchFacts, slot: number): Oddities {
     longestAirMs: longestAirMs(facts, slot),
     swings: swings.length,
     swingsHit: swings.filter((strike) => strike.hits.length > 0).length,
-    throwsHit: own.filter((strike) => strike.isThrow).length,
+    throwsHit: own.filter((strike) => strike.kind === 'throw').length,
     friendlyDamage: friendlyDamage(facts, slot),
   }
 }

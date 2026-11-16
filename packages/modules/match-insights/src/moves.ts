@@ -11,9 +11,9 @@ import { isRealWeapon, weaponLabel } from './weapon-names'
 function isLandedUse(strike: Strike, weapon: string, key: string): boolean {
   if (strike.weapon !== weapon || strike.hits.length === 0) return false
 
-  if (key === 'Throw') return strike.isThrow
+  if (key === 'Throw') return strike.kind === 'throw'
 
-  return !strike.isThrow && counterKeyOf(strike.move) === key
+  return strike.kind === 'swing' && counterKeyOf(strike.move) === key
 }
 
 export function readMoveRows(stats: PlayerStats, strikes: Strike[]): MoveRow[] {

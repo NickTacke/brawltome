@@ -27,7 +27,7 @@ function blowsOfStrike(strike: Strike): Blow[] {
       weapon: strike.weapon,
       move: strike.move,
       damage: hits.reduce((total, hit) => total + hit.damage, 0),
-      isThrow: strike.isThrow,
+      isThrow: strike.kind === 'throw',
     }
   })
 }
