@@ -23,6 +23,9 @@ export type LoadOptions = {
   fetch?: (url: string) => Promise<Response>
 }
 
+// the shape of every path the export writes into a manifest: a folder of the store and a file named by its hash
+const STORE_PATH = /^(art|sheets|anims|maps)\/[0-9a-f]+\.(json|bin|webp)$/
+
 // how many sheets load at once after loadReplay resolves
 const SHEETS_AT_ONCE = 4
 
@@ -93,8 +96,18 @@ class Store {
     this.totalBytes = Object.values(manifest.bytes).reduce((total, bytes) => total + bytes, 0)
   }
 
+  // urlOf is where a manifest path is in the art store. A path of another shape, or one that resolves outside the
+  // store, is refused: a tampered manifest mustn't make the page fetch from anywhere else
   urlOf(path: string): string {
-    return new URL(path, this.root).href
+    const outside = new Error(`load replay file ${path}: outside the art store`)
+
+    if (!STORE_PATH.test(path)) throw outside
+
+    const url = new URL(path, this.root)
+
+    if (url.origin !== this.root.origin || !url.pathname.startsWith(this.root.pathname)) throw outside
+
+    return url.href
   }
 
   // progress counts a file in, by its path, and tells onProgress

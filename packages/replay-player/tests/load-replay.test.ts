@@ -83,3 +83,31 @@ test('loadReplay keeps the folder of a baseUrl written without a trailing slash'
 
   expect(urls).toContain(`https://art.test/store/${groupPath}`)
 })
+
+const escapingPaths = [
+  ['a parent folder', '../art/0123456789abcdef0123456789abcdef.json'],
+  ['the origin root', '/art/0123456789abcdef0123456789abcdef.json'],
+  ['another host without a scheme', '//evil.example/art/0123456789abcdef0123456789abcdef.json'],
+  ['an absolute url', 'https://evil.example/art/0123456789abcdef0123456789abcdef.json'],
+  ['a data url', 'data:application/json,{}'],
+]
+
+test.each(escapingPaths)('loadReplay refuses a manifest path into %s', async (_, path) => {
+  const manifest = manifestOf(3)
+
+  manifest.players['1'].art = [path]
+  const { urls, fetch } = stubFetch(manifest, manifestUrl, 'https://art.test/')
+
+  await expect(loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })).rejects.toThrow(
+    `load replay file ${path}: outside the art store`,
+  )
+
+  expect(urls).toEqual([manifestUrl])
+})
+
+test.each(escapingPaths)('assetUrl refuses a path into %s', async (_, path) => {
+  const { fetch } = stubFetch(manifestOf(3), manifestUrl, 'https://art.test/')
+  const replay = await loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })
+
+  expect(() => replay.assetUrl(path)).toThrow(`load replay file ${path}: outside the art store`)
+})

@@ -1,4 +1,4 @@
-// The files the brawlhalla-anims export writes for a replay line, which src/draw.ts loads in the browser. Paths inside
+// The files the brawlhalla-anims export writes for a replay line, which src/load.ts loads in the browser. Paths inside
 // them are relative to the art store's root, the baseUrl loadReplay is given
 export const FORMAT = 3
 
