@@ -84,7 +84,7 @@ export const matches = replaysSchema.table('matches', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   artState: varchar('art_state', { length: 8 }).notNull().default('none'),
-  artManifestKey: varchar('art_manifest_key', { length: 120 }),
+  artManifestKey: varchar('art_manifest_key', { length: 200 }),
   artFormat: smallint('art_format'),
   artFailure: jsonb<ArtFailure>('art_failure'),
 })

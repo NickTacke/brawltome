@@ -3,7 +3,8 @@
 const sql = `ALTER TABLE replays.matches
   ADD COLUMN art_state varchar(8) NOT NULL DEFAULT 'none'
     CHECK (art_state IN ('none', 'queued', 'ready', 'failed')),
-  ADD COLUMN art_manifest_key varchar(120),
+  -- room for a 64-character build and a lease token in the key
+  ADD COLUMN art_manifest_key varchar(200),
   ADD COLUMN art_format smallint,
   ADD COLUMN art_failure jsonb,
   ADD CHECK ((art_state = 'failed') = (art_failure IS NOT NULL)),
@@ -61,7 +62,7 @@ CREATE TABLE replays.art_formats (
 export const addArt = {
   identity: 'replays/0003',
   predecessor: 'replays/0002',
-  checksum: '589207f9ca38db05557012ccf1e20e43fe406663ebbbf44355639f5df6f612a5',
+  checksum: '7bb925d114cf4898f5e246363e56cc7f0f6dccb3906d7f7d9a3474795159b6db',
   requires: [],
   sql,
 } as const

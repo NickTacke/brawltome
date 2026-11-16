@@ -60,14 +60,14 @@ describe.skipIf(!connectionString)('art jobs', () => {
   })
 
   // an operator's upload, parsed by the worker into a stored match
-  async function parsedMatch(): Promise<string> {
+  async function parsedMatch(workerReport: WorkerReport = report): Promise<string> {
     const accountId = randomUUID()
 
     await database.sql`INSERT INTO accounts.users (id) VALUES (${accountId})`
 
     const files = [new File([new Uint8Array(fakeReplay().bytes)], 'a.replay')]
     const [upload] = await uploadReplays(deps, { accountId, isOperator: true, files })
-    const claimed = await claimJob(deps, report)
+    const claimed = await claimJob(deps, workerReport)
 
     const outcome = await completeJob(deps, {
       jobId: claimed?.jobId as string,
@@ -184,6 +184,15 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await mapFiles()).toEqual([{ patch: '11.00', mapId: 136, path: art.mapPath }])
     expect((await artJobs())[0]?.status).toBe('completed')
+  })
+
+  test('a manifest key fits for the longest build a worker may report', async () => {
+    const longBuild = { ...report, build: 'b'.repeat(64) }
+    const matchId = await parsedMatch(longBuild)
+    const claimed = (await claimArtJob(deps, longBuild)) as ClaimedArtJob
+
+    expect(await exportArt(claimed)).toBe('completed')
+    expect((await artOf(matchId))?.manifestKey).toContain(longBuild.build)
   })
 
   test('only files the art bucket lacks are asked for', async () => {
