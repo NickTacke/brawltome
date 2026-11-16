@@ -9,6 +9,7 @@ pub mod lobby_client;
 mod log_prune;
 pub mod overlay;
 pub mod overlay_view;
+pub mod overlay_window;
 pub mod session;
 pub mod tray;
 pub mod updater_artifact;
