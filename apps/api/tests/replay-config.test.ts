@@ -23,9 +23,58 @@ describe('replay settings', () => {
         accessKeyId: 'key-id',
         secretAccessKey: 'secret',
       },
+      art: null,
       operatorAccountIds: [operator],
       isOpen: false,
     })
+  })
+
+  test('reads the art bucket, on the same R2 account as the replays', () => {
+    const withArt = {
+      ...complete,
+      ART_R2_BUCKET: 'brawltome-art',
+      ART_R2_ACCESS_KEY_ID: 'art-key-id',
+      ART_R2_SECRET_ACCESS_KEY: 'art-secret',
+      ART_BASE_URL: 'https://art.brawltome.app',
+    }
+
+    expect(readReplayConfig(withArt).art).toEqual({
+      storage: {
+        endpoint: complete.R2_ENDPOINT,
+        bucket: 'brawltome-art',
+        accessKeyId: 'art-key-id',
+        secretAccessKey: 'art-secret',
+      },
+      baseUrl: 'https://art.brawltome.app',
+    })
+  })
+
+  test('half an art bucket setup is refused', () => {
+    expect(() => readReplayConfig({ ...complete, ART_R2_BUCKET: 'brawltome-art' })).toThrow('ART_BASE_URL')
+  })
+
+  test('an art bucket without the replays bucket is refused', () => {
+    const artOnly = {
+      REPLAY_WORKER_TOKEN: token,
+      ART_R2_BUCKET: 'brawltome-art',
+      ART_R2_ACCESS_KEY_ID: 'art-key-id',
+      ART_R2_SECRET_ACCESS_KEY: 'art-secret',
+      ART_BASE_URL: 'https://art.brawltome.app',
+    }
+
+    expect(() => readReplayConfig(artOnly)).toThrow('R2_ENDPOINT')
+  })
+
+  test('an art base url that is not https is refused', () => {
+    const withArt = {
+      ...complete,
+      ART_R2_BUCKET: 'brawltome-art',
+      ART_R2_ACCESS_KEY_ID: 'art-key-id',
+      ART_R2_SECRET_ACCESS_KEY: 'art-secret',
+      ART_BASE_URL: 'art.brawltome.app',
+    }
+
+    expect(() => readReplayConfig(withArt)).toThrow('ART_BASE_URL')
   })
 
   test('without any R2 setting there is no storage, so replays stay off in local development', () => {

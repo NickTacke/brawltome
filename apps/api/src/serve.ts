@@ -110,6 +110,7 @@ const playerRefreshReservations = createPlayerRefreshReservations(database)
 const dailySalts = createPostgresDailySalts(database)
 const replayConfig = readReplayConfig(process.env)
 const replayFiles = replayConfig.storage ? createS3ObjectStore(replayConfig.storage) : undefined
+const artFiles = replayConfig.art ? createS3ObjectStore(replayConfig.art.storage) : null
 
 const moduleRuntime: ModuleRuntime = {
   database,
@@ -254,7 +255,7 @@ app.route('/events', createRefreshEventRoutes(refreshEvents))
 
 // the replay worker on VM 106 claims parse jobs here; without a bucket (local development) there is nothing to serve
 if (replayFiles) {
-  const replayJobs = createReplayJobs({ database, objectStore: replayFiles, accounts })
+  const replayJobs = createReplayJobs({ database, objectStore: replayFiles, artStore: artFiles, accounts })
 
   app.route('/internal/replays', createReplayWorkerRoutes({ jobs: replayJobs, token: replayConfig.workerToken }))
 }
