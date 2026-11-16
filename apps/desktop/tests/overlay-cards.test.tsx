@@ -182,6 +182,21 @@ describe('overlay cards', () => {
     expect(html).not.toContain('1v1')
   })
 
+  test('a new duo without a stored team rating shows the average personal 2v2 elo and its tier', () => {
+    const view = fixture('team')
+    const [card] = view.cards
+
+    if (card?.kind !== 'team') throw new Error('expected a team card in the fixture')
+
+    const html = render({
+      ...view,
+      cards: [{ ...card, data: { state: 'ready', standing: null, isRefreshing: false } }],
+    })
+
+    expect(textOf(partOf(html, 'team-figures'))).toBe('2133Team avg')
+    expect(partOf(html, 'banner-slot')).toContain('src="/banners/Diamond.png"')
+  })
+
   test('a team card without memory ratings falls back to 1v1 Elo, then to nothing', () => {
     const html = render(fixture('team-bare'))
 

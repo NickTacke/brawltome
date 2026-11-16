@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  baseTierFor,
   cardScale,
   failureText,
   formatCount,
   legendPortraitPath,
   shownPeak,
+  teamAverage,
   tierBannerPath,
   winRateClass,
   winRatePercent,
@@ -65,5 +67,30 @@ describe('card format', () => {
   test('a peak below the elo shows the elo, since the server has no peak yet', () => {
     expect(shownPeak(2000, 0)).toBe(2000)
     expect(shownPeak(2130, 2204)).toBe(2204)
+  })
+
+  test("a rating falls in the base tier of the site's floors", () => {
+    expect(baseTierFor(2244)).toBe('Diamond')
+    expect(baseTierFor(1999)).toBe('Platinum')
+    expect(baseTierFor(1390)).toBe('Gold')
+    expect(baseTierFor(700)).toBe('Tin')
+  })
+
+  test('a team average needs every personal 2v2 elo', () => {
+    const player = { brawlhallaId: 1, name: 'a', legend: null, oneVsOneRating: null }
+
+    expect(
+      teamAverage([
+        { ...player, personalRating2v2: 2244 },
+        { ...player, personalRating2v2: 2208 },
+      ]),
+    ).toBe(2226)
+
+    expect(
+      teamAverage([
+        { ...player, personalRating2v2: 2244 },
+        { ...player, personalRating2v2: null },
+      ]),
+    ).toBeNull()
   })
 })

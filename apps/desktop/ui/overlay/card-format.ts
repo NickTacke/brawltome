@@ -1,4 +1,4 @@
-import type { FailureReason } from './overlay-view'
+import type { FailureReason, TeamPlayer } from './overlay-view'
 
 const REFERENCE_HEIGHT_PX = 1080
 // the cards are drawn at 392 px wide; on a real screen three quarters of that is enough
@@ -74,4 +74,32 @@ export function failureText(reason: FailureReason): string {
 // css pixels already include the display scaling, so it is taken back out to size by the monitor alone
 export function cardScale(monitorHeightPx: number, devicePixelRatio: number): number {
   return (monitorHeightPx / REFERENCE_HEIGHT_PX / devicePixelRatio) * CARD_SIZE
+}
+
+// the floors the site's rating graph uses, matched to the banner art
+const tierFloors: [string, number][] = [
+  ['Diamond', 2000],
+  ['Platinum', 1680],
+  ['Gold', 1390],
+  ['Silver', 1130],
+  ['Bronze', 910],
+]
+
+// the base tier a rating falls in; subdivisions aren't known from a rating alone
+export function baseTierFor(rating: number): string {
+  const floor = tierFloors.find(([, minimum]) => rating >= minimum)
+
+  return floor?.[0] ?? 'Tin'
+}
+
+// a team without a stored rating, usually a new duo, is shown by the mean of the players' personal 2v2 elo, when
+// the game gave it for every player
+export function teamAverage(players: TeamPlayer[]): number | null {
+  const ratings = players.map((player) => player.personalRating2v2)
+
+  if (ratings.length === 0 || ratings.some((rating) => rating === null)) return null
+
+  const total = ratings.reduce<number>((sum, rating) => sum + (rating ?? 0), 0)
+
+  return Math.round(total / ratings.length)
 }

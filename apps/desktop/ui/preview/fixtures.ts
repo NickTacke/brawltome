@@ -54,6 +54,12 @@ function withTeamData(data: TeamData): OverlayView {
   return { ...view, cards: [{ ...teamCard(view), data }] }
 }
 
+function withNewDuo(view: OverlayView): OverlayView {
+  const card = teamCard(view)
+
+  return { ...view, cards: [{ ...card, data: { state: 'ready', standing: null, isRefreshing: false } }] }
+}
+
 export type StateCell = { title: string; view: OverlayView }
 
 export function stateCells(): StateCell[] {
@@ -98,6 +104,7 @@ export function stateCells(): StateCell[] {
     { title: 'Legend without art', view: withSoloPlayer('newcomer', 'Not A Legend') },
     { title: '2v2', view: team },
     { title: '2v2 without team rating', view: requireFixture('team-bare') },
+    { title: '2v2 new duo, average of personal Elo', view: withNewDuo(team) },
     { title: '2v2 loading', view: withTeamData({ state: 'loading' }) },
     {
       title: '2v2 refreshing',
