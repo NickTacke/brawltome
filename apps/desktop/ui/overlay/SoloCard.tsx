@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CardHead } from './CardHead'
+import { BannerSlot, CardHead } from './CardHead'
 import { failureText, formatCount, tierLabel, winRateClass, winRatePercent } from './card-format'
 import type { CardData, PlayerHead } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
@@ -20,10 +20,13 @@ export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCa
   if (data.state === 'failed') {
     return (
       <div className="card">
-        <button type="button" className="card-link" onClick={() => onOpenProfile(player.brawlhallaId)}>
-          <CardHead name={player.name} legend={player.legend} sub={failureText(data.reason)} tier={null} />
-        </button>
-        <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
+        <BannerSlot tier={null} />
+        <span className="main">
+          <button type="button" className="card-link" onClick={() => onOpenProfile(player.brawlhallaId)}>
+            <CardHead name={player.name} legend={player.legend} sub={failureText(data.reason)} />
+          </button>
+          <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
+        </span>
         {timer}
       </div>
     )
@@ -31,7 +34,6 @@ export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCa
 
   const isRefreshing = data.state === 'ranked' && data.isRefreshing
   const tier = data.state === 'ranked' ? data.tier : null
-  const sub = subLine(data)
 
   return (
     <button
@@ -40,9 +42,12 @@ export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCa
       onClick={() => onOpenProfile(player.brawlhallaId)}
     >
       {isRefreshing && <span className="refresh" />}
-      <CardHead name={player.name} legend={player.legend} sub={sub} tier={tier} />
-      {data.state === 'loading' && <PlaceholderFigures />}
-      {data.state === 'ranked' && <RankedFigures data={data} />}
+      <BannerSlot tier={tier} />
+      <span className="main">
+        <CardHead name={player.name} legend={player.legend} sub={subLine(data)} />
+        {data.state === 'loading' && <PlaceholderFigures />}
+        {data.state === 'ranked' && <RankedFigures data={data} />}
+      </span>
       {timer}
     </button>
   )

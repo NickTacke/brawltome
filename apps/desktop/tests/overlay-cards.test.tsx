@@ -168,6 +168,7 @@ describe('overlay cards', () => {
     expect(textOf(partOf(html, 'name'))).toBe('Shinigami')
     expect(html).toContain('src="/legends/hattori.png"')
     expect(partOf(html, 'figures')).toContain('placeholder')
+    expect(html).toContain('banner-empty')
     expect(textOf(partOf(html, 'figures'))).toBe('')
   })
 
@@ -175,7 +176,7 @@ describe('overlay cards', () => {
     const html = render(fixture('team'))
 
     expect(textOf(partOf(html, 'team-head'))).toBe('22842v2 team')
-    expect(partOf(html, 'team-head')).toContain('src="/banners/Diamond.png"')
+    expect(partOf(html, 'banner-slot')).toContain('src="/banners/Diamond.png"')
     expect(textOf(partOf(html, 'players'))).toBe('Shinigami2190tidecaller2075')
     expect(html).toContain('src="/legends/petra.png"')
     expect(html).not.toContain('1v1')

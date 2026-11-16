@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { LegendPortrait, TierBanner } from './CardHead'
+import { BannerSlot, LegendPortrait } from './CardHead'
 import { failureText } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
@@ -18,13 +18,18 @@ export function TeamCard({ data, players, timer, onOpenProfile, onRetry }: TeamC
   return (
     <div className={isRefreshing ? 'card is-refreshing' : 'card'}>
       {isRefreshing && <span className="refresh" />}
-      <TeamHead data={data} />
-      <span className="players">
-        {players.map((player) => (
-          <PlayerRow key={player.brawlhallaId} player={player} onOpenProfile={onOpenProfile} />
-        ))}
+      <BannerSlot tier={data.state === 'ready' ? (data.standing?.tier ?? null) : null} />
+      <span className="main">
+        <TeamHead data={data} />
+        <span className="players">
+          {players.map((player) => (
+            <PlayerRow key={player.brawlhallaId} player={player} onOpenProfile={onOpenProfile} />
+          ))}
+        </span>
+        {data.state === 'failed' && (
+          <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />
+        )}
       </span>
-      {data.state === 'failed' && <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />}
       {timer}
     </div>
   )
@@ -43,7 +48,6 @@ function TeamHead({ data }: { data: TeamData }) {
 
   return (
     <span className="team-head">
-      {standing !== null && <TierBanner tier={standing.tier} />}
       {data.state === 'loading' ? (
         <span className="bar wide" />
       ) : (
