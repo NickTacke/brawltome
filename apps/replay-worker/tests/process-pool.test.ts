@@ -9,6 +9,7 @@ const pools: ProcessPool[] = []
 const folders: string[] = []
 
 afterEach(async () => {
+  delete process.env.FAKE_READY_DELAY_MS
   for (const pool of pools.splice(0)) pool.close()
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
 })
@@ -30,6 +31,13 @@ function setup(patches: string[]) {
   }
 
   return { gameRoot: join(root, 'games'), replay }
+}
+
+// the fake bh-native processes running for a game root, starting ones included
+function gameProcesses(gameRoot: string): number {
+  const found = Bun.spawnSync(['pgrep', '-f', gameRoot]).stdout.toString()
+
+  return found.split('\n').filter(Boolean).length
 }
 
 // the worker waits for this before it claims again
@@ -210,5 +218,20 @@ describe('the bh-native process pool', () => {
     await pool.limitTo(1)
 
     expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00', '10.09'] })
+  })
+
+  test('a limit set while a stopped process is starting again waits for that start and stops it', async () => {
+    const { gameRoot } = setup(['11.00'])
+    const pool = await startPool(gameRoot, 2, 0)
+
+    await pool.limitTo(1)
+
+    // the restart unlimit starts takes 500 ms to be ready, and the next limit comes before that
+    process.env.FAKE_READY_DELAY_MS = '500'
+    pool.unlimit()
+    await Bun.sleep(100)
+    await pool.limitTo(1)
+
+    expect(gameProcesses(gameRoot)).toBe(1)
   })
 })

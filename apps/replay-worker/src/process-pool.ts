@@ -28,6 +28,8 @@ type Slot = {
   inFlight: number
   isParked: boolean
   isRestarting: boolean
+  // a start in progress, which settles once its process holds the slot or, started into a stopped slot, has exited
+  starting: Promise<boolean> | null
 }
 
 const IDLE_POLL_MS = 50
@@ -68,6 +70,7 @@ export class ProcessPool {
           inFlight: 0,
           isParked: false,
           isRestarting: false,
+          starting: null,
         }),
       ),
     )
@@ -211,6 +214,9 @@ export class ProcessPool {
   private async stopWhenIdle(slot: Slot): Promise<void> {
     while (slot.inFlight > 0) await Bun.sleep(IDLE_POLL_MS)
 
+    // a game still starting holds its memory too; its start sees the slot stopped and ends it
+    await slot.starting
+
     const process = slot.live
 
     // the limit may have lifted while the last replay played
@@ -234,7 +240,13 @@ export class ProcessPool {
     slot.isRestarting = true
 
     while (!this.isClosing && !slot.isParked) {
-      if (await this.startIn(slot)) break
+      slot.starting = this.startIn(slot)
+
+      const isStarted = await slot.starting
+
+      slot.starting = null
+
+      if (isStarted) break
 
       await Bun.sleep(this.config.restartDelayMs)
     }
@@ -250,6 +262,7 @@ export class ProcessPool {
 
       if (slot.isParked) {
         process.close()
+        await process.exited
 
         return false
       }
