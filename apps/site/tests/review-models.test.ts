@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { MatchInsights, ReviewStop } from '@brawltome/contracts'
+import { LEAD_DODGE_MS, LEAD_LANDING_MS, LEAD_TRADE_MS } from '@brawltome/contracts/match-insights-rules'
 import { placeCard } from '../src/components/match/review/callout-place'
+import { classRules } from '../src/components/match/review/moment-class'
 import { reviewPhaseOf } from '../src/components/match/review/review-phase'
 import { reviewChoicesOf } from '../src/components/match/review/review-stops'
 import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
@@ -286,5 +288,16 @@ describe('where a review stands', () => {
       isStopped: false,
       hasPlayedOn: false,
     })
+  })
+})
+
+describe('the rules of how an opening began', () => {
+  const seconds = (timeMs: number) => `${(timeMs / 1000).toFixed(2)} s`
+
+  test('name the windows the insights read the line with', () => {
+    expect([LEAD_TRADE_MS, LEAD_DODGE_MS, LEAD_LANDING_MS]).toEqual([160, 480, 128])
+    expect(classRules.trade).toBe(`Both players hit each other within ${seconds(LEAD_TRADE_MS)}`)
+    expect(classRules.dodge).toBe(`The player dodged at most ${seconds(LEAD_DODGE_MS)} before the first hit`)
+    expect(classRules.landing).toBe(`The player landed at most ${seconds(LEAD_LANDING_MS)} before the first hit`)
   })
 })
