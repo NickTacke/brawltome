@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 export type WorkerConfig = {
   apiUrl: string
   token: string
@@ -13,6 +16,13 @@ export type WorkerConfig = {
   // a 3-minute replay takes about 15 s to play; five minutes means the game is stuck
   replayTimeoutMs: number
   restartDelayMs: number
+  // the brawlhalla-anims export bundle: its own node, scripts/ and src/
+  animsPath: string
+  // bh-native processes left running while art exports, so the export has the memory
+  processesDuringArt: number
+  // a 2v2 render with nothing in the store takes about 95 s and warming a whole patch about 11 minutes; past fifteen
+  // minutes the export is stuck
+  exportTimeoutMs: number
 }
 
 type Env = Record<string, string | undefined>
@@ -35,7 +45,26 @@ export function readConfig(env: Env): WorkerConfig {
     renewEveryMs: 120_000,
     replayTimeoutMs: 300_000,
     restartDelayMs: 10_000,
+    animsPath: env.REPLAY_ANIMS_PATH ?? '/opt/anims/current',
+    processesDuringArt: count(env.REPLAY_PROCESSES_DURING_ART, 1, 'REPLAY_PROCESSES_DURING_ART'),
+    exportTimeoutMs: 900_000,
   }
+}
+
+/**
+ * The art format the export bundle writes, which the worker reports with each claim; null turns art off, for a
+ * worker without the bundle. Read from the bundle's source, since asking the export itself means loading the game.
+ */
+export function readArtFormat(animsPath: string): number | null {
+  if (!existsSync(join(animsPath, 'scripts', 'export.ts'))) return null
+
+  const formatPath = join(animsPath, 'src', 'format.ts')
+
+  if (!existsSync(formatPath)) return null
+
+  const format = /^export const FORMAT = (\d+);?$/m.exec(readFileSync(formatPath, 'utf8'))?.[1]
+
+  return format === undefined ? null : Number(format)
 }
 
 function count(value: string | undefined, fallback: number, name: string): number {
