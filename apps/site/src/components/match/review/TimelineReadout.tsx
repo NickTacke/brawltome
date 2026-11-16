@@ -27,7 +27,7 @@ function PlayerNow({ lane, pose, timeMs }: PlayerNowProps) {
   const icon = pose && damage !== null ? weaponIconName(pose.weapon) : null
 
   return (
-    <span className="flex items-center gap-1.5" data-player={lane.player.name}>
+    <span className="flex items-center gap-1.5 whitespace-nowrap" data-player={lane.player.name}>
       <LegendMark player={lane.player} slot={lane.player.slot} className="size-5 rounded-sm" />
       {icon ? <img src={`/images/weapons/${icon}.svg`} alt="" className="size-4" /> : null}
       <span
@@ -66,9 +66,9 @@ export function TimelineReadout({ timeMs, lanes, poses, moment, knockout }: Time
   return (
     <div
       data-timeline-readout
-      className="rounded-control border border-line bg-ink px-2.5 py-1.5 text-sm whitespace-nowrap shadow-xl"
+      className="rounded-control border border-line bg-ink px-2.5 py-1.5 text-sm whitespace-nowrap shadow-xl phone:whitespace-normal"
     >
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3.5 phone:flex-wrap phone:gap-y-1">
         <span className="font-mono text-xs text-soft tabular-nums">{formatClock(timeMs)}</span>
         {lanes.map((lane) => (
           <PlayerNow

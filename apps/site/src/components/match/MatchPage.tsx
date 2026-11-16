@@ -36,10 +36,11 @@ export function MatchPage({ match, insights }: MatchPageProps) {
     <WatchProvider>
       <div className={`pb-10 ${widePage} ${pageColumns}`}>
         <aside ref={sideRef} className={sideColumn} style={{ top: sideTopPx }}>
-          <div className={`${columnPiece} max-xl:order-1 max-xl:pt-0`}>
+          <div data-column-piece="identity" className={`${columnPiece} max-xl:order-1 max-xl:pt-0`}>
             <MatchIdentity insights={insights} mapImage={mapImage} />
           </div>
-          <div className={`${columnPiece} max-xl:order-1`}>
+          {/* on a phone the replay comes straight under the map's name, who played after it */}
+          <div data-column-piece="players" className={`${columnPiece} max-xl:order-1 phone:order-3`}>
             <Scoreboard
               players={players}
               selectedSlot={picked.slot}
@@ -47,15 +48,15 @@ export function MatchPage({ match, insights }: MatchPageProps) {
               onSelect={pick}
             />
           </div>
-          <div className={`${columnPiece} max-xl:order-3`}>
+          <div data-column-piece="neutral" className={`${columnPiece} max-xl:order-3`}>
             <NeutralByStock matchPlayer={picked} />
           </div>
         </aside>
         <div className={mainColumn}>
-          <div className={`${columnPiece} max-xl:order-2`}>
+          <div data-column-piece="replay" className={`${columnPiece} max-xl:order-2`}>
             <ReviewReplay insights={insights} legends={legends} selectedSlot={picked.slot} />
           </div>
-          <div className={`max-xl:order-4 ${modulesColumn}`}>
+          <div data-column-piece="modules" className={`max-xl:order-4 ${modulesColumn}`}>
             <MatchModules insights={insights} players={players} picked={picked} onPick={pick} />
           </div>
         </div>

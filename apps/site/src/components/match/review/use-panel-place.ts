@@ -19,7 +19,8 @@ export type PanelStudy = {
   key: string | null
   // the players to keep clear of, where the camera shows them
   players: Pose[]
-  // true when the top edge is taken by something else, as it is when the stage fills the screen
+  // true when the top edge is taken by something else, as it is when the stage fills the screen, or when the lanes
+  // lie under the stage on a phone, where the bottom keeps the timeline's readout over them, clear of the finger
   isBottomOnly: boolean
 }
 

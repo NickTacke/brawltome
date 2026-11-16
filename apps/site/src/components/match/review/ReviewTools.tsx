@@ -5,7 +5,7 @@ import type { CameraMode } from '../stage/camera-mode'
 import type { ReviewChoice } from './review-stops'
 
 const toolButton =
-  'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors'
+  'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors phone:min-h-10 phone:px-3.5'
 
 function toolButtonState(isOn: boolean): string {
   return isOn ? 'bg-raised text-strong' : 'text-soft hover:text-strong'
@@ -30,7 +30,11 @@ function ModeButton({ label, isOn, onPress }: { label: string; isOn: boolean; on
   )
 }
 
-/** Next to the replay's heading: what a review steps through, how the camera moves, and watching or reviewing. */
+/**
+ * Next to the replay's heading: what a review steps through, how the camera moves, and watching or reviewing. On a
+ * phone, watching or reviewing stays next to the heading and the two menus take a row of their own under it, so the
+ * switch doesn't move when a review adds its menu.
+ */
 export function ReviewTools(props: ReviewToolsProps) {
   const { isReview, onReview, choices } = props
 
@@ -45,13 +49,19 @@ export function ReviewTools(props: ReviewToolsProps) {
     if (choice) props.onScope(choice.key)
   }
 
+  const hasMenus = isReview || props.cameraMode !== null
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {isReview ? (
-        <FilterSelect label="Review" value={props.scope} options={scopeOptions} onChange={pickScope} />
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 phone:contents">
+      {hasMenus ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 phone:order-1 phone:w-full">
+          {isReview ? (
+            <FilterSelect label="Review" value={props.scope} options={scopeOptions} onChange={pickScope} />
+          ) : null}
+          {props.cameraMode ? <CameraSelect mode={props.cameraMode} onMode={props.onCameraMode} /> : null}
+        </div>
       ) : null}
-      {props.cameraMode ? <CameraSelect mode={props.cameraMode} onMode={props.onCameraMode} /> : null}
-      <div className="flex gap-0.5 rounded-lg bg-raised/50 p-0.5">
+      <div className="inline-flex gap-0.5 rounded-lg bg-raised/50 p-0.5">
         <ModeButton label="Watch" isOn={!isReview} onPress={() => onReview(false)} />
         <ModeButton label="Review" isOn={isReview} onPress={() => onReview(true)} />
       </div>

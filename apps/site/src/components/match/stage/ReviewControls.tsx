@@ -2,8 +2,9 @@ import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { formatClock } from '../match-format'
 import { type Playback, playbackSpeeds } from './use-playback'
 
+// a finger's size on a phone, where the buttons lie under the stage
 const barButton =
-  'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-soft transition-colors hover:bg-raised hover:text-strong disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent'
+  'flex size-7 shrink-0 phone:size-11 cursor-pointer items-center justify-center rounded-md text-soft transition-colors hover:bg-raised hover:text-strong disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent'
 
 // what the two buttons beside play do: a step in time while watching, a step to a stop in a review
 export type Stepping = {
@@ -59,7 +60,7 @@ function TransportButtons({ playback, stepping }: TransportButtonsProps) {
         onClick={playback.toggle}
         className={`${barButton} size-8 bg-raised text-strong hover:bg-line`}
       >
-        <PlayIcon className="size-4" aria-hidden="true" />
+        <PlayIcon className="size-4 phone:size-5" aria-hidden="true" />
       </button>
       <StepButton
         label={stepping.onLabel}
@@ -78,12 +79,11 @@ type ReplayClockProps = {
   hasLength: boolean
 }
 
-// on a phone's stage, the length of the match makes way for the buttons
 function ReplayClock({ playback, hasLength }: ReplayClockProps) {
   return (
     <span className="shrink-0 font-mono text-xs text-soft tabular-nums">
       <span className="text-strong">{formatClock(playback.timeMs)}</span>
-      {hasLength ? <span className="@max-[30rem]:hidden"> / {formatClock(playback.durationMs)}</span> : null}
+      {hasLength ? <span> / {formatClock(playback.durationMs)}</span> : null}
     </span>
   )
 }
@@ -114,7 +114,7 @@ function StopCountButton({ count }: { count: StopCount }) {
       title="Replay this stop (R)"
       disabled={count.index < 0}
       onClick={count.onReplay}
-      className="cursor-pointer rounded-md bg-white/[0.07] px-1.5 py-0.5 text-xs leading-4 font-semibold whitespace-nowrap text-strong tabular-nums transition-colors hover:bg-white/[0.14] disabled:cursor-default disabled:hover:bg-white/[0.07]"
+      className="cursor-pointer rounded-md bg-white/[0.07] px-1.5 py-0.5 text-xs leading-4 font-semibold whitespace-nowrap text-strong tabular-nums transition-colors hover:bg-white/[0.14] disabled:cursor-default disabled:hover:bg-white/[0.07] phone:min-h-11 phone:px-2.5"
     >
       {count.index + 1}
       <span className="font-normal text-soft">&nbsp;of {count.total}</span>
@@ -129,13 +129,14 @@ type TransportColumnProps = TransportButtonsProps & {
 
 /**
  * In the stage's corner: the steps around play, and under them the clock. In a review the clock gives the length of
- * the match up for which stop it is on, so the corner is as wide in both and the lanes never move.
+ * the match up for which stop it is on, so the corner is as wide in both and the lanes never move. On a phone the
+ * clock follows the steps in the row under the stage.
  */
 export function TransportColumn({ playback, stepping, count }: TransportColumnProps) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1 phone:flex-row phone:gap-2">
       <TransportButtons playback={playback} stepping={stepping} />
-      <div className="flex h-5 items-center gap-1.5">
+      <div className="flex h-5 items-center gap-1.5 phone:h-11 phone:gap-2">
         <ReplayClock playback={playback} hasLength={count === null} />
         {count ? <StopCountButton count={count} /> : null}
       </div>

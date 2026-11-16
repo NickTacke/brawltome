@@ -2,7 +2,7 @@ import { type MouseEvent, type PointerEvent, useEffect, useRef, useState } from 
 
 // how long the controls stay after the pointer last moved over the stage
 const idleMs = 2500
-// only a press on the picture plays or pauses, not one on the controls that lie on it
+// only a press on the picture plays or pauses, not one on the controls, which on a phone lie under it in the same frame
 const picture = '[data-stage-window]'
 
 /**

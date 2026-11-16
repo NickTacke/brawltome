@@ -110,9 +110,13 @@ function StageBesideLead({ stage, lead }: { stage: ReactNode; lead: (isUpright: 
     <>
       <div className="flex gap-4">
         <div className="min-w-0 flex-1">{stage}</div>
-        <div className={besideStage}>{lead(true)}</div>
+        <div data-lead="upright" className={besideStage}>
+          {lead(true)}
+        </div>
       </div>
-      <div className={underStage}>{lead(false)}</div>
+      <div data-lead="flat" className={underStage}>
+        {lead(false)}
+      </div>
     </>
   )
 }

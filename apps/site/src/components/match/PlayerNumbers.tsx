@@ -46,15 +46,20 @@ function LegendHeads({ players, selectedSlot, onSelect }: Picking) {
 type RowProps = { row: NumberRow; players: MatchPlayer[]; selectedSlot: number; isLast: boolean }
 
 function NumbersRow({ row, players, selectedSlot, isLast }: RowProps) {
-  // a match of four gets lower rows, so the column still fits a laptop's screen
-  const rowHeight = players.length > 2 ? 'h-[1.625rem]' : 'h-7'
+  // a match of four gets lower rows, so the column still fits a laptop's screen. on a phone four columns leave a
+  // long name too little room, so it wraps and its row grows
+  const rowHeight = players.length > 2 ? 'min-h-[1.625rem]' : 'min-h-7'
   const leaders = leadersOf(row, players)
   // whoever shows the leader's number leads with them, though theirs is a hair lower before rounding
   const leading = new Set(players.filter(({ slot }) => leaders.has(slot)).map((player) => row.value(player)))
 
   return (
     <div className="col-span-full grid grid-cols-subgrid items-stretch">
-      <span className={`flex items-center truncate border-t border-line/30 text-soft ${rowHeight}`}>{row.label}</span>
+      <span
+        className={`flex items-center truncate border-t border-line/30 text-soft phone:py-1 phone:leading-tight phone:whitespace-normal ${rowHeight}`}
+      >
+        {row.label}
+      </span>
       {players.map((player) => {
         const value = row.value(player)
         const weight = leading.has(value) ? 'font-bold text-strong' : 'text-text'

@@ -5,6 +5,8 @@ import type { StageControlsState } from './use-stage-controls'
 // the stage alone on the screen, in the middle of it; laid over the page where the browser can't fill the screen
 const fullscreenFrame = '@container flex items-center justify-center bg-black'
 const overlaidFrame = 'fixed inset-0 z-[100]'
+// on a phone's page the stage runs to the screen's edges, past the page's px-6 gutter
+const phoneBleed = 'phone:-mx-6'
 
 type StageFrameProps = {
   frameRef: RefObject<HTMLDivElement | null>
@@ -24,7 +26,7 @@ export function StageFrame({ frameRef, fullscreen, controls, aspect, children }:
   return (
     <div ref={frameRef} className={`min-w-0 ${frameLook}`}>
       {/* moving over the stage shows the controls, a press on it plays or pauses */}
-      <div {...controls.stage} style={stageSize}>
+      <div {...controls.stage} style={stageSize} className={fullscreen.isOn ? undefined : phoneBleed}>
         {children}
       </div>
     </div>

@@ -19,7 +19,8 @@ const StillStage = memo(StagePicture)
 const noTrails: StageTrail[] = []
 const noSlots: number[] = []
 const ignoreBuffering = () => undefined
-const stageWindow = 'relative overflow-hidden rounded-lg bg-black/[0.14]'
+// the picture runs to the phone's edges, so its corners are square there
+const stageWindow = 'relative overflow-hidden rounded-lg bg-black/[0.14] phone:rounded-none'
 
 type StagePlayProps = {
   insights: MatchInsights
@@ -106,7 +107,7 @@ export function StagePlay(props: StagePlayProps) {
 
   return (
     <StageCameraContext.Provider value={camera}>
-      {/* the deck lies beside the window that crops the picture, so it can be laid out on its own */}
+      {/* the deck lies on the picture, or under it on a phone, so it is beside the window that crops the picture */}
       <div className="relative">
         <div data-stage-window className={stageWindow}>
           {backgroundUrl ? <StageBackdrop imageUrl={backgroundUrl} /> : null}

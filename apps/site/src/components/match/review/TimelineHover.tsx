@@ -19,8 +19,9 @@ type TimelineHoverProps = {
   opensBelow: boolean
 }
 
-// as wide as what it says, however near the timeline's end it is placed
-const readoutWidth = 'w-max'
+// as wide as what it says, however near the timeline's end it is placed; on a phone no wider than the timeline,
+// where its players wrap onto a second line
+const readoutWidth = 'w-max phone:max-w-full'
 
 /**
  * The readout at the pointer. It slides along with it and is held by the same share of its own width, so it reaches

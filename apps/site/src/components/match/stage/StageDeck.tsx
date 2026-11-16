@@ -1,10 +1,12 @@
 import { Maximize, Minimize } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
-import { LanesPanel, onStage, shownOnStage, stageControlsGroup, TransportCorner } from './StageControls'
+import { LanesPanel, onStage, shownOnStage, stageControlsGroup, TransportCorner, underStage } from './StageControls'
 import type { Fullscreen } from './use-fullscreen'
 import type { StageControlsState } from './use-stage-controls'
 
-// always in the stage's top right corner, with the rest of the controls
+// in the stage's top right corner, with the rest of the controls; on a phone at the end of the row under the stage
+const fullscreenPlace = 'absolute top-2 right-2 flex size-8 phone:col-start-3 phone:row-start-1 phone:size-11'
+
 function FullscreenButton({ fullscreen, controls }: { fullscreen: Fullscreen; controls: StageControlsState }) {
   const Icon = fullscreen.isOn ? Minimize : Maximize
   const label = fullscreen.isOn ? 'Leave fullscreen' : 'Fullscreen'
@@ -16,7 +18,7 @@ function FullscreenButton({ fullscreen, controls }: { fullscreen: Fullscreen; co
       title={`${label} (F)`}
       onClick={fullscreen.toggle}
       {...controls.bar}
-      className={`absolute top-2 right-2 flex size-8 cursor-pointer items-center justify-center text-soft hover:text-strong ${onStage} ${shownOnStage(controls.isShown)}`}
+      className={`${fullscreenPlace} cursor-pointer items-center justify-center text-soft hover:text-strong ${onStage} ${shownOnStage(controls.isShown)} ${underStage}`}
     >
       <Icon className="size-4" aria-hidden="true" />
     </button>
@@ -45,17 +47,27 @@ type StageDeckProps = {
   note: ReactNode
   // measured, so a card on the stage keeps clear of the corner
   topLeftRef?: RefObject<HTMLDivElement | null>
-  // a review's card, laid on the stage under the controls
+  // a review's card, laid on the stage under the controls; on a phone under the lanes
   card?: ReactNode
 }
 
 type TopLeftProps = Pick<StageDeckProps, 'controls' | 'fullscreen' | 'tools' | 'note' | 'topLeftRef'>
 
+// in fullscreen on a phone held upright the stage is too small to lie on, so the corner stands over it
+const overStage = 'phone:top-auto phone:bottom-full phone:pb-2'
+
 // the note stays while the controls put themselves away; the tools come and go above it
 function TopLeftCorner({ controls, fullscreen, tools, note, topLeftRef }: TopLeftProps) {
+  const place = fullscreen.isOn ? overStage : ''
+  const toolsLook = `${onStage} ${shownOnStage(controls.isShown)} ${underStage}`
+
   return (
-    <div ref={topLeftRef} data-stage-top-left className="absolute top-2 left-2 flex flex-col items-start gap-1">
-      {fullscreen.isOn ? <div className={`px-2 py-1 ${onStage} ${shownOnStage(controls.isShown)}`}>{tools}</div> : null}
+    <div
+      ref={topLeftRef}
+      data-stage-top-left
+      className={`absolute top-2 left-2 flex flex-col items-start gap-1 ${place}`}
+    >
+      {fullscreen.isOn ? <div className={`px-2 py-1 ${toolsLook}`}>{tools}</div> : null}
       {note}
     </div>
   )
@@ -64,14 +76,14 @@ function TopLeftCorner({ controls, fullscreen, tools, note, topLeftRef }: TopLef
 /**
  * What lies on the stage over the players: the transport in its corner, the lanes along an edge, the fullscreen
  * button in the top right corner, and in the top left the note on the legends under the page's tools in fullscreen.
- * At a review's stop a card lies under them. The lanes are always there, at full size.
+ * At a review's stop a card lies under them. The lanes are always there, at full size. On a phone held upright the
+ * stage is too small to lie on: the controls, the lanes and the card come under it, in that order.
  */
 export function StageDeck(props: StageDeckProps) {
   const { controls, fullscreen, lanes } = props
 
   return (
     <>
-      {props.card}
       <div data-stage-controls-group className={stageControlsGroup}>
         <TopLeftCorner
           controls={controls}
@@ -81,6 +93,9 @@ export function StageDeck(props: StageDeckProps) {
           topLeftRef={props.topLeftRef}
         />
         <FullscreenButton fullscreen={fullscreen} controls={controls} />
+        <TransportCorner isShown={controls.isShown} isPartOfBar={lanes.edge === 'bottom'} bar={controls.bar}>
+          {props.transport}
+        </TransportCorner>
         <LanesPanel
           panelRef={lanes.panelRef}
           isShown={controls.isShown}
@@ -90,10 +105,8 @@ export function StageDeck(props: StageDeckProps) {
           timeline={props.timeline(lanes.edge === 'top')}
           speed={props.speed}
         />
-        <TransportCorner isShown={controls.isShown} isPartOfBar={lanes.edge === 'bottom'} bar={controls.bar}>
-          {props.transport}
-        </TransportCorner>
       </div>
+      {props.card}
     </>
   )
 }

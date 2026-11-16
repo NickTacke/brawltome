@@ -8,8 +8,14 @@ export const onStage = 'rounded-lg bg-ink/85 ring-1 ring-line/70 backdrop-blur-s
 export const transportCornerPx = { width: 132, height: 84 }
 
 // around everything of the controls on the stage, so keyboard focus in one part brings all of them back. it lets the
-// pointer through to the stage; the parts take it themselves
-export const stageControlsGroup = 'group/controls pointer-events-none absolute inset-0 z-20'
+// pointer through to the stage; the parts take it themselves. on a phone it is a row of the transport, the speed and
+// fullscreen under the stage, with the lanes under that. px-6 is the page's gutter, as the stage runs to the edges
+export const stageControlsGroup =
+  'group/controls pointer-events-none absolute inset-0 z-20 phone:static phone:grid phone:grid-cols-[1fr_auto_auto] phone:items-center phone:gap-x-1 phone:px-6 phone:pt-1'
+
+// a part of the controls under the stage on a phone: in the page's flow, flat on it, and always in sight
+export const underStage =
+  'phone:static phone:pointer-events-auto phone:opacity-100 phone:bg-transparent phone:ring-0 phone:backdrop-blur-none'
 
 const shownByKeyboard =
   'group-has-[:focus-visible]/controls:pointer-events-auto group-has-[:focus-visible]/controls:opacity-100'
@@ -33,6 +39,10 @@ type TransportCornerProps = {
   children: ReactNode
 }
 
+// over the lanes' panel, which it heads along the bottom; on a phone the start of the row under the stage
+const transportPlace =
+  'absolute bottom-2 left-2 z-10 flex w-[7.25rem] justify-center py-2 phone:col-start-1 phone:row-start-1 phone:w-auto phone:justify-start phone:py-1'
+
 /**
  * The steps around play, with the clock, in the stage's bottom left corner. They never leave it, so a button pressed
  * from stop to stop stays under the pointer while the lanes move out of the players' way. With the lanes along the
@@ -43,7 +53,7 @@ export function TransportCorner({ isShown, isPartOfBar, bar, children }: Transpo
     <div
       {...bar}
       data-stage-transport
-      className={`absolute bottom-2 left-2 flex w-[7.25rem] justify-center py-2 ${isPartOfBar ? '' : onStage} ${shownOnStage(isShown)}`}
+      className={`${transportPlace} ${isPartOfBar ? '' : onStage} ${shownOnStage(isShown)} ${underStage}`}
     >
       {children}
     </div>
@@ -65,7 +75,8 @@ type LanesPanelProps = {
 /**
  * The lanes on the stage, with the speed after them. Along the bottom they are one bar with the transport, like a
  * video player's: the bar runs from edge to edge and leaves its head to the transport. Along the top they are a
- * panel of their own, which leaves the corner to the fullscreen button.
+ * panel of their own, which leaves the corner to the fullscreen button. On a phone the panel gives its two parts to
+ * the row under the stage: the lanes take the whole width under it, the speed falls into the row's free cell.
  */
 export function LanesPanel({ panelRef, isShown, edge, bar, onHeld, timeline, speed }: LanesPanelProps) {
   const place =
@@ -84,9 +95,9 @@ export function LanesPanel({ panelRef, isShown, edge, bar, onHeld, timeline, spe
       data-stage-controls
       onPointerEnter={() => hold(true)}
       onPointerLeave={() => hold(false)}
-      className={`absolute flex gap-3 py-2 pr-2.5 ${onStage} ${place} ${shownOnStage(isShown)}`}
+      className={`absolute flex gap-3 py-2 pr-2.5 ${onStage} ${place} ${shownOnStage(isShown)} ${underStage} phone:contents`}
     >
-      <div className="min-w-0 flex-1">{timeline}</div>
+      <div className="min-w-0 flex-1 phone:col-span-full phone:row-start-2 phone:pt-2 phone:pb-1">{timeline}</div>
       {speed}
     </div>
   )
