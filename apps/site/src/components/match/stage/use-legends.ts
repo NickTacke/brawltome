@@ -88,6 +88,8 @@ function useReplayArt(art: Art): Load<Replay> {
 
     loadReplay(manifestUrl, { baseUrl, signal: controller.signal })
       .then((replay) => {
+        if (controller.signal.aborted) return
+
         replay.loaded.catch((error) => reportUnlessAborted(`load the rest of the art at ${manifestUrl}`, error))
         setLoad({ status: 'loaded', value: replay })
       })
@@ -115,7 +117,11 @@ function usePlaybackTimeline(playbackPath: string | null): Load<Timeline> {
     setLoad({ status: 'loading' })
 
     fetchPlaybackTimeline(playbackPath, controller.signal)
-      .then((timeline) => setLoad({ status: 'loaded', value: timeline }))
+      .then((timeline) => {
+        if (controller.signal.aborted) return
+
+        setLoad({ status: 'loaded', value: timeline })
+      })
       .catch((error) => {
         if (controller.signal.aborted) return
 
