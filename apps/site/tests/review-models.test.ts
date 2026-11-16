@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
 import { tagHeightPx, tagLifts, tagWidthPx } from '../src/components/match/stage/tag-stack'
+import { advanceClockMs } from '../src/components/match/stage/use-playback'
 import { readInsights, readPlayback } from './match-fixtures'
 
 // a player standing at a spot of the frame, in shares
@@ -58,5 +59,17 @@ describe('the tags over the players', () => {
 
       expect({ timeMs, pairs: overlappingPairs(shown) }).toEqual({ timeMs, pairs: [] })
     }
+  })
+})
+
+describe('the replay clock', () => {
+  test('moves by the time since the last frame at the speed picked, slowed by the scale', () => {
+    expect(advanceClockMs(1000, 16, { speed: 1, scale: 1 }, 5000)).toBe(1016)
+    expect(advanceClockMs(1000, 16, { speed: 2, scale: 1 }, 5000)).toBe(1032)
+    expect(advanceClockMs(1000, 20, { speed: 2, scale: 0.3 }, 5000)).toBe(1012)
+  })
+
+  test('stops at the end of the match', () => {
+    expect(advanceClockMs(4990, 100, { speed: 4, scale: 1 }, 5000)).toBe(5000)
   })
 })

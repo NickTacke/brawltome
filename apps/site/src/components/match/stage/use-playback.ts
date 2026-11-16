@@ -13,11 +13,21 @@ export function frameElapsedMs(nowMs: number, lastFrameMs: number | null): numbe
   return Math.min(nowMs - lastFrameMs, longestFrameMs)
 }
 
+// the speed the viewer picked, and how much the page slows it for a moment, as a review does just before a stop
+type Pace = { speed: number; scale: number }
+
+/** Where the clock is a frame later: moved by the frame's time at its pace, and never past the end. */
+export function advanceClockMs(currentMs: number, elapsedMs: number, pace: Pace, durationMs: number): number {
+  return Math.min(currentMs + elapsedMs * pace.speed * pace.scale, durationMs)
+}
+
 /** A match clock: it runs on animation frames while playing, at the chosen speed, and stops at the end. */
 export function usePlayback(durationMs: number) {
   const [timeMs, setTimeMs] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
+  // slows the clock for a moment without touching the speed the viewer picked
+  const [scale, setScale] = useState(1)
   // holds the clock while the frame it would show can't be drawn yet, as a video holds while it buffers
   const [isBuffering, setIsBuffering] = useState(false)
   const lastFrameMs = useRef<number | null>(null)
@@ -31,7 +41,7 @@ export function usePlayback(durationMs: number) {
       const elapsedMs = frameElapsedMs(nowMs, lastFrameMs.current)
 
       lastFrameMs.current = nowMs
-      setTimeMs((current) => Math.min(current + elapsedMs * speed, durationMs))
+      setTimeMs((current) => advanceClockMs(current, elapsedMs, { speed, scale }, durationMs))
       frame = requestAnimationFrame(tick)
     }
 
@@ -41,7 +51,7 @@ export function usePlayback(durationMs: number) {
       cancelAnimationFrame(frame)
       lastFrameMs.current = null
     }
-  }, [isPlaying, isBuffering, speed, durationMs])
+  }, [isPlaying, isBuffering, speed, scale, durationMs])
 
   // playing on from the end starts over
   function toggle() {
@@ -64,6 +74,7 @@ export function usePlayback(durationMs: number) {
     toggle,
     seek,
     setSpeed,
+    setScale,
     isBuffering,
     setIsBuffering,
     play: () => setIsPlaying(true),
