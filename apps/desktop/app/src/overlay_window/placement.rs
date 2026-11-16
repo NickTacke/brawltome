@@ -20,11 +20,11 @@ pub struct Rect {
 pub enum OverlayPosition {
     TopLeft,
     TopCenter,
-    /// the owner's pick: the top right is clear on the loading screen
-    #[default]
     TopRight,
     MiddleLeft,
     Center,
+    /// the owner's pick: the right edge is clear on the loading screen
+    #[default]
     MiddleRight,
     BottomLeft,
     BottomCenter,
@@ -315,7 +315,7 @@ mod tests {
         let parsed: OverlayPosition = serde_json::from_str("\"bottomCenter\"").unwrap();
 
         assert_eq!(parsed, OverlayPosition::BottomCenter);
-        assert_eq!(OverlayPosition::default(), OverlayPosition::TopRight);
+        assert_eq!(OverlayPosition::default(), OverlayPosition::MiddleRight);
     }
 
     #[test]
