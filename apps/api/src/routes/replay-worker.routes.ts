@@ -2,18 +2,10 @@ import { type JobFailureCode, MAX_LINE_BYTES, MAX_LINE_GZIP_BYTES, type ReplayJo
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { internalSecretValid } from '../auth/internal-secret'
+import { leaseOf, readBounded, workerReportSchema } from './replay-worker-requests'
 
 // the replay worker on VM 106 is the only caller: it claims a job, plays the replay with bh-native and answers.
 // nothing here is public; the worker authenticates with its own token
-
-const idSchema = z.uuid()
-
-// artFormat is the art export format the worker runs; a worker without the export sends none
-const reportSchema = z.object({
-  build: z.string().min(1).max(64),
-  patches: z.array(z.string().max(16)).max(10),
-  artFormat: z.number().int().min(1).max(32767).nullable().default(null),
-})
 
 const failureCodes = [
   'game-error',
@@ -39,7 +31,7 @@ export function createReplayWorkerRoutes(deps: { jobs: ReplayJobs; token: string
   })
 
   app.post('/claim', async (c) => {
-    const report = reportSchema.safeParse(await c.req.json().catch(() => null))
+    const report = workerReportSchema.safeParse(await c.req.json().catch(() => null))
 
     if (!report.success) return c.body(null, 400)
 
@@ -106,34 +98,12 @@ export function createReplayWorkerRoutes(deps: { jobs: ReplayJobs; token: string
   return app
 }
 
-function leaseOf(jobId: string, leaseToken: string | undefined): { jobId: string; leaseToken: string } | null {
-  if (!idSchema.safeParse(jobId).success || !idSchema.safeParse(leaseToken).success) return null
-
-  return { jobId, leaseToken: leaseToken as string }
-}
-
 function statusOf(outcome: 'completed' | 'failed' | 'lease-lost' | 'not-found'): 204 | 404 | 409 {
   if (outcome === 'lease-lost') return 409
 
   if (outcome === 'not-found') return 404
 
   return 204
-}
-
-async function readBounded(request: Request, limit: number): Promise<Uint8Array | null> {
-  if (Number(request.headers.get('content-length') ?? 0) > limit) return null
-
-  const chunks: Uint8Array[] = []
-  let size = 0
-
-  for await (const chunk of request.body ?? []) {
-    size += chunk.byteLength
-    if (size > limit) return null
-
-    chunks.push(chunk)
-  }
-
-  return Buffer.concat(chunks)
 }
 
 // streamed with a cap, so a small gzip that inflates to gigabytes is refused instead of filling memory
