@@ -39,6 +39,8 @@ export type ArtRunnerDeps = {
   // how long a plan or render may take, and how long a warm may
   exportTimeoutMs: number
   warmTimeoutMs: number
+  // the waits between tries of a file another attempt is uploading
+  uploadRetryDelaysMs: number[]
 }
 
 // one claimed job as it runs; leaseLost aborts once a renewal hears the lease is gone
@@ -207,9 +209,27 @@ export class ArtRunner {
     const writtenPaths = new Set(written)
     const missing = await this.deps.art.missing(job, written)
 
-    for (const path of missing.filter((path) => writtenPaths.has(path))) {
+    for (const path of missing.filter((path) => writtenPaths.has(path))) await this.sendFile(attempt, path)
+  }
+
+  // another attempt may be uploading the same path, a sheet two matches share. the file is sent again a few times; if
+  // it is still held after that the job fails as worker-error, to run again, and no manifest goes out before it
+  private async sendFile(attempt: Attempt, path: string): Promise<void> {
+    const bytes = readFileSync(join(attempt.files.store, path))
+    const delaysMs = this.deps.uploadRetryDelaysMs
+
+    for (let tries = 1; ; tries++) {
       throwIfLeaseLost(attempt)
-      await this.deps.art.putFile(job, path, readFileSync(join(files.store, path)))
+
+      if ((await this.deps.art.putFile(attempt.job, path, bytes)) === 'stored') return
+
+      const delayMs = delaysMs[tries - 1]
+
+      if (delayMs === undefined) {
+        throw new Error(`send art file ${path}: another attempt still holds it after ${tries} tries`)
+      }
+
+      await Bun.sleep(delayMs)
     }
   }
 

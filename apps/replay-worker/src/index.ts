@@ -66,6 +66,7 @@ async function artLoop(format: number): Promise<void> {
     renewEveryMs: config.renewEveryMs,
     exportTimeoutMs: config.exportTimeoutMs,
     warmTimeoutMs: config.warmTimeoutMs,
+    uploadRetryDelaysMs: config.uploadRetryDelaysMs,
   })
 
   while (!isStopping) {

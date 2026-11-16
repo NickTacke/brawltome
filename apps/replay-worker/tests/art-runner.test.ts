@@ -38,6 +38,8 @@ describe('the art runner', () => {
   let claimedJobId: string
   // whether renew answers that the lease is gone
   let isLeaseGone: boolean
+  // how many more times an upload of each path answers that another attempt holds it
+  let heldUploads: Map<string, number>
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
@@ -61,6 +63,7 @@ describe('the art runner', () => {
     extraMissing = []
     claimedJobId = jobId
     isLeaseGone = false
+    heldUploads = new Map()
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
   })
@@ -137,6 +140,15 @@ describe('the art runner', () => {
   function stored(path: string, bytes: Uint8Array): Response {
     received.calls.push('put')
     received.puts.push(path)
+
+    const held = heldUploads.get(path) ?? 0
+
+    if (held > 0) {
+      heldUploads.set(path, held - 1)
+
+      return new Response(null, { status: 423, headers: { 'retry-after': '5' } })
+    }
+
     bucket.set(path, bytes)
 
     return new Response(null, { status: 204 })
@@ -175,6 +187,7 @@ describe('the art runner', () => {
       renewEveryMs: 60_000,
       exportTimeoutMs: 10_000,
       warmTimeoutMs: 10_000,
+      uploadRetryDelaysMs: [10, 10, 10, 10],
       ...overrides,
     })
   }
@@ -270,6 +283,29 @@ describe('the art runner', () => {
 
     await expect(runner().runOnce()).rejects.toThrow('x-art-job')
     expect(received.calls).toEqual(['claim'])
+  })
+
+  test('a file another attempt is uploading is sent again until it is stored, then the manifest', async () => {
+    heldUploads.set(fakeMap, 2)
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(3)
+    expect(bucket.has(fakeMap)).toBe(true)
+    expect(received.results).toHaveLength(1)
+    expect(received.failures).toEqual([])
+  })
+
+  test('a file still held by another attempt after the last try fails the job with worker-error, unanswered', async () => {
+    heldUploads.set(fakeMap, 100)
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(5)
+    expect(received.results).toEqual([])
+    expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining(fakeMap) }])
   })
 
   test('a line without animations reports no-animations and renders nothing', async () => {

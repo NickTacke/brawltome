@@ -34,7 +34,7 @@ export type ArtClient = {
   claim(report: WorkerReport): Promise<ClaimedArt | null>
   missing(job: ArtJob, paths: string[]): Promise<string[]>
   readFile(job: ArtJob, path: string): Promise<Uint8Array>
-  putFile(job: ArtJob, path: string, bytes: Uint8Array): Promise<void>
+  putFile(job: ArtJob, path: string, bytes: Uint8Array): Promise<'stored' | 'held'>
   result(job: ArtJob, result: ArtResult): Promise<void>
   failure(job: ArtJob, code: ArtFailureCode, message: string): Promise<void>
   renew(job: ArtJob): Promise<boolean>
@@ -86,10 +86,15 @@ export function createArtClient(config: { apiUrl: string; token: string }): ArtC
       return new Uint8Array(await response.arrayBuffer())
     },
 
+    // held: another attempt is uploading the same path (423), so this one sends it again later
     async putFile(job, path, bytes) {
       const response = await send(`/${job.jobId}/files/${path}`, { method: 'PUT', lease: job.leaseToken, bytes })
 
+      if (response.status === 423) return 'held'
+
       await expectOk(response, `send art file ${path} for job ${job.jobId}`)
+
+      return 'stored'
     },
 
     async result(job, result) {

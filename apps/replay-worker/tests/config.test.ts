@@ -24,6 +24,7 @@ describe('worker settings', () => {
       processesDuringArt: 1,
       exportTimeoutMs: 900_000,
       warmTimeoutMs: 3_600_000,
+      uploadRetryDelaysMs: [2000, 4000, 8000, 16_000],
     })
   })
 

@@ -25,6 +25,8 @@ export type WorkerConfig = {
   // warming a whole patch took 11 minutes on four free cores; the vm shares its cores with bh-native at a lower
   // priority, so a warm gets far more room before it counts as stuck, and a stopped warm fails for good
   warmTimeoutMs: number
+  // waits between tries of an art file another attempt is uploading: five tries over 30 s
+  uploadRetryDelaysMs: number[]
 }
 
 type Env = Record<string, string | undefined>
@@ -51,6 +53,7 @@ export function readConfig(env: Env): WorkerConfig {
     processesDuringArt: count(env.REPLAY_PROCESSES_DURING_ART, 1, 'REPLAY_PROCESSES_DURING_ART'),
     exportTimeoutMs: 900_000,
     warmTimeoutMs: milliseconds(env.REPLAY_ART_WARM_TIMEOUT_MS, 3_600_000, 'REPLAY_ART_WARM_TIMEOUT_MS'),
+    uploadRetryDelaysMs: [2000, 4000, 8000, 16_000],
   }
 }
 
