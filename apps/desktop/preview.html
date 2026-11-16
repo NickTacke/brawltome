@@ -45,9 +45,13 @@
         justify-content: center;
       }
 
+      .preview-overlay[data-side="right"] {
+        justify-content: flex-end;
+      }
+
       .preview-sheet {
         display: grid;
-        grid-template-columns: repeat(4, 424px);
+        grid-template-columns: repeat(4, 440px);
         gap: 28px 32px;
         align-content: start;
         justify-content: center;
@@ -74,12 +78,6 @@
         color: #fff;
       }
 
-      /* &elapsedMs= holds every timer bar at that point */
-      [style*="--preview-timer-delay"] .timer i {
-        /* biome-ignore lint/complexity/noImportantStyles: the bar carries its own delay inline */
-        animation-delay: var(--preview-timer-delay) !important;
-        animation-play-state: paused;
-      }
     </style>
   </head>
   <body class="preview">

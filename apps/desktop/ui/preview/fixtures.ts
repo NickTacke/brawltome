@@ -109,3 +109,30 @@ export function stateCells(): StateCell[] {
     },
   ]
 }
+
+// one 1v1 card per tier, since the banners hang to different lengths
+export function tierCells(): StateCell[] {
+  const tiers: { tier: string; rating: number; peakRating: number }[] = [
+    { tier: 'Tin 3', rating: 812, peakRating: 905 },
+    { tier: 'Bronze 4', rating: 1105, peakRating: 1180 },
+    { tier: 'Silver 2', rating: 1302, peakRating: 1344 },
+    { tier: 'Gold 5', rating: 1618, peakRating: 1702 },
+    { tier: 'Platinum 3', rating: 1803, peakRating: 1911 },
+    { tier: 'Diamond', rating: 2130, peakRating: 2204 },
+    { tier: 'Valhallan', rating: 2504, peakRating: 2611 },
+  ]
+
+  return tiers.map(({ tier, rating, peakRating }) => ({
+    title: tier,
+    view: withSoloData({
+      state: 'ranked',
+      tier,
+      rating,
+      peakRating,
+      regionRank: 48,
+      wins: 734,
+      games: 1204,
+      isRefreshing: false,
+    }),
+  }))
+}
