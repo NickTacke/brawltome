@@ -79,6 +79,17 @@ describe('rendered application topology', () => {
     )
   })
 
+  test('rejects an api without a readable minimum desktop version', () => {
+    for (const value of [undefined, 'latest', '0.2']) {
+      const topology = renderedTopology()
+      const environment = services(topology).api.environment as Record<string, string | undefined>
+
+      environment.DESKTOP_MINIMUM_VERSION = value
+
+      expect(verifyAppRenderedTopology(topology)).toContain('api must name the oldest desktop app it serves')
+    }
+  })
+
   test.each([
     [
       'BRAWLHALLA_V1_REQUEST_LIMIT',
