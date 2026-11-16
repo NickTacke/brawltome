@@ -103,6 +103,67 @@ export {
   playerBoardRanksInputSchema,
   playerBoardRanksSchema,
 } from './leaderboard'
+export { type LevelArt, type LevelBounds, type LevelLayout, type LevelSegment, levelLayoutSchema } from './level-layout'
+export {
+  ADVANTAGE_SAMPLE_MS,
+  ADVANTAGE_STOCK_DAMAGE,
+  type Insights,
+  type MatchInsights,
+  matchInsightsSchema,
+} from './match-insights'
+export {
+  type Knockout,
+  type KoZone,
+  type Lead,
+  type LeadKind,
+  leadKinds,
+  type Moment,
+  type MomentClass,
+  type MomentHit,
+  momentClasses,
+  type PlayerAction,
+  type Punish,
+  type PunishCause,
+  type PunishHit,
+  punishCauses,
+  type ReviewScope,
+  type ReviewStop,
+  reviewScopes,
+} from './match-insights-moments'
+export type {
+  CauseRecord,
+  Habit,
+  HabitMoment,
+  HabitOption,
+  NeutralStats,
+  Oddities,
+  PlayerInsight,
+  Stock,
+} from './match-insights-players'
+export type {
+  AnimationShown,
+  Playback,
+  PlaybackPlayer,
+  Stage,
+  StageArt,
+  StageBox,
+  StageHit,
+  StageKo,
+  StageMarks,
+  StageRect,
+  StageSegment,
+  StageSpot,
+  StageTrail,
+} from './match-insights-stage'
+export type {
+  InsightExtras,
+  InsightSummary,
+  MoveRow,
+  PlayerExtras,
+  SummaryKo,
+  SummaryPlayer,
+  WeaponRow,
+} from './match-insights-summary'
 export { type MetaLegendsContract, metaLegendsSchema } from './meta-legends'
 export { type MostPlayedLegendsContract, mostPlayedLegendsSchema } from './most-played-legends'
 export {
