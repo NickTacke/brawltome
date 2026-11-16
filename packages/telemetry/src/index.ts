@@ -85,6 +85,9 @@ export type MetricName =
   | 'refresh_event_streams_closed_total'
   | 'refresh_events_delivered_total'
   | 'discord_interactions_total'
+  | 'desktop_requests_total'
+  | 'desktop_request_duration_ms'
+  | 'desktop_lobby_cards_total'
   | 'player_name_verifications_total'
   | 'player_name_verification_backlog'
   | 'freshness_refreshes_total'
@@ -153,6 +156,7 @@ const route = [
   'auth',
   'operations',
   'overlay',
+  'desktop',
   'events',
   'web',
   'api',
@@ -318,7 +322,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
         'rateLimited',
         'temporarilyUnavailable',
       ],
-      source: ['interactive-api', 'discord'],
+      source: ['interactive-api', 'discord', 'desktop-api'],
     },
   },
   refresh_event_streams_total: {
@@ -340,6 +344,22 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Discord interactions',
     labels: { interaction_kind: interactionKind, command, outcome: ['succeeded', 'failed', 'rejected'] },
+  },
+  desktop_requests_total: {
+    kind: 'counter',
+    help: 'Desktop api requests by endpoint and outcome',
+    labels: { endpoint: ['lobby'], outcome: ['ok', 'update_required', 'rate_limited', 'invalid', 'failed'] },
+  },
+  desktop_request_duration_ms: {
+    kind: 'histogram',
+    help: 'Desktop api request duration in milliseconds',
+    labels: { endpoint: ['lobby'] },
+    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500],
+  },
+  desktop_lobby_cards_total: {
+    kind: 'counter',
+    help: 'Desktop lobby players looked up, by match type and where the card came from',
+    labels: { match_type: ['1v1', '2v2'], source: ['profile', 'leaderboard', 'none'] },
   },
   player_name_verifications_total: {
     kind: 'counter',
@@ -1273,6 +1293,8 @@ export function normalizeHttpRoute(pathname: string): (typeof route)[number] {
   if (pathname.startsWith('/internal/operations')) return 'operations'
 
   if (pathname.startsWith('/api/overlay')) return 'overlay'
+
+  if (pathname.startsWith('/desktop/')) return 'desktop'
 
   if (pathname.startsWith('/events/')) return 'events'
 
