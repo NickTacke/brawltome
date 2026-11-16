@@ -4,7 +4,7 @@ import type { Replay } from '@brawltome/replay-player'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { matchDetailOf, readPlayback } from './match-fixtures'
+import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
 
 // these render the stage in a browser-like dom, so its effects run: loading the art and the timeline, drawing, keys
 
@@ -37,6 +37,7 @@ mock.module('../src/components/match/stage/draw-moment', () => ({
 }))
 
 const { MatchByKind } = await import('../src/components/match/MatchByKind')
+const { MatchStage } = await import('../src/components/match/stage/MatchStage')
 
 const timelineJson = JSON.stringify(readPlayback('duel-a'))
 
@@ -106,6 +107,28 @@ describe('the stage in a browser', () => {
     await settle()
 
     expect(drawnReplays).not.toContain(firstReplay)
+
+    await unmount()
+  })
+
+  test('keys held with a modifier stay the browser’s, so find and its other shortcuts keep working', async () => {
+    const match = matchNamed('first')
+
+    await mount(<MatchStage insights={readInsights('duel-a')} art={match.art} playbackPath={match.playbackPath} />)
+
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true })
+
+      window.dispatchEvent(event)
+
+      return event.defaultPrevented
+    }
+
+    expect(press({ key: 'f', metaKey: true })).toBe(false)
+    expect(press({ key: 'f', ctrlKey: true })).toBe(false)
+    expect(press({ key: 'ArrowLeft', altKey: true })).toBe(false)
+    expect(press({ key: 'ArrowRight', ctrlKey: true })).toBe(false)
+    expect(press({ key: 'ArrowRight' })).toBe(true)
 
     await unmount()
   })

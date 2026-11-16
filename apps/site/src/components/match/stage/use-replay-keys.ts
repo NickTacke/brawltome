@@ -4,8 +4,11 @@ import { type RefObject, useEffect, useRef } from 'react'
 const visibleShare = 0.4
 const fields = 'input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"], [role="combobox"]'
 
-// space and enter on a button or link press it, and a field takes every key
+// a key held with a modifier is the browser's or the system's (find, history, tabs); space and enter on a button or
+// link press it, and a field takes every key
 function isBusyElsewhere(event: KeyboardEvent): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey) return true
+
   if (!(event.target instanceof Element)) return false
 
   const isPressingButton = event.target.closest('button, a') !== null && (event.key === ' ' || event.key === 'Enter')
