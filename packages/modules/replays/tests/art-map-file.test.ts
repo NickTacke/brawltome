@@ -31,6 +31,12 @@ describe('readMapFileSheets', () => {
     expect(readMapFileSheets({ artAssets: [platform] })).toHaveProperty('reason')
   })
 
+  test('names at most 100 characters of a refused file in the reason', () => {
+    const read = readMapFileSheets({ artAssets: { ['x'.repeat(5000)]: '../x' } })
+
+    expect(read).toEqual({ reason: `the map file's artAssets.${'x'.repeat(100)} is not a sheet file path` })
+  })
+
   test('refuses a background that is not a sheet', () => {
     expect(readMapFileSheets({ background: { asset: '../x' } })).toHaveProperty('reason')
     expect(readMapFileSheets({ background: 'sheets/5555555555555555.webp' })).toHaveProperty('reason')

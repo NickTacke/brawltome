@@ -15,7 +15,8 @@ export function readMapFileSheets(mapFile: Record<string, unknown>): { paths: st
 
   const wrong = Object.entries(artAssets).find(([, value]) => !isSheetPath(value))
 
-  if (wrong) return { reason: `the map file's artAssets.${wrong[0]} is not a sheet file path` }
+  // the file name comes from the worker, so only its start goes into the reason
+  if (wrong) return { reason: `the map file's artAssets.${wrong[0].slice(0, 100)} is not a sheet file path` }
 
   const paths = [...(background ? [background] : []), ...(Object.values(artAssets) as string[])]
 
