@@ -2,6 +2,7 @@ import { BannerSlot, LegendPortrait, Spinner } from './CardHead'
 import { failureText } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
+import { WinRate } from './WinRate'
 
 type TeamCardProps = {
   data: TeamData
@@ -10,17 +11,18 @@ type TeamCardProps = {
   onRetry: () => void
 }
 
+// the people on top and the team's standing below, the same order as the 1v1 card
 export function TeamCard({ data, players, onOpenProfile, onRetry }: TeamCardProps) {
   return (
     <div className={teamCardClass(data)}>
       <BannerSlot tier={data.state === 'ready' ? (data.standing?.tier ?? null) : null} />
       <span className="main">
-        <TeamHead data={data} />
         <span className="players">
           {players.map((player) => (
             <PlayerRow key={player.brawlhallaId} player={player} onOpenProfile={onOpenProfile} />
           ))}
         </span>
+        <TeamFigures data={data} />
         {data.state === 'failed' && (
           <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />
         )}
@@ -45,20 +47,40 @@ function teamFailureNote(data: Extract<TeamData, { state: 'failed' }>): string {
   return countdown === null ? reason : `${reason} · ${countdown}`
 }
 
-function TeamHead({ data }: { data: TeamData }) {
-  const standing = data.state === 'ready' ? data.standing : null
+function TeamFigures({ data }: { data: TeamData }) {
   const isBusy = data.state === 'loading' || (data.state === 'ready' && data.isRefreshing)
 
   return (
-    <span className="team-head">
-      {data.state === 'loading' ? (
-        <span className="bar wide" />
-      ) : (
-        <span className="elo">{standing?.rating ?? '—'}</span>
-      )}
-      <span className="label">2v2 team</span>
+    <span className="figures team-figures">
+      <TeamStanding data={data} />
       {isBusy && <Spinner />}
     </span>
+  )
+}
+
+// the team's elo and win rate; the banner already says the tier, and a team we hold no rating for shows a dash
+function TeamStanding({ data }: { data: TeamData }) {
+  if (data.state === 'loading') {
+    return (
+      <span className="stat">
+        <span className="bar lead" />
+        <span className="bar label-bar" />
+      </span>
+    )
+  }
+
+  const standing = data.state === 'ready' ? data.standing : null
+
+  return (
+    <>
+      <span className="stat">
+        <span className="stat-value">
+          <span className="elo">{standing?.rating ?? '—'}</span>
+        </span>
+        <span className="stat-label">2v2 team</span>
+      </span>
+      {standing !== null && <WinRate wins={standing.wins} games={standing.games} />}
+    </>
   )
 }
 
