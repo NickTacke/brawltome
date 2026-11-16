@@ -5,6 +5,7 @@ import { MatchPage } from '../src/components/match/MatchPage'
 import { cameraModeOptions } from '../src/components/match/stage/camera-mode'
 import { MatchStage } from '../src/components/match/stage/MatchStage'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
+import { StageDeck } from '../src/components/match/stage/StageDeck'
 import { StagePlay } from '../src/components/match/stage/StagePlay'
 import { initialLegends } from '../src/components/match/stage/use-legends'
 import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
@@ -29,7 +30,11 @@ function renderStagePlay(art: Art): string {
 
 // the markup of the first element carrying an attribute, up to its own closing tag
 function elementWith(markup: string, attribute: string): string {
-  const start = markup.lastIndexOf('<', markup.indexOf(attribute))
+  const at = markup.indexOf(attribute)
+
+  if (at < 0) throw new Error(`no element with ${attribute}`)
+
+  const start = markup.lastIndexOf('<', at)
   const tag = /^<(\w+)/.exec(markup.slice(start))?.[1] ?? 'div'
   const pattern = new RegExp(`<${tag}[\\s>]|</${tag}>`, 'g')
   let depth = 0
@@ -78,6 +83,52 @@ describe('the match stage', () => {
     expect(button).toContain('<button')
     expect(button).toContain('top-2')
     expect(button).toContain('right-2')
+  })
+})
+
+// what StageDeck reads of the fullscreen and the controls, with the screen filled and the controls up
+const filledScreen = { isOn: true, isOverlay: false, exit: () => undefined, toggle: () => undefined }
+
+const shownControls = {
+  isShown: true,
+  isHeld: false,
+  wake: () => undefined,
+  stage: {
+    onPointerMove: () => undefined,
+    onPointerDown: () => undefined,
+    onPointerLeave: () => undefined,
+    onClick: () => undefined,
+  },
+  bar: { onPointerEnter: () => undefined, onPointerLeave: () => undefined },
+}
+
+describe('the stage in fullscreen', () => {
+  test('the legends note lies under the tools in the top left corner, never on them', () => {
+    const markup = renderToStaticMarkup(
+      <StageDeck
+        controls={shownControls}
+        fullscreen={filledScreen}
+        transport={null}
+        timeline={null}
+        speed={null}
+        tools={<span>Camera tools</span>}
+        note={<span>{unavailableNote}</span>}
+      />,
+    )
+
+    const corner = elementWith(markup, 'data-stage-top-left')
+
+    expect(corner).toContain('flex-col')
+    expect(corner.indexOf('Camera tools')).toBeGreaterThan(-1)
+    expect(corner.indexOf(unavailableNote)).toBeGreaterThan(corner.indexOf('Camera tools'))
+  })
+
+  test('on the page, the note is part of that corner', () => {
+    const markup = renderToStaticMarkup(
+      <MatchStage insights={readInsights('duel-a')} art={failedArt} playbackPath={playbackPath} />,
+    )
+
+    expect(elementWith(markup, 'data-stage-top-left')).toContain(unavailableNote)
   })
 })
 

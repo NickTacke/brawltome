@@ -70,7 +70,7 @@ export function MatchStage({ insights, art, playbackPath, selectedSlot = 1 }: Ma
           timeMs={playback.timeMs}
           cameraMode={cameraMode}
           selectedSlot={selectedSlot}
-          deck={
+          deck={(note) => (
             <StageDeck
               controls={controls}
               fullscreen={fullscreen}
@@ -78,8 +78,9 @@ export function MatchStage({ insights, art, playbackPath, selectedSlot = 1 }: Ma
               timeline={null}
               speed={speed}
               tools={tools}
+              note={note}
             />
-          }
+          )}
           onBuffering={playback.setIsBuffering}
         />
       </StageFrame>

@@ -30,8 +30,8 @@ type StagePlayProps = {
   watched?: Moment | null
   // drawn on the stage itself, so it moves with the players; the watched moment's ring unless a page brings its own
   stageOverlay?: ReactNode
-  // what lies on the stage over the players: its controls
-  deck?: ReactNode
+  // what lies on the stage over the players: its controls, which place the note on the legends among them
+  deck?: (legendsNote: ReactNode) => ReactNode
   // where players stood, drawn into the stage itself: whose, and for which part of the match
   trails?: StageTrail[]
   shownSlots?: number[]
@@ -69,19 +69,11 @@ function backgroundUrlOf(replay: Replay | null): string | null {
   }
 }
 
-// while the legends aren't drawn: why not, or that they are on their way
-function LegendsStatus({ legends }: { legends: Legends }) {
-  if (legends.state === 'unavailable') {
-    return (
-      <span className="absolute top-2 left-2 rounded-sm bg-ink/80 px-1.5 text-xs leading-5 text-soft">
-        Legends unavailable for this match
-      </span>
-    )
-  }
-
-  if (legends.state === 'loading' && legends.isDownloading) return <StageSpinner label="Loading legends" />
-
-  return null
+// why the legends aren't drawn, when they aren't coming
+function LegendsNote() {
+  return (
+    <span className="rounded-sm bg-ink/80 px-1.5 text-xs leading-5 text-soft">Legends unavailable for this match</span>
+  )
 }
 
 type PlayersProps = Pick<StagePlayProps, 'legends' | 'timeMs' | 'selectedSlot' | 'onBuffering'> & {
@@ -122,6 +114,7 @@ export function StagePlay(props: StagePlayProps) {
   const camera = useCameraBlend(cameraNow(source, timeMs), cameraPathKey(source))
   const poses = legends.timeline ? posesAt(legends.timeline, stage.box, timeMs) : []
   const backgroundUrl = backgroundUrlOf(legends.replay)
+  const note = legends.state === 'unavailable' ? <LegendsNote /> : null
 
   return (
     <StageCameraContext.Provider value={camera}>
@@ -141,8 +134,8 @@ export function StagePlay(props: StagePlayProps) {
           {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} timeMs={timeMs} />}
         </div>
         <Players {...props} poses={poses} camera={camera} />
-        <LegendsStatus legends={legends} />
-        {props.deck}
+        {legends.state === 'loading' && legends.isDownloading ? <StageSpinner label="Loading legends" /> : null}
+        {props.deck ? props.deck(note) : <div className="absolute top-2 left-2">{note}</div>}
       </div>
     </StageCameraContext.Provider>
   )
