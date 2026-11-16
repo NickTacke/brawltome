@@ -6,6 +6,8 @@ import type { WorkerReport } from './api-client'
 const REQUEST_TIMEOUT_MS = 30_000
 // as many paths as the api answers in one missing call
 const PATHS_PER_CALL = 2000
+// the job id names the job's files under the work folder, so it must be nothing but an id
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type ClaimedArt = {
   jobId: string
@@ -127,10 +129,14 @@ async function claimFrom(response: Response): Promise<ClaimedArt | null> {
 
   if (kind !== 'match' && kind !== 'warm') throw new Error(`claim an art job: unknown kind ${kind}`)
 
+  const jobId = requiredHeader(response, 'x-art-job')
+
+  if (!UUID.test(jobId)) throw new Error(`claim an art job: x-art-job ${jobId.slice(0, 60)} is not a uuid`)
+
   const body = new Uint8Array(await response.arrayBuffer())
 
   return {
-    jobId: requiredHeader(response, 'x-art-job'),
+    jobId,
     leaseToken: requiredHeader(response, 'x-art-lease'),
     kind,
     patch: requiredHeader(response, 'x-art-patch'),

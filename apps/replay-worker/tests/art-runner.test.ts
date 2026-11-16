@@ -34,6 +34,8 @@ describe('the art runner', () => {
   let received: Received
   // paths a lying api adds to every missing answer
   let extraMissing: string[]
+  // the job id a claim answers with
+  let claimedJobId: string
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
@@ -55,6 +57,7 @@ describe('the art runner', () => {
   beforeEach(() => {
     nextJob = null
     extraMissing = []
+    claimedJobId = jobId
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
   })
@@ -97,7 +100,7 @@ describe('the art runner', () => {
     const job = nextJob
 
     const headers: Record<string, string> = {
-      'x-art-job': jobId,
+      'x-art-job': claimedJobId,
       'x-art-lease': leaseToken,
       'x-art-kind': job.kind,
       'x-art-patch': job.kind === 'warm' ? (job.patch ?? '11.00') : '11.00',
@@ -254,6 +257,14 @@ describe('the art runner', () => {
 
     expect(received.calls).toEqual(['claim', 'warm --list', 'failure'])
     expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('../') }])
+  })
+
+  test('a claim whose job id is not a uuid is refused before any file is named after it', async () => {
+    claimedJobId = '../escape'
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await expect(runner().runOnce()).rejects.toThrow('x-art-job')
+    expect(received.calls).toEqual(['claim'])
   })
 
   test('a line without animations reports no-animations and renders nothing', async () => {
