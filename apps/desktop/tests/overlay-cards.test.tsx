@@ -91,23 +91,16 @@ describe('overlay cards', () => {
     expect(textOf(partOf(html, 'sub'))).toBe('Diamond·#48')
     expect(html).toContain('src="/banners/Diamond.png"')
     expect(html).toContain('src="/legends/hattori.png"')
-    expect(textOf(partOf(html, 'figures'))).toBe('2130/ 2204 peak61% of 1,204 games')
-    expect(partOf(html, 'record')).toContain('class="rate-high"')
-    expect(html).not.toContain('updating')
-    expect(html).not.toContain('class="refresh"')
+    expect(textOf(partOf(html, 'figures'))).toBe('2130/ 2204Elo / peak61%1,204 games')
+    expect(html).toContain('class="stat-value rate rate-high"')
+    expect(html).not.toContain('class="spinner"')
   })
 
-  test('the timer runs for as long as the cards stay', () => {
-    const html = render(fixture('solo-ranked'))
-
-    expect(partOf(html, 'timer')).toContain('animation-duration:12000ms')
-  })
-
-  test('a card with stored data that is refreshing says updating', () => {
+  test('a card with stored data that is refreshing shows the spinner', () => {
     const html = render(fixture('solo-refreshing'))
 
-    expect(textOf(partOf(html, 'sub'))).toBe('Diamond·#48·updating')
-    expect(html).toContain('class="refresh"')
+    expect(textOf(partOf(html, 'sub'))).toBe('Diamond·#48')
+    expect(html).toContain('class="spinner"')
     expect(html).toContain('is-refreshing')
     expect(textOf(partOf(html, 'figures'))).toContain('2130')
   })
@@ -140,7 +133,6 @@ describe('overlay cards', () => {
     const failedCard = SoloCard({
       player: card.player,
       data: card.data,
-      timer: null,
       onOpenProfile: (brawlhallaId) => opened.push(brawlhallaId),
       onRetry: ignore,
     })
@@ -169,6 +161,7 @@ describe('overlay cards', () => {
     expect(html).toContain('src="/legends/hattori.png"')
     expect(partOf(html, 'figures')).toContain('placeholder')
     expect(html).toContain('banner-empty')
+    expect(html).toContain('class="spinner"')
     expect(textOf(partOf(html, 'figures'))).toBe('')
   })
 
@@ -207,7 +200,7 @@ describe('overlay cards', () => {
     const html = render(withSoloData(ranked, zeroGames))
 
     expect(textOf(partOf(html, 'sub'))).toBe('Tin 0')
-    expect(partOf(html, 'record')).toBe('<span class="record">0 games</span>')
+    expect(textOf(partOf(html, 'figures'))).toBe('782/ 782Elo / peak—0 games')
     expect(html).not.toContain('No ranked data')
   })
 

@@ -1,41 +1,25 @@
-import { type CSSProperties, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Overlay } from '../overlay/Overlay'
 import type { OverlayView } from '../overlay/overlay-view'
-import { overlayFixture, stateCells } from './fixtures'
+import { overlayFixture, type StateCell, stateCells, tierCells } from './fixtures'
 
 const FRAME_HEIGHT_PX = 1080
 const OVERLAY_TOP_PX = 24
 
-type OverlayPreviewProps = { card: string; elapsedMs: number | null }
+type OverlayPreviewProps = { card: string }
 
-// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all;
-// &elapsedMs=<n> holds the timer bar at that point, for screenshots
-export function OverlayPreview({ card, elapsedMs }: OverlayPreviewProps) {
-  const timerStyle = frozenTimerStyle(elapsedMs)
-
-  if (card === 'states') {
-    return (
-      <div style={timerStyle}>
-        <StatesSheet />
-      </div>
-    )
+// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=tiers one
+// 1v1 card per tier
+export function OverlayPreview({ card }: OverlayPreviewProps) {
+  if (card === 'states' || card === 'tiers') {
+    return <StatesSheet cells={card === 'states' ? stateCells() : tierCells()} />
   }
 
   const view = overlayFixture(card)
 
   if (view === null) return <p className="preview-missing">No fixture named overlay-view-{card}.json</p>
 
-  return (
-    <div style={timerStyle}>
-      <GameFrame view={view} />
-    </div>
-  )
-}
-
-function frozenTimerStyle(elapsedMs: number | null): CSSProperties | undefined {
-  if (elapsedMs === null) return undefined
-
-  return { '--preview-timer-delay': `-${elapsedMs}ms` } as CSSProperties
+  return <GameFrame view={view} />
 }
 
 // the frame scales with the window height like the game does, and the cards scale on their own the way the app
@@ -81,10 +65,10 @@ function PreviewStage() {
 }
 
 // the sheet draws every card at the size it has on a 1080p monitor
-function StatesSheet() {
+function StatesSheet({ cells }: { cells: StateCell[] }) {
   return (
     <div className="preview-sheet">
-      {stateCells().map((cell) => (
+      {cells.map((cell) => (
         <div className="preview-cell" key={cell.title}>
           <h2>{cell.title}</h2>
           <PreviewOverlay view={cell.view} monitorHeightPx={FRAME_HEIGHT_PX * window.devicePixelRatio} />

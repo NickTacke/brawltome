@@ -26,9 +26,9 @@ export function BannerSlot({ tier }: { tier: string | null }) {
   )
 }
 
-type CardHeadProps = { name: string; legend: string | null; sub: ReactNode }
+type CardHeadProps = { name: string; legend: string | null; sub: ReactNode; isBusy: boolean }
 
-export function CardHead({ name, legend, sub }: CardHeadProps) {
+export function CardHead({ name, legend, sub, isBusy }: CardHeadProps) {
   return (
     <span className="head">
       <LegendPortrait legend={legend} />
@@ -36,6 +36,12 @@ export function CardHead({ name, legend, sub }: CardHeadProps) {
         <span className="name">{name}</span>
         <span className="sub">{sub}</span>
       </span>
+      {isBusy && <Spinner />}
     </span>
   )
+}
+
+// shown while the card waits for its data or refreshes it
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />
 }

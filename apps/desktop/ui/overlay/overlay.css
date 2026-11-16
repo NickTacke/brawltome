@@ -25,16 +25,17 @@ body {
 
 /* ---------- cards ---------- */
 
+/* the panel and the banner share one grid cell row, so a long banner hangs below the panel and still counts
+   towards the window size */
 .card {
   position: relative;
-  display: flex;
-  width: 424px;
+  display: grid;
+  grid-template-columns: 10px 106px 1fr;
+  width: 440px;
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  border: 1px solid hsl(var(--line) / 0.9);
-  border-radius: 10px;
-  background: hsl(var(--ink) / 0.9);
+  border: 0;
+  background: none;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -44,37 +45,55 @@ button.card {
   cursor: pointer;
 }
 
-/* everything right of the rank banner */
+/* the card's panel, under the banner, with its content right of it */
 .main {
+  position: relative;
   display: block;
-  flex: 1;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: start;
   min-width: 0;
+  padding-left: 124px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--line) / 0.9);
+  border-radius: 10px;
+  background: hsl(var(--ink) / 0.9);
 }
 
-/* the banner hangs from the top edge of the card, like it does in game */
+/* the banner hangs from the top edge of the card, like it does in game; higher tiers hang longer */
 .banner-slot {
   position: relative;
-  flex: none;
-  align-self: stretch;
-  width: 72px;
-  margin-left: 12px;
+  z-index: 1;
+  display: block;
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
 }
 
 .banner {
-  position: absolute;
-  inset: 0 0 auto 0;
+  display: block;
   width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: top;
-  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.5));
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.55));
+  animation: unroll 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* a pennant without a tier, so loading and failed cards keep their shape */
+/* the banner unrolls from its rod, like it does on the game's ranked screen */
+@keyframes unroll {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-6px);
+  }
+  to {
+    clip-path: inset(0 0 -20% 0);
+    transform: translateY(0);
+  }
+}
+
+/* a pennant without a tier, inside the panel, so loading and failed cards keep their shape */
 .banner-empty {
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: min(96px, calc(100% - 8px));
+  display: block;
+  width: 100%;
+  height: 104px;
   background: hsl(var(--raised) / 0.55);
   clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
 }
@@ -97,7 +116,7 @@ button.card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 11px 14px 10px;
 }
 
 .portrait {
@@ -156,13 +175,57 @@ button.card {
 }
 
 .figures {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 16px;
+  align-items: end;
+  padding: 9px 14px 11px;
   border-top: 1px solid hsl(var(--line) / 0.6);
   white-space: nowrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stat + .stat {
+  padding-left: 16px;
+  border-left: 1px solid hsl(var(--line) / 0.6);
+}
+
+.stat-value {
+  font-size: 19px;
+  white-space: nowrap;
+  font-weight: 800;
+  line-height: 22px;
+  color: hsl(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.peak {
+  margin-left: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  color: hsl(var(--soft) / 0.8);
+}
+
+.stat-value.rate {
+  font-size: 20px;
+  line-height: 30px;
+}
+
+.stat-label {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--soft) / 0.75);
+  text-overflow: ellipsis;
 }
 
 .elo {
@@ -174,14 +237,6 @@ button.card {
   font-variant-numeric: tabular-nums;
 }
 
-.peak {
-  margin-left: 6px;
-  font-size: 15px;
-  font-weight: 700;
-  color: hsl(var(--soft) / 0.75);
-  font-variant-numeric: tabular-nums;
-}
-
 .label {
   font-size: 10px;
   font-weight: 700;
@@ -190,17 +245,6 @@ button.card {
   color: hsl(var(--soft) / 0.75);
 }
 
-.record {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: hsl(var(--soft));
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.record b {
-  font-weight: 700;
-}
 .rate-high {
   color: hsl(var(--won));
 }
@@ -211,62 +255,29 @@ button.card {
   color: hsl(var(--soft));
 }
 
-/* the same height as a filled figures row: 1 + 10 + 30 + 12 */
-.figures.placeholder {
-  align-items: center;
-  height: 53px;
-}
-
+/* where a figure goes once the answer comes in */
 .bar {
   display: block;
-  height: 12px;
+  width: 56px;
+  height: 18px;
   border-radius: 4px;
-  background: hsl(var(--raised));
-  opacity: 0.7;
+  background: hsl(var(--raised) / 0.7);
 }
 
-.bar.wide {
-  width: 132px;
-  height: 22px;
-}
-.bar.narrow {
-  width: 116px;
+.bar.lead {
+  width: 150px;
+  height: 26px;
 }
 
-/* time left before the card hides */
-.timer {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: block;
-  height: 2px;
-  background: hsl(var(--raised));
+.bar.sub-bar {
+  width: 112px;
+  height: 10px;
+  margin-top: 5px;
 }
 
-.timer i {
-  display: block;
-  height: 100%;
-  background: hsl(var(--primary));
-  transform-origin: left;
-  animation-name: drain;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
-
-@keyframes drain {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
-}
-
-.refresh {
-  position: absolute;
-  inset: 0 0 auto 0;
-  display: block;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 10%, hsl(var(--primary)) 45%, transparent 80%);
+.bar.label-bar {
+  width: 64px;
+  height: 8px;
 }
 
 .note {
@@ -312,6 +323,25 @@ button.card {
   font-size: 16px;
 }
 
+/* top right of the head while the card waits for its data or refreshes it */
+.spinner {
+  flex: none;
+  align-self: flex-start;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0 auto;
+  border: 2px solid hsl(var(--line));
+  border-top-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---------- 2v2 ---------- */
 
 /* the height of a filled head, so a loading team or one without a rating doesn't jump when it fills in */
@@ -330,8 +360,13 @@ button.card {
 .team-head .label {
   margin-left: auto;
 }
+.team-head .spinner {
+  align-self: center;
+  margin: 0;
+}
 .team-head .bar {
-  height: 20px;
+  width: 120px;
+  height: 22px;
 }
 
 .players {
@@ -387,10 +422,17 @@ button.card {
   opacity: 0.6;
 }
 
-button.card:hover {
+button.card:hover .main {
   border-color: hsl(var(--primary) / 0.8);
 }
 
 button.card:hover .name {
   color: hsl(var(--primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner,
+  .spinner {
+    animation: none;
+  }
 }
