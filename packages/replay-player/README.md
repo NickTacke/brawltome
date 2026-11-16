@@ -41,12 +41,14 @@ for (const [slot, player] of replay.players) {
 for (const object of objects) if (!object.behind) drawObject(ctx, replay, object, levelToCanvas)
 ```
 
-- `loadReplay(manifestUrl, { baseUrl, onProgress?, fetch? })` fetches the manifest, then every art group's piece
-  table, the first seconds' animation packs and the sheets they draw from, and resolves with the `Replay`. Every path
+- `loadReplay(manifestUrl, { baseUrl, onProgress?, fetch?, signal? })` fetches the manifest, then every art group's
+  piece table, the first seconds' animation packs and the sheets they draw from, and resolves with the `Replay`. Every path
   in the manifest is resolved against `baseUrl`, the art store's root, not against the manifest's URL;
   `replay.assetUrl(path)` resolves one the same way (the map's `layout`, the `background`). In the background it
   fetches the other packs, then every sheet in `sheetOrder`, four at a time. `replay.loaded` settles when everything
-  is in. It rejects a manifest whose `format` isn't `FORMAT` (3).
+  is in. It rejects a manifest whose `format` isn't `FORMAT` (3). Abort `signal` when the page leaves the match or
+  opens another: every download stops, `loadReplay` rejects if it hasn't resolved yet, and `replay.loaded` rejects
+  with the signal's reason (an `AbortError`), so catch it or ignore that error.
 - `drawPlayer` and `drawObject` draw a player or an object whole or not at all: while a piece of the frame hasn't
   loaded they draw nothing, return `false`, and move the sheets that frame needs to the front of what's left to load.
   A page that pauses while they return `false` never shows a half-loaded legend.

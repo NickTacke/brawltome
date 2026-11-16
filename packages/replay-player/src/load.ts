@@ -20,8 +20,15 @@ export type LoadOptions = {
   // the art store's root, which the manifest's art/, sheets/, anims/ and maps/ paths are relative to
   baseUrl: string | URL
   onProgress?: (progress: Progress) => void
-  fetch?: (url: string) => Promise<Response>
+  fetch?: Fetch
+  // aborting it stops the replay's downloads: loadReplay rejects if it hasn't resolved, and replay.loaded rejects
+  // with the signal's reason (an AbortError) instead of loading the rest
+  signal?: AbortSignal
 }
+
+type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
+
+const fetchOf = (options: LoadOptions): Fetch => options.fetch ?? ((url, init) => fetch(url, init))
 
 // the shape of every path the export writes into a manifest: a folder of the store and a file named by its hash
 const STORE_PATH = /^(art|sheets|anims|maps)\/[0-9a-f]+\.(json|bin|webp)$/
@@ -63,9 +70,15 @@ function storeRootOf(baseUrl: string | URL): URL {
   return root
 }
 
-async function fetchManifest(get: (url: string) => Promise<Response>, manifestUrl: string | URL): Promise<Manifest> {
+async function fetchManifest(manifestUrl: string | URL, options: LoadOptions): Promise<Manifest> {
   const url = new URL(manifestUrl, globalThis.location?.href).href
-  const response = await get(url)
+  const signal = options.signal
+
+  signal?.throwIfAborted()
+
+  const response = await fetchOf(options)(url, { signal })
+
+  signal?.throwIfAborted()
 
   if (!response.ok) throw new Error(`load replay ${url}: HTTP ${response.status}`)
 
@@ -83,7 +96,8 @@ class Store {
   readonly manifest: Manifest
   started = false
   private readonly root: URL
-  private readonly get: (url: string) => Promise<Response>
+  private readonly get: Fetch
+  private readonly signal?: AbortSignal
   private readonly onProgress?: (progress: Progress) => void
   private readonly totalBytes: number
   private loadedBytes = 0
@@ -91,7 +105,8 @@ class Store {
   constructor(manifest: Manifest, options: LoadOptions) {
     this.manifest = manifest
     this.root = storeRootOf(options.baseUrl)
-    this.get = options.fetch ?? ((url) => fetch(url))
+    this.get = fetchOf(options)
+    this.signal = options.signal
     this.onProgress = options.onProgress
     this.totalBytes = Object.values(manifest.bytes).reduce((total, bytes) => total + bytes, 0)
   }
@@ -110,6 +125,10 @@ class Store {
     return url.href
   }
 
+  throwIfAborted() {
+    this.signal?.throwIfAborted()
+  }
+
   // progress counts a file in, by its path, and tells onProgress
   progress(path?: string) {
     if (path) this.loadedBytes += this.manifest.bytes[path] ?? 0
@@ -119,7 +138,13 @@ class Store {
 
   async file(path: string): Promise<Response> {
     const url = this.urlOf(path)
-    const response = await this.get(url)
+
+    this.throwIfAborted()
+
+    const response = await this.get(url, { signal: this.signal })
+
+    // a response that arrives after the replay was abandoned is dropped, whatever fetch did with the signal
+    this.throwIfAborted()
 
     if (!response.ok) throw new Error(`load replay file ${url}: HTTP ${response.status}`)
 
@@ -204,6 +229,9 @@ class Sheets {
 
   private async fetchSheet(src: string) {
     const blob = await (await this.store.file(src)).blob()
+
+    this.store.throwIfAborted()
+
     const bitmap = await createImageBitmap(blob)
 
     // a sheet two groups name is fetched and decoded once
@@ -333,7 +361,7 @@ async function loadRest(store: Store, drawables: [ManifestArt, Drawable][], shee
 // loadReplay loads a manifest and resolves once the players and objects the match's first seconds show
 // (manifest.start) can be drawn completely; the rest goes on loading, and replay.loaded settles when it's done
 export async function loadReplay(manifestUrl: string | URL, options: LoadOptions): Promise<Replay> {
-  const manifest = await fetchManifest(options.fetch ?? ((url) => fetch(url)), manifestUrl)
+  const manifest = await fetchManifest(manifestUrl, options)
   const store = new Store(manifest, options)
 
   const arts = [...Object.values(manifest.players), ...(manifest.objects ? [manifest.objects] : [])]
