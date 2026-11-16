@@ -253,6 +253,17 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/modules/match-insights": {
+      "name": "@brawltome/match-insights",
+      "dependencies": {
+        "@brawltome/contracts": "workspace:*",
+        "zod": "4.6.7",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/modules/player": {
       "name": "@brawltome/player",
       "dependencies": {
@@ -510,6 +521,8 @@
     "@brawltome/foundation": ["@brawltome/foundation@workspace:packages/foundation"],
 
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
+
+    "@brawltome/match-insights": ["@brawltome/match-insights@workspace:packages/modules/match-insights"],
 
     "@brawltome/player": ["@brawltome/player@workspace:packages/modules/player"],
 
