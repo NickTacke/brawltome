@@ -1,11 +1,8 @@
 import type { MomentClass } from '@brawltome/contracts'
+import { BIG_PUNISH_DAMAGE, EARLY_KO_DAMAGE } from '@brawltome/contracts/match-insights-rules'
 
 // the classes the insights put each exchange in, as players would name them. each is a rule over what the line
 // records, never a judgement of how well it was played
-
-// the insights' own lines between an early KO and a late one, and a small punish and a big one
-const earlyKoDamage = 100
-const bigDamage = 30
 
 export const classLabels: Record<MomentClass, string> = {
   'team-ko': 'Team KO',
@@ -25,9 +22,9 @@ export const classLabels: Record<MomentClass, string> = {
 export const classRules: Record<MomentClass, string> = {
   'team-ko': "A teammate's hit knocked the player out",
   fall: 'The player went out with no enemy credited for it',
-  'early-ko': `The player was knocked out under ${earlyKoDamage} damage`,
-  ko: `The player was knocked out at ${earlyKoDamage} damage or more`,
-  big: `The punish dealt ${bigDamage} damage or more`,
+  'early-ko': `The player was knocked out under ${EARLY_KO_DAMAGE} damage`,
+  ko: `The player was knocked out at ${EARLY_KO_DAMAGE} damage or more`,
+  big: `The punish dealt ${BIG_PUNISH_DAMAGE} damage or more`,
   trade: 'Both players hit each other within 0.16 s',
   whiff: 'The first hit landed while the player was in the recovery of an attack that missed',
   swing: 'The first hit landed while the player was in an attack of their own',
