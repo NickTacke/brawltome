@@ -234,6 +234,9 @@ class Sheets {
 
     const bitmap = await createImageBitmap(blob)
 
+    // decoding takes a while; a replay abandoned meanwhile keeps nothing and reports nothing
+    this.store.throwIfAborted()
+
     // a sheet two groups name is fetched and decoded once
     for (const group of this.groups) {
       group.json.sheets.forEach((sheet, index) => {

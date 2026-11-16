@@ -71,3 +71,29 @@ test('loadReplay hands the signal to every fetch', async () => {
 
   expect([...signals]).toEqual([controller.signal])
 })
+
+test('aborting while the last start sheet decodes rejects loadReplay', async () => {
+  const store = stubArtStore()
+  const controller = new AbortController()
+  const startedFlags: boolean[] = []
+  const onProgress = (progress: { started: boolean }) => startedFlags.push(progress.started)
+
+  // the page leaves while the browser decodes the only start sheet
+  Object.assign(globalThis, {
+    createImageBitmap: async () => {
+      controller.abort()
+
+      return { width: 8, height: 8, close() {} }
+    },
+  })
+
+  try {
+    await expect(
+      loadReplay(manifestUrl, { baseUrl: artUrl, fetch: store.fetch, signal: controller.signal, onProgress }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(startedFlags).not.toContain(true)
+  } finally {
+    stubImageBitmaps()
+  }
+})
