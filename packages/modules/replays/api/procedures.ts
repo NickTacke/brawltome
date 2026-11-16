@@ -22,6 +22,8 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
   const { accounts } = createPostgresAccounts(runtime.database)
   const operators = new Set(runtime.replayOperatorAccountIds ?? [])
   const isOpen = runtime.replaysOpen ?? false
+  const artStore = runtime.replayArt?.store ?? null
+  const artBaseUrl = runtime.replayArt?.baseUrl ?? null
 
   // until replays open to everyone, only operators see anything; to others the pages don't exist yet
   async function canSee(sessionToken: string | undefined): Promise<boolean> {
@@ -85,7 +87,10 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .handler(async ({ context, input }) => {
       await requireSight(context.visitorSessionToken, 'NOT_FOUND')
 
-      const found = await getMatch(runtime.database.sql, input.id)
+      const found = await getMatch(
+        { database: runtime.database, objectStore: objectStore(), artStore, artBaseUrl },
+        input.id,
+      )
 
       if (!found) throw new ORPCError('NOT_FOUND')
 

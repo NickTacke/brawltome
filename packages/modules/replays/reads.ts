@@ -1,7 +1,9 @@
 import type { MatchDetailContract, MatchSummaryContract, MyReplayContract } from '@brawltome/contracts'
 import type { ObjectStore, Sql } from '@brawltome/foundation'
+import { insightsOf, logInsightsFailure } from './insights'
 import { replayKey } from './keys'
-import { findMatchRow, type MatchRow } from './match-row'
+import { findMatchRow, type MatchRow, type StoredMatchRow } from './match-row'
+import type { ReplaysDeps } from './model'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
 
@@ -50,12 +52,37 @@ function summaryOf(row: MatchRow, players: PlayerRow[]): MatchSummaryContract {
   }
 }
 
-export async function getMatch(sql: Sql, id: string): Promise<MatchDetailContract | null> {
+/** What reading a match needs: the art bucket's address is null when this process has no art bucket. */
+export type MatchReadDeps = Pick<ReplaysDeps, 'database' | 'objectStore' | 'artStore'> & { artBaseUrl: string | null }
+
+// a queued or failed export keeps the last good manifest, so its address is given whatever the state
+function artOf(row: StoredMatchRow, artBaseUrl: string | null): MatchDetailContract['art'] {
+  const manifestUrl = artBaseUrl && row.artManifestKey ? `${artBaseUrl}/${row.artManifestKey}` : null
+
+  return { state: row.artState, manifestUrl, baseUrl: artBaseUrl }
+}
+
+// a match whose insights fail still has its page, without them
+async function insightsOrNull(deps: MatchReadDeps, row: StoredMatchRow): Promise<MatchDetailContract['insights']> {
+  try {
+    return await insightsOf(deps, row)
+  } catch (error) {
+    logInsightsFailure(row.id, error)
+
+    return null
+  }
+}
+
+export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDetailContract | null> {
+  const sql = deps.database.sql
   const row = await findMatchRow(sql, id)
 
   if (!row) return null
 
   const players = await playersOf(sql, [row.id])
+  const insights = await insightsOrNull(deps, row)
+  // the page only plays back the matches it has insights for
+  const playbackPath = insights ? `/match/${row.id}/playback/${encodeURIComponent(row.build)}` : null
 
   return {
     ...summaryOf(row, players),
@@ -67,6 +94,9 @@ export async function getMatch(sql: Sql, id: string): Promise<MatchDetailContrac
     failedChecks: row.failedChecks,
     players: players.map(({ matchId: _matchId, ...player }) => player),
     replay: { available: !row.fileDeleted, patch: row.patch, fileName: replayFileName(row.patch, row.mapName) },
+    insights,
+    art: artOf(row, deps.artBaseUrl),
+    playbackPath,
   }
 }
 

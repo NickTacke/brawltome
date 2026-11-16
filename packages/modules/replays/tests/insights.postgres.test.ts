@@ -7,12 +7,14 @@ import { replaysModule } from '../index'
 import { readMatchInsightsFor } from '../insights'
 import { claimJob, completeJob } from '../jobs'
 import type { ReplaysDeps } from '../model'
+import { getMatch } from '../reads'
 import { uploadReplays } from '../upload'
 import { fakeLayout } from './fixtures/art'
 import { brokenLine, insightLine, timedLine } from './fixtures/insight-lines'
 import { fakeReplay } from './fixtures/replays'
 
 const connectionString = process.env.DATABASE_URL
+const artBaseUrl = 'https://art.brawltome.app'
 const mapPath = `maps/${'4'.repeat(32)}.json`
 
 // a map file as the art export writes it; the insights read its layout
@@ -175,5 +177,48 @@ describe.skipIf(!connectionString)('match insights', () => {
 
     expect(insightKeys(matchId)).toEqual([])
     expect(logged).toEqual([expect.stringContaining(matchId)])
+  })
+
+  test('the match carries its insights, its art and where its playback is served', async () => {
+    const matchId = await storedMatch()
+    const readDeps = { ...deps, artBaseUrl }
+
+    const match = await getMatch(readDeps, matchId)
+
+    expect(match?.insights?.version).toBe(1)
+    expect(match?.art).toEqual({ state: 'queued', manifestUrl: null, baseUrl: artBaseUrl })
+    expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1`)
+  })
+
+  test('a failed export keeps the address of the last good manifest', async () => {
+    const matchId = await storedMatch()
+    const manifestKey = `matches/${matchId}/dev-1-lease/manifest.json`
+
+    await database.sql`
+      UPDATE replays.matches SET art_state = 'failed', art_manifest_key = ${manifestKey},
+        art_failure = ${JSON.stringify({ code: 'worker-error' })}::text::jsonb
+      WHERE id = ${matchId}
+    `
+
+    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+
+    expect(match?.art).toEqual({ state: 'failed', manifestUrl: `${artBaseUrl}/${manifestKey}`, baseUrl: artBaseUrl })
+  })
+
+  test('without an art bucket the art has no addresses', async () => {
+    const matchId = await storedMatch()
+
+    const match = await getMatch({ ...deps, artStore: null, artBaseUrl: null }, matchId)
+
+    expect(match?.art).toEqual({ state: 'queued', manifestUrl: null, baseUrl: null })
+  })
+
+  test('a timed match has no insights and no playback', async () => {
+    const matchId = await storedMatch(timedLine())
+
+    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+
+    expect(match?.insights).toBeNull()
+    expect(match?.playbackPath).toBeNull()
   })
 })
