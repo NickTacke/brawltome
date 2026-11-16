@@ -5,25 +5,19 @@ import { gunzipSync } from 'node:zlib'
 // a real anonymised ranked 1v1, shared with the match-insights module's tests
 
 type Line = {
-  stats: Record<string, unknown>
   match: { rules: { mode: { id: number; name: string } } }
   timeline: Record<string, unknown>
 }
 
 const fixtureFolder = resolve(import.meta.dir, '../../../match-insights/tests/fixtures')
 
-function readLine(): Line {
-  const line = JSON.parse(gunzipSync(readFileSync(resolve(fixtureFolder, 'duel-a.line.gz'))).toString('utf8')) as Line
-
-  // a stock line has no Score, which storing a match still requires here; #532 drops that, and this with it
-  for (const slot of ['Player1', 'Player2']) line.stats[slot] = { Score: 0, ...(line.stats[slot] as object) }
-
-  return line
-}
-
 /** The line as text, the way the worker sends it. */
 export function insightLine(): string {
-  return JSON.stringify(readLine())
+  return gunzipSync(readFileSync(resolve(fixtureFolder, 'duel-a.line.gz'))).toString('utf8')
+}
+
+function readLine(): Line {
+  return JSON.parse(insightLine()) as Line
 }
 
 /** The same 1v1, played as a timed match, which the match page wasn't designed for. */

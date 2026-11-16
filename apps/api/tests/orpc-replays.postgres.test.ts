@@ -191,12 +191,8 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
 // a real anonymised 1v1, shared with the match-insights module's tests
 function realLine(): string {
   const path = resolve(import.meta.dir, '../../../packages/modules/match-insights/tests/fixtures/duel-a.line.gz')
-  const line = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(readFileSync(path))))
 
-  // a stock line has no Score, which storing a match still requires here; #532 drops that, and this with it
-  for (const slot of ['Player1', 'Player2']) line.stats[slot] = { Score: 0, ...line.stats[slot] }
-
-  return JSON.stringify(line)
+  return new TextDecoder().decode(Bun.gunzipSync(readFileSync(path)))
 }
 
 function madeUpLine(): string {
