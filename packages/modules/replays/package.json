@@ -6,7 +6,8 @@
     ".": "./index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "write-site-playback": "bun run scripts/write-site-playback.ts"
   },
   "dependencies": {
     "@brawltome/accounts": "workspace:*",
