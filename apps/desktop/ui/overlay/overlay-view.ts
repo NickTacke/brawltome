@@ -23,7 +23,11 @@ export type CardData =
 
 export type TeamData =
   | { state: 'loading' }
-  | { state: 'ready'; standing: { tier: string | null; rating: number } | null; isRefreshing: boolean }
+  | {
+      state: 'ready'
+      standing: { tier: string | null; rating: number; wins: number; games: number } | null
+      isRefreshing: boolean
+    }
   | Failed
 
 export type TeamPlayer = PlayerHead & { personalRating2v2: number | null; oneVsOneRating: number | null }

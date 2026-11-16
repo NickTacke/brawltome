@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { BannerSlot, CardHead } from './CardHead'
-import { failureText, formatCount, tierLabel, winRateClass, winRatePercent } from './card-format'
+import { failureText, tierLabel } from './card-format'
 import type { CardData, PlayerHead } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
+import { WinRate } from './WinRate'
 
 type Ranked = Extract<CardData, { state: 'ranked' }>
 type SubPart = { key: string; content: ReactNode }
@@ -93,20 +94,6 @@ function RankedFigures({ data }: { data: Ranked }) {
         <span className="stat-label">Elo / peak</span>
       </span>
       <WinRate wins={data.wins} games={data.games} />
-    </span>
-  )
-}
-
-// the win rate over the season's games, with the game count as its label
-function WinRate({ wins, games }: { wins: number; games: number }) {
-  const percent = winRatePercent(wins, games)
-  const gamesText = `${formatCount(games)} ${games === 1 ? 'game' : 'games'}`
-  const valueClass = percent === null ? 'stat-value rate' : `stat-value rate ${winRateClass(percent)}`
-
-  return (
-    <span className="stat">
-      <span className={valueClass}>{percent === null ? '—' : `${percent}%`}</span>
-      <span className="stat-label">{gamesText}</span>
     </span>
   )
 }
