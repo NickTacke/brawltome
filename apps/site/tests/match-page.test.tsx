@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { MatchInsights, SummaryPlayer } from '@brawltome/contracts'
+import type { Habit, MatchInsights, SummaryPlayer } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
+import { matchPlayersOf } from '../src/components/match/match-players'
+import { HabitDetail } from '../src/components/match/modules/HabitDetail'
 import { moveCode } from '../src/components/match/review/move-notation'
-import { type InsightsFixture, matchDetailOf } from './match-fixtures'
+import { type InsightsFixture, matchDetailOf, readInsights } from './match-fixtures'
 
 // the numbers the page shows, each as it is written next to its neighbours: these tests read the markup as the run of
 // texts between its tags and look for each figure's run, so a number lands under the right name and in the right row
@@ -243,6 +245,61 @@ describe.each(fixtures)('the match page of %s', (name) => {
           `${move.usesLanded} of ${move.uses}`,
           String(Math.round(move.damage)),
         ])
+      }
+    }
+  })
+})
+
+// a habit opened up: its header and a row per option picked, read as the run of texts like the page above
+function detailTextsOf(insights: MatchInsights, habit: Habit, slot: number): string[] {
+  const markup = renderToStaticMarkup(
+    <HabitDetail
+      habit={habit}
+      players={matchPlayersOf(insights)}
+      selectedSlot={slot}
+      durationMs={insights.summary.durationMs}
+      onClose={() => undefined}
+    />,
+  )
+
+  return markup
+    .split(/<[^>]*>/)
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+}
+
+function shownRowsOf(texts: string[], habit: Habit) {
+  const used = habit.options.filter((option) => option.count > 0)
+
+  return used.map((option) => {
+    const start = texts.findIndex((text, index) => text === option.label && texts[index + 1] === String(option.count))
+
+    return { option, row: texts.slice(start, start + 5) }
+  })
+}
+
+describe.each(fixtures)('an opened habit of %s', (name) => {
+  const insights = readInsights(name)
+
+  const habits = insights.insights.players.flatMap((player) =>
+    player.habits.filter((habit) => habit.total > 0).map((habit) => ({ slot: player.slot, habit })),
+  )
+
+  test('shows every option picked with its count, share, punishes and damage', () => {
+    for (const { slot, habit } of habits) {
+      const texts = detailTextsOf(insights, habit, slot)
+
+      for (const { option, row } of shownRowsOf(texts, habit)) {
+        const shownDamage = Number(row[4])
+
+        expect(row.slice(0, 4)).toEqual([
+          option.label,
+          String(option.count),
+          share(option.count / habit.total),
+          String(option.punished),
+        ])
+
+        expect(Math.abs(shownDamage - option.costDamage)).toBeLessThan(1)
       }
     }
   })
