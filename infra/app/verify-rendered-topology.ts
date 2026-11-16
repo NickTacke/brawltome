@@ -4,6 +4,8 @@ import { posix } from 'node:path'
 
 const expectedServices = ['migration', 'postgres', 'api', 'operations-worker', 'web', 'site'] as const
 const releaseCommitPattern = /^[0-9a-f]{40}$/
+// same shape as desktopVersionSchema in packages/contracts, which the api checks at start-up
+const desktopVersionPattern = /^\d{1,5}\.\d{1,5}\.\d{1,5}(?:-[0-9A-Za-z.-]{1,20})?$/
 
 const expectedServiceNetworks: Record<string, string[]> = {
   api: ['application', 'observability'],
@@ -222,6 +224,12 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
   if (isRecord(api)) {
     if (readPath(api, 'environment', 'CORS_ORIGIN') !== 'https://brawltome.app') {
       violations.push('api must allow only the final public web origin')
+    }
+
+    const minimumDesktopVersion = readPath(api, 'environment', 'DESKTOP_MINIMUM_VERSION')
+
+    if (typeof minimumDesktopVersion !== 'string' || !desktopVersionPattern.test(minimumDesktopVersion)) {
+      violations.push('api must name the oldest desktop app it serves')
     }
 
     const discordClientId = readPath(api, 'environment', 'DISCORD_CLIENT_ID')

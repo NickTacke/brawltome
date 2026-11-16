@@ -129,6 +129,8 @@ services:
     environment:
       AUTHENTICATED_REFRESH_IP_LIMIT: "120"
       CORS_ORIGIN: https://brawltome.app
+      # the oldest desktop app /desktop/v1 answers; an older one is told to update
+      DESKTOP_MINIMUM_VERSION: "0.2.0"
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Set the Discord OAuth client ID}
       DISCORD_REDIRECT_URI: https://api.brawltome.app/auth/discord/callback
       NODE_ENV: production
