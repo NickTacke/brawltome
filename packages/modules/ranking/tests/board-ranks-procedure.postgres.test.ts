@@ -335,6 +335,15 @@ describe('boardRanksById', () => {
     expect(await readRanks({ id: bram.id, region: 'EU' })).toEqual({ globalRank: 3, regionRank: 6 })
   })
 
+  test('is offered to other packages with the answer the procedure gives', async () => {
+    const ranking = await import('../index')
+
+    expect(await ranking.readPlayerBoardRanks(database.sql, { brawlhallaId: anna.id, region: 'EU' })).toEqual({
+      globalRank: 2,
+      regionRank: 1,
+    })
+  })
+
   test('rejects callers from outside', () => {
     const { boardRanksById } = createRankingProcedures({ database })
 
