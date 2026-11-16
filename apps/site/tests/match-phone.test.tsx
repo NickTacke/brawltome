@@ -5,6 +5,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
+import { matchPlayersOf } from '../src/components/match/match-players'
+import { PlayerMoves } from '../src/components/match/modules/PlayerMoves'
+import { PlayerNumbers } from '../src/components/match/PlayerNumbers'
+import { PlayerPick } from '../src/components/match/PlayerPick'
 import { lanePlayersOf } from '../src/components/match/review/lane-players'
 import { MatchTimeline } from '../src/components/match/review/MatchTimeline'
 import { ReviewCardSlot } from '../src/components/match/review/ReviewCardSlot'
@@ -195,6 +199,27 @@ describe('tap targets on a phone', () => {
     const markup = renderPage()
 
     expect(classOf(tagWith(markup, 'aria-label="Fullscreen"'))).toContain('phone:size-11')
+  })
+
+  test('picking a player, wherever the page offers it', () => {
+    const insights = readInsights('doubles-b')
+    const players = matchPlayersOf(insights)
+    const [first] = players
+
+    if (!first) throw new Error('doubles-b has no players')
+
+    expectFingerSized(
+      renderToStaticMarkup(<PlayerPick matchPlayer={first} isPicked stocks={3} isCompact onPick={ignore} />),
+    )
+
+    expectFingerSized(
+      renderToStaticMarkup(<PlayerNumbers rows={[]} players={players} selectedSlot={1} onSelect={ignore} />),
+    )
+
+    // the player's name over their moves is the pick; the buttons after it show more moves
+    const moves = renderToStaticMarkup(<PlayerMoves matchPlayer={first} sort="damage" isPicked onPick={ignore} />)
+
+    expectFingerSized(buttonsOf(moves)[0] ?? '')
   })
 })
 

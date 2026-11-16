@@ -25,7 +25,7 @@ export function PlayerPick({ matchPlayer, isPicked, stocks, isCompact, onPick }:
       type="button"
       aria-pressed={isPicked}
       onClick={onPick}
-      className={`-mx-3 flex w-[calc(100%+1.5rem)] cursor-pointer items-center gap-3 rounded-lg px-3 text-left transition-colors ${rowHeight} ${look}`}
+      className={`-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] cursor-pointer items-center gap-3 rounded-lg px-3 text-left transition-colors ${rowHeight} ${look}`}
     >
       <LegendMark
         player={player}

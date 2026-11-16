@@ -24,7 +24,7 @@ export function PlayerMoves({ matchPlayer, sort, isPicked, onPick }: PlayerMoves
         type="button"
         aria-pressed={isPicked}
         onClick={onPick}
-        className={`flex max-w-full cursor-pointer items-center gap-2.5 text-sm font-bold hover:text-strong ${isPicked ? 'text-strong' : 'text-text'}`}
+        className={`flex max-w-full cursor-pointer items-center gap-2.5 text-sm font-bold hover:text-strong phone:min-h-11 ${isPicked ? 'text-strong' : 'text-text'}`}
       >
         <LegendMark player={player} slot={slot} isDecorative />
         <span className="truncate">{player.name}</span>

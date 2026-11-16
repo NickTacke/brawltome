@@ -36,7 +36,8 @@ function LegendHeads({ players, selectedSlot, onSelect }: Picking) {
       aria-pressed={slot === selectedSlot}
       title={player.name}
       onClick={() => onSelect(slot)}
-      className={`flex cursor-pointer justify-end pt-1.5 pr-2 pb-1 ${columnLook(slot === selectedSlot, true, false)}`}
+      // a finger's height on a phone
+      className={`flex cursor-pointer justify-end pt-1.5 pr-2 pb-1 phone:min-h-11 phone:items-center phone:py-0 ${columnLook(slot === selectedSlot, true, false)}`}
     >
       <LegendMark player={player} slot={slot} isDecorative />
     </button>
