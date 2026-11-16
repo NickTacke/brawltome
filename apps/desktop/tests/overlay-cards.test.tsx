@@ -4,7 +4,7 @@ import path from 'node:path'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Overlay } from '../ui/overlay/Overlay'
-import type { CardData, OverlayView, TeamPlayer } from '../ui/overlay/overlay-view'
+import type { CardData, OverlayView } from '../ui/overlay/overlay-view'
 import { SoloCard } from '../ui/overlay/SoloCard'
 
 function fixture(name: string): OverlayView {
@@ -83,14 +83,6 @@ function withSoloName(view: OverlayView, name: string): OverlayView {
   return { ...view, cards: [{ ...card, player: { ...card.player, name } }] }
 }
 
-function teamPlayersOf(view: OverlayView): TeamPlayer[] {
-  const [card] = view.cards
-
-  if (card?.kind !== 'team') throw new Error('expected a team card in the fixture')
-
-  return card.players
-}
-
 describe('overlay cards', () => {
   test('a ranked card shows tier, rank, Elo, peak, win rate and games, and no region', () => {
     const html = render(fixture('solo-ranked'))
@@ -148,7 +140,6 @@ describe('overlay cards', () => {
     const failedCard = SoloCard({
       player: card.player,
       data: card.data,
-      isDeferred: false,
       timer: null,
       onOpenProfile: (brawlhallaId) => opened.push(brawlhallaId),
       onRetry: ignore,
@@ -244,16 +235,6 @@ describe('overlay cards', () => {
 
     expect(textOf(partOf(html, 'unknown'))).toBe('?')
     expect(html).not.toContain('/legends/')
-  })
-
-  test('a clicked profile waiting for the match to end says so', () => {
-    const solo = render({ ...fixture('solo-ranked'), deferredProfileIds: [91913839] })
-    const team = fixture('team')
-    const teammate = teamPlayersOf(team)[1]?.brawlhallaId ?? 0
-    const teamHtml = render({ ...team, deferredProfileIds: [teammate] })
-
-    expect(textOf(partOf(solo, 'sub'))).toBe('Opens after the match')
-    expect(textOf(partOf(teamHtml, 'players'))).toBe('Shinigami2190tidecallerOpens after the match')
   })
 
   test('the cards have no shadow or blur, and the page is see-through', () => {

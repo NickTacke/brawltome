@@ -1,19 +1,18 @@
 import type { ReactNode } from 'react'
 import { LegendPortrait, TierBanner } from './CardHead'
-import { DEFERRED_PROFILE_TEXT, failureText } from './card-format'
+import { failureText } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
 
 type TeamCardProps = {
   data: TeamData
   players: TeamPlayer[]
-  deferredProfileIds: number[]
   timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-export function TeamCard({ data, players, deferredProfileIds, timer, onOpenProfile, onRetry }: TeamCardProps) {
+export function TeamCard({ data, players, timer, onOpenProfile, onRetry }: TeamCardProps) {
   const isRefreshing = data.state === 'ready' && data.isRefreshing
 
   return (
@@ -22,12 +21,7 @@ export function TeamCard({ data, players, deferredProfileIds, timer, onOpenProfi
       <TeamHead data={data} />
       <span className="players">
         {players.map((player) => (
-          <PlayerRow
-            key={player.brawlhallaId}
-            player={player}
-            isDeferred={deferredProfileIds.includes(player.brawlhallaId)}
-            onOpenProfile={onOpenProfile}
-          />
+          <PlayerRow key={player.brawlhallaId} player={player} onOpenProfile={onOpenProfile} />
         ))}
       </span>
       {data.state === 'failed' && <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />}
@@ -60,14 +54,14 @@ function TeamHead({ data }: { data: TeamData }) {
   )
 }
 
-type PlayerRowProps = { player: TeamPlayer; isDeferred: boolean; onOpenProfile: (brawlhallaId: number) => void }
+type PlayerRowProps = { player: TeamPlayer; onOpenProfile: (brawlhallaId: number) => void }
 
-function PlayerRow({ player, isDeferred, onOpenProfile }: PlayerRowProps) {
+function PlayerRow({ player, onOpenProfile }: PlayerRowProps) {
   return (
     <button type="button" className="player" onClick={() => onOpenProfile(player.brawlhallaId)}>
       <LegendPortrait legend={player.legend} isSmall />
       <span className="name">{player.name}</span>
-      {isDeferred ? <span className="note">{DEFERRED_PROFILE_TEXT}</span> : <PlayerRating player={player} />}
+      <PlayerRating player={player} />
     </button>
   )
 }

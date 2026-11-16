@@ -32,4 +32,4 @@ export type Card =
   | { kind: 'solo'; player: PlayerHead; data: CardData }
   | { kind: 'team'; team: number; data: TeamData; players: TeamPlayer[] }
 
-export type OverlayView = { lobbyId: number; cards: Card[]; visibleMs: number; deferredProfileIds: number[] }
+export type OverlayView = { lobbyId: number; cards: Card[]; visibleMs: number }

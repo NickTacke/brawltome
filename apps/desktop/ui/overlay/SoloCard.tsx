@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { CardHead } from './CardHead'
-import { DEFERRED_PROFILE_TEXT, failureText, formatCount, tierLabel, winRateClass, winRatePercent } from './card-format'
+import { failureText, formatCount, tierLabel, winRateClass, winRatePercent } from './card-format'
 import type { CardData, PlayerHead } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
 
@@ -10,13 +10,12 @@ type SubPart = { key: string; content: ReactNode }
 type SoloCardProps = {
   player: PlayerHead
   data: CardData
-  isDeferred: boolean
   timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-export function SoloCard({ player, data, isDeferred, timer, onOpenProfile, onRetry }: SoloCardProps) {
+export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCardProps) {
   // the profile link doesn't need the lookup, so the head stays clickable beside the retry button
   if (data.state === 'failed') {
     return (
@@ -32,7 +31,7 @@ export function SoloCard({ player, data, isDeferred, timer, onOpenProfile, onRet
 
   const isRefreshing = data.state === 'ranked' && data.isRefreshing
   const tier = data.state === 'ranked' ? data.tier : null
-  const sub = isDeferred ? DEFERRED_PROFILE_TEXT : subLine(data)
+  const sub = subLine(data)
 
   return (
     <button
