@@ -15,7 +15,7 @@ const fixtureFolder = resolve(import.meta.dir, '../../../match-insights/tests/fi
 function readLine(): Line {
   const line = JSON.parse(gunzipSync(readFileSync(resolve(fixtureFolder, 'duel-a.line.gz'))).toString('utf8')) as Line
 
-  // the line's stats dump has no Score, which storing a match reads
+  // a stock line has no Score, which storing a match still requires here; #532 drops that, and this with it
   for (const slot of ['Player1', 'Player2']) line.stats[slot] = { Score: 0, ...(line.stats[slot] as object) }
 
   return line
