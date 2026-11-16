@@ -12,10 +12,20 @@ import {
 import { internalProcedure, type ModuleRuntime, type ObjectStore } from '@brawltome/foundation'
 import { ORPCError } from '@orpc/server'
 import { z } from 'zod'
+import { readPlaybackFor } from '../playback'
 import { getMatch, getReplayFile, listMyReplays, listPlayerMatches } from '../reads'
 import { uploadReplays } from '../upload'
 
 const tags = ['replays']
+
+// the worker reports its build in at most 64 characters
+const buildSchema = z.string().min(1).max(64)
+
+// the site keeps a playback timeline private while replays are closed, and caches it for good once they're open
+const playbackOutputSchema = z.object({
+  headers: z.object({ 'x-replays-open': z.enum(['true', 'false']) }),
+  body: z.file(),
+})
 
 // the site calls these for its visitor; key holders of the public api will get the same procedures later
 export function createReplayProcedures(runtime: ModuleRuntime) {
@@ -136,6 +146,33 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       return new File([new Uint8Array(file.bytes)], file.fileName, { type: 'application/octet-stream' })
     })
 
+  const playback = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/matches/{id}/playback/{build}',
+      operationId: 'replays.playback',
+      summary: 'Playback timeline',
+      tags,
+      outputStructure: 'detailed',
+    })
+    .input(z.object({ id: matchIdSchema, build: buildSchema }))
+    .output(playbackOutputSchema)
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
+      const bytes = await readPlaybackFor(
+        { database: runtime.database, objectStore: objectStore() },
+        input.id,
+        input.build,
+      )
+
+      if (!bytes) throw new ORPCError('NOT_FOUND')
+
+      const body = new File([new Uint8Array(bytes)], `${input.build}.json.gz`, { type: 'application/gzip' })
+
+      return { headers: { 'x-replays-open': isOpen ? 'true' : 'false' }, body } as const
+    })
+
   const mine = internalProcedure
     .route({ method: 'GET', path: '/me/replays', operationId: 'replays.mine', summary: 'Your uploads', tags })
     .output(myReplaysSchema)
@@ -157,7 +194,7 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       return { isOpen, canSee: isVisible, canUpload: isVisible && (await canUpload(sessionToken)) }
     })
 
-  return { access, upload, match, playerMatches, replayFile, mine }
+  return { access, upload, match, playerMatches, replayFile, playback, mine }
 }
 
 async function requireAccount(accounts: Accounts, sessionToken: string | undefined) {

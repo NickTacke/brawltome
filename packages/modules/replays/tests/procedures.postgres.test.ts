@@ -7,6 +7,8 @@ import { call, ORPCError } from '@orpc/server'
 import { createReplayProcedures } from '../api/procedures'
 import { replaysModule } from '../index'
 import { claimJob, completeJob } from '../jobs'
+import { uploadReplays } from '../upload'
+import { insightLine } from './fixtures/insight-lines'
 import { makeLine } from './fixtures/lines'
 import { fakeReplay } from './fixtures/replays'
 
@@ -113,6 +115,30 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     return match?.id as string
   }
 
+  // an operator's upload of a real 1v1, which the match page reads
+  async function insightMatch(): Promise<string> {
+    const accountId = randomUUID()
+
+    await database.sql`INSERT INTO accounts.users (id) VALUES (${accountId})`
+
+    const deps = { database, objectStore, artStore: null, accounts }
+    const files = [new File([new Uint8Array(fakeReplay().bytes)], 'a.replay')]
+    const [upload] = await uploadReplays(deps, { accountId, isOperator: true, files })
+    const claimed = await claimJob(deps, { build: 'dev-1', patches: ['11.00'], artFormat: null })
+
+    await completeJob(deps, {
+      jobId: claimed?.jobId as string,
+      leaseToken: claimed?.leaseToken as string,
+      line: insightLine(),
+    })
+
+    const [match] = await database.sql<{ id: string }[]>`
+      SELECT match_id AS id FROM replays.match_uploads WHERE upload_id = ${upload?.uploadId as string}
+    `
+
+    return match?.id as string
+  }
+
   async function errorCode(work: Promise<unknown>): Promise<string> {
     const error = await work.then(() => null).catch((caught: unknown) => caught)
 
@@ -202,6 +228,28 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     expect(await errorCode(call(procedures.replayFile, { id: matchId }, visitor()))).toBe('GONE')
   })
 
+  test('playback gives the trimmed timeline, gzipped, and says whether replays are open', async () => {
+    const matchId = await insightMatch()
+
+    const match = await call(procedures.match, { id: matchId }, visitor())
+
+    expect(match.playbackPath).toBe(`/match/${matchId}/playback/dev-1`)
+    expect(match.art).toEqual({ state: 'none', manifestUrl: null, baseUrl: null })
+
+    const playback = await call(procedures.playback, { id: matchId, build: 'dev-1' }, visitor())
+    const timeline = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(await playback.body.bytes())))
+
+    expect(playback.headers).toEqual({ 'x-replays-open': 'true' })
+    expect(timeline).toMatchObject({ stepMs: 16, startStep: 375 })
+    expect(timeline).not.toHaveProperty('events')
+  })
+
+  test('playback answers NOT_FOUND for a build the match was not parsed with', async () => {
+    const matchId = await insightMatch()
+
+    expect(await errorCode(call(procedures.playback, { id: matchId, build: 'dev-0' }, visitor()))).toBe('NOT_FOUND')
+  })
+
   test('mine lists the visitor’s uploads with their state', async () => {
     const { account, sessionToken } = await signIn()
 
@@ -240,6 +288,15 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     })
 
     expect(await errorCode(call(closed.match, { id: matchId }, visitor(visitorSession)))).toBe('NOT_FOUND')
+
+    const playable = { id: await insightMatch(), build: 'dev-1' }
+
+    expect(await errorCode(call(closed.playback, playable, visitor(visitorSession)))).toBe('NOT_FOUND')
+
+    expect((await call(closed.playback, playable, visitor(operator.sessionToken))).headers).toEqual({
+      'x-replays-open': 'false',
+    })
+
     expect(await errorCode(call(closed.playerMatches, { brawlhallaId: 1002 }, visitor()))).toBe('NOT_FOUND')
     expect(await errorCode(call(closed.mine, undefined, visitor(visitorSession)))).toBe('FORBIDDEN')
     expect((await call(closed.match, { id: matchId }, visitor(operator.sessionToken))).id).toBe(matchId)
