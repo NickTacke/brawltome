@@ -35,6 +35,9 @@ export type ArtRunnerDeps = {
   // bh-native processes left running while the export draws
   processesDuringArt: number
   renewEveryMs: number
+  // how long a plan or render may take, and how long a warm may
+  exportTimeoutMs: number
+  warmTimeoutMs: number
 }
 
 type Failure = { kind: 'failure'; code: ArtFailureCode; message: string }
@@ -144,7 +147,8 @@ export class ArtRunner {
     await this.download(job, storedMaps, files.store)
     writeHave(files, present)
 
-    const warmed = await this.whileLimited(() => this.step([...warmArgs, '--have', files.have]))
+    const warmHaveArgs = [...warmArgs, '--have', files.have]
+    const warmed = await this.whileLimited(() => this.step(warmHaveArgs, this.deps.warmTimeoutMs))
 
     if (warmed.kind === 'failure') return warmed
 
@@ -187,9 +191,15 @@ export class ArtRunner {
     }
   }
 
-  private async step(args: string[]): Promise<StepOutput> {
-    const run = await this.deps.exporter.run(args)
-    const command = args[0]
+  private async step(args: string[], timeoutMs = this.deps.exportTimeoutMs): Promise<StepOutput> {
+    const command = args.includes('--list') ? `${args[0]} --list` : args[0]
+    const startedMs = performance.now()
+    const run = await this.deps.exporter.run(args, timeoutMs)
+
+    const elapsedSeconds = ((performance.now() - startedMs) / 1000).toFixed(1)
+    const ending = run.kind === 'exited' ? `exit ${run.exitCode}` : 'stopped'
+
+    console.log(`export ${command}: ${ending} after ${elapsedSeconds} s`)
 
     if (run.kind === 'timed-out') {
       return failure('export-failed', `export ${command} was stopped after ${run.timeoutMs} ms`)

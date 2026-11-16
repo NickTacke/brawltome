@@ -1,16 +1,15 @@
 // the brawlhalla-anims export bundle, run as a child process: `plan`, `render` and `warm` (see "Export format" in its
-// README). Each run is one process, which is killed once it runs out of time
+// README). Each run is one process, which is killed once it runs out of the time it was given
 
 export type ExportRun =
   | { kind: 'exited'; exitCode: number; stdout: string; stderr: string }
   | { kind: 'timed-out'; timeoutMs: number }
 
-export type Exporter = { run(args: string[]): Promise<ExportRun> }
+export type Exporter = { run(args: string[], timeoutMs: number): Promise<ExportRun> }
 
 export type ExporterConfig = {
   // the bundle's own node with its heap cap, then scripts/export.ts
   command: string[]
-  exportTimeoutMs: number
 }
 
 /** The node command that runs the bundle at animsPath. */
@@ -21,14 +20,14 @@ export function exportCommand(animsPath: string): string[] {
 
 export function createExporter(config: ExporterConfig): Exporter {
   return {
-    async run(args) {
+    async run(args, timeoutMs) {
       const child = Bun.spawn([...config.command, ...args], { stdout: 'pipe', stderr: 'pipe' })
       let isTimedOut = false
 
       const timer = setTimeout(() => {
         isTimedOut = true
         child.kill('SIGKILL')
-      }, config.exportTimeoutMs)
+      }, timeoutMs)
 
       try {
         const [stdout, stderr, exitCode] = await Promise.all([
@@ -37,7 +36,7 @@ export function createExporter(config: ExporterConfig): Exporter {
           child.exited,
         ])
 
-        if (isTimedOut) return { kind: 'timed-out', timeoutMs: config.exportTimeoutMs }
+        if (isTimedOut) return { kind: 'timed-out', timeoutMs }
 
         return { kind: 'exited', exitCode, stdout, stderr }
       } finally {

@@ -1,6 +1,6 @@
 // stands in for the brawlhalla-anims export (`export.ts plan|render|warm`, see its README) in tests. The line's
-// `fake` field says what to do: ok (the default), no-animations, crash-render, hang-render. It writes files named the
-// way the export names them, with tiny bodies
+// `fake` field says what to do: ok (the default), no-animations, crash-render, hang-render; a warm for patch 11.01
+// never ends. It writes files named the way the export names them, with tiny bodies
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -91,7 +91,7 @@ function render(store: string, haveFile: string, manifestPath: string): void {
   console.log(`${store}: wrote some files`)
 }
 
-function warm(store: string, values: { have?: string; patch?: string; list?: boolean }): void {
+async function warm(store: string, values: { have?: string; patch?: string; list?: boolean }): Promise<void> {
   const have = readHave(values.have)
   const paths = [warmGroup, ...warmMaps].filter((path) => !have.has(path))
 
@@ -100,6 +100,9 @@ function warm(store: string, values: { have?: string; patch?: string; list?: boo
 
     return
   }
+
+  // a warm that never ends, for the tests of its timeout
+  if (values.patch === '11.01') await new Promise(() => undefined)
 
   for (const path of paths) console.log(...writeDrawn(store, path, values.patch))
 }

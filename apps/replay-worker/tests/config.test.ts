@@ -23,6 +23,7 @@ describe('worker settings', () => {
       animsPath: '/opt/anims/current',
       processesDuringArt: 1,
       exportTimeoutMs: 900_000,
+      warmTimeoutMs: 3_600_000,
     })
   })
 
@@ -43,6 +44,14 @@ describe('worker settings', () => {
     const env = { REPLAY_WORKER_TOKEN: token, REPLAY_ANIMS_PATH: '/srv/anims', REPLAY_PROCESSES_DURING_ART: '2' }
 
     expect(readConfig(env)).toMatchObject({ animsPath: '/srv/anims', processesDuringArt: 2 })
+  })
+
+  test('the time a warm may take can be changed, to a whole number of milliseconds', () => {
+    const env = { REPLAY_WORKER_TOKEN: token, REPLAY_ART_WARM_TIMEOUT_MS: '7200000' }
+
+    expect(readConfig(env).warmTimeoutMs).toBe(7_200_000)
+    expect(() => readConfig({ ...env, REPLAY_ART_WARM_TIMEOUT_MS: 'an hour' })).toThrow('REPLAY_ART_WARM_TIMEOUT_MS')
+    expect(() => readConfig({ ...env, REPLAY_ART_WARM_TIMEOUT_MS: '0' })).toThrow('REPLAY_ART_WARM_TIMEOUT_MS')
   })
 })
 

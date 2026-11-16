@@ -11,8 +11,9 @@ const token = 'replay-worker-token-for-tests-32-bytes-long'
 const jobId = '1b2f7508-8e9c-4b1a-950f-d60fabe27176'
 const leaseToken = '9d3c1f0e-0a51-4f6c-9a43-5d1e2f3a4b5c'
 const matchId = '4a6d0c55-2b0e-4f7e-9d1a-3c5b7e9f1a2b'
+const fakeExport = ['bun', join(import.meta.dir, 'fake-export.ts')]
 
-type NextJob = { kind: 'match'; fake: string } | { kind: 'warm' }
+type NextJob = { kind: 'match'; fake: string } | { kind: 'warm'; patch?: string }
 
 type Received = {
   calls: string[]
@@ -35,6 +36,8 @@ describe('the art runner', () => {
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
     mkdirSync(join(root, 'games', '11.00'), { recursive: true })
+    // the fake export's warm never ends for this patch
+    mkdirSync(join(root, 'games', '11.01'), { recursive: true })
     mkdirSync(join(root, 'work'))
 
     server = Bun.serve({ port: 0, fetch: (request) => answer(request) })
@@ -92,7 +95,7 @@ describe('the art runner', () => {
       'x-art-job': jobId,
       'x-art-lease': leaseToken,
       'x-art-kind': job.kind,
-      'x-art-patch': '11.00',
+      'x-art-patch': job.kind === 'warm' ? (job.patch ?? '11.00') : '11.00',
     }
 
     nextJob = null
@@ -129,16 +132,16 @@ describe('the art runner', () => {
   // the export, its calls noted in order with the api's
   function recorded(exporter: Exporter): Exporter {
     return {
-      run: (args) => {
+      run: (args, timeoutMs) => {
         received.calls.push(args[0] === 'warm' && args.includes('--list') ? 'warm --list' : (args[0] ?? ''))
 
-        return exporter.run(args)
+        return exporter.run(args, timeoutMs)
       },
     }
   }
 
-  function runner(overrides: Partial<ArtRunnerDeps> = {}, exportTimeoutMs = 10_000): ArtRunner {
-    const exporter = createExporter({ command: ['bun', join(import.meta.dir, 'fake-export.ts')], exportTimeoutMs })
+  function runner(overrides: Partial<ArtRunnerDeps> = {}): ArtRunner {
+    const exporter = createExporter({ command: fakeExport })
 
     return new ArtRunner({
       art: createArtClient({ apiUrl: `http://localhost:${server.port}`, token }),
@@ -157,6 +160,8 @@ describe('the art runner', () => {
       artFormat: 3,
       processesDuringArt: 1,
       renewEveryMs: 60_000,
+      exportTimeoutMs: 10_000,
+      warmTimeoutMs: 10_000,
       ...overrides,
     })
   }
@@ -238,20 +243,20 @@ describe('the art runner', () => {
   test('a render past its timeout reports export-failed, and the pool is unlimited after it', async () => {
     nextJob = { kind: 'match', fake: 'hang-render' }
 
-    await runner({}, 500).runOnce()
+    await runner({ exportTimeoutMs: 500, warmTimeoutMs: 60_000 }).runOnce()
 
     expect(received.calls.slice(-4)).toEqual(['limit 1', 'render', 'unlimit', 'failure'])
     expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('500 ms') }])
   })
 
   test('the pool is unlimited even when the render throws, and the job fails with worker-error', async () => {
-    const real = createExporter({ command: ['bun', join(import.meta.dir, 'fake-export.ts')], exportTimeoutMs: 10_000 })
+    const real = createExporter({ command: fakeExport })
 
     const throwing: Exporter = {
-      run: async (args) => {
+      run: async (args, timeoutMs) => {
         if (args[0] === 'render') throw new Error('spawn failed')
 
-        return real.run(args)
+        return real.run(args, timeoutMs)
       },
     }
 
@@ -266,7 +271,7 @@ describe('the art runner', () => {
   test('renews the lease while the export runs', async () => {
     nextJob = { kind: 'match', fake: 'hang-render' }
 
-    await runner({ renewEveryMs: 100 }, 500).runOnce()
+    await runner({ renewEveryMs: 100, exportTimeoutMs: 500 }).runOnce()
 
     expect(received.renewals).toBeGreaterThanOrEqual(2)
   })
@@ -304,6 +309,15 @@ describe('the art runner', () => {
         artFormat: 3,
       },
     ])
+  })
+
+  test('a warm runs under its own timeout, not the one for a match', async () => {
+    nextJob = { kind: 'warm', patch: '11.01' }
+
+    await runner({ exportTimeoutMs: 60_000, warmTimeoutMs: 500 }).runOnce()
+
+    expect(received.calls.slice(-4)).toEqual(['limit 1', 'warm', 'unlimit', 'failure'])
+    expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('500 ms') }])
   })
 
   test('a job for a patch the worker has no game folder for reports export-failed', async () => {

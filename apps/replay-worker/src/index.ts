@@ -58,12 +58,14 @@ async function artLoop(format: number): Promise<void> {
   const runner = new ArtRunner({
     art: createArtClient({ apiUrl: config.apiUrl, token: config.token }),
     pool,
-    exporter: createExporter({ command: exportCommand(config.animsPath), exportTimeoutMs: config.exportTimeoutMs }),
+    exporter: createExporter({ command: exportCommand(config.animsPath) }),
     gameRoot: config.gameRoot,
     workDir: config.workDir,
     artFormat: format,
     processesDuringArt: config.processesDuringArt,
     renewEveryMs: config.renewEveryMs,
+    exportTimeoutMs: config.exportTimeoutMs,
+    warmTimeoutMs: config.warmTimeoutMs,
   })
 
   while (!isStopping) {

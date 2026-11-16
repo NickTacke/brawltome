@@ -24,6 +24,7 @@ memory. The worker never holds storage keys.
 | `REPLAY_NEWEST_PROCESSES` / `REPLAY_PREVIOUS_PROCESSES` | `3` / `1`; each takes about 1.5 GB |
 | `REPLAY_ANIMS_PATH` | `/opt/anims/current`, the export bundle; art is off without its `scripts/export.ts` |
 | `REPLAY_PROCESSES_DURING_ART` | `1`, the bh-native processes left running while the export draws |
+| `REPLAY_ART_WARM_TIMEOUT_MS` | `3600000`; a plan or render is stopped after 15 minutes, a warm after this |
 
 Tests use a fake bh-native (`tests/fake-bhnative.ts`) and a fake export (`tests/fake-export.ts`):
 `bun test apps/replay-worker`.

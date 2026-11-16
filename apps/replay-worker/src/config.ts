@@ -20,9 +20,11 @@ export type WorkerConfig = {
   animsPath: string
   // bh-native processes left running while art exports, so the export has the memory
   processesDuringArt: number
-  // a 2v2 render with nothing in the store takes about 95 s and warming a whole patch about 11 minutes; past fifteen
-  // minutes the export is stuck
+  // a 2v2 plan or render with nothing in the store takes about 100 s; past fifteen minutes it is stuck
   exportTimeoutMs: number
+  // warming a whole patch took 11 minutes on four free cores; the vm shares its cores with bh-native at a lower
+  // priority, so a warm gets far more room before it counts as stuck, and a stopped warm fails for good
+  warmTimeoutMs: number
 }
 
 type Env = Record<string, string | undefined>
@@ -48,6 +50,7 @@ export function readConfig(env: Env): WorkerConfig {
     animsPath: env.REPLAY_ANIMS_PATH ?? '/opt/anims/current',
     processesDuringArt: count(env.REPLAY_PROCESSES_DURING_ART, 1, 'REPLAY_PROCESSES_DURING_ART'),
     exportTimeoutMs: 900_000,
+    warmTimeoutMs: milliseconds(env.REPLAY_ART_WARM_TIMEOUT_MS, 3_600_000, 'REPLAY_ART_WARM_TIMEOUT_MS'),
   }
 }
 
@@ -74,6 +77,16 @@ function count(value: string | undefined, fallback: number, name: string): numbe
 
   if (!Number.isInteger(parsed) || parsed < 0 || parsed > 8)
     throw new Error(`${name} must be a whole number from 0 to 8`)
+
+  return parsed
+}
+
+function milliseconds(value: string | undefined, fallback: number, name: string): number {
+  if (value === undefined) return fallback
+
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < 1) throw new Error(`${name} must be a whole number of milliseconds`)
 
   return parsed
 }
