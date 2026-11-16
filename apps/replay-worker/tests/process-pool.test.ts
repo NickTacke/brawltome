@@ -150,4 +150,65 @@ describe('the bh-native process pool', () => {
 
     expect(pool.isReady()).toBe(true)
   })
+
+  test('limited to one process, it stops the others and still plays; unlimited, it starts them again', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 2, 1)
+
+    await pool.limitTo(1)
+
+    expect(pool.runningCount()).toBe(1)
+    expect((await pool.play(replay('a.replay', 'ok'))).kind).toBe('line')
+
+    pool.unlimit()
+
+    for (let waited = 0; pool.runningCount() < 3 && waited < 5000; waited += 20) await Bun.sleep(20)
+
+    expect(pool.runningCount()).toBe(3)
+  })
+
+  test('a limit waits for the replays already playing on the processes it stops', async () => {
+    const { gameRoot, replay } = setup(['11.00'])
+    const pool = await startPool(gameRoot, 2, 0)
+
+    const playing = Promise.all([pool.play(replay('a.replay', 'slow')), pool.play(replay('b.replay', 'slow'))])
+
+    await Bun.sleep(50)
+    await pool.limitTo(1)
+
+    expect((await playing).map((answer) => answer.kind)).toEqual(['line', 'line'])
+    expect(pool.runningCount()).toBe(1)
+  })
+
+  test('a replay of a patch the limit left with no process waits for the limit to lift', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    let isAnswered = false
+
+    const answer = pool.play(replay('old.replay', 'old')).finally(() => {
+      isAnswered = true
+    })
+
+    await Bun.sleep(300)
+    expect(isAnswered).toBe(false)
+
+    pool.unlimit()
+
+    const answered = await answer
+
+    expect(answered.kind).toBe('line')
+    expect(JSON.parse(answered.kind === 'line' ? answered.raw : '{}').patch).toBe('10.09')
+  })
+
+  test('while limited it still reports the patches of the processes it stopped', async () => {
+    const { gameRoot } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00', '10.09'] })
+  })
 })

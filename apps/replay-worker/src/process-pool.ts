@@ -21,7 +21,18 @@ export type PlayAnswer =
   | { kind: 'line'; raw: string }
   | { kind: 'failure'; code: 'patch-not-supported' | 'worker-error'; message: string }
 
-type Slot = { gameFolder: string; live: BhnativeProcess | null; inFlight: number }
+// isParked: stopped by limitTo, so nothing plays on it and it isn't started again until unlimit
+type Slot = {
+  gameFolder: string
+  live: BhnativeProcess | null
+  inFlight: number
+  isParked: boolean
+  isRestarting: boolean
+}
+
+const IDLE_POLL_MS = 50
+// as long as a game may take to say it's ready
+const RESTART_WAIT_MS = 300_000
 
 type RawAnswer =
   | { kind: 'answer'; exit: number; raw: string; replayVersion?: string }
@@ -29,6 +40,9 @@ type RawAnswer =
 
 export class ProcessPool {
   private isClosing = false
+  // resolves when the current limit lifts
+  private limitLifted: Promise<void> = Promise.resolve()
+  private liftLimit: () => void = () => undefined
 
   private constructor(
     private readonly config: PoolConfig,
@@ -48,7 +62,13 @@ export class ProcessPool {
     const groups = plan.map(([patch, count]) =>
       Array.from(
         { length: count },
-        (): Slot => ({ gameFolder: join(config.gameRoot, patch), live: null, inFlight: 0 }),
+        (): Slot => ({
+          gameFolder: join(config.gameRoot, patch),
+          live: null,
+          inFlight: 0,
+          isParked: false,
+          isRestarting: false,
+        }),
       ),
     )
 
@@ -73,6 +93,8 @@ export class ProcessPool {
     let lastVersion = 'unknown'
 
     for (const group of this.groups) {
+      await this.untilUsable(group)
+
       const answer = await this.playOn(group, replayPath)
 
       if (answer.kind === 'failure') return answer
@@ -96,11 +118,45 @@ export class ProcessPool {
   report(): { build: string; patches: string[] } {
     const patches = new Set<string>()
 
+    // a process stopped by the limit still counts: it starts again once the limit lifts
     for (const slot of this.groups.flat()) {
-      if (slot.live) patches.add(slot.live.patch ?? basename(slot.gameFolder))
+      if (slot.live || slot.isParked) patches.add(slot.live?.patch ?? basename(slot.gameFolder))
     }
 
     return { build: this.config.build, patches: [...patches] }
+  }
+
+  /** How many bh-native processes are running now. */
+  runningCount(): number {
+    return this.groups.flat().filter((slot) => slot.live !== null).length
+  }
+
+  /**
+   * Stops every process past the first count, newest patch first, once the replays it was given are answered, so an
+   * art export has the memory. A replay for a patch left with no process waits until unlimit.
+   */
+  async limitTo(count: number): Promise<void> {
+    const stopped = this.groups.flat().slice(count)
+
+    this.limitLifted = new Promise((resolve) => {
+      this.liftLimit = resolve
+    })
+
+    for (const slot of stopped) slot.isParked = true
+
+    await Promise.all(stopped.map((slot) => this.stopWhenIdle(slot)))
+  }
+
+  /** Starts the processes limitTo stopped again. */
+  unlimit(): void {
+    for (const slot of this.groups.flat()) {
+      if (!slot.isParked) continue
+
+      slot.isParked = false
+      if (slot.live === null && !slot.isRestarting) void this.restart(slot)
+    }
+
+    this.liftLimit()
   }
 
   close(): void {
@@ -110,7 +166,7 @@ export class ProcessPool {
   }
 
   private async playOn(group: Slot[], replayPath: string): Promise<RawAnswer> {
-    const running = group.filter((slot) => slot.live !== null)
+    const running = group.filter((slot) => slot.live !== null && !slot.isParked)
 
     if (running.length === 0)
       return { kind: 'failure', code: 'worker-error', message: 'no bh-native process is running' }
@@ -139,26 +195,66 @@ export class ProcessPool {
     }
   }
 
-  // puts a running process in its slot and starts a new one when it exits
+  // a group the limit stopped entirely waits for the limit to lift and one of its processes to start again
+  private async untilUsable(group: Slot[]): Promise<void> {
+    if (!group.every((slot) => slot.isParked)) return
+
+    await this.limitLifted
+
+    for (let waitedMs = 0; waitedMs < RESTART_WAIT_MS; waitedMs += IDLE_POLL_MS) {
+      if (this.isClosing || group.some((slot) => slot.live !== null)) return
+
+      await Bun.sleep(IDLE_POLL_MS)
+    }
+  }
+
+  private async stopWhenIdle(slot: Slot): Promise<void> {
+    while (slot.inFlight > 0) await Bun.sleep(IDLE_POLL_MS)
+
+    const process = slot.live
+
+    // the limit may have lifted while the last replay played
+    if (!process || !slot.isParked) return
+
+    process.close()
+    await process.exited
+  }
+
+  // puts a running process in its slot and starts a new one when it exits, unless the limit stopped it
   private watch(slot: Slot, process: BhnativeProcess): void {
     slot.live = process
 
     void process.exited.then(() => {
       slot.live = null
-      if (!this.isClosing) void this.restart(slot)
+      if (!this.isClosing && !slot.isParked) void this.restart(slot)
     })
   }
 
   private async restart(slot: Slot): Promise<void> {
-    while (!this.isClosing) {
-      try {
-        this.watch(slot, await BhnativeProcess.start(this.config.command, slot.gameFolder))
+    slot.isRestarting = true
 
-        return
-      } catch (error) {
-        console.error(`bh-native for ${slot.gameFolder} didn't start again:`, error)
-        await Bun.sleep(this.config.restartDelayMs)
-      }
+    while (!this.isClosing && !slot.isParked) {
+      if (await this.startIn(slot)) break
+
+      await Bun.sleep(this.config.restartDelayMs)
+    }
+
+    slot.isRestarting = false
+  }
+
+  // whether a process started; one that starts after the limit stopped its slot is closed again at once
+  private async startIn(slot: Slot): Promise<boolean> {
+    try {
+      const process = await BhnativeProcess.start(this.config.command, slot.gameFolder)
+
+      if (slot.isParked) process.close()
+      else this.watch(slot, process)
+
+      return true
+    } catch (error) {
+      console.error(`bh-native for ${slot.gameFolder} didn't start again:`, error)
+
+      return false
     }
   }
 }
