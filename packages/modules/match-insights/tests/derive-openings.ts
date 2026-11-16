@@ -41,23 +41,39 @@ export function damageBefore(line: RawLine, span: PunishSpan): number {
   return damageAt(line, span.target, span.startStep - 1)
 }
 
-/** Whether the punish is the attacker's last on the target before the attacker KO'd them. */
+// 1.5 s without a hit and the game is back in neutral: the gap that ends a punish, and the longest a KO can come
+// after a punish's last hit and still be its KO
+export const resetSteps = 90
+
+/** The step of the last hit from the attacker on the target inside a punish, from the hit events. */
+export function lastHitStep(line: RawLine, span: PunishSpan): number {
+  return Math.max(...hitsWithin(line, span).map((hit) => hit.step))
+}
+
+/**
+ * Whether the attacker KO'd the target within the reset gap after the punish's last hit, with no later punish of
+ * theirs on the target landing in between.
+ */
 export function endsInKo(line: RawLine, span: PunishSpan, spans: PunishSpan[]): boolean {
+  const lastStep = lastHitStep(line, span)
+
   const ko = eventsOf(line, 'ko').find(
-    (event) => event.player === span.target && event.killer === span.attacker && event.step >= span.endStep,
+    (event) =>
+      event.player === span.target &&
+      event.killer === span.attacker &&
+      event.step >= lastStep &&
+      event.step - lastStep <= resetSteps,
   )
 
   if (!ko) return false
 
-  const later = spans.find(
-    (other) =>
-      other.attacker === span.attacker &&
-      other.target === span.target &&
-      other.startStep > span.startStep &&
-      other.endStep <= ko.step,
-  )
+  const pairSpans = spans.filter((other) => other.attacker === span.attacker && other.target === span.target)
 
-  return later === undefined
+  return !pairSpans.some((other) => {
+    const otherLast = lastHitStep(line, other)
+
+    return otherLast > lastStep && otherLast <= ko.step
+  })
 }
 
 /** Whether any enemy hit at all lands from one player on another. */

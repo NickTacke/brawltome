@@ -5,9 +5,10 @@ import { type MatchRecord, stateOf, toMs } from './record'
 import { lastBecameWithin, valueAt } from './series'
 
 // openings and the punishes that follow them. an opening is the first hit on a player who had not been hit by that
-// attacker for a while; the punish runs until the hits stop, the target is KO'd or the target hits back
+// attacker for a while; the punish runs until the attacker goes the reset gap without a hit on the target, or an
+// enemy hits the attacker. a KO doesn't end it, but the respawn that follows is longer than the gap
 
-// 1.5 s without a hit and the game is back in neutral
+// 1.5 s without a hit and the game is back in neutral; a KO later than this after a punish's last hit isn't its KO
 const resetSteps = 90
 // a dodge takes two steps to start, so a gap this short still left the target nothing to do
 const trueLinkSteps = 2
@@ -53,7 +54,7 @@ function extendPunish(record: MatchRecord, punish: Punish, blow: Blow) {
   punish.targetDamageTo = valueAt(stateOf(record, blow.target).damage, blow.lastStep, punish.targetDamageTo)
 }
 
-// the punishes the blow's target was running on anyone end here: the target took a hit back
+// any punish the blow's target was running ends here: its attacker took a hit
 function reverseOpenPunishes(open: Map<string, Punish>, blow: Blow): boolean {
   let isReversal = false
 
@@ -69,7 +70,7 @@ function reverseOpenPunishes(open: Map<string, Punish>, blow: Blow): boolean {
   return isReversal
 }
 
-// the KO goes to the killer's last punish on the victim before it
+// the KO goes to the killer's last punish on the victim, when it ended at most the reset gap before
 function markKos(record: MatchRecord, punishes: Punish[]) {
   for (const event of record.events) {
     if (event.type !== 'ko' || event.killer === null) continue
@@ -77,7 +78,11 @@ function markKos(record: MatchRecord, punishes: Punish[]) {
     const { killer, player, step } = event
 
     const last = punishes.findLast(
-      (punish) => punish.target === player && punish.attacker === killer && punish.endStep <= step,
+      (punish) =>
+        punish.target === player &&
+        punish.attacker === killer &&
+        punish.endStep <= step &&
+        step - punish.endStep <= resetSteps,
     )
 
     if (!last) continue
