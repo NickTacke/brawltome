@@ -37,6 +37,16 @@ export async function queueWarmArt(sql: Sql, patch: string): Promise<void> {
   `
 }
 
+/** Queues a patch's warm job unless it ever had one, whatever became of it. */
+export async function queueFirstWarmArt(sql: Sql, patch: string): Promise<void> {
+  await sql`
+    INSERT INTO replays.art_jobs (kind, patch)
+    SELECT 'warm', ${patch}
+    WHERE NOT EXISTS (SELECT 1 FROM replays.art_jobs WHERE kind = 'warm' AND patch = ${patch})
+    ON CONFLICT (kind, (coalesce(match_id::text, patch))) WHERE status IN ('pending', 'processing') DO NOTHING
+  `
+}
+
 /** Queues an art export for every match with a line whose art was drawn in another format, or never. */
 export async function queueArtForFormat(sql: Sql, format: number): Promise<void> {
   await sql`

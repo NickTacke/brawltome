@@ -1,5 +1,5 @@
 import type { Sql } from '@brawltome/foundation'
-import { queueArtForFormat, queueWarmArt } from './art-queue'
+import { queueArtForFormat, queueFirstWarmArt } from './art-queue'
 import { replayKey } from './keys'
 import { FILE_GRACE_DAYS } from './limits'
 import type { ReplaysDeps, WorkerReport } from './model'
@@ -14,17 +14,20 @@ const KEPT_PATCHES = 2
 
 /**
  * Records what the worker runs. A build never seen before queues a re-parse of every match whose file is kept; with
- * an art bucket, a new patch queues its warm art job and a new art format re-exports the matches drawn in another.
+ * an art bucket, a patch never warmed queues its warm job and a new art format re-exports the matches drawn in
+ * another.
  */
 export async function noteWorkerReport(
   deps: Pick<ReplaysDeps, 'database' | 'artStore'>,
   report: WorkerReport,
 ): Promise<{ isNewBuild: boolean }> {
   const sql = deps.database.sql
-  const newPatches = await notePatches(sql, report.patches)
+
+  for (const patch of report.patches) await notePatch(sql, patch)
 
   if (deps.artStore) {
-    for (const patch of newPatches) await queueWarmArt(sql, patch)
+    // decided from the art jobs, not from worker_reports, which holds patches reported before there was art
+    for (const patch of report.patches) await queueFirstWarmArt(sql, patch)
 
     if (report.artFormat !== null) await noteArtFormat(sql, report.artFormat)
   }
@@ -32,22 +35,11 @@ export async function noteWorkerReport(
   return noteBuild(sql, report.build)
 }
 
-// returns the patches never reported before
-async function notePatches(sql: Sql, patches: string[]): Promise<string[]> {
-  const newPatches: string[] = []
-
-  for (const patch of patches) {
-    const inserted = await sql`INSERT INTO replays.worker_reports (patch) VALUES (${patch}) ON CONFLICT DO NOTHING`
-
-    if (inserted.count === 1) {
-      newPatches.push(patch)
-      continue
-    }
-
-    await sql`UPDATE replays.worker_reports SET last_reported_at = clock_timestamp() WHERE patch = ${patch}`
-  }
-
-  return newPatches
+async function notePatch(sql: Sql, patch: string): Promise<void> {
+  await sql`
+    INSERT INTO replays.worker_reports (patch) VALUES (${patch})
+    ON CONFLICT (patch) DO UPDATE SET last_reported_at = clock_timestamp()
+  `
 }
 
 async function noteArtFormat(sql: Sql, format: number): Promise<void> {

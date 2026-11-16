@@ -33,6 +33,8 @@ CREATE TABLE replays.art_jobs (
 
 CREATE UNIQUE INDEX replays_art_jobs_one_active_idx
   ON replays.art_jobs (kind, (coalesce(match_id::text, patch))) WHERE status IN ('pending', 'processing');
+-- every worker report asks whether each of its patches was ever warmed
+CREATE INDEX replays_art_jobs_warm_patch_idx ON replays.art_jobs (patch) WHERE kind = 'warm';
 
 -- every file the art bucket holds; they are named by their content or their inputs, so a stored path never changes
 CREATE TABLE replays.art_files (
@@ -59,7 +61,7 @@ CREATE TABLE replays.art_formats (
 export const addArt = {
   identity: 'replays/0003',
   predecessor: 'replays/0002',
-  checksum: '9d398776f7dd9faee0ac89e757cfff031c5621fc1f6bc52b8eb21d161619c3f3',
+  checksum: '589207f9ca38db05557012ccf1e20e43fe406663ebbbf44355639f5df6f612a5',
   requires: [],
   sql,
 } as const

@@ -23,6 +23,7 @@ type MemoryStore = ReturnType<typeof createMemoryObjectStore>
 describe.skipIf(!connectionString)('art jobs', () => {
   let database: TestDatabase
   let deps: ReplaysDeps & { objectStore: MemoryStore; artStore: MemoryStore }
+  let earlierWarmJobId: string
 
   beforeAll(async () => {
     database = await createTestDatabase({ label: 'replays_art', modules: [...accountsTestModules, replaysModule] })
@@ -39,9 +40,16 @@ describe.skipIf(!connectionString)('art jobs', () => {
         replays.worker_reports, replays.builds
     `
 
-    // the worker already ran 11.00 and dev-1, so claims queue no warm job or re-parse unless a test says so
+    // the worker already ran 11.00 and dev-1, and 11.00 was warmed, so claims queue no warm job or re-parse unless a
+    // test says so
     await database.sql`INSERT INTO replays.worker_reports (patch) VALUES ('11.00')`
     await database.sql`INSERT INTO replays.builds (build) VALUES ('dev-1')`
+
+    const [warmed] = await database.sql<{ id: string }[]>`
+      INSERT INTO replays.art_jobs (kind, patch, status) VALUES ('warm', '11.00', 'completed') RETURNING id
+    `
+
+    earlierWarmJobId = warmed?.id as string
 
     deps = {
       database,
@@ -94,9 +102,11 @@ describe.skipIf(!connectionString)('art jobs', () => {
     return match
   }
 
+  // the jobs this test queued
   async function artJobs() {
     const jobs = await database.sql<{ kind: string; matchId: string | null; patch: string; status: string }[]>`
-      SELECT kind, match_id AS "matchId", patch, status FROM replays.art_jobs ORDER BY created_at
+      SELECT kind, match_id AS "matchId", patch, status FROM replays.art_jobs WHERE id <> ${earlierWarmJobId}
+      ORDER BY created_at
     `
 
     return [...jobs]
@@ -437,11 +447,27 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(await mapFiles()).toEqual([{ patch: '11.00', mapId: 136, path: art.mapPath }])
   })
 
-  test('a report with a new patch queues one warm job', async () => {
-    await noteWorkerReport(deps, { ...report, patches: ['11.00', '11.01'] })
-    await noteWorkerReport(deps, { ...report, patches: ['11.00', '11.01'] })
+  test('a report queues one warm job for each patch never warmed, even one reported before art', async () => {
+    await database.sql`INSERT INTO replays.worker_reports (patch) VALUES ('10.09')`
 
-    expect(await artJobs()).toEqual([{ kind: 'warm', matchId: null, patch: '11.01', status: 'pending' }])
+    await noteWorkerReport(deps, { ...report, patches: ['11.00', '10.09', '11.01'] })
+    await noteWorkerReport(deps, { ...report, patches: ['11.00', '10.09', '11.01'] })
+
+    expect(await artJobs()).toEqual([
+      { kind: 'warm', matchId: null, patch: '10.09', status: 'pending' },
+      { kind: 'warm', matchId: null, patch: '11.01', status: 'pending' },
+    ])
+  })
+
+  test('a patch whose warm job failed is not warmed again on its own', async () => {
+    await database.sql`
+      INSERT INTO replays.art_jobs (kind, patch, status, failure)
+      VALUES ('warm', '11.01', 'failed', '{"code":"export-failed","message":"x"}')
+    `
+
+    await noteWorkerReport(deps, { ...report, patches: ['11.01'] })
+
+    expect((await artJobs()).filter((job) => job.status === 'pending')).toEqual([])
   })
 
   test('a report with a new art format queues art only for matches drawn in another format', async () => {
