@@ -270,12 +270,12 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     const claimed = await claimedMatchJob()
     const art = fakeArtExport()
-    const [groupPath] = art.files.keys()
+    const [groupPath, groupBytes] = [...art.files][0] as [string, Uint8Array]
     const sheetPath = art.manifest.sheetOrder[0] as string
     const read = (path: string) => readArtFile(deps, claimed.jobId, claimed.leaseToken, path)
 
-    expect(await read(groupPath as string)).toEqual({ status: 'found', bytes: art.files.get(groupPath as string) })
-    expect(await read(art.mapPath)).toEqual({ status: 'found', bytes: art.files.get(art.mapPath) })
+    expect(await read(groupPath)).toEqual({ status: 'found', bytes: groupBytes })
+    expect(await read(art.mapPath)).toEqual({ status: 'found', bytes: art.files.get(art.mapPath) as Uint8Array })
     expect(await read(sheetPath)).toMatchObject({ status: 'refused' })
     expect(await read(`art/${'f'.repeat(32)}.json`)).toEqual({ status: 'not-found' })
   })
