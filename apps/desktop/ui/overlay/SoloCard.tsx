@@ -10,12 +10,11 @@ type SubPart = { key: string; content: ReactNode }
 type SoloCardProps = {
   player: PlayerHead
   data: CardData
-  timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCardProps) {
+export function SoloCard({ player, data, onOpenProfile, onRetry }: SoloCardProps) {
   // the profile link doesn't need the lookup, so the head stays clickable beside the retry button
   if (data.state === 'failed') {
     return (
@@ -23,38 +22,39 @@ export function SoloCard({ player, data, timer, onOpenProfile, onRetry }: SoloCa
         <BannerSlot tier={null} />
         <span className="main">
           <button type="button" className="card-link" onClick={() => onOpenProfile(player.brawlhallaId)}>
-            <CardHead name={player.name} legend={player.legend} sub={failureText(data.reason)} />
+            <CardHead name={player.name} legend={player.legend} sub={failureText(data.reason)} isBusy={false} />
           </button>
           <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
         </span>
-        {timer}
       </div>
     )
   }
 
-  const isRefreshing = data.state === 'ranked' && data.isRefreshing
+  const isBusy = data.state === 'loading' || (data.state === 'ranked' && data.isRefreshing)
   const tier = data.state === 'ranked' ? data.tier : null
 
   return (
-    <button
-      type="button"
-      className={isRefreshing ? 'card is-refreshing' : 'card'}
-      onClick={() => onOpenProfile(player.brawlhallaId)}
-    >
-      {isRefreshing && <span className="refresh" />}
+    <button type="button" className={cardClass(data)} onClick={() => onOpenProfile(player.brawlhallaId)}>
       <BannerSlot tier={tier} />
       <span className="main">
-        <CardHead name={player.name} legend={player.legend} sub={subLine(data)} />
+        <CardHead name={player.name} legend={player.legend} sub={subLine(data)} isBusy={isBusy} />
         {data.state === 'loading' && <PlaceholderFigures />}
         {data.state === 'ranked' && <RankedFigures data={data} />}
       </span>
-      {timer}
     </button>
   )
 }
 
+function cardClass(data: Exclude<CardData, { state: 'failed' }>): string {
+  if (data.state === 'loading') return 'card is-loading'
+
+  if (data.state === 'ranked' && data.isRefreshing) return 'card is-refreshing'
+
+  return 'card'
+}
+
 function subLine(data: Exclude<CardData, { state: 'failed' }>): ReactNode {
-  if (data.state === 'loading') return null
+  if (data.state === 'loading') return <span className="bar sub-bar" />
 
   if (data.state === 'noRankedData') return 'No ranked data'
 
@@ -69,8 +69,6 @@ function rankedSubParts(data: Ranked): SubPart[] {
 
   if (data.regionRank !== null) parts.push({ key: 'rank', content: <b>{`#${data.regionRank}`}</b> })
 
-  if (data.isRefreshing) parts.push({ key: 'updating', content: 'updating' })
-
   return parts
 }
 
@@ -83,28 +81,32 @@ function SubParts({ parts }: { parts: SubPart[] }) {
   ))
 }
 
+// the Elo and the peak read as one figure, the win rate beside it
 function RankedFigures({ data }: { data: Ranked }) {
   return (
     <span className="figures">
-      <span>
-        <span className="elo">{data.rating}</span>
-        <span className="peak">{`/ ${data.peakRating}`}</span> <span className="label">peak</span>
+      <span className="stat">
+        <span className="stat-value">
+          <span className="elo">{data.rating}</span>
+          <span className="peak">{`/ ${data.peakRating}`}</span>
+        </span>
+        <span className="stat-label">Elo / peak</span>
       </span>
-      <GameRecord wins={data.wins} games={data.games} />
+      <WinRate wins={data.wins} games={data.games} />
     </span>
   )
 }
 
-function GameRecord({ wins, games }: { wins: number; games: number }) {
+// the win rate over the season's games, with the game count as its label
+function WinRate({ wins, games }: { wins: number; games: number }) {
   const percent = winRatePercent(wins, games)
   const gamesText = `${formatCount(games)} ${games === 1 ? 'game' : 'games'}`
-
-  if (percent === null) return <span className="record">{gamesText}</span>
+  const valueClass = percent === null ? 'stat-value rate' : `stat-value rate ${winRateClass(percent)}`
 
   return (
-    <span className="record">
-      <b className={winRateClass(percent)}>{`${percent}%`}</b>
-      {` of ${gamesText}`}
+    <span className="stat">
+      <span className={valueClass}>{percent === null ? '—' : `${percent}%`}</span>
+      <span className="stat-label">{gamesText}</span>
     </span>
   )
 }
@@ -112,8 +114,14 @@ function GameRecord({ wins, games }: { wins: number; games: number }) {
 function PlaceholderFigures() {
   return (
     <span className="figures placeholder">
-      <span className="bar wide" />
-      <span className="bar narrow" />
+      <span className="stat">
+        <span className="bar lead" />
+        <span className="bar label-bar" />
+      </span>
+      <span className="stat">
+        <span className="bar" />
+        <span className="bar label-bar" />
+      </span>
     </span>
   )
 }

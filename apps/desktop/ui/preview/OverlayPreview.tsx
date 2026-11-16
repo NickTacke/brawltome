@@ -1,46 +1,30 @@
-import { type CSSProperties, useEffect, useState } from 'react'
-import { Overlay } from '../overlay/Overlay'
+import { useEffect, useState } from 'react'
+import { type BannerSide, Overlay } from '../overlay/Overlay'
 import type { OverlayView } from '../overlay/overlay-view'
-import { overlayFixture, stateCells } from './fixtures'
+import { overlayFixture, type StateCell, stateCells, tierCells } from './fixtures'
 
 const FRAME_HEIGHT_PX = 1080
 const OVERLAY_TOP_PX = 24
 
-type OverlayPreviewProps = { card: string; elapsedMs: number | null }
+type OverlayPreviewProps = { card: string; bannerSide: BannerSide }
 
-// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all;
-// &elapsedMs=<n> holds the timer bar at that point, for screenshots
-export function OverlayPreview({ card, elapsedMs }: OverlayPreviewProps) {
-  const timerStyle = frozenTimerStyle(elapsedMs)
-
-  if (card === 'states') {
-    return (
-      <div style={timerStyle}>
-        <StatesSheet />
-      </div>
-    )
+// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=tiers one
+// 1v1 card per tier; &side=right puts the cards top right, mirrored like the app does there
+export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
+  if (card === 'states' || card === 'tiers') {
+    return <StatesSheet cells={card === 'states' ? stateCells() : tierCells()} bannerSide={bannerSide} />
   }
 
   const view = overlayFixture(card)
 
   if (view === null) return <p className="preview-missing">No fixture named overlay-view-{card}.json</p>
 
-  return (
-    <div style={timerStyle}>
-      <GameFrame view={view} />
-    </div>
-  )
-}
-
-function frozenTimerStyle(elapsedMs: number | null): CSSProperties | undefined {
-  if (elapsedMs === null) return undefined
-
-  return { '--preview-timer-delay': `-${elapsedMs}ms` } as CSSProperties
+  return <GameFrame view={view} bannerSide={bannerSide} />
 }
 
 // the frame scales with the window height like the game does, and the cards scale on their own the way the app
 // scales them, so a wrong scale shows up as a card that drifts from the frame
-function GameFrame({ view }: { view: OverlayView }) {
+function GameFrame({ view, bannerSide }: { view: OverlayView; bannerSide: BannerSide }) {
   const windowHeightPx = useWindowHeight()
   const scale = windowHeightPx / FRAME_HEIGHT_PX
 
@@ -50,11 +34,22 @@ function GameFrame({ view }: { view: OverlayView }) {
         <PreviewStage />
         <div className="preview-dim" />
       </div>
-      <div className="preview-overlay" style={{ top: OVERLAY_TOP_PX * scale }}>
-        <PreviewOverlay view={view} monitorHeightPx={windowHeightPx * window.devicePixelRatio} />
+      <div className="preview-overlay" data-side={bannerSide} style={overlayStyle(bannerSide, scale)}>
+        <PreviewOverlay
+          view={view}
+          monitorHeightPx={windowHeightPx * window.devicePixelRatio}
+          bannerSide={bannerSide}
+        />
       </div>
     </>
   )
+}
+
+// the app's edge margin is the same 24 px at 1080p as the top offset, scaled with the frame
+function overlayStyle(bannerSide: BannerSide, scale: number) {
+  const edgePx = OVERLAY_TOP_PX * scale
+
+  return bannerSide === 'right' ? { top: edgePx, paddingRight: edgePx } : { top: edgePx }
 }
 
 function useWindowHeight(): number {
@@ -81,24 +76,31 @@ function PreviewStage() {
 }
 
 // the sheet draws every card at the size it has on a 1080p monitor
-function StatesSheet() {
+function StatesSheet({ cells, bannerSide }: { cells: StateCell[]; bannerSide: BannerSide }) {
   return (
     <div className="preview-sheet">
-      {stateCells().map((cell) => (
+      {cells.map((cell) => (
         <div className="preview-cell" key={cell.title}>
           <h2>{cell.title}</h2>
-          <PreviewOverlay view={cell.view} monitorHeightPx={FRAME_HEIGHT_PX * window.devicePixelRatio} />
+          <PreviewOverlay
+            view={cell.view}
+            monitorHeightPx={FRAME_HEIGHT_PX * window.devicePixelRatio}
+            bannerSide={bannerSide}
+          />
         </div>
       ))}
     </div>
   )
 }
 
-function PreviewOverlay({ view, monitorHeightPx }: { view: OverlayView; monitorHeightPx: number }) {
+type PreviewOverlayProps = { view: OverlayView; monitorHeightPx: number; bannerSide: BannerSide }
+
+function PreviewOverlay({ view, monitorHeightPx, bannerSide }: PreviewOverlayProps) {
   return (
     <Overlay
       view={view}
       monitorHeightPx={monitorHeightPx}
+      bannerSide={bannerSide}
       onOpenProfile={(brawlhallaId) => console.info(`open profile ${brawlhallaId}`)}
       onRetry={() => console.info('retry')}
       onResize={(widthPx, heightPx) => {

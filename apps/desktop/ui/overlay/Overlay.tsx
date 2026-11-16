@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import '../shared/tokens.css'
 import './overlay.css'
 import { cardScale } from './card-format'
@@ -6,26 +6,26 @@ import type { Card, OverlayView } from './overlay-view'
 import { SoloCard } from './SoloCard'
 import { TeamCard } from './TeamCard'
 
+// the banner goes on the side of the card that faces the nearest screen edge
+export type BannerSide = 'left' | 'right'
+
 type OverlayProps = {
   view: OverlayView
   monitorHeightPx: number
+  bannerSide: BannerSide
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
   onResize: (widthPx: number, heightPx: number) => void
 }
 
-export function Overlay({ view, monitorHeightPx, onOpenProfile, onRetry, onResize }: OverlayProps) {
+export function Overlay({ view, monitorHeightPx, bannerSide, onOpenProfile, onRetry, onResize }: OverlayProps) {
   const scale = cardScale(monitorHeightPx, globalThis.devicePixelRatio ?? 1)
   const cardsRef = useCardsSize(scale, onResize)
-  const lobbyStartedAtMs = useLobbyStart(view.lobbyId)
-
-  // keyed by lobby, so a newer answer for the same lobby keeps the bar where it is
-  const timer = <TimerBar key={view.lobbyId} startedAtMs={lobbyStartedAtMs} visibleMs={view.visibleMs} />
 
   return (
-    <div className="cards" ref={cardsRef} style={{ zoom: scale }}>
+    <div className="cards" data-banner-side={bannerSide} ref={cardsRef} style={{ zoom: scale }}>
       {view.cards.map((card) => (
-        <OverlayCard key={cardKey(card)} card={card} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
+        <OverlayCard key={cardKey(card)} card={card} onOpenProfile={onOpenProfile} onRetry={onRetry} />
       ))}
     </div>
   )
@@ -33,46 +33,16 @@ export function Overlay({ view, monitorHeightPx, onOpenProfile, onRetry, onResiz
 
 type OverlayCardProps = {
   card: Card
-  timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-function OverlayCard({ card, timer, onOpenProfile, onRetry }: OverlayCardProps) {
+function OverlayCard({ card, onOpenProfile, onRetry }: OverlayCardProps) {
   if (card.kind === 'team') {
-    return (
-      <TeamCard data={card.data} players={card.players} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
-    )
+    return <TeamCard data={card.data} players={card.players} onOpenProfile={onOpenProfile} onRetry={onRetry} />
   }
 
-  return (
-    <SoloCard player={card.player} data={card.data} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
-  )
-}
-
-// when the cards of this lobby first showed, on the performance.now() clock
-function useLobbyStart(lobbyId: number): number {
-  const lobbyStartRef = useRef<{ lobbyId: number; startedAtMs: number } | null>(null)
-
-  if (lobbyStartRef.current?.lobbyId !== lobbyId) {
-    lobbyStartRef.current = { lobbyId, startedAtMs: performance.now() }
-  }
-
-  return lobbyStartRef.current.startedAtMs
-}
-
-type TimerBarProps = { startedAtMs: number; visibleMs: number }
-
-// a card that turns from a failed div into a button is a new element, so the bar starts where the lobby's time
-// already is instead of from full
-function TimerBar({ startedAtMs, visibleMs }: TimerBarProps) {
-  const [delayMs] = useState(() => Math.round(startedAtMs - performance.now()))
-
-  return (
-    <span className="timer">
-      <i style={{ animationDuration: `${visibleMs}ms`, animationDelay: `${delayMs}ms` }} />
-    </span>
-  )
+  return <SoloCard player={card.player} data={card.data} onOpenProfile={onOpenProfile} onRetry={onRetry} />
 }
 
 function cardKey(card: Card): string {

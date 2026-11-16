@@ -1,5 +1,4 @@
-import type { ReactNode } from 'react'
-import { BannerSlot, LegendPortrait } from './CardHead'
+import { BannerSlot, LegendPortrait, Spinner } from './CardHead'
 import { failureText } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
@@ -7,17 +6,13 @@ import { RetryRow, retryCountdown } from './RetryRow'
 type TeamCardProps = {
   data: TeamData
   players: TeamPlayer[]
-  timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-export function TeamCard({ data, players, timer, onOpenProfile, onRetry }: TeamCardProps) {
-  const isRefreshing = data.state === 'ready' && data.isRefreshing
-
+export function TeamCard({ data, players, onOpenProfile, onRetry }: TeamCardProps) {
   return (
-    <div className={isRefreshing ? 'card is-refreshing' : 'card'}>
-      {isRefreshing && <span className="refresh" />}
+    <div className={teamCardClass(data)}>
       <BannerSlot tier={data.state === 'ready' ? (data.standing?.tier ?? null) : null} />
       <span className="main">
         <TeamHead data={data} />
@@ -30,9 +25,16 @@ export function TeamCard({ data, players, timer, onOpenProfile, onRetry }: TeamC
           <RetryRow note={teamFailureNote(data)} canRetry={data.canRetry} onRetry={onRetry} />
         )}
       </span>
-      {timer}
     </div>
   )
+}
+
+function teamCardClass(data: TeamData): string {
+  if (data.state === 'loading') return 'card is-loading'
+
+  if (data.state === 'ready' && data.isRefreshing) return 'card is-refreshing'
+
+  return 'card'
 }
 
 // a team card has no sub line, so the reason goes in the retry row
@@ -45,6 +47,7 @@ function teamFailureNote(data: Extract<TeamData, { state: 'failed' }>): string {
 
 function TeamHead({ data }: { data: TeamData }) {
   const standing = data.state === 'ready' ? data.standing : null
+  const isBusy = data.state === 'loading' || (data.state === 'ready' && data.isRefreshing)
 
   return (
     <span className="team-head">
@@ -54,6 +57,7 @@ function TeamHead({ data }: { data: TeamData }) {
         <span className="elo">{standing?.rating ?? '—'}</span>
       )}
       <span className="label">2v2 team</span>
+      {isBusy && <Spinner />}
     </span>
   )
 }
