@@ -2,6 +2,7 @@ import { beforeAll, expect, test } from 'bun:test'
 import { isReady, loadReplay } from '..'
 import {
   artUrl,
+  backgroundPiece,
   backgroundSheetPath,
   manifestUrl,
   restAnimation,
@@ -18,9 +19,6 @@ test('the first seconds can be drawn when loadReplay resolves, while the backgro
   const player = replay.players.get('1')
 
   if (!player) throw new Error('expected player 1 in the replay')
-
-  // piece 1 of the only group, the one on the background sheet
-  const backgroundPiece = 1
 
   expect(isReady(replay, player, startAnimation)).toBe(true)
   expect(replay.isLoaded(backgroundPiece)).toBe(false)

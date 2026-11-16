@@ -1,19 +1,35 @@
 import { beforeAll, expect, test } from 'bun:test'
 import { loadReplay } from '..'
-import { artUrl, backgroundSheetPath, manifestUrl, stubArtStore, stubImageBitmaps } from './art-store.ts'
+import {
+  artUrl,
+  backgroundPiece,
+  backgroundSheetPath,
+  manifestUrl,
+  queuedSheetPath,
+  stubArtStore,
+  stubImageBitmaps,
+} from './art-store.ts'
 
 beforeAll(stubImageBitmaps)
 
-test('aborting after loadReplay resolves stops the background downloads', async () => {
-  const store = stubArtStore()
+test('aborting while a background sheet loads stops the sheets still queued', async () => {
   const controller = new AbortController()
+
+  // the page leaves while the background sheet is on its way
+  const store = stubArtStore({
+    onFetch: (url) => {
+      if (url === `${artUrl}${backgroundSheetPath}`) controller.abort()
+    },
+  })
+
   const replay = await loadReplay(manifestUrl, { baseUrl: artUrl, fetch: store.fetch, signal: controller.signal })
 
-  controller.abort()
   store.release()
 
   await expect(replay.loaded).rejects.toMatchObject({ name: 'AbortError' })
-  expect(store.urls).not.toContain(`${artUrl}${backgroundSheetPath}`)
+  expect(store.urls).toContain(`${artUrl}${backgroundSheetPath}`)
+  expect(store.urls).not.toContain(`${artUrl}${queuedSheetPath}`)
+  expect(replay.isLoaded(backgroundPiece)).toBe(false)
 })
 
 test('aborting before loadReplay resolves rejects it and fetches nothing more', async () => {

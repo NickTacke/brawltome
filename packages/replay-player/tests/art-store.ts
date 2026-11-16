@@ -1,6 +1,7 @@
 // A tiny synthetic art store for the loader's tests: one player whose body bone shows a piece on a start sheet in the
 // first seconds' animation (0) and a piece on a background sheet in an animation only the rest pack has (1). The
-// background sheet is held back until release() is called, so a test can look at the replay while it's pending
+// background sheet is held back until release() is called, so a test can look at the replay while it's pending. A
+// third sheet, which nothing draws, is queued after it
 import type { Manifest } from '..'
 import { writePack } from './pack-writer.ts'
 
@@ -13,6 +14,10 @@ const restPackPath = 'anims/3333333333333333.bin'
 
 export const startSheetPath = 'sheets/4444444444444444.webp'
 export const backgroundSheetPath = 'sheets/5555555555555555.webp'
+export const queuedSheetPath = 'sheets/7777777777777777.webp'
+
+// piece 1 of the only group, the one on the background sheet
+export const backgroundPiece = 1
 
 export const startAnimation = 0
 export const restAnimation = 1
@@ -28,7 +33,7 @@ const manifest = {
   ],
   objectAnimations: [],
   start: { from: 0, to: 94 },
-  sheetOrder: [startSheetPath, backgroundSheetPath],
+  sheetOrder: [startSheetPath, backgroundSheetPath, queuedSheetPath],
   players: {
     '1': {
       slot: 1,
@@ -50,6 +55,7 @@ const group = {
   sheets: [
     { src: startSheetPath, w: 8, h: 8, bytes: 10 },
     { src: backgroundSheetPath, w: 8, h: 8, bytes: 10 },
+    { src: queuedSheetPath, w: 8, h: 8, bytes: 10 },
   ],
   pieces: [
     [0, 0, 0, 8, 8, 0, 0, 8, 8],
@@ -64,8 +70,9 @@ const bodyAt = (spriteFrame: number) => ({ name: 'a_Body', spriteFrame, opacity:
 const startPack = writePack([{ index: startAnimation, frameCount: 1, frames: new Map([[0, [bodyAt(0)]]]) }])
 const restPack = writePack([{ index: restAnimation, frameCount: 1, frames: new Map([[0, [bodyAt(1)]]]) }])
 
-// stubArtStore serves the store, records every url asked for, and holds the background sheet until release()
-export function stubArtStore() {
+// stubArtStore serves the store, records every url asked for, and holds the background sheet until release().
+// onFetch is told of each url as it's asked for
+export function stubArtStore(options: { onFetch?: (url: string) => void } = {}) {
   const urls: string[] = []
   let release = () => {}
 
@@ -80,10 +87,12 @@ export function stubArtStore() {
     [`${artUrl}${restPackPath}`, () => new Response(restPack)],
     [`${artUrl}${startSheetPath}`, () => new Response(new Blob(['start sheet']))],
     [`${artUrl}${backgroundSheetPath}`, () => backgroundSheetSent.then(() => new Response(new Blob(['background'])))],
+    [`${artUrl}${queuedSheetPath}`, () => new Response(new Blob(['queued']))],
   ])
 
   const fetch = async (url: string) => {
     urls.push(url)
+    options.onFetch?.(url)
 
     return (await files.get(url)?.()) ?? new Response(null, { status: 404 })
   }
