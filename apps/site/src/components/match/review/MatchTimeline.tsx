@@ -1,6 +1,6 @@
 import type { MatchInsights, Moment } from '@brawltome/contracts'
 import type { Timeline } from '@brawltome/replay-player'
-import { type MouseEvent, useMemo } from 'react'
+import { type PointerEvent, useMemo } from 'react'
 import { lanePlayersOf, startsSide } from './lane-players'
 import { PlayerLane } from './PlayerLane'
 import { TimelineHover } from './TimelineHover'
@@ -43,17 +43,29 @@ export function MatchTimeline(props: MatchTimelineProps) {
   const { plotRef, hover, track, clear } = usePlotHover()
   const placed = stops.map((stop, position) => ({ stop, position }))
 
-  // while scrubbing the stage shows the moment itself, so the readout stays out of its way
-  function readOut(event: MouseEvent) {
-    if (event.buttons === 0) track(event)
+  // a mouse reads out where it rests, and not while it scrubs, as the stage then shows the moment itself. a finger
+  // can't rest without pressing, so it reads out while it presses and scrubs, and lifting it puts the readout away
+  function readOut(event: PointerEvent) {
+    const isPressed = event.buttons !== 0
+    const isReading = event.pointerType === 'mouse' ? !isPressed : isPressed
+
+    if (isReading) track(event)
     else clear()
   }
 
   return (
     // a gutter before the lanes for who each one is
     <div className="relative mr-1 ml-9">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: a pointer-only readout, the slider and the stops are controls of their own */}
-      <div ref={plotRef} className="relative grid gap-0.5" onMouseMove={readOut} onMouseLeave={clear}>
+      {/* a pointer-only readout: the slider and the stops are controls of their own */}
+      <div
+        ref={plotRef}
+        className="relative grid gap-0.5"
+        onPointerDown={readOut}
+        onPointerMove={readOut}
+        onPointerUp={readOut}
+        onPointerCancel={clear}
+        onPointerLeave={clear}
+      >
         {lanes.map((lane, index) => (
           <PlayerLane
             key={lane.player.slot}
