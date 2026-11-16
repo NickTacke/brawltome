@@ -53,6 +53,7 @@ export function ReviewTools(props: ReviewToolsProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 phone:contents">
+      {/* on a phone the menus drop to a row of their own after the switch, so a review's menu never moves it */}
       {hasMenus ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 phone:order-1 phone:w-full">
           {isReview ? (
