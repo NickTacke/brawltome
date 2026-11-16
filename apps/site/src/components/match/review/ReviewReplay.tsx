@@ -1,5 +1,6 @@
 import type { MatchInsights } from '@brawltome/contracts'
-import { useMemo, useRef, useState } from 'react'
+import { type ReactNode, useMemo, useRef, useState } from 'react'
+import { PickedLead } from '../lead/PickedLead'
 import { type CameraMode, defaultCameraMode } from '../stage/camera-mode'
 import { type Pose, posesAt } from '../stage/pose'
 import { useFullscreen } from '../stage/use-fullscreen'
@@ -14,6 +15,10 @@ import { ReviewTools } from './ReviewTools'
 import { useReviewMode } from './use-review-mode'
 
 const noPoses: Pose[] = []
+
+// the lead stands beside the stage from this width of the replay on; under it on anything narrower
+const besideStage = 'shrink-0 @max-[40rem]:hidden'
+const underStage = '@[40rem]:hidden'
 
 type ReviewReplayProps = {
   insights: MatchInsights
@@ -62,22 +67,49 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
     />
   )
 
+  const lead = (isUpright: boolean) => (
+    <PickedLead
+      insights={insights}
+      selectedSlot={selectedSlot}
+      timeMs={playback.timeMs}
+      onSeek={mode.seekByHand}
+      isUpright={isUpright}
+    />
+  )
+
+  const replayStage = (
+    <ReviewStage
+      insights={insights}
+      legends={legends}
+      playback={playback}
+      controls={controls}
+      fullscreen={fullscreen}
+      frameRef={frameRef}
+      cameraMode={cameraMode}
+      mode={mode}
+      selectedSlot={selectedSlot}
+      poses={poses}
+      lanes={lanes}
+      tools={tools}
+    />
+  )
+
   return (
     <ReplaySection tools={tools}>
-      <ReviewStage
-        insights={insights}
-        legends={legends}
-        playback={playback}
-        controls={controls}
-        fullscreen={fullscreen}
-        frameRef={frameRef}
-        cameraMode={cameraMode}
-        mode={mode}
-        selectedSlot={selectedSlot}
-        poses={poses}
-        lanes={lanes}
-        tools={tools}
-      />
+      <StageBesideLead stage={replayStage} lead={lead} />
     </ReplaySection>
+  )
+}
+
+/** The stage with the lead panel standing beside it, or lying under it when the replay is narrow. */
+function StageBesideLead({ stage, lead }: { stage: ReactNode; lead: (isUpright: boolean) => ReactNode }) {
+  return (
+    <>
+      <div className="flex gap-4">
+        <div className="min-w-0 flex-1">{stage}</div>
+        <div className={besideStage}>{lead(true)}</div>
+      </div>
+      <div className={underStage}>{lead(false)}</div>
+    </>
   )
 }
