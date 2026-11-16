@@ -3,17 +3,10 @@ import { randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
-import {
-  type ClaimedArtJob,
-  claimArtJob,
-  failArtJob,
-  missingArtFiles,
-  readArtFile,
-  releaseArtJob,
-  storeArtFile,
-} from '../art'
+import { type ClaimedArtJob, claimArtJob, failArtJob, missingArtFiles, readArtFile, releaseArtJob } from '../art'
 import { completeArtJob } from '../art-complete'
 import { queueArtJob, queueWarmJob } from '../art-queue'
+import { storeArtFile } from '../art-upload'
 import { replaysModule } from '../index'
 import { claimJob, completeJob, type WorkerReport } from '../jobs'
 import { noteWorkerReport } from '../maintenance'
@@ -68,14 +61,14 @@ describe.skipIf(!connectionString)('art jobs', () => {
   })
 
   // an operator's upload, parsed by the worker into a stored match
-  async function parsedMatch(): Promise<string> {
+  async function parsedMatch(workerReport: WorkerReport = report): Promise<string> {
     const accountId = randomUUID()
 
     await database.sql`INSERT INTO accounts.users (id) VALUES (${accountId})`
 
     const files = [new File([new Uint8Array(fakeReplay().bytes)], 'a.replay')]
     const [upload] = await uploadReplays(deps, { accountId, isOperator: true, files })
-    const claimed = await claimJob(deps, report)
+    const claimed = await claimJob(deps, workerReport)
 
     const outcome = await completeJob(deps, {
       jobId: claimed?.jobId as string,
@@ -180,7 +173,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await exportArt(claimed, art)).toBe('completed')
 
-    const manifestKey = `matches/${matchId}/dev-1/manifest.json`
+    const manifestKey = `matches/${matchId}/dev-1-${claimed.leaseToken}/manifest.json`
 
     expect(await artOf(matchId)).toEqual({ state: 'ready', manifestKey, format: 3, failure: null })
 
@@ -192,6 +185,135 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await mapFiles()).toEqual([{ patch: '11.00', mapId: 136, path: art.mapPath }])
     expect((await artJobs())[0]?.status).toBe('completed')
+  })
+
+  test('a manifest key fits for the longest build a worker may report', async () => {
+    const longBuild = { ...report, build: 'b'.repeat(64) }
+    const matchId = await parsedMatch(longBuild)
+    const claimed = (await claimArtJob(deps, longBuild)) as ClaimedArtJob
+
+    expect(await exportArt(claimed)).toBe('completed')
+    expect((await artOf(matchId))?.manifestKey).toContain(longBuild.build)
+  })
+
+  test('a later export replaces the manifest and deletes the one before', async () => {
+    const matchId = await parsedMatch()
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    await exportArt(first)
+    await queueArtJob(deps, matchId)
+
+    const second = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    expect(await exportArt(second)).toBe('completed')
+
+    const manifests = deps.artStore.keys().filter((key) => key.startsWith('matches/'))
+
+    expect(manifests).toEqual([`matches/${matchId}/dev-1-${second.leaseToken}/manifest.json`])
+    expect((await artOf(matchId))?.manifestKey).toBe(manifests[0] as string)
+  })
+
+  test('an attempt that stalls past its lease never replaces the manifest of the one after it', async () => {
+    const matchId = await parsedMatch()
+    const stalled = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const art = fakeArtExport()
+
+    for (const [path, bytes] of art.files) await storeArtFile(deps, stalled.jobId, stalled.leaseToken, path, bytes)
+
+    // the stalled attempt's manifest write waits until the attempt after it has finished
+    const artStore = deps.artStore
+    let letStalledWriteFinish = () => {}
+
+    const stalledWriteMayFinish = new Promise<void>((resolve) => {
+      letStalledWriteFinish = resolve
+    })
+
+    let markWriteStalled = () => {}
+
+    const writeStalled = new Promise<void>((resolve) => {
+      markWriteStalled = resolve
+    })
+
+    const stallingDeps = {
+      ...deps,
+      artStore: {
+        ...artStore,
+        put: async (key: string, body: Uint8Array, contentType: string) => {
+          markWriteStalled()
+          await stalledWriteMayFinish
+          await artStore.put(key, body, contentType)
+        },
+      },
+    }
+
+    const result = { manifest: art.manifest, maps: [], artFormat: 3 }
+    const stalledAnswer = completeArtJob(stallingDeps, stalled.jobId, stalled.leaseToken, result)
+
+    await writeStalled
+
+    await database.sql`
+      UPDATE replays.art_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ${stalled.jobId}
+    `
+
+    const next = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    expect(await completeArtJob(deps, next.jobId, next.leaseToken, result)).toBe('completed')
+
+    letStalledWriteFinish()
+
+    expect(await stalledAnswer).toBe('lease-lost')
+
+    const nextKey = `matches/${matchId}/dev-1-${next.leaseToken}/manifest.json`
+
+    expect((await artOf(matchId))?.manifestKey).toBe(nextKey)
+    expect(deps.artStore.keys().filter((key) => key.startsWith('matches/'))).toEqual([nextKey])
+  })
+
+  test('an export that finishes in a format older than one reported while it ran runs again', async () => {
+    const matchId = await parsedMatch()
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    // the format arrives while the job runs, so the format re-queue passes this match by
+    await noteWorkerReport(deps, { ...report, artFormat: 4 })
+
+    expect(await exportArt(claimed)).toBe('completed')
+
+    expect(await artOf(matchId)).toMatchObject({
+      state: 'queued',
+      format: 3,
+      manifestKey: `matches/${matchId}/dev-1-${claimed.leaseToken}/manifest.json`,
+    })
+
+    expect((await claimArtJob(deps, report))?.matchId).toBe(matchId)
+  })
+
+  test('a worker rolled back to an older format exports each match once', async () => {
+    const matchId = await parsedMatch()
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    // format 4 is reported once while the job runs, then the worker goes back to 3
+    await noteWorkerReport(deps, { ...report, artFormat: 4 })
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    expect(await exportArt(first)).toBe('completed')
+    expect((await artOf(matchId))?.state).toBe('queued')
+
+    expect(await exportArt((await claimArtJob(deps, report)) as ClaimedArtJob)).toBe('completed')
+    expect(await artOf(matchId)).toMatchObject({ state: 'ready', format: 3 })
+    expect(await claimArtJob(deps, report)).toBeNull()
+  })
+
+  test('an export in the newest format reported stays ready', async () => {
+    const matchId = await parsedMatch()
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    expect(await exportArt((await claimArtJob(deps, report)) as ClaimedArtJob)).toBe('completed')
+    expect((await artOf(matchId))?.state).toBe('ready')
+    expect(await claimArtJob(deps, report)).toBeNull()
   })
 
   test('only files the art bucket lacks are asked for', async () => {
@@ -290,6 +412,164 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(read).toEqual({ status: 'lease-lost' })
   })
 
+  // two stored matches, each with its art job claimed by its own attempt
+  async function twoClaimedJobs(): Promise<[ClaimedArtJob, ClaimedArtJob]> {
+    await parsedMatch()
+    await parsedMatch()
+
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const second = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    return [first, second]
+  }
+
+  // an art store whose writes wait until the test lets them finish
+  function stallingArtStore() {
+    const artStore = deps.artStore
+    let letWritesFinish = () => {}
+
+    const writesMayFinish = new Promise<void>((resolve) => {
+      letWritesFinish = resolve
+    })
+
+    let markWriteStarted = () => {}
+
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve
+    })
+
+    const store = {
+      ...artStore,
+      put: async (key: string, body: Uint8Array, contentType: string) => {
+        markWriteStarted()
+        await writesMayFinish
+        await artStore.put(key, body, contentType)
+      },
+    }
+
+    return { store, writeStarted, letWritesFinish: () => letWritesFinish() }
+  }
+
+  test('of two overlapping uploads of one path, only the first is stored', async () => {
+    const [first, second] = await twoClaimedJobs()
+    const path = `art/${'c'.repeat(32)}.json`
+    const firstBytes = new TextEncoder().encode('{"from":"first"}')
+    const stalling = stallingArtStore()
+
+    const firstUpload = storeArtFile(
+      { ...deps, artStore: stalling.store },
+      first.jobId,
+      first.leaseToken,
+      path,
+      firstBytes,
+    )
+
+    await stalling.writeStarted
+
+    const secondBytes = new TextEncoder().encode('{"from":"second"}')
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, secondBytes)).toEqual({
+      status: 'in-progress',
+    })
+
+    expect(await missingArtFiles(deps, second.jobId, second.leaseToken, [path])).toEqual([path])
+
+    stalling.letWritesFinish()
+
+    expect(await firstUpload).toEqual({ status: 'stored' })
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, secondBytes)).toEqual({ status: 'exists' })
+    expect(await deps.artStore.get(path)).toEqual(firstBytes)
+    expect(await missingArtFiles(deps, second.jobId, second.leaseToken, [path])).toEqual([])
+  })
+
+  test('an upload left unfinished is taken over once its attempt has lost its lease', async () => {
+    const [first, second] = await twoClaimedJobs()
+    const path = `maps/${'d'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{"mapId":136}')
+
+    const failingStore = {
+      ...deps.artStore,
+      put: async () => {
+        throw new Error('connection reset')
+      },
+    }
+
+    await expect(
+      storeArtFile({ ...deps, artStore: failingStore }, first.jobId, first.leaseToken, path, bytes),
+    ).rejects.toThrow()
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, bytes)).toEqual({ status: 'in-progress' })
+
+    await database.sql`
+      UPDATE replays.art_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ${first.jobId}
+    `
+
+    expect(await storeArtFile(deps, second.jobId, second.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+    expect(await deps.artStore.get(path)).toEqual(bytes)
+  })
+
+  test('the same attempt may retry an upload that failed', async () => {
+    const [first] = await twoClaimedJobs()
+    const path = `art/${'e'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{}')
+
+    const failingStore = {
+      ...deps.artStore,
+      put: async () => {
+        throw new Error('connection reset')
+      },
+    }
+
+    await expect(
+      storeArtFile({ ...deps, artStore: failingStore }, first.jobId, first.leaseToken, path, bytes),
+    ).rejects.toThrow()
+
+    expect(await storeArtFile(deps, first.jobId, first.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+  })
+
+  test('a duplicate upload from the same attempt finds the path already stored', async () => {
+    const [first] = await twoClaimedJobs()
+    const path = `art/${'f'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{}')
+    const stalling = stallingArtStore()
+
+    const stalledUpload = storeArtFile(
+      { ...deps, artStore: stalling.store },
+      first.jobId,
+      first.leaseToken,
+      path,
+      bytes,
+    )
+
+    await stalling.writeStarted
+
+    expect(await storeArtFile(deps, first.jobId, first.leaseToken, path, bytes)).toEqual({ status: 'stored' })
+
+    stalling.letWritesFinish()
+
+    expect(await stalledUpload).toEqual({ status: 'exists' })
+  })
+
+  test('a manifest naming a file still being uploaded is refused', async () => {
+    const claimed = await claimedMatchJob()
+    const art = fakeArtExport()
+
+    for (const [path, bytes] of art.files) await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)
+
+    await database.sql`
+      UPDATE replays.art_files SET state = 'uploading', job_id = ${claimed.jobId}, lease_token = ${claimed.leaseToken}
+      WHERE path = ${art.mapPath}
+    `
+
+    const outcome = await completeArtJob(deps, claimed.jobId, claimed.leaseToken, {
+      manifest: art.manifest,
+      maps: [{ patch: '11.00', mapId: 136, path: art.mapPath }],
+      artFormat: 3,
+    })
+
+    expect(outcome).toBe('failed')
+  })
+
   test('no-animations marks the art failed with that code', async () => {
     const matchId = await parsedMatch()
     const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
@@ -333,7 +613,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await exportArt(claimed)).toBe('completed')
 
-    const manifestKey = `matches/${survivorId}/dev-1/manifest.json`
+    const manifestKey = `matches/${survivorId}/dev-1-${claimed.leaseToken}/manifest.json`
 
     expect(await artOf(survivorId)).toMatchObject({ state: 'ready', manifestKey })
     expect(deps.artStore.keys()).toContain(manifestKey)

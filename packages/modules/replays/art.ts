@@ -1,4 +1,4 @@
-import type { ObjectStore, Sql } from '@brawltome/foundation'
+import type { Sql } from '@brawltome/foundation'
 import { type ArtResult, completeArtJob } from './art-complete'
 import {
   type ArtFailure,
@@ -8,8 +8,9 @@ import {
   giveBack,
   type LiveArtJob,
 } from './art-lease'
-import { parseArtPath, verifyArtFile } from './art-paths'
+import { parseArtPath } from './art-paths'
 import { queueArtJob, queueWarmJob } from './art-queue'
+import { type StoreArtOutcome, storeArtFile } from './art-upload'
 import type { CompleteOutcome } from './jobs'
 import { LEASE_SECONDS, MAX_ART_PATHS_PER_CALL, MAX_ATTEMPTS } from './limits'
 import { noteWorkerReport } from './maintenance'
@@ -29,8 +30,6 @@ export type ClaimedArtJob = {
   // the match's line, gzipped as stored; null for a warm job
   line: Uint8Array | null
 }
-
-export type StoreArtOutcome = { status: 'stored' } | { status: 'rejected'; reason: string } | { status: 'lease-lost' }
 
 export type ReadArtOutcome =
   | { status: 'found'; bytes: Uint8Array }
@@ -86,7 +85,7 @@ async function takeNextArtJob(sql: Sql): Promise<(LiveArtJob & { leaseToken: str
     UPDATE replays.art_jobs AS job SET status = 'processing', attempts = job.attempts + 1,
       lease_token = gen_random_uuid(), lease_expires_at = clock_timestamp() + ${LEASE_SECONDS} * interval '1 second',
       timeline_key = (SELECT timeline_key FROM replays.matches WHERE id = job.match_id),
-      updated_at = clock_timestamp()
+      claimed_at = clock_timestamp(), updated_at = clock_timestamp()
     FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.kind, job.match_id AS "matchId", job.patch, job.attempts, job.timeline_key AS "timelineKey",
       job.lease_token AS "leaseToken"
@@ -113,46 +112,12 @@ export async function missingArtFiles(
   const uniquePaths = [...new Set(paths)]
 
   const stored = await deps.database.sql<{ path: string }[]>`
-    SELECT path FROM replays.art_files WHERE path = ANY(${uniquePaths}::text[])
+    SELECT path FROM replays.art_files WHERE path = ANY(${uniquePaths}::text[]) AND state = 'stored'
   `
 
   const storedPaths = new Set(stored.map(({ path }) => path))
 
   return uniquePaths.filter((path) => !storedPaths.has(path))
-}
-
-/**
- * Checks one file from the worker and puts it in the art bucket. A path already stored is left as it is: its name
- * stands for its content or its inputs, so the stored file is the same one.
- */
-export async function storeArtFile(
-  deps: ReplaysDeps,
-  jobId: string,
-  leaseToken: string,
-  path: string,
-  bytes: Uint8Array,
-): Promise<StoreArtOutcome> {
-  const artStore = requireArtStore(deps.artStore, `store art file ${path} for job ${jobId}`)
-  const problem = verifyArtFile(path, bytes)
-
-  if (problem) return { status: 'rejected', reason: problem }
-
-  const job = await findLiveArtJob(deps.database.sql, jobId, leaseToken)
-
-  if (job === 'not-found' || job === 'lease-lost') return { status: 'lease-lost' }
-
-  const [stored] = await deps.database.sql`SELECT 1 FROM replays.art_files WHERE path = ${path}`
-
-  if (stored) return { status: 'stored' }
-
-  // the file first, so a path in art_files is always in the bucket
-  await artStore.put(path, bytes, parseArtPath(path)?.contentType as string)
-
-  await deps.database.sql`
-    INSERT INTO replays.art_files (path, bytes) VALUES (${path}, ${bytes.byteLength}) ON CONFLICT DO NOTHING
-  `
-
-  return { status: 'stored' }
 }
 
 /**
@@ -165,7 +130,10 @@ export async function readArtFile(
   leaseToken: string,
   path: string,
 ): Promise<ReadArtOutcome> {
-  const artStore = requireArtStore(deps.artStore, `read art file ${path} for job ${jobId}`)
+  const artStore = deps.artStore
+
+  if (!artStore) throw new Error(`read art file ${path} for job ${jobId}: this process has no art bucket`)
+
   const kind = parseArtPath(path)?.kind
 
   if (kind !== 'art' && kind !== 'map') return { status: 'refused', reason: `${path} is not an art group or map file` }
@@ -213,12 +181,6 @@ export async function renewArtLease(deps: ReplaysDeps, jobId: string, leaseToken
 /** Gives a job back unplayed, for a worker shutting down; it doesn't count as an attempt. */
 export async function releaseArtJob(deps: ReplaysDeps, jobId: string, leaseToken: string): Promise<boolean> {
   return giveBack(deps.database.sql, { id: jobId, leaseToken }, { isAttempt: false })
-}
-
-function requireArtStore(artStore: ObjectStore | null, action: string): ObjectStore {
-  if (!artStore) throw new Error(`${action}: this process has no art bucket`)
-
-  return artStore
 }
 
 export type ReplayArtJobs = {

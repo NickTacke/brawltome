@@ -1,5 +1,5 @@
 import type { ObjectStore, Sql, TransactionSql } from '@brawltome/foundation'
-import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartOnNewLine } from './art-lease'
+import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartArtJob } from './art-lease'
 import { readManifestPaths } from './art-manifest'
 import { parseArtPath } from './art-paths'
 import type { CompleteOutcome } from './jobs'
@@ -88,7 +88,10 @@ function isMapEntry(map: ArtMap, patch: string): boolean {
 }
 
 async function notStored(sql: Sql, paths: string[]): Promise<string[]> {
-  const stored = await sql<{ path: string }[]>`SELECT path FROM replays.art_files WHERE path = ANY(${paths}::text[])`
+  const stored = await sql<{ path: string }[]>`
+    SELECT path FROM replays.art_files WHERE path = ANY(${paths}::text[]) AND state = 'stored'
+  `
+
   const storedPaths = new Set(stored.map(({ path }) => path))
 
   return paths.filter((path) => !storedPaths.has(path))
@@ -102,7 +105,7 @@ async function storeMaps(
   return finishJob(sql, job, async (transaction) => {
     await saveMaps(transaction, result)
 
-    return true
+    return 'done'
   })
 }
 
@@ -117,35 +120,87 @@ async function storeManifest(
 
   // a re-parse replaced the line this art was drawn from; the job goes back to run again on the new one
   if (!line || line.timelineKey !== job.timelineKey) {
-    await restartOnNewLine(sql, job, { isLeaseLive: true })
+    await restartArtJob(sql, job, { isLeaseLive: true })
 
     return 'lease-lost'
   }
 
   const survivorId = await survivingMatchId(sql, matchId)
-  const key = manifestKey(survivorId, line.build)
+  const key = manifestKey(survivorId, line.build, job.leaseToken)
 
   // the manifest first, so a match marked ready always has one
   await artStore.put(key, new TextEncoder().encode(JSON.stringify(result.manifest)), 'application/json')
 
-  return finishJob(sql, job, async (transaction) => {
-    // checked again under the match's lock, since a re-parse may have committed since the check above
-    const [match] = await transaction<{ timelineKey: string | null }[]>`
-      SELECT timeline_key AS "timelineKey" FROM replays.matches WHERE id = ${matchId} FOR UPDATE
-    `
+  let replacedKeys: string[] = []
 
-    if (match?.timelineKey !== job.timelineKey) return false
+  const outcome = await finishJob(sql, job, async (transaction) => {
+    const marked = await markReady(transaction, { ...job, matchId, survivorId }, key, result)
 
-    await saveMaps(transaction, result)
+    if (marked === 'line-replaced') return marked
 
-    await transaction`
-      UPDATE replays.matches SET art_state = 'ready', art_manifest_key = ${key}, art_format = ${result.artFormat},
-        art_failure = NULL
-      WHERE id IN (${matchId}, ${survivorId})
-    `
+    replacedKeys = marked.replacedKeys
 
-    return true
+    return marked.isOutdated ? 'run-again' : 'done'
   })
+
+  // an accepted manifest replaces the ones before it; a refused one goes itself
+  const unusedKeys = outcome === 'completed' ? replacedKeys : [key]
+
+  for (const unusedKey of unusedKeys) await artStore.delete(unusedKey)
+
+  return outcome
+}
+
+// line-replaced when a re-parse replaced the line since the check before the manifest was written. art in a format
+// older than one first reported while its job ran is kept but stays queued: the format re-queue passed this match by
+async function markReady(
+  transaction: TransactionSql,
+  job: { id: string; matchId: string; survivorId: string; timelineKey: string | null },
+  key: string,
+  result: ArtResult,
+): Promise<{ replacedKeys: string[]; isOutdated: boolean } | 'line-replaced'> {
+  const matchIds = [...new Set([job.matchId, job.survivorId])]
+
+  const matches = await transaction<{ id: string; timelineKey: string | null; manifestKey: string | null }[]>`
+    SELECT id, timeline_key AS "timelineKey", art_manifest_key AS "manifestKey" FROM replays.matches
+    WHERE id = ANY(${matchIds}::uuid[])
+    ORDER BY id
+    FOR UPDATE
+  `
+
+  const exported = matches.find((match) => match.id === job.matchId)
+
+  if (exported?.timelineKey !== job.timelineKey) return 'line-replaced'
+
+  const isOutdated = await isOutdatedWhileRunning(transaction, job.id, result.artFormat)
+  const state = isOutdated ? 'queued' : 'ready'
+
+  await saveMaps(transaction, result)
+
+  await transaction`
+    UPDATE replays.matches SET art_state = ${state}, art_manifest_key = ${key}, art_format = ${result.artFormat},
+      art_failure = NULL
+    WHERE id = ANY(${matchIds}::uuid[])
+  `
+
+  const replacedKeys = matches.flatMap((match) =>
+    match.manifestKey && match.manifestKey !== key ? [match.manifestKey] : [],
+  )
+
+  return { replacedKeys: [...new Set(replacedKeys)], isOutdated }
+}
+
+// only a newer format first reported after the claim counts: one reported before it is a format the worker no longer
+// runs (a rollback), and comparing with it would export the match again forever
+async function isOutdatedWhileRunning(transaction: TransactionSql, jobId: string, format: number): Promise<boolean> {
+  const [outdated] = await transaction<{ isOutdated: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM replays.art_formats AS newer, replays.art_jobs AS job
+      WHERE job.id = ${jobId} AND newer.format > ${format} AND newer.first_seen_at > job.claimed_at
+    ) AS "isOutdated"
+  `
+
+  return outdated?.isOutdated ?? false
 }
 
 async function lineOf(sql: Sql, matchId: string): Promise<MatchLine | null> {
@@ -182,12 +237,15 @@ async function saveMaps(transaction: TransactionSql, result: ArtResult): Promise
   }
 }
 
-// the lease is checked again under the row lock, so an attempt that lost it in the meantime writes nothing. write
-// answers false when the job's line was replaced, and the job then goes back to the queue
+// what a completion wrote: done, nothing because the job's line was replaced, or art the job must draw again
+type Written = 'done' | 'line-replaced' | 'run-again'
+
+// the lease is checked again under the row lock, so an attempt that lost it in the meantime writes nothing. a job whose
+// line was replaced, or whose art must be drawn again, goes back to the queue
 async function finishJob(
   sql: Sql,
   job: { id: string; leaseToken: string },
-  write: (transaction: TransactionSql) => Promise<boolean>,
+  write: (transaction: TransactionSql) => Promise<Written>,
 ): Promise<CompleteOutcome> {
   return sql.begin(async (transaction) => {
     const [locked] = await transaction<{ ok: boolean }[]>`
@@ -197,12 +255,13 @@ async function finishJob(
 
     if (!locked?.ok) return 'lease-lost' as const
 
-    const isWritten = await write(transaction)
+    const written = await write(transaction)
 
-    if (!isWritten) {
-      await restartOnNewLine(transaction, job, { isLeaseLive: true })
+    if (written !== 'done') {
+      await restartArtJob(transaction, job, { isLeaseLive: true })
 
-      return 'lease-lost' as const
+      // a replaced line answers as for a lost lease; art to draw again was still taken
+      return written === 'line-replaced' ? ('lease-lost' as const) : ('completed' as const)
     }
 
     await transaction`

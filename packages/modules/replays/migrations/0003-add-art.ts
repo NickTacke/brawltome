@@ -3,7 +3,8 @@
 const sql = `ALTER TABLE replays.matches
   ADD COLUMN art_state varchar(8) NOT NULL DEFAULT 'none'
     CHECK (art_state IN ('none', 'queued', 'ready', 'failed')),
-  ADD COLUMN art_manifest_key varchar(120),
+  -- room for a 64-character build and a lease token in the key
+  ADD COLUMN art_manifest_key varchar(200),
   ADD COLUMN art_format smallint,
   ADD COLUMN art_failure jsonb,
   ADD CHECK ((art_state = 'failed') = (art_failure IS NOT NULL)),
@@ -22,6 +23,8 @@ CREATE TABLE replays.art_jobs (
   lease_expires_at timestamptz,
   -- the line the worker was handed, so art for a line a re-parse has since replaced is refused
   timeline_key varchar(200),
+  -- when the running attempt was claimed, so only a format first reported after it makes its art outdated
+  claimed_at timestamptz,
   failure jsonb,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -36,11 +39,17 @@ CREATE UNIQUE INDEX replays_art_jobs_one_active_idx
 -- every worker report asks whether each of its patches was ever warmed
 CREATE INDEX replays_art_jobs_warm_patch_idx ON replays.art_jobs (patch) WHERE kind = 'warm';
 
--- every file the art bucket holds; they are named by their content or their inputs, so a stored path never changes
+-- every file the art bucket holds; they are named by their content or their inputs, so a stored path never changes.
+-- one upload attempt claims a path before its bytes go to the bucket, and holds it while its job's lease runs
 CREATE TABLE replays.art_files (
   path varchar(80) PRIMARY KEY,
   bytes integer NOT NULL CHECK (bytes >= 0),
-  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  state varchar(9) NOT NULL CHECK (state IN ('uploading', 'stored')),
+  job_id uuid,
+  lease_token uuid,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CHECK ((state = 'uploading') = (lease_token IS NOT NULL)),
+  CHECK ((job_id IS NULL) = (lease_token IS NULL))
 );
 
 -- the map file (maps/<fingerprint>.json) a patch draws each map with
@@ -61,7 +70,7 @@ CREATE TABLE replays.art_formats (
 export const addArt = {
   identity: 'replays/0003',
   predecessor: 'replays/0002',
-  checksum: '589207f9ca38db05557012ccf1e20e43fe406663ebbbf44355639f5df6f612a5',
+  checksum: '3f6b010971f7c8b17360571411f301aef496e9a83929ee8d8e22d2b1a347724b',
   requires: [],
   sql,
 } as const

@@ -4,10 +4,11 @@ import { createReplays } from './migrations/0001-create-replays'
 import { addWorkerReports } from './migrations/0002-add-worker-reports'
 import { addArt } from './migrations/0003-add-art'
 
-export type { ClaimedArtJob, ReadArtOutcome, ReplayArtJobs, StoreArtOutcome } from './art'
+export type { ClaimedArtJob, ReadArtOutcome, ReplayArtJobs } from './art'
 export type { ArtMap, ArtResult } from './art-complete'
 export type { ArtFailure, ArtFailureCode } from './art-lease'
 export { parseArtPath } from './art-paths'
+export type { StoreArtOutcome } from './art-upload'
 export {
   type ClaimedJob,
   type CompleteOutcome,

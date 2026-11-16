@@ -84,7 +84,7 @@ export const matches = replaysSchema.table('matches', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   artState: varchar('art_state', { length: 8 }).notNull().default('none'),
-  artManifestKey: varchar('art_manifest_key', { length: 120 }),
+  artManifestKey: varchar('art_manifest_key', { length: 200 }),
   artFormat: smallint('art_format'),
   artFailure: jsonb<ArtFailure>('art_failure'),
 })
@@ -156,6 +156,7 @@ export const artJobs = replaysSchema.table('art_jobs', {
   leaseToken: uuid('lease_token'),
   leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
   timelineKey: varchar('timeline_key', { length: 200 }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
   failure: jsonb<ArtFailure>('failure'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
@@ -164,6 +165,9 @@ export const artJobs = replaysSchema.table('art_jobs', {
 export const artFiles = replaysSchema.table('art_files', {
   path: varchar('path', { length: 80 }).primaryKey(),
   bytes: integer('bytes').notNull(),
+  state: varchar('state', { length: 9 }).notNull(),
+  jobId: uuid('job_id'),
+  leaseToken: uuid('lease_token'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 })
 

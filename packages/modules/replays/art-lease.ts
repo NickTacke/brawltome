@@ -79,7 +79,7 @@ async function failUnlessLineReplaced(
   return sql.begin(async (transaction) => {
     const isReplaced = await lockIsLineReplaced(transaction, job.id)
 
-    if (isReplaced) return (await restartOnNewLine(transaction, job, fence)) ? 'given-back' : 'lease-lost'
+    if (isReplaced) return (await restartArtJob(transaction, job, fence)) ? 'given-back' : 'lease-lost'
 
     return (await failJobAndArt(transaction, job, failure, fence)) ? 'failed' : 'lease-lost'
   })
@@ -125,8 +125,11 @@ async function failJobAndArt(
   return failed?.count === 1
 }
 
-/** Puts a job whose line was replaced back in the queue, with its attempts reset: the new line is new work. */
-export async function restartOnNewLine(sql: Sql | TransactionSql, job: LeasedJob, fence: LeaseFence): Promise<boolean> {
+/**
+ * Puts a job back in the queue with its attempts reset, when its line was replaced or its art must be drawn again in
+ * a newer format: that is new work.
+ */
+export async function restartArtJob(sql: Sql | TransactionSql, job: LeasedJob, fence: LeaseFence): Promise<boolean> {
   const restarted = await sql`
     UPDATE replays.art_jobs SET status = 'pending', lease_token = NULL, lease_expires_at = NULL, timeline_key = NULL,
       attempts = 0, updated_at = clock_timestamp()
