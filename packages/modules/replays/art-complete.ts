@@ -1,5 +1,5 @@
 import type { ObjectStore, Sql, TransactionSql } from '@brawltome/foundation'
-import { findLiveArtJob, finishArtWithFailure, giveBack, type LiveArtJob } from './art-lease'
+import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartOnNewLine } from './art-lease'
 import { readManifestPaths } from './art-manifest'
 import { parseArtPath } from './art-paths'
 import type { CompleteOutcome } from './jobs'
@@ -38,9 +38,10 @@ export async function completeArtJob(
 
   if (problem) {
     const failure = { code: 'export-failed' as const, message: problem.slice(0, 500) }
-    const isRecorded = await finishArtWithFailure(sql, { id: jobId, leaseToken }, failure, true)
+    const outcome = await finishArtWithFailure(sql, { id: jobId, leaseToken }, failure, true)
 
-    return isRecorded ? 'failed' : 'lease-lost'
+    // given back means the line was replaced, which a result answers as for a lost lease
+    return outcome === 'failed' ? 'failed' : 'lease-lost'
   }
 
   if (job.kind === 'warm') return storeMaps(sql, { id: jobId, leaseToken }, result)
@@ -116,7 +117,7 @@ async function storeManifest(
 
   // a re-parse replaced the line this art was drawn from; the job goes back to run again on the new one
   if (!line || line.timelineKey !== job.timelineKey) {
-    await giveBack(sql, job, { isAttempt: false })
+    await restartOnNewLine(sql, job, { isLeaseLive: true })
 
     return 'lease-lost'
   }
@@ -199,7 +200,7 @@ async function finishJob(
     const isWritten = await write(transaction)
 
     if (!isWritten) {
-      await giveBack(transaction, job, { isAttempt: false })
+      await restartOnNewLine(transaction, job, { isLeaseLive: true })
 
       return 'lease-lost' as const
     }

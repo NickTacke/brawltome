@@ -58,7 +58,8 @@ export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Prom
 
     if (line) return { ...claimed, line }
 
-    // nothing to export from, now or on a later attempt
+    // nothing to export from, unless a re-parse replaced the line just now: the job then goes back with the new
+    // one and the next turn of the loop takes it again
     const failure: ArtFailure = { code: 'export-failed', message: 'the match has no stored line' }
 
     await finishArtWithFailure(deps.database.sql, job, failure, true)
@@ -161,8 +162,9 @@ export async function failArtJob(
 
   const isFinal = failure.code !== 'worker-error' || job.attempts >= MAX_ATTEMPTS
   const trimmed = { code: failure.code, message: failure.message.slice(0, 500) }
+  const outcome = await finishArtWithFailure(deps.database.sql, { id: jobId, leaseToken }, trimmed, isFinal)
 
-  return finishArtWithFailure(deps.database.sql, { id: jobId, leaseToken }, trimmed, isFinal)
+  return outcome !== 'lease-lost'
 }
 
 export async function renewArtLease(deps: ReplaysDeps, jobId: string, leaseToken: string): Promise<boolean> {

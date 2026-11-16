@@ -309,6 +309,95 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect((await artOf(matchId))?.state).toBe('queued')
   })
 
+  // what a re-parse does to a match's line while its art job runs
+  async function replaceLine(matchId: string): Promise<string> {
+    const newerKey = `timelines/${matchId}/newer.json.gz`
+
+    await deps.objectStore.put(newerKey, Bun.gzipSync(new TextEncoder().encode(makeLine())), 'application/gzip')
+    await database.sql`UPDATE replays.matches SET timeline_key = ${newerKey} WHERE id = ${matchId}`
+
+    return newerKey
+  }
+
+  test('a failure for a line a re-parse has since replaced puts the job back', async () => {
+    const matchId = await parsedMatch()
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    await replaceLine(matchId)
+
+    const failure = { code: 'no-animations' as const, message: 'the line has no timeline.animations' }
+
+    expect(await failArtJob(deps, claimed.jobId, claimed.leaseToken, failure)).toBe(true)
+    expect(await artOf(matchId)).toMatchObject({ state: 'queued', failure: null })
+    expect(await artJobs()).toMatchObject([{ status: 'pending' }])
+  })
+
+  test('a refused result for a line a re-parse has since replaced puts the job back', async () => {
+    const matchId = await parsedMatch()
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    await replaceLine(matchId)
+
+    const outcome = await completeArtJob(deps, claimed.jobId, claimed.leaseToken, {
+      manifest: fakeArtExport().manifest,
+      maps: [],
+      artFormat: 3,
+    })
+
+    expect(outcome).toBe('lease-lost')
+    expect((await artOf(matchId))?.state).toBe('queued')
+    expect(await artJobs()).toMatchObject([{ status: 'pending' }])
+  })
+
+  test('a job out of attempts whose line was replaced runs again on the new line', async () => {
+    const matchId = await parsedMatch()
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const newerKey = await replaceLine(matchId)
+
+    await database.sql`
+      UPDATE replays.art_jobs SET attempts = 3, lease_expires_at = clock_timestamp() - interval '1 second'
+      WHERE id = ${claimed.jobId}
+    `
+
+    const again = await claimArtJob(deps, report)
+
+    expect(again?.jobId).toBe(claimed.jobId)
+    expect(again?.line).toEqual(await deps.objectStore.get(newerKey))
+    expect((await artOf(matchId))?.state).toBe('queued')
+  })
+
+  test('a claim whose line a re-parse deletes before it is read hands out the new line', async () => {
+    const matchId = await parsedMatch()
+    const objectStore = deps.objectStore
+
+    const [{ oldKey }] = await database.sql<{ oldKey: string }[]>`
+      SELECT timeline_key AS "oldKey" FROM replays.matches WHERE id = ${matchId}
+    `
+
+    let newerKey = ''
+
+    deps = {
+      ...deps,
+      objectStore: {
+        ...objectStore,
+        get: async (key) => {
+          if (key !== oldKey || newerKey) return objectStore.get(key)
+
+          newerKey = await replaceLine(matchId)
+          await objectStore.delete(oldKey)
+
+          return null
+        },
+      },
+    }
+
+    const claimed = await claimArtJob(deps, report)
+
+    expect(claimed?.matchId).toBe(matchId)
+    expect(claimed?.line).toEqual(await objectStore.get(newerKey))
+    expect((await artOf(matchId))?.state).toBe('queued')
+  })
+
   test('warm jobs are claimed first, then the newest match', async () => {
     const older = await parsedMatch()
     const newer = await parsedMatch()
