@@ -143,6 +143,13 @@ export {
   ADVANTAGE_STOCK_DAMAGE,
   BIG_PUNISH_DAMAGE,
   EARLY_KO_DAMAGE,
+  LEAD_DODGE_MS,
+  LEAD_DODGE_STEPS,
+  LEAD_LANDING_MS,
+  LEAD_LANDING_STEPS,
+  LEAD_TRADE_MS,
+  LEAD_TRADE_STEPS,
+  LINE_STEP_MS,
 } from './match-insights-rules'
 export type {
   Stage,
