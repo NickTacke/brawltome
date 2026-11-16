@@ -313,6 +313,25 @@ describe('the art runner', () => {
     expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining('spawn failed') }])
   })
 
+  test('the pool is unlimited even when limiting it fails', async () => {
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    const pool = {
+      report: () => ({ build: 'dev-test', patches: ['11.00'] }),
+      limitTo: async () => {
+        throw new Error('the pool could not stop a process')
+      },
+      unlimit: () => {
+        received.calls.push('unlimit')
+      },
+    }
+
+    await runner({ pool }).runOnce()
+
+    expect(received.calls.slice(-2)).toEqual(['unlimit', 'failure'])
+    expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining('could not stop') }])
+  })
+
   test('renews the lease while the export runs', async () => {
     nextJob = { kind: 'match', fake: 'hang-render' }
 

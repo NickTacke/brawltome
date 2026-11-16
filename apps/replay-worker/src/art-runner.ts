@@ -196,9 +196,10 @@ export class ArtRunner {
 
   // drawing takes memory the game processes would otherwise use, so only a few of them run meanwhile
   private async whileLimited<T>(work: () => Promise<T>): Promise<T> {
-    await this.deps.pool.limitTo(this.deps.processesDuringArt)
-
     try {
+      // inside the try, so processes a limit that failed halfway already stopped start again
+      await this.deps.pool.limitTo(this.deps.processesDuringArt)
+
       return await work()
     } finally {
       this.deps.pool.unlimit()
