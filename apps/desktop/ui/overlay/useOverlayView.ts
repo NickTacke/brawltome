@@ -1,10 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useState } from 'react'
+import type { BannerSide } from './Overlay'
 import type { OverlayView } from './overlay-view'
 
-// what the app sends with each view: the cards are scaled to the monitor the game is on
-export type OverlayEnvelope = { view: OverlayView; monitorHeightPx: number }
+// what the app sends with each view: the cards are scaled to the monitor the game is on, and mirrored on its right
+export type OverlayEnvelope = { view: OverlayView; monitorHeightPx: number; bannerSide: BannerSide }
 
 export type OverlayViewState = {
   envelope: OverlayEnvelope | null

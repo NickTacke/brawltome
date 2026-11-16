@@ -26,22 +26,24 @@ use placement::{
     monitor_for, overlay_rect, physical_size, primary_first, rescaled_size, REFERENCE_HEIGHT_PX,
 };
 
-pub use placement::{OverlayPosition, Rect};
+pub use placement::{BannerSide, OverlayPosition, Rect};
 
 const OVERLAY_LABEL: &str = "overlay";
 const VIEW_EVENT: &str = "overlay://view";
 const CLEAR_EVENT: &str = "overlay://clear";
 
 /// the cards' size at the reference height until the page has measured them
-const FIRST_SOLO_SIZE_PX: (u32, u32) = (340, 131);
-const FIRST_TEAM_SIZE_PX: (u32, u32) = (340, 155);
+/// (a diamond banner hangs below both kinds of card, so it sets their height)
+const FIRST_SOLO_SIZE_PX: (u32, u32) = (440, 182);
+const FIRST_TEAM_SIZE_PX: (u32, u32) = (440, 182);
 
-/// what the overlay page draws, and how tall the monitor it draws on is
+/// what the overlay page draws, how tall the monitor it draws on is, and which side the banners hang on
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct OverlayEnvelope {
     pub view: OverlayView,
     pub monitor_height_px: u32,
+    pub banner_side: BannerSide,
 }
 
 pub struct OverlayWindow {
@@ -160,6 +162,7 @@ impl OverlayWindow {
         let envelope = OverlayEnvelope {
             view: view.clone(),
             monitor_height_px: monitor.height,
+            banner_side: self.state().position.banner_side(),
         };
 
         let rect = {
@@ -448,6 +451,7 @@ mod tests {
             envelope: OverlayEnvelope {
                 view,
                 monitor_height_px: MONITOR.height,
+                banner_side: BannerSide::Right,
             },
             monitor: MONITOR,
             kind: CardKind::Solo,

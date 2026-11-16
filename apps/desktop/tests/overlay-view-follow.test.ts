@@ -38,7 +38,7 @@ function envelope(name: string): OverlayEnvelope {
   const file = path.join(import.meta.dir, 'fixtures', `overlay-view-${name}.json`)
   const view: OverlayView = JSON.parse(readFileSync(file, 'utf8'))
 
-  return { view, monitorHeightPx: 1080 }
+  return { view, monitorHeightPx: 1080, bannerSide: 'right' }
 }
 
 // lets the awaited listen calls and the invoke resolve

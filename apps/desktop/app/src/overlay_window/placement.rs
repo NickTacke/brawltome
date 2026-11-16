@@ -36,7 +36,23 @@ enum Anchor {
     End,
 }
 
+/// which side of the card the rank banner hangs on
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BannerSide {
+    Left,
+    Right,
+}
+
 impl OverlayPosition {
+    /// the banner faces the nearest screen edge, so cards in the right column carry it on their right
+    pub fn banner_side(self) -> BannerSide {
+        match self.anchors() {
+            (Anchor::End, _) => BannerSide::Right,
+            _ => BannerSide::Left,
+        }
+    }
+
     fn anchors(self) -> (Anchor, Anchor) {
         match self {
             Self::TopLeft => (Anchor::Start, Anchor::Start),
@@ -299,5 +315,24 @@ mod tests {
 
         assert_eq!(parsed, OverlayPosition::BottomCenter);
         assert_eq!(OverlayPosition::default(), OverlayPosition::TopCenter);
+    }
+
+    #[test]
+    fn the_banner_hangs_on_the_side_of_the_nearest_edge() {
+        assert_eq!(OverlayPosition::TopRight.banner_side(), BannerSide::Right);
+        assert_eq!(
+            OverlayPosition::MiddleRight.banner_side(),
+            BannerSide::Right
+        );
+        assert_eq!(
+            OverlayPosition::BottomRight.banner_side(),
+            BannerSide::Right
+        );
+        assert_eq!(OverlayPosition::TopCenter.banner_side(), BannerSide::Left);
+        assert_eq!(OverlayPosition::BottomLeft.banner_side(), BannerSide::Left);
+        assert_eq!(
+            serde_json::to_string(&BannerSide::Right).unwrap(),
+            "\"right\""
+        );
     }
 }
