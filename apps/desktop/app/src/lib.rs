@@ -2,11 +2,14 @@
 //! Tauri builder + plugin wiring + setup callback that wires the focused modules.
 
 pub mod api_client;
+pub mod app_status;
 mod detection_bridge;
 pub mod legacy_detection;
 pub mod lobby_client;
 mod log_prune;
 pub mod overlay;
+pub mod overlay_view;
+pub mod session;
 pub mod tray;
 pub mod updater_artifact;
 

@@ -1,0 +1,9 @@
+{
+  "game": { "state": "running", "gameVersion": "11.01.36258" },
+  "detection": { "state": "unsupported", "message": "Patch 11.01 isn't supported yet" },
+  "service": { "state": "ok" },
+  "update": { "state": "idle" },
+  "isOverlayPaused": false,
+  "isMatchRunning": false,
+  "recentMatches": []
+}

@@ -1,0 +1,25 @@
+{
+  "game": { "state": "running", "gameVersion": "11.00.36258" },
+  "detection": { "state": "ready" },
+  "service": { "state": "ok" },
+  "update": { "state": "idle" },
+  "isOverlayPaused": false,
+  "isMatchRunning": false,
+  "recentMatches": [
+    {
+      "startedAtMs": 1800000,
+      "opponents": [{ "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" }],
+      "isWin": null,
+      "ratingChange": null
+    },
+    {
+      "startedAtMs": 600000,
+      "opponents": [
+        { "brawlhallaId": 91913850, "name": "Koa", "legend": "Ada" },
+        { "brawlhallaId": 91913851, "name": "rimelight", "legend": "Lucien" }
+      ],
+      "isWin": null,
+      "ratingChange": null
+    }
+  ]
+}
