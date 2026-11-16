@@ -123,29 +123,62 @@ async function storeManifest(
   }
 
   const survivorId = await survivingMatchId(sql, matchId)
-  const key = manifestKey(survivorId, line.build)
+  const key = manifestKey(survivorId, line.build, job.leaseToken)
 
   // the manifest first, so a match marked ready always has one
   await artStore.put(key, new TextEncoder().encode(JSON.stringify(result.manifest)), 'application/json')
 
-  return finishJob(sql, job, async (transaction) => {
-    // checked again under the match's lock, since a re-parse may have committed since the check above
-    const [match] = await transaction<{ timelineKey: string | null }[]>`
-      SELECT timeline_key AS "timelineKey" FROM replays.matches WHERE id = ${matchId} FOR UPDATE
-    `
+  let replacedKeys: string[] = []
 
-    if (match?.timelineKey !== job.timelineKey) return false
+  const outcome = await finishJob(sql, job, async (transaction) => {
+    const marked = await markReady(transaction, { ...job, matchId, survivorId }, key, result)
 
-    await saveMaps(transaction, result)
+    replacedKeys = marked?.replacedKeys ?? []
 
-    await transaction`
-      UPDATE replays.matches SET art_state = 'ready', art_manifest_key = ${key}, art_format = ${result.artFormat},
-        art_failure = NULL
-      WHERE id IN (${matchId}, ${survivorId})
-    `
-
-    return true
+    return marked !== null
   })
+
+  // an accepted manifest replaces the ones before it; a refused one goes itself
+  const unusedKeys = outcome === 'completed' ? replacedKeys : [key]
+
+  for (const unusedKey of unusedKeys) await artStore.delete(unusedKey)
+
+  return outcome
+}
+
+// null when a re-parse replaced the line since the check before the manifest was written
+async function markReady(
+  transaction: TransactionSql,
+  job: { matchId: string; survivorId: string; timelineKey: string | null },
+  key: string,
+  result: ArtResult,
+): Promise<{ replacedKeys: string[] } | null> {
+  const matchIds = [...new Set([job.matchId, job.survivorId])]
+
+  const matches = await transaction<{ id: string; timelineKey: string | null; manifestKey: string | null }[]>`
+    SELECT id, timeline_key AS "timelineKey", art_manifest_key AS "manifestKey" FROM replays.matches
+    WHERE id = ANY(${matchIds}::uuid[])
+    ORDER BY id
+    FOR UPDATE
+  `
+
+  const exported = matches.find((match) => match.id === job.matchId)
+
+  if (exported?.timelineKey !== job.timelineKey) return null
+
+  await saveMaps(transaction, result)
+
+  await transaction`
+    UPDATE replays.matches SET art_state = 'ready', art_manifest_key = ${key}, art_format = ${result.artFormat},
+      art_failure = NULL
+    WHERE id = ANY(${matchIds}::uuid[])
+  `
+
+  const replacedKeys = matches.flatMap((match) =>
+    match.manifestKey && match.manifestKey !== key ? [match.manifestKey] : [],
+  )
+
+  return { replacedKeys: [...new Set(replacedKeys)] }
 }
 
 async function lineOf(sql: Sql, matchId: string): Promise<MatchLine | null> {

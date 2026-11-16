@@ -172,7 +172,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await exportArt(claimed, art)).toBe('completed')
 
-    const manifestKey = `matches/${matchId}/dev-1/manifest.json`
+    const manifestKey = `matches/${matchId}/dev-1-${claimed.leaseToken}/manifest.json`
 
     expect(await artOf(matchId)).toEqual({ state: 'ready', manifestKey, format: 3, failure: null })
 
@@ -193,6 +193,79 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await exportArt(claimed)).toBe('completed')
     expect((await artOf(matchId))?.manifestKey).toContain(longBuild.build)
+  })
+
+  test('a later export replaces the manifest and deletes the one before', async () => {
+    const matchId = await parsedMatch()
+    const first = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    await exportArt(first)
+    await queueArtJob(deps, matchId)
+
+    const second = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    expect(await exportArt(second)).toBe('completed')
+
+    const manifests = deps.artStore.keys().filter((key) => key.startsWith('matches/'))
+
+    expect(manifests).toEqual([`matches/${matchId}/dev-1-${second.leaseToken}/manifest.json`])
+    expect((await artOf(matchId))?.manifestKey).toBe(manifests[0] as string)
+  })
+
+  test('an attempt that stalls past its lease never replaces the manifest of the one after it', async () => {
+    const matchId = await parsedMatch()
+    const stalled = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const art = fakeArtExport()
+
+    for (const [path, bytes] of art.files) await storeArtFile(deps, stalled.jobId, stalled.leaseToken, path, bytes)
+
+    // the stalled attempt's manifest write waits until the attempt after it has finished
+    const artStore = deps.artStore
+    let letStalledWriteFinish = () => {}
+
+    const stalledWriteMayFinish = new Promise<void>((resolve) => {
+      letStalledWriteFinish = resolve
+    })
+
+    let markWriteStalled = () => {}
+
+    const writeStalled = new Promise<void>((resolve) => {
+      markWriteStalled = resolve
+    })
+
+    const stallingDeps = {
+      ...deps,
+      artStore: {
+        ...artStore,
+        put: async (key: string, body: Uint8Array, contentType: string) => {
+          markWriteStalled()
+          await stalledWriteMayFinish
+          await artStore.put(key, body, contentType)
+        },
+      },
+    }
+
+    const result = { manifest: art.manifest, maps: [], artFormat: 3 }
+    const stalledAnswer = completeArtJob(stallingDeps, stalled.jobId, stalled.leaseToken, result)
+
+    await writeStalled
+
+    await database.sql`
+      UPDATE replays.art_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = ${stalled.jobId}
+    `
+
+    const next = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    expect(await completeArtJob(deps, next.jobId, next.leaseToken, result)).toBe('completed')
+
+    letStalledWriteFinish()
+
+    expect(await stalledAnswer).toBe('lease-lost')
+
+    const nextKey = `matches/${matchId}/dev-1-${next.leaseToken}/manifest.json`
+
+    expect((await artOf(matchId))?.manifestKey).toBe(nextKey)
+    expect(deps.artStore.keys().filter((key) => key.startsWith('matches/'))).toEqual([nextKey])
   })
 
   test('only files the art bucket lacks are asked for', async () => {
@@ -309,7 +382,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(await exportArt(claimed)).toBe('completed')
 
-    const manifestKey = `matches/${survivorId}/dev-1/manifest.json`
+    const manifestKey = `matches/${survivorId}/dev-1-${claimed.leaseToken}/manifest.json`
 
     expect(await artOf(survivorId)).toMatchObject({ state: 'ready', manifestKey })
     expect(deps.artStore.keys()).toContain(manifestKey)
