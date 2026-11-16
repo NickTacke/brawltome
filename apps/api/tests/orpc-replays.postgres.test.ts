@@ -100,13 +100,18 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
     form.append('files[0]', new File([bytes], 'x.replay'))
     await app.fetch(new Request('http://api.test/v1/replays', { method: 'POST', headers: siteHeaders(), body: form }))
 
-    const jobs = createReplayJobs({ database, objectStore, accounts: createPostgresAccounts(database).accounts })
+    const jobs = createReplayJobs({
+      database,
+      objectStore,
+      artStore: null,
+      accounts: createPostgresAccounts(database).accounts,
+    })
 
     // finish every queued job with a made-up line, so a match exists
     for (
-      let claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'] });
+      let claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null });
       claimed;
-      claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'] })
+      claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null })
     ) {
       await jobs.complete({ jobId: claimed.jobId, leaseToken: claimed.leaseToken, line: madeUpLine() })
     }
