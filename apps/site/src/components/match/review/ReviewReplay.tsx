@@ -8,6 +8,7 @@ import type { Legends } from '../stage/use-legends'
 import { usePlayback } from '../stage/use-playback'
 import { useStageControls } from '../stage/use-stage-controls'
 import { useStageKeys } from '../stage/use-stage-keys'
+import { usePhoneLayout } from '../use-phone-layout'
 import { lanePlayersOf } from './lane-players'
 import { ReplaySection } from './ReplaySection'
 import { ReviewStage } from './ReviewStage'
@@ -36,7 +37,8 @@ type ReviewReplayProps = {
 export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayProps) {
   const { stage } = insights.insights
   const playback = usePlayback(stage.durationMs)
-  const controls = useStageControls(playback.isPlaying, playback.toggle)
+  const isPhone = usePhoneLayout()
+  const controls = useStageControls(playback.isPlaying, playback.toggle, isPhone)
   const frameRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreen(frameRef)
   const [cameraMode, setCameraMode] = useState<CameraMode>(defaultCameraMode)

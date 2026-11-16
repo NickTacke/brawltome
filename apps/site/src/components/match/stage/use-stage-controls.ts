@@ -7,15 +7,16 @@ const picture = '[data-stage-window]'
 
 /**
  * When the controls on the stage show, like a video player's: always while paused, and while playing for as long as
- * the pointer moves over the stage or rests on them. A press on the stage itself plays or pauses.
+ * the pointer moves over the stage or rests on them. A press on the stage itself plays or pauses. On a phone held
+ * upright the controls lie under the stage and always show, so the first tap on the picture already pauses.
  */
-export function useStageControls(isPlaying: boolean, onToggle: () => void) {
+export function useStageControls(isPlaying: boolean, onToggle: () => void, isPhone: boolean) {
   const [isAwake, setIsAwake] = useState(false)
   const [isHeld, setIsHeld] = useState(false)
   const idleTimer = useRef<number | null>(null)
   // on a touch screen the first tap only brings the controls back
   const wasShownOnPress = useRef(true)
-  const isShown = !isPlaying || isAwake || isHeld
+  const isShown = isPhone || !isPlaying || isAwake || isHeld
 
   function stopTimer() {
     if (idleTimer.current !== null) window.clearTimeout(idleTimer.current)

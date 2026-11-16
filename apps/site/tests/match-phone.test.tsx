@@ -18,6 +18,7 @@ import { ReviewCardSlot } from '../src/components/match/review/ReviewCardSlot'
 import { TimelineScrubber } from '../src/components/match/review/TimelineScrubber'
 import { SpeedButton, TransportColumn } from '../src/components/match/stage/ReviewControls'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
+import { useStageControls } from '../src/components/match/stage/use-stage-controls'
 import { phoneQuery } from '../src/components/match/use-phone-layout'
 import { matchDetailOf, readInsights } from './match-fixtures'
 
@@ -258,6 +259,17 @@ describe('tap targets on a phone', () => {
   })
 })
 
+// a stage that plays, with only its picture and the hook that decides what a tap on it does
+function PlayingStage({ isPhone, onToggle }: { isPhone: boolean; onToggle: () => void }) {
+  const controls = useStageControls(true, onToggle, isPhone)
+
+  return (
+    <div {...controls.stage}>
+      <div data-stage-window />
+    </div>
+  )
+}
+
 describe('under a finger', () => {
   let root: Root
   let container: HTMLElement
@@ -392,6 +404,38 @@ describe('under a finger', () => {
     expect(seeks).toEqual([50_000])
 
     await unmount()
+  })
+
+  async function tapPlayingStage(isPhone: boolean): Promise<number> {
+    let toggles = 0
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(<PlayingStage isPhone={isPhone} onToggle={() => toggles++} />))
+
+    const picture = container.querySelector('[data-stage-window]')
+
+    if (!picture) throw new Error('the stage has no picture')
+
+    await press(picture, 'pointerdown', { buttons: 1 })
+
+    await act(async () => {
+      picture.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await unmount()
+
+    return toggles
+  }
+
+  test('on a phone one tap on the picture pauses, as the controls under it never go away', async () => {
+    expect(await tapPlayingStage(true)).toBe(1)
+  })
+
+  test('elsewhere the first tap on a playing stage only brings its controls back', async () => {
+    expect(await tapPlayingStage(false)).toBe(0)
   })
 
   // where an opened kind's detail lies among the two lists, as the dom orders them
