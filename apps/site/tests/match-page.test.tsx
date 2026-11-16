@@ -44,6 +44,27 @@ function playersInOrder(insights: MatchInsights): SummaryPlayer[] {
 
 const share = (value: number) => `${Math.round(value * 100)}%`
 
+function clock(timeMs: number): string {
+  const seconds = Math.round(timeMs / 1000)
+
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+// how an opening began, as the openings lists name it
+const leadLabels: Record<string, string> = {
+  free: 'Clean hit',
+  swing: 'During a swing',
+  whiff: 'After a miss',
+  dodge: 'After a dodge',
+  landing: 'On landing',
+  trade: 'Trade',
+  throw: 'Thrown weapon',
+}
+
+function timesText(count: number): string {
+  return `${count} ${count === 1 ? 'time' : 'times'}`
+}
+
 function insightOf(insights: MatchInsights, slot: number) {
   const insight = insights.insights.players.find((entry) => entry.slot === slot)
   const extras = insights.extras.players.find((entry) => entry.slot === slot)
@@ -81,6 +102,89 @@ describe.each(fixtures)('the match page of %s', (name) => {
 
     expectRun(texts, ['Neutral', picked.name])
     expectRun(texts, [String(neutral.openingsWon), 'won', '·', String(neutral.openingsLost), 'lost'])
+  })
+
+  test('shows every player’s share of neutral won and damage per opening', () => {
+    const neutralOf = (slot: number) => insightOf(insights, slot).insight.neutral
+
+    const shares = players.map((player) => {
+      const { openingsWon, openingsLost } = neutralOf(player.slot)
+      const openings = openingsWon + openingsLost
+
+      return openings > 0 ? share(openingsWon / openings) : '–'
+    })
+
+    expectRun(texts, ['Neutral won', ...shares])
+
+    expectRun(texts, [
+      'Damage per opening',
+      ...players.map((player) => neutralOf(player.slot).damagePerOpening.toFixed(1)),
+    ])
+  })
+
+  test('shows the picked player’s neutral share and each of their stocks', () => {
+    const { neutral, stocks: lives } = insightOf(insights, picked.slot).insight
+    const openings = neutral.openingsWon + neutral.openingsLost
+    const wonShare = openings > 0 ? share(neutral.openingsWon / openings) : '–'
+
+    expectRun(texts, [
+      'Neutral',
+      picked.name,
+      wonShare,
+      String(neutral.openingsWon),
+      'won',
+      '·',
+      String(neutral.openingsLost),
+      'lost',
+      neutral.damagePerOpening.toFixed(1),
+      'per opening',
+    ])
+
+    for (const life of lives) {
+      expectRun(texts, [
+        `Stock ${life.index + 1}`,
+        String(life.openingsWon),
+        'won',
+        '·',
+        String(life.openingsLost),
+        'lost',
+        String(Math.round(life.damageDealt)),
+        'dealt ·',
+        String(Math.round(life.damageTaken)),
+        'taken',
+      ])
+    }
+  })
+
+  test('counts the picked player’s openings both ways round, as many as neutral says, by how each began', () => {
+    const { neutral } = insightOf(insights, picked.slot).insight
+    const withLead = insights.insights.moments.filter((moment) => moment.lead !== null)
+
+    expectRun(texts, ['Opened them up', String(neutral.openingsWon), 'times'])
+    expectRun(texts, ['Got opened up', String(neutral.openingsLost), 'times'])
+
+    for (const [kind, label] of Object.entries(leadLabels)) {
+      const ofKind = withLead.filter((moment) => moment.lead?.kind === kind)
+
+      for (const way of [
+        ofKind.filter((moment) => moment.attacker === picked.slot),
+        ofKind.filter((moment) => moment.victim === picked.slot),
+      ]) {
+        const damage = way.reduce((total, moment) => total + moment.damage, 0)
+
+        if (way.length > 0) expectRun(texts, [label, timesText(way.length), String(Math.round(damage))])
+      }
+    }
+  })
+
+  test('shows the damage each player did with each weapon and how long they held it', () => {
+    for (const player of players) {
+      const hasMoves = (weapon: string) => player.moves.some((move) => move.weapon === weapon)
+      const held = player.weapons.filter((weapon) => weapon.isWeapon && hasMoves(weapon.weapon))
+      const figures = held.flatMap((weapon) => [String(Math.round(weapon.damage)), clock(weapon.heldMs)])
+
+      expectRun(texts, [player.name, ...figures])
+    }
   })
 
   test('shows every habit’s top option and its share for every player', () => {
