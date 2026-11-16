@@ -146,9 +146,19 @@ async function storeManifest(
   // an accepted manifest replaces the ones before it; a refused one goes itself
   const unusedKeys = outcome === 'completed' ? replacedKeys : [key]
 
-  for (const unusedKey of unusedKeys) await artStore.delete(unusedKey)
+  for (const unusedKey of unusedKeys) await deleteUnlessInUse(stores, unusedKey)
 
   return outcome
+}
+
+// a key may still be in use: a duplicate completion of the same attempt published it, or a merged match still
+// points at a manifest its survivor replaced
+async function deleteUnlessInUse(stores: { sql: Sql; artStore: ObjectStore }, key: string): Promise<void> {
+  const [inUse] = await stores.sql`SELECT 1 FROM replays.matches WHERE art_manifest_key = ${key} LIMIT 1`
+
+  if (inUse) return
+
+  await stores.artStore.delete(key)
 }
 
 // line-replaced when a re-parse replaced the line since the check before the manifest was written. art in a format

@@ -316,6 +316,54 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(await claimArtJob(deps, report)).toBeNull()
   })
 
+  test('two overlapping completions of one attempt keep the manifest they published', async () => {
+    const matchId = await parsedMatch()
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const art = fakeArtExport()
+
+    for (const [path, bytes] of art.files) await storeArtFile(deps, claimed.jobId, claimed.leaseToken, path, bytes)
+
+    const result = { manifest: art.manifest, maps: [], artFormat: 3 }
+    const stalling = stallingArtStore()
+
+    const stalledCompletion = completeArtJob(
+      { ...deps, artStore: stalling.store },
+      claimed.jobId,
+      claimed.leaseToken,
+      result,
+    )
+
+    await stalling.writeStarted
+
+    expect(await completeArtJob(deps, claimed.jobId, claimed.leaseToken, result)).toBe('completed')
+
+    stalling.letWritesFinish()
+
+    expect(await stalledCompletion).toBe('lease-lost')
+
+    const manifestKey = `matches/${matchId}/dev-1-${claimed.leaseToken}/manifest.json`
+
+    expect(await artOf(matchId)).toMatchObject({ state: 'ready', manifestKey })
+    expect(deps.artStore.keys()).toContain(manifestKey)
+  })
+
+  test('a replaced manifest that a merged match still points at is kept', async () => {
+    const mergedId = await parsedMatch()
+    const mergedJob = (await claimArtJob(deps, report)) as ClaimedArtJob
+    const survivorId = await parsedMatch()
+
+    await database.sql`UPDATE replays.matches SET merged_into = ${survivorId} WHERE id = ${mergedId}`
+    await exportArt(mergedJob)
+
+    const sharedKey = `matches/${survivorId}/dev-1-${mergedJob.leaseToken}/manifest.json`
+    const survivorJob = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    expect(survivorJob.matchId).toBe(survivorId)
+    expect(await exportArt(survivorJob)).toBe('completed')
+    expect((await artOf(mergedId))?.manifestKey).toBe(sharedKey)
+    expect(deps.artStore.keys()).toContain(sharedKey)
+  })
+
   test('only files the art bucket lacks are asked for', async () => {
     await exportArt(await claimedMatchJob())
 
