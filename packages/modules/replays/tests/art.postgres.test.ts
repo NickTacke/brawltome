@@ -268,6 +268,37 @@ describe.skipIf(!connectionString)('art jobs', () => {
     expect(deps.artStore.keys().filter((key) => key.startsWith('matches/'))).toEqual([nextKey])
   })
 
+  test('an export that finishes in a format older than one reported while it ran runs again', async () => {
+    const matchId = await parsedMatch()
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    const claimed = (await claimArtJob(deps, report)) as ClaimedArtJob
+
+    // the format arrives while the job runs, so the format re-queue passes this match by
+    await noteWorkerReport(deps, { ...report, artFormat: 4 })
+
+    expect(await exportArt(claimed)).toBe('completed')
+
+    expect(await artOf(matchId)).toMatchObject({
+      state: 'queued',
+      format: 3,
+      manifestKey: `matches/${matchId}/dev-1-${claimed.leaseToken}/manifest.json`,
+    })
+
+    expect((await claimArtJob(deps, report))?.matchId).toBe(matchId)
+  })
+
+  test('an export in the newest format reported stays ready', async () => {
+    const matchId = await parsedMatch()
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    expect(await exportArt((await claimArtJob(deps, report)) as ClaimedArtJob)).toBe('completed')
+    expect((await artOf(matchId))?.state).toBe('ready')
+    expect(await claimArtJob(deps, report)).toBeNull()
+  })
+
   test('only files the art bucket lacks are asked for', async () => {
     await exportArt(await claimedMatchJob())
 
