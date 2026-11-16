@@ -34,8 +34,8 @@ const CLEAR_EVENT: &str = "overlay://clear";
 
 /// the cards' size at the reference height until the page has measured them
 /// (a diamond banner hangs below both kinds of card, so it sets their height)
-const FIRST_SOLO_SIZE_PX: (u32, u32) = (440, 182);
-const FIRST_TEAM_SIZE_PX: (u32, u32) = (440, 182);
+const FIRST_SOLO_SIZE_PX: (u32, u32) = (392, 179);
+const FIRST_TEAM_SIZE_PX: (u32, u32) = (392, 179);
 
 /// what the overlay page draws, how tall the monitor it draws on is, and which side the banners hang on
 #[derive(Serialize, Clone, Debug, PartialEq)]
