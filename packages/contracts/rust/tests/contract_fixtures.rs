@@ -1,5 +1,6 @@
 use brawltome_contracts::generated::types::{
-    ClanProfile, DesktopRankedLookup, PlayerCareerProfile, PlayerRankedProfile, RefreshOutcome,
+    ClanProfile, DesktopLobby, DesktopRankedLookup, PlayerCareerProfile, PlayerRankedProfile,
+    RefreshOutcome,
 };
 
 const PLAYER_RANKED_MEASURED_ZERO: &str =
@@ -13,6 +14,10 @@ const DESKTOP_RANKED_STATES: [&str; 5] = [
     include_str!("../../tests/fixtures/desktop-ranked-stale-rate-limited.json"),
     include_str!("../../tests/fixtures/desktop-ranked-stale-temporarily-unavailable.json"),
 ];
+const DESKTOP_V1_LOBBY_1V1: &str = include_str!("../../tests/fixtures/desktop-v1-lobby-1v1.json");
+const DESKTOP_V1_LOBBY_2V2: &str = include_str!("../../tests/fixtures/desktop-v1-lobby-2v2.json");
+const DESKTOP_V1_LOBBY_NO_DATA: &str =
+    include_str!("../../tests/fixtures/desktop-v1-lobby-no-data.json");
 const PLAYER_CAREER_MEASURED_ZERO: &str =
     include_str!("../../tests/fixtures/player-career-measured-zero.json");
 const REFRESH_OUTCOMES: [&str; 6] = [
@@ -324,4 +329,51 @@ fn generated_clan_contract_preserves_decimal_xp_and_section_provenance() {
         serde_json::to_value(clan).expect("serialize generated clan"),
         wire
     );
+}
+
+#[test]
+fn desktop_v1_fixtures_deserialize() {
+    let lobby: DesktopLobby = serde_json::from_str(DESKTOP_V1_LOBBY_1V1).expect("1v1 lobby");
+    let standing = lobby.cards[0].players[0]
+        .one_vs_one
+        .as_ref()
+        .expect("1v1 standing");
+    assert_eq!(standing.rating, 2112);
+    assert_eq!(standing.peak_rating, 2240);
+    assert!(lobby.cards[0].team_standing.is_none());
+    assert!(!lobby.cards[0].players[0].is_refreshing);
+
+    let lobby: DesktopLobby = serde_json::from_str(DESKTOP_V1_LOBBY_2V2).expect("2v2 lobby");
+    let team_standing = lobby.cards[0]
+        .team_standing
+        .as_ref()
+        .expect("2v2 team standing");
+    assert_eq!(team_standing.rating, 1975);
+    assert_eq!(lobby.cards[0].players.len(), 2);
+    assert!(lobby.cards[0].players[0].region_rank.is_none());
+
+    let lobby: DesktopLobby =
+        serde_json::from_str(DESKTOP_V1_LOBBY_NO_DATA).expect("no-data lobby");
+    let player = &lobby.cards[0].players[0];
+    assert!(!player.known);
+    assert!(player.name.is_none());
+    assert!(player.one_vs_one.is_none());
+    assert!(player.refreshed_at.is_none());
+    assert!(player.is_refreshing);
+}
+
+#[test]
+fn desktop_v1_types_accept_fields_added_later() {
+    for fixture in [
+        DESKTOP_V1_LOBBY_1V1,
+        DESKTOP_V1_LOBBY_2V2,
+        DESKTOP_V1_LOBBY_NO_DATA,
+    ] {
+        let mut wire: serde_json::Value = serde_json::from_str(fixture).expect("valid fixture");
+        wire["addedLater"] = serde_json::json!(true);
+        wire["cards"][0]["addedLater"] = serde_json::json!(true);
+        wire["cards"][0]["players"][0]["addedLater"] = serde_json::json!(true);
+
+        serde_json::from_value::<DesktopLobby>(wire).expect("lobby with fields added later");
+    }
 }

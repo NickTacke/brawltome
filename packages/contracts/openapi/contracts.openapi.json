@@ -600,6 +600,217 @@
         ],
         "type": "object"
       },
+      "DesktopLobby": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DesktopLobbyCard"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cards"
+        ],
+        "type": "object"
+      },
+      "DesktopLobbyCard": {
+        "properties": {
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/DesktopLobbyPlayer"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "team": {
+            "format": "int32",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "teamStanding": {
+            "nullable": true,
+            "properties": {
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "peakRating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tier": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rating",
+              "peakRating",
+              "tier",
+              "wins",
+              "games"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "team",
+          "players",
+          "teamStanding"
+        ],
+        "type": "object"
+      },
+      "DesktopLobbyInput": {
+        "properties": {
+          "matchType": {
+            "enum": [
+              "1v1",
+              "2v2"
+            ],
+            "type": "string"
+          },
+          "players": {
+            "items": {
+              "properties": {
+                "brawlhallaId": {
+                  "exclusiveMinimum": true,
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "team": {
+                  "format": "int32",
+                  "maximum": 2147483647,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "brawlhallaId",
+                "team"
+              ],
+              "type": "object"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "matchType",
+          "players"
+        ],
+        "type": "object"
+      },
+      "DesktopLobbyPlayer": {
+        "properties": {
+          "brawlhallaId": {
+            "exclusiveMinimum": true,
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "isRefreshing": {
+            "type": "boolean"
+          },
+          "known": {
+            "type": "boolean"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "oneVsOne": {
+            "nullable": true,
+            "properties": {
+              "games": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "peakRating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rating": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tier": {
+                "minLength": 1,
+                "nullable": true,
+                "type": "string"
+              },
+              "wins": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rating",
+              "peakRating",
+              "tier",
+              "wins",
+              "games"
+            ],
+            "type": "object"
+          },
+          "refreshedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "pattern": "Z$",
+            "type": "string"
+          },
+          "region": {
+            "nullable": true,
+            "type": "string"
+          },
+          "regionRank": {
+            "format": "int32",
+            "maximum": 2147483647,
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "brawlhallaId",
+          "name",
+          "known",
+          "oneVsOne",
+          "region",
+          "regionRank",
+          "refreshedAt",
+          "isRefreshing"
+        ],
+        "type": "object"
+      },
       "DesktopRankedLookup": {
         "additionalProperties": false,
         "properties": {
@@ -653,6 +864,18 @@
           "player",
           "ranked",
           "refresh"
+        ],
+        "type": "object"
+      },
+      "DesktopUpdateRequired": {
+        "properties": {
+          "minimumVersion": {
+            "pattern": "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "minimumVersion"
         ],
         "type": "object"
       },
@@ -1898,6 +2121,54 @@
               }
             },
             "description": "Canonical ranked player snapshot with desktop refresh admission"
+          }
+        }
+      }
+    },
+    "/desktop/v1/lobby": {
+      "post": {
+        "operationId": "postDesktopLobby",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-desktop-version",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesktopLobbyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesktopLobby"
+                }
+              }
+            },
+            "description": "Opponent cards for the lobby"
+          },
+          "426": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesktopUpdateRequired"
+                }
+              }
+            },
+            "description": "The desktop app is older than the minimum version this API supports"
           }
         }
       }
