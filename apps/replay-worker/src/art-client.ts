@@ -107,10 +107,15 @@ export function createArtClient(config: { apiUrl: string; token: string }): ArtC
       }
     },
 
+    // false only once the api says the lease is gone; any other answer is a failed request, not a lost lease
     async renew(job) {
       const response = await send(`/${job.jobId}/renew`, { lease: job.leaseToken })
 
-      return response.ok
+      if (response.status === 409) return false
+
+      await expectOk(response, `renew art job ${job.jobId}`)
+
+      return true
     },
   }
 }

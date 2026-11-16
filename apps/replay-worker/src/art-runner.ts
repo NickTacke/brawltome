@@ -41,6 +41,9 @@ export type ArtRunnerDeps = {
   warmTimeoutMs: number
 }
 
+// one claimed job as it runs; leaseLost aborts once a renewal hears the lease is gone
+type Attempt = { job: ClaimedArt; files: JobFiles; leaseLost: AbortSignal }
+
 type Failure = { kind: 'failure'; code: ArtFailureCode; message: string }
 type Outcome = { kind: 'result'; result: ArtResult } | Failure
 type StepOutput = { kind: 'done'; stdout: string } | Failure
@@ -58,13 +61,11 @@ export class ArtRunner {
     if (!job) return 'idle'
 
     const artDir = join(this.deps.workDir, 'art')
-
-    const renewal = setInterval(() => {
-      this.deps.art.renew(job).catch((error: unknown) => console.error(`renew art job ${job.jobId}:`, error))
-    }, this.deps.renewEveryMs)
+    const leaseLost = new AbortController()
+    const renewal = setInterval(() => void this.renew(job, leaseLost), this.deps.renewEveryMs)
 
     try {
-      await this.attempt(job, jobFiles(artDir, job.jobId))
+      await this.attempt({ job, files: jobFiles(artDir, job.jobId), leaseLost: leaseLost.signal })
     } finally {
       clearInterval(renewal)
       removeJobFiles(artDir, job.jobId)
@@ -73,9 +74,21 @@ export class ArtRunner {
     return 'done'
   }
 
-  private async attempt(job: ClaimedArt, files: JobFiles): Promise<void> {
+  private async renew(job: ArtJob, leaseLost: AbortController): Promise<void> {
     try {
-      const outcome = await this.exportArt(job, files)
+      if (!(await this.deps.art.renew(job))) leaseLost.abort()
+    } catch (error) {
+      console.error(`renew art job ${job.jobId}:`, error)
+    }
+  }
+
+  private async attempt(attempt: Attempt): Promise<void> {
+    const { job } = attempt
+
+    try {
+      const outcome = await this.exportArt(attempt)
+
+      throwIfLeaseLost(attempt)
 
       if (outcome.kind === 'result') await this.deps.art.result(job, outcome.result)
       else await this.deps.art.failure(job, outcome.code, outcome.message)
@@ -91,7 +104,8 @@ export class ArtRunner {
     }
   }
 
-  private async exportArt(job: ClaimedArt, files: JobFiles): Promise<Outcome> {
+  private async exportArt(attempt: Attempt): Promise<Outcome> {
+    const { job, files } = attempt
     const gameFolder = join(this.deps.gameRoot, job.patch)
 
     // the patch names a folder, so it must look like one (11.00)
@@ -101,15 +115,17 @@ export class ArtRunner {
 
     mkdirSync(files.store, { recursive: true })
 
-    if (job.kind === 'warm') return this.exportWarm(job, gameFolder, files)
+    if (job.kind === 'warm') return this.exportWarm(attempt, gameFolder)
 
-    return this.exportMatch(job, gameFolder, files)
+    return this.exportMatch(attempt, gameFolder)
   }
 
-  private async exportMatch(job: ClaimedArt, gameFolder: string, files: JobFiles): Promise<Outcome> {
+  private async exportMatch(attempt: Attempt, gameFolder: string): Promise<Outcome> {
+    const { job, files } = attempt
+
     writeFileSync(files.line, job.line ?? new Uint8Array())
 
-    const planned = await this.step(['plan', gameFolder, files.line])
+    const planned = await this.step(attempt, ['plan', gameFolder, files.line])
 
     if (planned.kind === 'failure') return planned
 
@@ -127,11 +143,11 @@ export class ArtRunner {
 
     const outputArgs = ['--have', files.have, '--manifest', files.manifest]
     const renderArgs = ['render', gameFolder, files.line, files.store, ...outputArgs]
-    const rendered = await this.whileLimited(() => this.step(renderArgs))
+    const rendered = await this.whileLimited(() => this.step(attempt, renderArgs))
 
     if (rendered.kind === 'failure') return rendered
 
-    await this.upload(job, files.store, present)
+    await this.upload(attempt, present)
 
     const manifest = JSON.parse(readFileSync(files.manifest, 'utf8')) as Record<string, unknown>
     const maps = [{ patch: plan.patch, mapId: plan.mapId, path: plan.map.path }]
@@ -139,9 +155,10 @@ export class ArtRunner {
     return { kind: 'result', result: { manifest, maps, artFormat: this.deps.artFormat } }
   }
 
-  private async exportWarm(job: ClaimedArt, gameFolder: string, files: JobFiles): Promise<Outcome> {
+  private async exportWarm(attempt: Attempt, gameFolder: string): Promise<Outcome> {
+    const { job, files } = attempt
     const warmArgs = ['warm', gameFolder, files.store, '--patch', job.patch]
-    const listed = await this.step([...warmArgs, '--list'])
+    const listed = await this.step(attempt, [...warmArgs, '--list'])
 
     if (listed.kind === 'failure') return listed
 
@@ -159,11 +176,11 @@ export class ArtRunner {
     writeHave(files, present)
 
     const warmHaveArgs = [...warmArgs, '--have', files.have]
-    const warmed = await this.whileLimited(() => this.step(warmHaveArgs, this.deps.warmTimeoutMs))
+    const warmed = await this.whileLimited(() => this.step(attempt, warmHaveArgs, this.deps.warmTimeoutMs))
 
     if (warmed.kind === 'failure') return warmed
 
-    await this.upload(job, files.store, present)
+    await this.upload(attempt, present)
 
     const maps = readStoreMaps(files.store)
 
@@ -183,14 +200,16 @@ export class ArtRunner {
 
   // sends what the export wrote that the bucket still lacks: a sheet shared with another match may be there already.
   // only a path the export wrote is read, whatever the api answers
-  private async upload(job: ArtJob, store: string, downloaded: string[]): Promise<void> {
+  private async upload(attempt: Attempt, downloaded: string[]): Promise<void> {
+    const { job, files } = attempt
     const downloadedPaths = new Set(downloaded)
-    const written = listStore(store).filter((path) => !downloadedPaths.has(path))
+    const written = listStore(files.store).filter((path) => !downloadedPaths.has(path))
     const writtenPaths = new Set(written)
     const missing = await this.deps.art.missing(job, written)
 
     for (const path of missing.filter((path) => writtenPaths.has(path))) {
-      await this.deps.art.putFile(job, path, readFileSync(join(store, path)))
+      throwIfLeaseLost(attempt)
+      await this.deps.art.putFile(job, path, readFileSync(join(files.store, path)))
     }
   }
 
@@ -206,15 +225,17 @@ export class ArtRunner {
     }
   }
 
-  private async step(args: string[], timeoutMs = this.deps.exportTimeoutMs): Promise<StepOutput> {
+  private async step(attempt: Attempt, args: string[], timeoutMs = this.deps.exportTimeoutMs): Promise<StepOutput> {
     const command = args.includes('--list') ? `${args[0]} --list` : args[0]
     const startedMs = performance.now()
-    const run = await this.deps.exporter.run(args, timeoutMs)
+    const run = await this.deps.exporter.run(args, { timeoutMs, signal: attempt.leaseLost })
 
     const elapsedSeconds = ((performance.now() - startedMs) / 1000).toFixed(1)
     const ending = run.kind === 'exited' ? `exit ${run.exitCode}` : 'stopped'
 
     console.log(`export ${command}: ${ending} after ${elapsedSeconds} s`)
+
+    if (run.kind === 'stopped') throw new LeaseLostError(`export ${command} for job ${attempt.job.jobId}: stopped`)
 
     if (run.kind === 'timed-out') {
       return failure('export-failed', `export ${command} was stopped after ${run.timeoutMs} ms`)
@@ -229,6 +250,11 @@ export class ArtRunner {
 
     return { kind: 'done', stdout: run.stdout }
   }
+}
+
+// another attempt may own the job now, so this one stops before it sends anything more
+function throwIfLeaseLost(attempt: Attempt): void {
+  if (attempt.leaseLost.aborted) throw new LeaseLostError(`art job ${attempt.job.jobId}: the lease was lost`)
 }
 
 function failure(code: ArtFailureCode, message: string): Failure {

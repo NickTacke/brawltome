@@ -1,11 +1,15 @@
 // the brawlhalla-anims export bundle, run as a child process: `plan`, `render` and `warm` (see "Export format" in its
-// README). Each run is one process, which is killed once it runs out of the time it was given
+// README). Each run is one process, which is killed once it runs out of the time it was given or its signal aborts
 
+// stopped: killed because its signal aborted
 export type ExportRun =
   | { kind: 'exited'; exitCode: number; stdout: string; stderr: string }
   | { kind: 'timed-out'; timeoutMs: number }
+  | { kind: 'stopped' }
 
-export type Exporter = { run(args: string[], timeoutMs: number): Promise<ExportRun> }
+export type RunOptions = { timeoutMs: number; signal?: AbortSignal }
+
+export type Exporter = { run(args: string[], options: RunOptions): Promise<ExportRun> }
 
 export type ExporterConfig = {
   // the bundle's own node with its heap cap, then scripts/export.ts
@@ -20,14 +24,21 @@ export function exportCommand(animsPath: string): string[] {
 
 export function createExporter(config: ExporterConfig): Exporter {
   return {
-    async run(args, timeoutMs) {
+    async run(args, options) {
       const child = Bun.spawn([...config.command, ...args], { stdout: 'pipe', stderr: 'pipe' })
-      let isTimedOut = false
+      let ending: 'timed-out' | 'stopped' | null = null
 
-      const timer = setTimeout(() => {
-        isTimedOut = true
+      const kill = (reason: 'timed-out' | 'stopped') => {
+        ending ??= reason
         child.kill('SIGKILL')
-      }, timeoutMs)
+      }
+
+      const timer = setTimeout(() => kill('timed-out'), options.timeoutMs)
+      const stop = () => kill('stopped')
+
+      if (options.signal?.aborted) stop()
+
+      options.signal?.addEventListener('abort', stop, { once: true })
 
       try {
         const [stdout, stderr, exitCode] = await Promise.all([
@@ -36,11 +47,14 @@ export function createExporter(config: ExporterConfig): Exporter {
           child.exited,
         ])
 
-        if (isTimedOut) return { kind: 'timed-out', timeoutMs }
+        if (ending === 'timed-out') return { kind: 'timed-out', timeoutMs: options.timeoutMs }
+
+        if (ending === 'stopped') return { kind: 'stopped' }
 
         return { kind: 'exited', exitCode, stdout, stderr }
       } finally {
         clearTimeout(timer)
+        options.signal?.removeEventListener('abort', stop)
       }
     },
   }

@@ -36,6 +36,8 @@ describe('the art runner', () => {
   let extraMissing: string[]
   // the job id a claim answers with
   let claimedJobId: string
+  // whether renew answers that the lease is gone
+  let isLeaseGone: boolean
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
@@ -58,6 +60,7 @@ describe('the art runner', () => {
     nextJob = null
     extraMissing = []
     claimedJobId = jobId
+    isLeaseGone = false
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
   })
@@ -87,6 +90,8 @@ describe('the art runner', () => {
     if (action === 'renew') received.renewals += 1
 
     received.calls.push(action ?? '')
+
+    if (action === 'renew' && isLeaseGone) return new Response(null, { status: 409 })
 
     return new Response(null, { status: 204 })
   }
@@ -140,10 +145,10 @@ describe('the art runner', () => {
   // the export, its calls noted in order with the api's
   function recorded(exporter: Exporter): Exporter {
     return {
-      run: (args, timeoutMs) => {
+      run: (args, options) => {
         received.calls.push(args[0] === 'warm' && args.includes('--list') ? 'warm --list' : (args[0] ?? ''))
 
-        return exporter.run(args, timeoutMs)
+        return exporter.run(args, options)
       },
     }
   }
@@ -298,10 +303,10 @@ describe('the art runner', () => {
     const real = createExporter({ command: fakeExport })
 
     const throwing: Exporter = {
-      run: async (args, timeoutMs) => {
+      run: async (args, options) => {
         if (args[0] === 'render') throw new Error('spawn failed')
 
-        return real.run(args, timeoutMs)
+        return real.run(args, options)
       },
     }
 
@@ -338,6 +343,22 @@ describe('the art runner', () => {
     await runner({ renewEveryMs: 100, exportTimeoutMs: 500 }).runOnce()
 
     expect(received.renewals).toBeGreaterThanOrEqual(2)
+  })
+
+  test('a lease lost during the export stops it, sends nothing more and leaves no files', async () => {
+    isLeaseGone = true
+    nextJob = { kind: 'match', fake: 'hang-render' }
+
+    const startedMs = Date.now()
+
+    await runner({ renewEveryMs: 100, exportTimeoutMs: 10_000 }).runOnce()
+
+    expect(Date.now() - startedMs).toBeLessThan(3000)
+    expect(received.calls.filter((call) => call !== 'renew').slice(-3)).toEqual(['limit 1', 'render', 'unlimit'])
+    expect(received.puts).toEqual([])
+    expect(received.results).toEqual([])
+    expect(received.failures).toEqual([])
+    expect(readdirSync(join(root, 'work', 'art'))).toEqual([])
   })
 
   test('warms a patch: lists, asks, warms only what is missing, sends it, then every map of the patch', async () => {
