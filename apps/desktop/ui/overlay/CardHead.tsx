@@ -14,17 +14,21 @@ export function LegendPortrait({ legend, isSmall = false }: LegendPortraitProps)
   return <img className={`portrait${sizeClass}`} src={path} alt="" onError={() => setHasFailed(true)} />
 }
 
-export function TierBanner({ tier }: { tier: string | null }) {
+// the rank banner hangs down the left of the card, like on the game's ranked screen; without a tier the empty
+// pennant keeps the card the same width as the one that replaces it
+export function BannerSlot({ tier }: { tier: string | null }) {
   const path = tierBannerPath(tier)
 
-  if (path === null) return null
-
-  return <img className="banner" src={path} alt="" />
+  return (
+    <span className="banner-slot">
+      {path === null ? <span className="banner-empty" /> : <img className="banner" src={path} alt="" />}
+    </span>
+  )
 }
 
-type CardHeadProps = { name: string; legend: string | null; sub: ReactNode; tier: string | null }
+type CardHeadProps = { name: string; legend: string | null; sub: ReactNode }
 
-export function CardHead({ name, legend, sub, tier }: CardHeadProps) {
+export function CardHead({ name, legend, sub }: CardHeadProps) {
   return (
     <span className="head">
       <LegendPortrait legend={legend} />
@@ -32,7 +36,6 @@ export function CardHead({ name, legend, sub, tier }: CardHeadProps) {
         <span className="name">{name}</span>
         <span className="sub">{sub}</span>
       </span>
-      <TierBanner tier={tier} />
     </span>
   )
 }

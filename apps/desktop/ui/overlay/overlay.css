@@ -27,8 +27,8 @@ body {
 
 .card {
   position: relative;
-  display: block;
-  width: 340px;
+  display: flex;
+  width: 424px;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -42,6 +42,41 @@ body {
 
 button.card {
   cursor: pointer;
+}
+
+/* everything right of the rank banner */
+.main {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+/* the banner hangs from the top edge of the card, like it does in game */
+.banner-slot {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  width: 72px;
+  margin-left: 12px;
+}
+
+.banner {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: top;
+  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.5));
+}
+
+/* a pennant without a tier, so loading and failed cards keep their shape */
+.banner-empty {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(96px, calc(100% - 8px));
+  background: hsl(var(--raised) / 0.55);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
 }
 
 /* the clickable head of a card that also holds a retry button */
@@ -118,18 +153,6 @@ button.card {
 .sub .dot {
   margin: 0 6px;
   opacity: 0.5;
-}
-
-/* the banner hangs from the top edge of the card, like it does in game */
-.banner {
-  flex: none;
-  align-self: flex-start;
-  width: 38px;
-  height: 60px;
-  margin: -12px 2px -4px 0;
-  object-fit: contain;
-  object-position: top;
-  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.5));
 }
 
 .figures {
@@ -291,7 +314,7 @@ button.card {
 
 /* ---------- 2v2 ---------- */
 
-/* the height the banner gives it, so a loading team or one without a rating doesn't jump when it fills in */
+/* the height of a filled head, so a loading team or one without a rating doesn't jump when it fills in */
 .team-head {
   display: flex;
   align-items: center;
@@ -300,11 +323,6 @@ button.card {
   padding: 10px 14px;
 }
 
-.team-head .banner {
-  width: 30px;
-  height: 46px;
-  margin: -10px 0 -6px 0;
-}
 .team-head .elo {
   font-size: 26px;
   line-height: 26px;

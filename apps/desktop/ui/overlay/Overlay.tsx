@@ -25,14 +25,7 @@ export function Overlay({ view, monitorHeightPx, onOpenProfile, onRetry, onResiz
   return (
     <div className="cards" ref={cardsRef} style={{ zoom: scale }}>
       {view.cards.map((card) => (
-        <OverlayCard
-          key={cardKey(card)}
-          card={card}
-          deferredProfileIds={view.deferredProfileIds}
-          timer={timer}
-          onOpenProfile={onOpenProfile}
-          onRetry={onRetry}
-        />
+        <OverlayCard key={cardKey(card)} card={card} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
       ))}
     </div>
   )
@@ -40,35 +33,20 @@ export function Overlay({ view, monitorHeightPx, onOpenProfile, onRetry, onResiz
 
 type OverlayCardProps = {
   card: Card
-  deferredProfileIds: number[]
   timer: ReactNode
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
 }
 
-function OverlayCard({ card, deferredProfileIds, timer, onOpenProfile, onRetry }: OverlayCardProps) {
+function OverlayCard({ card, timer, onOpenProfile, onRetry }: OverlayCardProps) {
   if (card.kind === 'team') {
     return (
-      <TeamCard
-        data={card.data}
-        players={card.players}
-        deferredProfileIds={deferredProfileIds}
-        timer={timer}
-        onOpenProfile={onOpenProfile}
-        onRetry={onRetry}
-      />
+      <TeamCard data={card.data} players={card.players} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
     )
   }
 
   return (
-    <SoloCard
-      player={card.player}
-      data={card.data}
-      isDeferred={deferredProfileIds.includes(card.player.brawlhallaId)}
-      timer={timer}
-      onOpenProfile={onOpenProfile}
-      onRetry={onRetry}
-    />
+    <SoloCard player={card.player} data={card.data} timer={timer} onOpenProfile={onOpenProfile} onRetry={onRetry} />
   )
 }
 
