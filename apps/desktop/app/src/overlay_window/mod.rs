@@ -492,8 +492,9 @@ mod tests {
         let rect = state.resize_shown(7, (340, 150));
         let other_lobby = state.resize_shown(8, (340, 131));
 
+        // top right by default: 1920 - 24 - 340
         let expected = Rect {
-            x: 790,
+            x: 1556,
             y: 24,
             width: 340,
             height: 150,
