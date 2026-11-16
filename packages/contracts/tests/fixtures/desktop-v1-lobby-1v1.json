@@ -1,0 +1,20 @@
+{
+  "cards": [
+    {
+      "team": 2,
+      "teamStanding": null,
+      "players": [
+        {
+          "brawlhallaId": 91913839,
+          "name": "Sandstorm",
+          "known": true,
+          "oneVsOne": { "rating": 2112, "peakRating": 2240, "tier": "Diamond", "wins": 734, "games": 1204 },
+          "region": "EU",
+          "regionRank": 48,
+          "refreshedAt": "2026-11-16T10:00:00.000Z",
+          "isRefreshing": false
+        }
+      ]
+    }
+  ]
+}

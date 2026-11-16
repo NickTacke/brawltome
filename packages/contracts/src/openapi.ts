@@ -1,13 +1,24 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi'
 import { clanProfileSchema, clanRefreshResponseSchema } from './clan'
 import { desktopRankedLookupInputSchema, desktopRankedLookupSchema } from './desktop-ranked'
+import {
+  desktopLobbyInputSchema,
+  desktopLobbySchema,
+  desktopUpdateRequiredSchema,
+  desktopVersionHeader,
+  desktopVersionSchema,
+} from './desktop-v1'
 import { playerCareerProfileSchema } from './player-career'
 import { playerRankedProfileSchema } from './player-ranked'
 import { playerRefreshResponseSchema, refreshOutcomeSchema } from './refresh-outcome'
+import { z } from './zod'
 
 export function generateContractOpenApi() {
   const registry = new OpenAPIRegistry()
   const desktopRankedResponseSchema = registry.register('DesktopRankedLookup', desktopRankedLookupSchema)
+  const desktopLobbyResponseSchema = registry.register('DesktopLobby', desktopLobbySchema)
+  const desktopUpdateRequiredResponseSchema = registry.register('DesktopUpdateRequired', desktopUpdateRequiredSchema)
+  const desktopLobbyRequestSchema = registry.register('DesktopLobbyInput', desktopLobbyInputSchema)
 
   registry.register('RefreshOutcome', refreshOutcomeSchema)
   registry.register('PlayerRefreshResponse', playerRefreshResponseSchema)
@@ -31,6 +42,26 @@ export function generateContractOpenApi() {
             schema: desktopRankedResponseSchema,
           },
         },
+      },
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/desktop/v1/lobby',
+    operationId: 'postDesktopLobby',
+    request: {
+      headers: z.object({ [desktopVersionHeader]: desktopVersionSchema }),
+      body: { required: true, content: { 'application/json': { schema: desktopLobbyRequestSchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Opponent cards for the lobby',
+        content: { 'application/json': { schema: desktopLobbyResponseSchema } },
+      },
+      426: {
+        description: 'The desktop app is older than the minimum version this API supports',
+        content: { 'application/json': { schema: desktopUpdateRequiredResponseSchema } },
       },
     },
   })

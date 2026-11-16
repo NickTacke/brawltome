@@ -1,0 +1,20 @@
+{
+  "cards": [
+    {
+      "team": 2,
+      "teamStanding": null,
+      "players": [
+        {
+          "brawlhallaId": 60417325,
+          "name": null,
+          "known": false,
+          "oneVsOne": null,
+          "region": null,
+          "regionRank": null,
+          "refreshedAt": null,
+          "isRefreshing": true
+        }
+      ]
+    }
+  ]
+}

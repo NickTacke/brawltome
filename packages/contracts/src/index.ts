@@ -64,6 +64,18 @@ export {
   parseDesktopRankedLookupOutput,
 } from './desktop-ranked'
 export {
+  type DesktopLobbyContract,
+  type DesktopLobbyInputContract,
+  type DesktopStandingContract,
+  desktopLobbyInputSchema,
+  desktopLobbySchema,
+  desktopStandingSchema,
+  desktopUpdateRequiredSchema,
+  desktopVersionHeader,
+  desktopVersionSchema,
+  parseDesktopLobbyOutput,
+} from './desktop-v1'
+export {
   type DiscoveryClanHitContract,
   type DiscoveryPlayerHitContract,
   discoverySearchInputSchema,

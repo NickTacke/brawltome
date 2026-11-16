@@ -4969,6 +4969,670 @@ pub mod types {
             value.parse()
         }
     }
+    ///`DesktopLobby`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "cards"
+    ///  ],
+    ///  "properties": {
+    ///    "cards": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "$ref": "#/components/schemas/DesktopLobbyCard"
+    ///      }
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobby {
+        pub cards: ::std::vec::Vec<DesktopLobbyCard>,
+    }
+    ///`DesktopLobbyCard`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "players",
+    ///    "team",
+    ///    "teamStanding"
+    ///  ],
+    ///  "properties": {
+    ///    "players": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "$ref": "#/components/schemas/DesktopLobbyPlayer"
+    ///      },
+    ///      "minItems": 1
+    ///    },
+    ///    "team": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "teamStanding": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "games",
+    ///        "peakRating",
+    ///        "rating",
+    ///        "tier",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "peakRating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "rating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "tier": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "minLength": 1
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      }
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyCard {
+        pub players: ::std::vec::Vec<DesktopLobbyPlayer>,
+        pub team: i32,
+        #[serde(rename = "teamStanding")]
+        pub team_standing: ::std::option::Option<DesktopLobbyCardTeamStanding>,
+    }
+    ///`DesktopLobbyCardTeamStanding`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "tier": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyCardTeamStanding {
+        pub games: i32,
+        #[serde(rename = "peakRating")]
+        pub peak_rating: i32,
+        pub rating: i32,
+        pub tier: ::std::option::Option<DesktopLobbyCardTeamStandingTier>,
+        pub wins: i32,
+    }
+    ///`DesktopLobbyCardTeamStandingTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct DesktopLobbyCardTeamStandingTier(::std::string::String);
+    impl ::std::ops::Deref for DesktopLobbyCardTeamStandingTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<DesktopLobbyCardTeamStandingTier>
+    for ::std::string::String {
+        fn from(value: DesktopLobbyCardTeamStandingTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for DesktopLobbyCardTeamStandingTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for DesktopLobbyCardTeamStandingTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for DesktopLobbyCardTeamStandingTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for DesktopLobbyCardTeamStandingTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for DesktopLobbyCardTeamStandingTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`DesktopLobbyInput`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "matchType",
+    ///    "players"
+    ///  ],
+    ///  "properties": {
+    ///    "matchType": {
+    ///      "type": "string",
+    ///      "enum": [
+    ///        "1v1",
+    ///        "2v2"
+    ///      ]
+    ///    },
+    ///    "players": {
+    ///      "type": "array",
+    ///      "items": {
+    ///        "type": "object",
+    ///        "required": [
+    ///          "brawlhallaId",
+    ///          "team"
+    ///        ],
+    ///        "properties": {
+    ///          "brawlhallaId": {
+    ///            "type": "integer",
+    ///            "maximum": 2147483647.0,
+    ///            "exclusiveMinimum": 0.0
+    ///          },
+    ///          "team": {
+    ///            "type": "integer",
+    ///            "format": "int32",
+    ///            "maximum": 2147483647.0,
+    ///            "minimum": 0.0
+    ///          }
+    ///        }
+    ///      },
+    ///      "maxItems": 4,
+    ///      "minItems": 1
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyInput {
+        #[serde(rename = "matchType")]
+        pub match_type: DesktopLobbyInputMatchType,
+        pub players: ::std::vec::Vec<DesktopLobbyInputPlayersItem>,
+    }
+    ///`DesktopLobbyInputMatchType`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "enum": [
+    ///    "1v1",
+    ///    "2v2"
+    ///  ]
+    ///}
+    /// ```
+    /// </details>
+    #[derive(
+        ::serde::Deserialize,
+        ::serde::Serialize,
+        Clone,
+        Copy,
+        Debug,
+        Eq,
+        Hash,
+        Ord,
+        PartialEq,
+        PartialOrd
+    )]
+    pub enum DesktopLobbyInputMatchType {
+        #[serde(rename = "1v1")]
+        X1v1,
+        #[serde(rename = "2v2")]
+        X2v2,
+    }
+    impl ::std::fmt::Display for DesktopLobbyInputMatchType {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match *self {
+                Self::X1v1 => f.write_str("1v1"),
+                Self::X2v2 => f.write_str("2v2"),
+            }
+        }
+    }
+    impl ::std::str::FromStr for DesktopLobbyInputMatchType {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            match value {
+                "1v1" => Ok(Self::X1v1),
+                "2v2" => Ok(Self::X2v2),
+                _ => Err("invalid value".into()),
+            }
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for DesktopLobbyInputMatchType {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String> for DesktopLobbyInputMatchType {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String> for DesktopLobbyInputMatchType {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    ///`DesktopLobbyInputPlayersItem`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "team"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "team": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyInputPlayersItem {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        pub team: i32,
+    }
+    ///`DesktopLobbyPlayer`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "brawlhallaId",
+    ///    "isRefreshing",
+    ///    "known",
+    ///    "name",
+    ///    "oneVsOne",
+    ///    "refreshedAt",
+    ///    "region",
+    ///    "regionRank"
+    ///  ],
+    ///  "properties": {
+    ///    "brawlhallaId": {
+    ///      "type": "integer",
+    ///      "maximum": 2147483647.0,
+    ///      "exclusiveMinimum": 0.0
+    ///    },
+    ///    "isRefreshing": {
+    ///      "type": "boolean"
+    ///    },
+    ///    "known": {
+    ///      "type": "boolean"
+    ///    },
+    ///    "name": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "oneVsOne": {
+    ///      "type": [
+    ///        "object",
+    ///        "null"
+    ///      ],
+    ///      "required": [
+    ///        "games",
+    ///        "peakRating",
+    ///        "rating",
+    ///        "tier",
+    ///        "wins"
+    ///      ],
+    ///      "properties": {
+    ///        "games": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "peakRating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "rating": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        },
+    ///        "tier": {
+    ///          "type": [
+    ///            "string",
+    ///            "null"
+    ///          ],
+    ///          "minLength": 1
+    ///        },
+    ///        "wins": {
+    ///          "type": "integer",
+    ///          "format": "int32",
+    ///          "maximum": 2147483647.0,
+    ///          "minimum": 0.0
+    ///        }
+    ///      }
+    ///    },
+    ///    "refreshedAt": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "format": "date-time",
+    ///      "pattern": "Z$"
+    ///    },
+    ///    "region": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ]
+    ///    },
+    ///    "regionRank": {
+    ///      "type": [
+    ///        "integer",
+    ///        "null"
+    ///      ],
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 1.0
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyPlayer {
+        #[serde(rename = "brawlhallaId")]
+        pub brawlhalla_id: ::std::num::NonZeroU64,
+        #[serde(rename = "isRefreshing")]
+        pub is_refreshing: bool,
+        pub known: bool,
+        pub name: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "oneVsOne")]
+        pub one_vs_one: ::std::option::Option<DesktopLobbyPlayerOneVsOne>,
+        #[serde(rename = "refreshedAt")]
+        pub refreshed_at: ::std::option::Option<
+            ::chrono::DateTime<::chrono::offset::Utc>,
+        >,
+        pub region: ::std::option::Option<::std::string::String>,
+        #[serde(rename = "regionRank")]
+        pub region_rank: ::std::option::Option<::std::num::NonZeroU32>,
+    }
+    ///`DesktopLobbyPlayerOneVsOne`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "games",
+    ///    "peakRating",
+    ///    "rating",
+    ///    "tier",
+    ///    "wins"
+    ///  ],
+    ///  "properties": {
+    ///    "games": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "peakRating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "rating": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    },
+    ///    "tier": {
+    ///      "type": [
+    ///        "string",
+    ///        "null"
+    ///      ],
+    ///      "minLength": 1
+    ///    },
+    ///    "wins": {
+    ///      "type": "integer",
+    ///      "format": "int32",
+    ///      "maximum": 2147483647.0,
+    ///      "minimum": 0.0
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopLobbyPlayerOneVsOne {
+        pub games: i32,
+        #[serde(rename = "peakRating")]
+        pub peak_rating: i32,
+        pub rating: i32,
+        pub tier: ::std::option::Option<DesktopLobbyPlayerOneVsOneTier>,
+        pub wins: i32,
+    }
+    ///`DesktopLobbyPlayerOneVsOneTier`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "minLength": 1
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct DesktopLobbyPlayerOneVsOneTier(::std::string::String);
+    impl ::std::ops::Deref for DesktopLobbyPlayerOneVsOneTier {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<DesktopLobbyPlayerOneVsOneTier> for ::std::string::String {
+        fn from(value: DesktopLobbyPlayerOneVsOneTier) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for DesktopLobbyPlayerOneVsOneTier {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            if value.chars().count() < 1usize {
+                return Err("shorter than 1 characters".into());
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for DesktopLobbyPlayerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for DesktopLobbyPlayerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for DesktopLobbyPlayerOneVsOneTier {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for DesktopLobbyPlayerOneVsOneTier {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
     ///`DesktopRankedLookup`
     ///
     /// <details><summary>JSON schema</summary>
@@ -5179,6 +5843,115 @@ pub mod types {
         }
     }
     impl<'de> ::serde::Deserialize<'de> for DesktopRankedLookupPlayerBestLegendNameKey {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
+    ///`DesktopUpdateRequired`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "object",
+    ///  "required": [
+    ///    "minimumVersion"
+    ///  ],
+    ///  "properties": {
+    ///    "minimumVersion": {
+    ///      "type": "string",
+    ///      "pattern": "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$"
+    ///    }
+    ///  }
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
+    pub struct DesktopUpdateRequired {
+        #[serde(rename = "minimumVersion")]
+        pub minimum_version: DesktopUpdateRequiredMinimumVersion,
+    }
+    ///`DesktopUpdateRequiredMinimumVersion`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct DesktopUpdateRequiredMinimumVersion(::std::string::String);
+    impl ::std::ops::Deref for DesktopUpdateRequiredMinimumVersion {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<DesktopUpdateRequiredMinimumVersion>
+    for ::std::string::String {
+        fn from(value: DesktopUpdateRequiredMinimumVersion) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for DesktopUpdateRequiredMinimumVersion {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            {
+                ::regress::Regex::new(
+                        "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$",
+                    )
+                    .unwrap()
+            });
+            if PATTERN.find(value).is_none() {
+                return Err(
+                    "doesn't match pattern \"^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$\""
+                        .into(),
+                );
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for DesktopUpdateRequiredMinimumVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for DesktopUpdateRequiredMinimumVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for DesktopUpdateRequiredMinimumVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for DesktopUpdateRequiredMinimumVersion {
         fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
         where
             D: ::serde::Deserializer<'de>,
@@ -11351,6 +12124,91 @@ pub mod types {
                 })
         }
     }
+    ///`PostDesktopLobbyXDesktopVersion`
+    ///
+    /// <details><summary>JSON schema</summary>
+    ///
+    /// ```json
+    ///{
+    ///  "type": "string",
+    ///  "pattern": "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$"
+    ///}
+    /// ```
+    /// </details>
+    #[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    #[serde(transparent)]
+    pub struct PostDesktopLobbyXDesktopVersion(::std::string::String);
+    impl ::std::ops::Deref for PostDesktopLobbyXDesktopVersion {
+        type Target = ::std::string::String;
+        fn deref(&self) -> &::std::string::String {
+            &self.0
+        }
+    }
+    impl ::std::convert::From<PostDesktopLobbyXDesktopVersion>
+    for ::std::string::String {
+        fn from(value: PostDesktopLobbyXDesktopVersion) -> Self {
+            value.0
+        }
+    }
+    impl ::std::str::FromStr for PostDesktopLobbyXDesktopVersion {
+        type Err = self::error::ConversionError;
+        fn from_str(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(||
+            {
+                ::regress::Regex::new(
+                        "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$",
+                    )
+                    .unwrap()
+            });
+            if PATTERN.find(value).is_none() {
+                return Err(
+                    "doesn't match pattern \"^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}(-[0-9A-Za-z.-]{1,20})?$\""
+                        .into(),
+                );
+            }
+            Ok(Self(value.to_string()))
+        }
+    }
+    impl ::std::convert::TryFrom<&str> for PostDesktopLobbyXDesktopVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &str,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<&::std::string::String>
+    for PostDesktopLobbyXDesktopVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: &::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl ::std::convert::TryFrom<::std::string::String>
+    for PostDesktopLobbyXDesktopVersion {
+        type Error = self::error::ConversionError;
+        fn try_from(
+            value: ::std::string::String,
+        ) -> ::std::result::Result<Self, self::error::ConversionError> {
+            value.parse()
+        }
+    }
+    impl<'de> ::serde::Deserialize<'de> for PostDesktopLobbyXDesktopVersion {
+        fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+        where
+            D: ::serde::Deserializer<'de>,
+        {
+            ::std::string::String::deserialize(deserializer)?
+                .parse()
+                .map_err(|e: self::error::ConversionError| {
+                    <D::Error as ::serde::de::Error>::custom(e.to_string())
+                })
+        }
+    }
     ///`RefreshNoRetryGuidance`
     ///
     /// <details><summary>JSON schema</summary>
@@ -12116,6 +12974,52 @@ impl Client {
         }
         match response.status().as_u16() {
             200u16 => ResponseValue::from_response(response).await,
+            _ => Err(Error::UnexpectedResponse(response)),
+        }
+    }
+    /**Sends a `POST` request to `/desktop/v1/lobby`
+
+*/
+    pub async fn post_desktop_lobby<'a>(
+        &'a self,
+        x_desktop_version: &'a types::PostDesktopLobbyXDesktopVersion,
+        body: &'a types::DesktopLobbyInput,
+    ) -> Result<
+        ResponseValue<types::DesktopLobby>,
+        Error<types::DesktopUpdateRequired>,
+    > {
+        let url = format!("{}/desktop/v1/lobby", self.baseurl,);
+        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(2usize);
+        header_map
+            .append(
+                ::reqwest::header::HeaderName::from_static("api-version"),
+                ::reqwest::header::HeaderValue::from_static(Self::api_version()),
+            );
+        header_map
+            .append("x-desktop-version", x_desktop_version.to_string().try_into()?);
+        #[allow(unused_mut)]
+        let mut request = self
+            .client
+            .post(url)
+            .header(
+                ::reqwest::header::ACCEPT,
+                ::reqwest::header::HeaderValue::from_static("application/json"),
+            )
+            .json(&body)
+            .headers(header_map)
+            .build()?;
+        let info = OperationInfo {
+            operation_id: "post_desktop_lobby",
+        };
+        self.pre(&mut request, &info).await?;
+        let result = self.exec(request, &info).await;
+        self.post(&result, &info).await?;
+        let response = result?;
+        match response.status().as_u16() {
+            200u16 => ResponseValue::from_response(response).await,
+            426u16 => {
+                Err(Error::ErrorResponse(ResponseValue::from_response(response).await?))
+            }
             _ => Err(Error::UnexpectedResponse(response)),
         }
     }

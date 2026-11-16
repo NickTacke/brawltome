@@ -1,0 +1,30 @@
+{
+  "cards": [
+    {
+      "team": 2,
+      "teamStanding": { "rating": 1975, "peakRating": 2010, "tier": "Platinum 5", "wins": 88, "games": 150 },
+      "players": [
+        {
+          "brawlhallaId": 91913839,
+          "name": "Sandstorm",
+          "known": true,
+          "oneVsOne": { "rating": 2112, "peakRating": 2240, "tier": "Diamond", "wins": 734, "games": 1204 },
+          "region": "EU",
+          "regionRank": null,
+          "refreshedAt": "2026-11-16T10:00:00.000Z",
+          "isRefreshing": false
+        },
+        {
+          "brawlhallaId": 40218877,
+          "name": "Tidewater",
+          "known": true,
+          "oneVsOne": { "rating": 1840, "peakRating": 1902, "tier": "Platinum 3", "wins": 412, "games": 801 },
+          "region": "US-E",
+          "regionRank": null,
+          "refreshedAt": "2026-11-16T09:30:00.000Z",
+          "isRefreshing": false
+        }
+      ]
+    }
+  ]
+}
