@@ -146,14 +146,18 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
 
     const claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null })
 
-    await jobs.complete({ jobId: claimed?.jobId as string, leaseToken: claimed?.leaseToken as string, line: realLine() })
+    await jobs.complete({
+      jobId: claimed?.jobId as string,
+      leaseToken: claimed?.leaseToken as string,
+      line: realLine(),
+    })
 
     const [match] = await database.sql<{ id: string }[]>`
       SELECT id FROM replays.matches ORDER BY created_at DESC LIMIT 1
     `
 
     const response = await app.fetch(
-      new Request(`http://api.test/v1/matches/${match?.id}/playback/dev-1`, { headers: siteHeaders() }),
+      new Request(`http://api.test/v1/matches/${match?.id}/playback/dev-1/1`, { headers: siteHeaders() }),
     )
 
     const timeline = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(await response.bytes())))
@@ -173,12 +177,12 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
         '/matches/{id}',
         '/players/{brawlhallaId}/matches',
         '/matches/{id}/replay',
-        '/matches/{id}/playback/{build}',
+        '/matches/{id}/playback/{build}/{version}',
         '/me/replays',
       ]),
     )
 
-    const playback = document.paths['/matches/{id}/playback/{build}'] as { get?: { operationId?: string } }
+    const playback = document.paths['/matches/{id}/playback/{build}/{version}'] as { get?: { operationId?: string } }
 
     expect(playback.get?.operationId).toBe('replays.playback')
   })
