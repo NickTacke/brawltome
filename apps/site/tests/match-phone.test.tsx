@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
 import { matchPlayersOf } from '../src/components/match/match-players'
 import { HabitOptionRows } from '../src/components/match/modules/HabitOptionRows'
+import { OpeningLists } from '../src/components/match/modules/OpeningLists'
 import { PlayerMoves } from '../src/components/match/modules/PlayerMoves'
 import type { NumberRow } from '../src/components/match/number-rows'
 import { PlayerNumbers } from '../src/components/match/PlayerNumbers'
@@ -307,6 +308,42 @@ describe('under a finger', () => {
       target.dispatchEvent(event)
     })
   }
+
+  // where an opened kind's detail lies among the two lists, as the dom orders them
+  function detailAfter(): string | undefined {
+    const lists = [...container.querySelectorAll('section[aria-labelledby="openings"] h3')]
+    const detail = container.querySelector('.tile-detail-opening')
+
+    const before = lists.filter(
+      (heading) => heading.compareDocumentPosition(detail as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+
+    return before.at(-1)?.textContent ?? undefined
+  }
+
+  test('an opened kind’s detail lies right under the list it was opened from', async () => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(<OpeningLists moments={readInsights('duel-a').insights.moments} slot={1} />))
+
+    const kinds = (title: string) =>
+      [...container.querySelectorAll('button[aria-expanded]')].filter((button) =>
+        button.closest('div.min-w-0')?.querySelector('h3')?.textContent?.includes(title),
+      )
+
+    await act(async () => (kinds('Got opened up')[0] as HTMLElement).click())
+
+    expect(detailAfter()).toBe('Got opened up')
+
+    await act(async () => (kinds('Opened them up')[0] as HTMLElement).click())
+
+    expect(detailAfter()).toBe('Opened them up')
+
+    await act(async () => root.unmount())
+    container.remove()
+  })
 
   test('a press reads out where the finger is, and lifting it puts the readout away', async () => {
     const plot = await mountTimeline()
