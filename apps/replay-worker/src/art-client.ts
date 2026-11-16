@@ -4,6 +4,8 @@ import type { WorkerReport } from './api-client'
 // goes through the api, which checks it before it reaches the bucket
 
 const REQUEST_TIMEOUT_MS = 30_000
+// a result writes the manifest to the bucket before it answers, so it gets longer
+const RESULT_TIMEOUT_MS = 120_000
 // as many paths as the api answers in one missing call
 const PATHS_PER_CALL = 2000
 // the job id names the job's files under the work folder, so it must be nothing but an id
@@ -27,6 +29,12 @@ export type ArtFailureCode = 'no-animations' | 'export-failed' | 'worker-error'
 /** The api answered 409: the attempt lost its lease, so nothing more it sends about the job counts. */
 export class LeaseLostError extends Error {}
 
+/**
+ * A result got no answer: the api may have stored it or not. It is never sent again, nor followed by a failure: a
+ * second complete or a failure racing the first could undo it. The lease running out settles it.
+ */
+export class ResultUnansweredError extends Error {}
+
 /** The api answered 422: it won't take a file or the manifest, so the export made something it can't store. */
 export class ArtRefusedError extends Error {}
 
@@ -40,9 +48,11 @@ export type ArtClient = {
   renew(job: ArtJob): Promise<boolean>
 }
 
-type RequestInit = { method?: string; lease?: string; json?: unknown; bytes?: Uint8Array }
+type RequestInit = { method?: string; lease?: string; json?: unknown; bytes?: Uint8Array; timeoutMs?: number }
 
-export function createArtClient(config: { apiUrl: string; token: string }): ArtClient {
+export type ArtClientConfig = { apiUrl: string; token: string; resultTimeoutMs?: number }
+
+export function createArtClient(config: ArtClientConfig): ArtClient {
   const base = `${config.apiUrl.replace(/\/$/, '')}/internal/replays/art`
 
   async function send(path: string, init: RequestInit): Promise<Response> {
@@ -57,7 +67,7 @@ export function createArtClient(config: { apiUrl: string; token: string }): ArtC
       headers,
       body: init.json === undefined ? bodyOf(init.bytes) : JSON.stringify(init.json),
       redirect: 'error',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS),
     })
   }
 
@@ -98,7 +108,12 @@ export function createArtClient(config: { apiUrl: string; token: string }): ArtC
     },
 
     async result(job, result) {
-      const response = await send(`/${job.jobId}/result`, { lease: job.leaseToken, json: result })
+      const timeoutMs = config.resultTimeoutMs ?? RESULT_TIMEOUT_MS
+      const request = { lease: job.leaseToken, json: result, timeoutMs }
+
+      const response = await send(`/${job.jobId}/result`, request).catch((error: unknown) => {
+        throw new ResultUnansweredError(`send the art of job ${job.jobId}: no answer: ${String(error)}`)
+      })
 
       await expectOk(response, `send the art of job ${job.jobId}`)
     },

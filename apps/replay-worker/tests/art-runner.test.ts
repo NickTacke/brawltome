@@ -40,6 +40,8 @@ describe('the art runner', () => {
   let isLeaseGone: boolean
   // how many more times an upload of each path answers that another attempt holds it
   let heldUploads: Map<string, number>
+  // how long the api takes to answer a result
+  let resultDelayMs: number
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
@@ -64,6 +66,7 @@ describe('the art runner', () => {
     claimedJobId = jobId
     isLeaseGone = false
     heldUploads = new Map()
+    resultDelayMs = 0
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
   })
@@ -86,7 +89,10 @@ describe('the art runner', () => {
 
     if (action === 'files') return stored(rest.join('/'), new Uint8Array(await request.arrayBuffer()))
 
-    if (action === 'result') received.results.push(await request.json())
+    if (action === 'result') {
+      received.results.push(await request.json())
+      await Bun.sleep(resultDelayMs)
+    }
 
     if (action === 'failure') received.failures.push(await request.json())
 
@@ -306,6 +312,20 @@ describe('the art runner', () => {
     expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(5)
     expect(received.results).toEqual([])
     expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining(fakeMap) }])
+  })
+
+  test('a result that gets no answer in time is sent once, and no failure follows it', async () => {
+    resultDelayMs = 3000
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    const art = createArtClient({ apiUrl: `http://localhost:${server.port}`, token, resultTimeoutMs: 200 })
+    const startedMs = Date.now()
+
+    await runner({ art }).runOnce()
+
+    expect(Date.now() - startedMs).toBeLessThan(2500)
+    expect(received.results).toHaveLength(1)
+    expect(received.failures).toEqual([])
   })
 
   test('a line without animations reports no-animations and renders nothing', async () => {

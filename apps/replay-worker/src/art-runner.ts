@@ -8,6 +8,7 @@ import {
   type ArtResult,
   type ClaimedArt,
   LeaseLostError,
+  ResultUnansweredError,
 } from './art-client'
 import type { Exporter } from './art-export'
 import {
@@ -97,8 +98,8 @@ export class ArtRunner {
     } catch (error) {
       console.error(`art job ${job.jobId}:`, error)
 
-      // another attempt owns the job now
-      if (error instanceof LeaseLostError) return
+      // another attempt owns the job now, or the result may have been taken: either way nothing more is sent
+      if (error instanceof LeaseLostError || error instanceof ResultUnansweredError) return
 
       const code = error instanceof ArtRefusedError ? 'export-failed' : 'worker-error'
 
