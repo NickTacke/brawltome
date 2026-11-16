@@ -33,7 +33,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22"
 minisign-verify = "0.2"
 sha2 = "0.10"
-uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

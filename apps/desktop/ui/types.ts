@@ -26,7 +26,6 @@ export interface MatchFoundEvent {
   opponents: Opponent[]
   isRanked: boolean
   localPlayerId: number
-  acceptanceSampleId: string | null
 }
 
 export interface MatchEndedEvent {

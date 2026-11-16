@@ -4,8 +4,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
-use crate::windows_acceptance::{AcceptanceCheck, AcceptanceProbe};
-
 #[derive(Debug, Clone, Copy)]
 pub struct PhysicalPoint {
     pub x: i32,
@@ -39,11 +37,6 @@ pub fn cursor_effect(
         && cursor_y < top + i64::from(bounds.height)
 }
 
-fn record_check(probe: &AcceptanceProbe, check: AcceptanceCheck) {
-    if let Err(error) = probe.record_check(check) {
-        log::warn!("Could not record overlay acceptance evidence: {error}");
-    }
-}
 #[cfg(target_os = "windows")]
 use tokio::time::{sleep, Duration};
 
@@ -79,20 +72,11 @@ pub fn set_clickthrough(
     window: tauri::Window,
     ignore: bool,
     state: tauri::State<'_, Arc<OverlayState>>,
-    probe: tauri::State<'_, Arc<AcceptanceProbe>>,
 ) -> Result<(), String> {
     window
         .set_ignore_cursor_events(ignore)
         .map_err(|error| format!("failed to update overlay click-through: {error}"))?;
     state.clickthrough.store(ignore, Ordering::Relaxed);
-    record_check(
-        &probe,
-        if ignore {
-            AcceptanceCheck::ClickThroughEnabled
-        } else {
-            AcceptanceCheck::ClickThroughDisabled
-        },
-    );
     Ok(())
 }
 
@@ -130,7 +114,7 @@ pub fn update_content_bounds(
 
 /// Run the initial window positioning + Windows window-style tweaks.
 /// Call from the Tauri `setup` callback before spawning the cursor monitor.
-pub fn position_overlay_window(app: &AppHandle, probe: &AcceptanceProbe) -> tauri::Result<()> {
+pub fn position_overlay_window(app: &AppHandle) -> tauri::Result<()> {
     let window = app
         .get_webview_window("overlay")
         .expect("overlay window must exist");
@@ -151,13 +135,9 @@ pub fn position_overlay_window(app: &AppHandle, probe: &AcceptanceProbe) -> taur
         window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(350.0, height)))?;
     }
 
-    #[cfg(not(target_os = "windows"))]
-    let _ = probe;
-
     #[cfg(target_os = "windows")]
     {
         window.set_ignore_cursor_events(true)?;
-        record_check(probe, AcceptanceCheck::ClickThroughEnabled);
     }
 
     // Prevent the overlay from stealing focus when clicked.
@@ -173,27 +153,13 @@ pub fn position_overlay_window(app: &AppHandle, probe: &AcceptanceProbe) -> taur
         }
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        if window.is_visible().unwrap_or(false) {
-            record_check(probe, AcceptanceCheck::OverlayVisible);
-        }
-        if window.is_always_on_top().unwrap_or(false) {
-            record_check(probe, AcceptanceCheck::OverlayAlwaysOnTop);
-        }
-    }
-
     Ok(())
 }
 
 /// Spawn the background task that disables click-through when the cursor is
 /// inside the content bounding box reported by the frontend.
 #[cfg(target_os = "windows")]
-pub fn spawn_cursor_monitor(
-    app: &AppHandle,
-    state: Arc<OverlayState>,
-    probe: Arc<AcceptanceProbe>,
-) {
+pub fn spawn_cursor_monitor(app: &AppHandle, state: Arc<OverlayState>) {
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         use windows_sys::Win32::Foundation::POINT;
@@ -227,10 +193,7 @@ pub fn spawn_cursor_monitor(
                 let visible = window.is_visible().unwrap_or(false);
                 if cursor_effect(true, visible, bounds, PhysicalPoint { x: pt.x, y: pt.y }) {
                     match window.set_ignore_cursor_events(false) {
-                        Ok(()) => {
-                            state.clickthrough.store(false, Ordering::Relaxed);
-                            record_check(&probe, AcceptanceCheck::ClickThroughDisabled);
-                        }
+                        Ok(()) => state.clickthrough.store(false, Ordering::Relaxed),
                         Err(error) => {
                             log::warn!("Could not disable overlay click-through: {error}")
                         }
@@ -243,9 +206,4 @@ pub fn spawn_cursor_monitor(
 
 /// No-op on non-Windows so calling code doesn't need cfg gating.
 #[cfg(not(target_os = "windows"))]
-pub fn spawn_cursor_monitor(
-    _app: &AppHandle,
-    _state: Arc<OverlayState>,
-    _probe: Arc<AcceptanceProbe>,
-) {
-}
+pub fn spawn_cursor_monitor(_app: &AppHandle, _state: Arc<OverlayState>) {}

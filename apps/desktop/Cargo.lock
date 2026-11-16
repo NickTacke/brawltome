@@ -438,7 +438,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
- "uuid",
  "windows-sys 0.59.0",
 ]
 

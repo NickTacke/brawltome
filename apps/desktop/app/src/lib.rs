@@ -8,7 +8,6 @@ mod log_prune;
 pub mod overlay;
 pub mod tray;
 pub mod updater_artifact;
-pub mod windows_acceptance;
 
 use tauri::Manager;
 
@@ -54,14 +53,8 @@ pub fn run() {
             overlay::set_clickthrough,
             overlay::update_content_bounds,
             detection_bridge::get_detection_state,
-            windows_acceptance::complete_acceptance_sample,
         ])
         .setup(|app| {
-            let acceptance_probe = std::sync::Arc::new(
-                windows_acceptance::AcceptanceProbe::from_environment(),
-            );
-            app.manage(acceptance_probe.clone());
-
             // Best-effort: keep the log dir bounded. Runs synchronously on
             // startup; ~tens of ms even with 10+ files, so it's fine before
             // the window is shown.
@@ -69,21 +62,17 @@ pub fn run() {
                 log_prune::prune_log_dir(&log_dir, 10);
             }
 
-            overlay::position_overlay_window(app.handle(), &acceptance_probe)?;
+            overlay::position_overlay_window(app.handle())?;
 
             let overlay_state = overlay::OverlayState::new();
-            overlay::spawn_cursor_monitor(
-                app.handle(),
-                overlay_state.clone(),
-                acceptance_probe.clone(),
-            );
+            overlay::spawn_cursor_monitor(app.handle(), overlay_state.clone());
             app.manage(overlay_state);
 
-            tray::install(app.handle(), acceptance_probe.clone())?;
+            tray::install(app.handle())?;
 
             let detection_state = detection_bridge::DetectionState::new();
             app.manage(detection_state.clone());
-            detection_bridge::spawn(app.handle(), detection_state, acceptance_probe);
+            detection_bridge::spawn(app.handle(), detection_state);
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we
