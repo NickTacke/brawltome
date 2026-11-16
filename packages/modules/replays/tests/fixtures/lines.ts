@@ -12,6 +12,8 @@ export type FakeLineOptions = {
   firstKoStep?: number
   isReliable?: boolean
   custom?: boolean
+  // a timed match, whose stats dump scores each player; stock dumps have no score
+  timed?: boolean
 }
 
 const defaultPlayers: FakePlayer[] = [
@@ -19,7 +21,7 @@ const defaultPlayers: FakePlayer[] = [
   { slot: 2, brawlhallaId: 1002, name: 'Bravo' },
 ]
 
-function playerStats(player: FakePlayer) {
+function playerStats(player: FakePlayer, isTimed: boolean) {
   return {
     BrawlhallaID: player.brawlhallaId,
     PlayerName: player.name,
@@ -38,7 +40,7 @@ function playerStats(player: FakePlayer) {
     Deaths: 4,
     Suicides: 0,
     Clashes: 1,
-    Score: 38,
+    ...(isTimed ? { Score: 38 } : {}),
     Loadout: { LegendName: 'IMUGI', LegendID: 65 },
     Axe: { Uses: 12, Hits: 5 },
     Unarmed: { Uses: 3, Hits: 1 },
@@ -64,18 +66,18 @@ export function makeLine(options: FakeLineOptions = {}): string {
     GameDuration: 180000,
     BuildVersion: options.patch ?? '11.00',
     ReplayVersion: 271,
-    GameMode: 'Stock',
+    GameMode: options.timed ? 'Timed' : 'Stock',
     Teams: false,
     MapID: 136,
     MapName: 'Big Crystal Temple',
   }
 
-  for (const player of players) stats[`Player${player.slot}`] = playerStats(player)
+  for (const player of players) stats[`Player${player.slot}`] = playerStats(player, options.timed ?? false)
 
   const match = {
     map: { id: 136, name: 'Big Crystal Temple' },
     rules: {
-      mode: { id: 2, name: 'Stock' },
+      mode: options.timed ? { id: 1, name: 'Timed' } : { id: 2, name: 'Stock' },
       queue: options.custom ? 'custom' : 'ranked',
       isRanked: !options.custom,
       isCustom: options.custom ?? false,
