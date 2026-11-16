@@ -1,6 +1,7 @@
 import type { MatchDetailContract, MatchInsights } from '@brawltome/contracts'
 import { ReviewReplay } from './review/ReviewReplay'
 import { useLegends } from './stage/use-legends'
+import { WatchProvider } from './watch-moment'
 
 // past the content column on wide screens, as the replay wants the room; the rail is 3.5625rem
 const widePage =
@@ -13,10 +14,12 @@ export function MatchPage({ match, insights }: MatchPageProps) {
   const legends = useLegends(match.art, match.playbackPath)
 
   return (
-    <div className={`py-10 ${widePage}`}>
-      <h1 className="mb-6 text-4xl font-black tracking-tight text-strong">{match.mapName}</h1>
-      {/* the first player until the page lets you pick one */}
-      <ReviewReplay insights={insights} legends={legends} selectedSlot={1} />
-    </div>
+    <WatchProvider>
+      <div className={`py-10 ${widePage}`}>
+        <h1 className="mb-6 text-4xl font-black tracking-tight text-strong">{match.mapName}</h1>
+        {/* the first player until the page lets you pick one */}
+        <ReviewReplay insights={insights} legends={legends} selectedSlot={1} />
+      </div>
+    </WatchProvider>
   )
 }

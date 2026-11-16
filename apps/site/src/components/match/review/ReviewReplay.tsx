@@ -13,6 +13,7 @@ import { ReplaySection } from './ReplaySection'
 import { ReviewStage } from './ReviewStage'
 import { ReviewTools } from './ReviewTools'
 import { useReviewMode } from './use-review-mode'
+import { useWatchRequests } from './use-watch-requests'
 
 const noPoses: Pose[] = []
 
@@ -53,6 +54,8 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
     onReplayStop: mode.isReview ? () => review.goTo(review.index) : undefined,
     onLeave: mode.isReview ? mode.leave : undefined,
   })
+
+  useWatchRequests(frameRef, playback, mode.seekByHand)
 
   const tools = (
     <ReviewTools

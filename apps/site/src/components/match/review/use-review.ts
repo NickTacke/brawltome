@@ -4,7 +4,7 @@ import type { Playback } from '../stage/use-playback'
 import { holdMs, type ReviewPhase, reviewPhaseOf } from './review-phase'
 
 // the replay starts this long before a stop, so what led up to it is seen
-const leadInMs = 1500
+export const leadInMs = 1500
 const easeScale = 0.3
 
 type Pacing = { phase: ReviewPhase; playback: Playback; index: number }
