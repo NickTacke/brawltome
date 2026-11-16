@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./legend-weapons": "./src/legend-weapons.ts"
+    "./legend-weapons": "./src/legend-weapons.ts",
+    "./match-insights-rules": "./src/match-insights-rules.ts"
   },
   "scripts": {
     "generate": "bun run scripts/generate-openapi.ts && cargo run --quiet --locked --manifest-path generator/Cargo.toml",

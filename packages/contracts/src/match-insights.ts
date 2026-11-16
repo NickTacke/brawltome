@@ -13,12 +13,6 @@ import { z } from './zod'
 // everything the match page shows about a parsed match, worked out once from its stored line on the server, so the
 // page and its tests read the same numbers
 
-// the lead is sampled this often, from the start of the match
-export const ADVANTAGE_SAMPLE_MS = 500
-
-// the damage a stock is worth in the lead: the median damage players were KO'd at across the first sample replays
-export const ADVANTAGE_STOCK_DAMAGE = 165
-
 const insightsSchema = z
   .object({
     punishes: z.array(punishSchema),
