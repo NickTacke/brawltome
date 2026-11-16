@@ -32,3 +32,8 @@ export function insightsKey(matchId: string, build: string, version: number, lay
 
   return `insights/${matchId}/${build}/${version}-${layoutName}.json.gz`
 }
+
+/** The part of a match's timeline the page plays the match back from, trimmed from the line of one build. */
+export function playbackKey(matchId: string, build: string): string {
+  return `playback/${matchId}/${build}.json.gz`
+}

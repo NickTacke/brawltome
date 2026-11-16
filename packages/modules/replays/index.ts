@@ -20,6 +20,7 @@ export * from './keys'
 export * from './limits'
 export { inspectReplayQueue, type ReplayQueueInspection } from './maintenance'
 export type { ReplaysDeps, WorkerReport } from './model'
+export { type PlaybackTimeline, trimPlaybackTimeline } from './playback'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
 const migrations = [createReplays, addWorkerReports, addArt] as const
