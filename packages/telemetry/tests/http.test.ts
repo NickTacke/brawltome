@@ -48,6 +48,12 @@ describe('HTTP telemetry adapters', () => {
     expect(normalizeHttpRoute('/trpc/status.discordReady')).toBe('trpc')
   })
 
+  test('labels the versioned desktop api apart from the frozen overlay route', () => {
+    expect(normalizeHttpRoute('/desktop/v1/lobby')).toBe('desktop')
+    expect(normalizeHttpRoute('/desktop/v1/session')).toBe('desktop')
+    expect(normalizeHttpRoute('/api/overlay/opponent/42')).toBe('overlay')
+  })
+
   test('keeps long-lived refresh event streams apart from request/response routes', () => {
     expect(normalizeHttpRoute('/events/player/42/refresh')).toBe('events')
   })

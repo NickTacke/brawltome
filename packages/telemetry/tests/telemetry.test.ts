@@ -690,6 +690,31 @@ describe('telemetry foundation', () => {
     expect(telemetry.stats().seriesDropped).toBe(1)
   })
 
+  test('counts desktop requests, lobby cards and refreshes, and drops labels it does not know', () => {
+    const telemetry = createTelemetry({ service: 'api', sink: createMemorySink(), capacity: 10 })
+
+    telemetry.metrics.add('desktop_requests_total', 1, { endpoint: 'lobby', outcome: 'ok' })
+    telemetry.metrics.observe('desktop_request_duration_ms', 12, { endpoint: 'lobby' })
+    telemetry.metrics.add('desktop_lobby_cards_total', 1, { match_type: '1v1', source: 'none' })
+    telemetry.metrics.add('refresh_requests_total', 1, { kind: 'player', outcome: 'accepted', source: 'desktop-api' })
+
+    const snapshot = telemetry.metrics.snapshot()
+    const seriesOf = (name: string) => snapshot.find((metric) => metric.name === name)?.series[0]
+
+    expect(seriesOf('desktop_requests_total')?.value).toBe(1)
+    expect(seriesOf('desktop_request_duration_ms')?.count).toBe(1)
+    expect(seriesOf('desktop_lobby_cards_total')?.value).toBe(1)
+    expect(seriesOf('refresh_requests_total')?.value).toBe(1)
+    expect(telemetry.stats().seriesDropped).toBe(0)
+
+    telemetry.metrics.add('desktop_lobby_cards_total', 1, { match_type: '3v3', source: 'none' })
+
+    const afterUnknown = telemetry.metrics.snapshot()
+
+    expect(afterUnknown.find((metric) => metric.name === 'desktop_lobby_cards_total')?.series).toHaveLength(1)
+    expect(telemetry.stats().seriesDropped).toBe(1)
+  })
+
   test('accepts analytics metrics with allow-listed labels and drops unknown values', () => {
     const telemetry = createTelemetry({ service: 'web', sink: createMemorySink(), capacity: 10 })
 
