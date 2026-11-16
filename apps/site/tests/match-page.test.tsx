@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { MatchInsights, SummaryPlayer } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
+import { moveCode } from '../src/components/match/review/move-notation'
 import { type InsightsFixture, matchDetailOf } from './match-fixtures'
 
 // the numbers the page shows, each as it is written next to its neighbours: these tests read the markup as the run of
@@ -230,9 +231,19 @@ describe.each(fixtures)('the match page of %s', (name) => {
 
   test('shows each player’s five most damaging moves with the uses that landed', () => {
     for (const player of players) {
-      const top = player.moves.filter((move) => move.uses > 0).slice(0, 5)
+      const used = player.moves.filter((move) => move.uses > 0)
+      const top = [...used].sort((left, right) => right.damage - left.damage).slice(0, 5)
 
-      for (const move of top) expectRun(texts, [`${move.usesLanded} of ${move.uses}`, String(Math.round(move.damage))])
+      for (const move of top) {
+        const kos = move.kos > 0 ? [`${move.kos} ${move.kos === 1 ? 'KO' : 'KOs'}`] : []
+
+        expectRun(texts, [
+          moveCode(move.label),
+          ...kos,
+          `${move.usesLanded} of ${move.uses}`,
+          String(Math.round(move.damage)),
+        ])
+      }
     }
   })
 })
