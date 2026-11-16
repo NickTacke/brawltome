@@ -8,6 +8,7 @@ export const policy: ArchitecturePolicy = {
     '@fixture/rankings': 'capability',
     '@fixture/contracts': 'contracts',
     '@fixture/game-data': 'foundation',
+    '@fixture/replay-player': 'browser',
   },
   moduleSchemas: {
     players: '@fixture/players',
@@ -21,6 +22,7 @@ export const policy: ArchitecturePolicy = {
     '@fixture/rankings': ['.'],
     '@fixture/contracts': ['.'],
     '@fixture/game-data': ['.', './testing'],
+    '@fixture/replay-player': ['.'],
   },
   testOnlyExports: {
     '@fixture/game-data': ['./testing'],
@@ -81,6 +83,13 @@ const base: ArchitectureRepository = {
       dependencies: [],
       exports: ['.'],
       sourceFiles: [{ path: 'packages/game-data/src/index.ts', imports: [], source: '' }],
+    },
+    {
+      name: '@fixture/replay-player',
+      path: 'packages/replay-player',
+      dependencies: [],
+      exports: ['.'],
+      sourceFiles: [{ path: 'packages/replay-player/src/index.ts', imports: [], source: '' }],
     },
   ],
 }

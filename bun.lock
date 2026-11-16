@@ -358,6 +358,13 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/replay-player": {
+      "name": "@brawltome/replay-player",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/telemetry": {
       "name": "@brawltome/telemetry",
       "dependencies": {
@@ -531,6 +538,8 @@
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/modules/ranking"],
 
     "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/modules/replay-analysis"],
+
+    "@brawltome/replay-player": ["@brawltome/replay-player@workspace:packages/replay-player"],
 
     "@brawltome/replay-worker": ["@brawltome/replay-worker@workspace:apps/replay-worker"],
 
