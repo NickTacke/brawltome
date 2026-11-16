@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Overlay } from '../ui/overlay/Overlay'
+import { type BannerSide, Overlay } from '../ui/overlay/Overlay'
 import type { CardData, OverlayView } from '../ui/overlay/overlay-view'
 import { SoloCard } from '../ui/overlay/SoloCard'
 
@@ -13,11 +13,18 @@ function fixture(name: string): OverlayView {
   return JSON.parse(readFileSync(file, 'utf8'))
 }
 
-function render(view: OverlayView): string {
+function render(view: OverlayView, bannerSide: BannerSide = 'left'): string {
   const ignore = () => {}
 
   return renderToStaticMarkup(
-    <Overlay view={view} monitorHeightPx={1080} onOpenProfile={ignore} onRetry={ignore} onResize={ignore} />,
+    <Overlay
+      view={view}
+      monitorHeightPx={1080}
+      bannerSide={bannerSide}
+      onOpenProfile={ignore}
+      onRetry={ignore}
+      onResize={ignore}
+    />,
   )
 }
 
@@ -229,6 +236,11 @@ describe('overlay cards', () => {
 
     expect(textOf(partOf(html, 'unknown'))).toBe('?')
     expect(html).not.toContain('/legends/')
+  })
+
+  test('the cards say which side the banner hangs on', () => {
+    expect(render(fixture('solo-ranked'))).toContain('data-banner-side="left"')
+    expect(render(fixture('solo-ranked'), 'right')).toContain('data-banner-side="right"')
   })
 
   test('the cards have no shadow or blur, and the page is see-through', () => {

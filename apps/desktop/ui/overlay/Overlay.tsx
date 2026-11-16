@@ -6,20 +6,24 @@ import type { Card, OverlayView } from './overlay-view'
 import { SoloCard } from './SoloCard'
 import { TeamCard } from './TeamCard'
 
+// the banner goes on the side of the card that faces the nearest screen edge
+export type BannerSide = 'left' | 'right'
+
 type OverlayProps = {
   view: OverlayView
   monitorHeightPx: number
+  bannerSide: BannerSide
   onOpenProfile: (brawlhallaId: number) => void
   onRetry: () => void
   onResize: (widthPx: number, heightPx: number) => void
 }
 
-export function Overlay({ view, monitorHeightPx, onOpenProfile, onRetry, onResize }: OverlayProps) {
+export function Overlay({ view, monitorHeightPx, bannerSide, onOpenProfile, onRetry, onResize }: OverlayProps) {
   const scale = cardScale(monitorHeightPx, globalThis.devicePixelRatio ?? 1)
   const cardsRef = useCardsSize(scale, onResize)
 
   return (
-    <div className="cards" ref={cardsRef} style={{ zoom: scale }}>
+    <div className="cards" data-banner-side={bannerSide} ref={cardsRef} style={{ zoom: scale }}>
       {view.cards.map((card) => (
         <OverlayCard key={cardKey(card)} card={card} onOpenProfile={onOpenProfile} onRetry={onRetry} />
       ))}

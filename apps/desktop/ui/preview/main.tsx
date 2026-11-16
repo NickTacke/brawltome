@@ -8,7 +8,11 @@ const page = params.get('page') ?? 'overlay'
 const root = document.getElementById('root') as HTMLElement
 
 function PreviewPage() {
-  if (page === 'overlay') return <OverlayPreview card={params.get('card') ?? 'solo-ranked'} />
+  if (page === 'overlay') {
+    const side = params.get('side') === 'right' ? 'right' : 'left'
+
+    return <OverlayPreview card={params.get('card') ?? 'solo-ranked'} bannerSide={side} />
+  }
 
   return <p className="preview-missing">No preview page named {page}</p>
 }

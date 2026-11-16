@@ -98,6 +98,16 @@ button.card {
   clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
 }
 
+/* on the right of the screen the card is mirrored, so the banner hangs on the outer edge */
+[data-banner-side="right"] .card {
+  grid-template-columns: 1fr 106px 10px;
+}
+
+[data-banner-side="right"] .main {
+  padding-right: 124px;
+  padding-left: 0;
+}
+
 /* the clickable head of a card that also holds a retry button */
 .card-link {
   display: block;
