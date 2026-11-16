@@ -1,58 +1,15 @@
 import type { MatchDetailContract, MatchSummaryContract, MyReplayContract } from '@brawltome/contracts'
 import type { ObjectStore, Sql } from '@brawltome/foundation'
 import { replayKey } from './keys'
-import { MAX_MERGE_HOPS } from './limits'
+import { findMatchRow, type MatchRow } from './match-row'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
-
-type MatchRow = {
-  id: string
-  mergedInto: string | null
-  digest: string
-  patch: string
-  mapName: string
-  modeName: string
-  queue: string | null
-  isRanked: boolean
-  isCustom: boolean
-  hasTeams: boolean
-  hasTeamDamage: boolean
-  stocks: number | null
-  durationMs: number
-  isReliable: boolean
-  failedChecks: string[]
-  parsedAt: Date
-  fileDeleted: boolean
-}
 
 type PlayerRow = MatchDetailContract['players'][number] & { matchId: string }
 
 /** The game's own replay file names: `[11.00] BigCrystalTemple.replay`. */
 export function replayFileName(patch: string, mapName: string): string {
   return `[${patch}] ${mapName.replace(/\s+/g, '')}.replay`
-}
-
-async function findMatchRow(sql: Sql, id: string): Promise<MatchRow | null> {
-  let currentId = id
-
-  for (let hop = 0; hop <= MAX_MERGE_HOPS; hop++) {
-    const [row] = await sql<MatchRow[]>`
-      SELECT match.id, match.merged_into AS "mergedInto", match.digest, match.patch, match.map_name AS "mapName",
-        match.mode_name AS "modeName", match.queue, match.is_ranked AS "isRanked", match.is_custom AS "isCustom",
-        match.has_teams AS "hasTeams", match.has_team_damage AS "hasTeamDamage", match.stocks,
-        match.duration_ms AS "durationMs", match.is_reliable AS "isReliable", match.failed_checks AS "failedChecks",
-        match.parsed_at AS "parsedAt", file.deleted_at IS NOT NULL AS "fileDeleted"
-      FROM replays.matches AS match
-      JOIN replays.replay_files AS file ON file.digest = match.digest
-      WHERE match.id = ${currentId}
-    `
-
-    if (!row?.mergedInto) return row ?? null
-
-    currentId = row.mergedInto
-  }
-
-  return null
 }
 
 async function playersOf(sql: Sql, matchIds: string[]): Promise<PlayerRow[]> {

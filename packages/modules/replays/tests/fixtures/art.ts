@@ -50,6 +50,17 @@ export function fakeManifest(names: ArtNames = fixedNames) {
   }
 }
 
+const bounds = { x: -100, y: 0, width: 3000, height: 1600 }
+
+/** A stage with one floor, in the shape the map file carries it. */
+export const fakeLayout = {
+  camera: bounds,
+  killBounds: { x: -1000, y: -1000, width: 5000, height: 3600 },
+  collisions: [{ fromX: 200, fromY: 900, toX: 2600, toY: 900, isSoft: false }],
+  art: [],
+  background: null,
+}
+
 function webp(body: string): Uint8Array {
   return new TextEncoder().encode(`RIFF\0\0\0\0WEBP${body}`)
 }
@@ -69,7 +80,7 @@ export function fakeArtExport(seed = 'one') {
     return path
   }) as ArtNames['groups']
 
-  files.set(fixedNames.map, json({ format: 3, mapId: 136, patch: '11.00' }))
+  files.set(fixedNames.map, json({ format: 3, mapId: 136, patch: '11.00', layout: fakeLayout }))
 
   const sheets = ['background', 'sheet'].map((body) => {
     const bytes = webp(`${body}-${seed}`)

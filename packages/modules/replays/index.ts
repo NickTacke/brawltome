@@ -8,6 +8,7 @@ export type { ClaimedArtJob, ReplayArtJobs } from './art'
 export type { ArtMap, ArtResult } from './art-complete'
 export type { ArtFailure, ArtFailureCode } from './art-lease'
 export type { StoreArtOutcome } from './art-upload'
+export { readMatchInsightsFor } from './insights'
 export {
   type ClaimedJob,
   type CompleteOutcome,

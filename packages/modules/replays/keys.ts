@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 // where the module's files live in the object store
 
 /** `sha256:<hex>` → `replays/<hex>.replay` */
@@ -19,4 +21,14 @@ export function timelineKey(matchId: string, build: string, leaseToken: string):
  */
 export function manifestKey(matchId: string, build: string, leaseToken: string): string {
   return `matches/${matchId}/${build}-${leaseToken}/manifest.json`
+}
+
+/**
+ * A match's insights, worked out from the line of one build, by one version of the figures, with one map layout or
+ * none. A new version or a layout that appears later gives a new key, so stale insights are never read again.
+ */
+export function insightsKey(matchId: string, build: string, version: number, layoutPath: string | null): string {
+  const layoutName = layoutPath ? createHash('sha1').update(layoutPath).digest('hex').slice(0, 8) : 'none'
+
+  return `insights/${matchId}/${build}/${version}-${layoutName}.json.gz`
 }
