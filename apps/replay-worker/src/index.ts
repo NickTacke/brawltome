@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 import { createApiClient } from './api-client'
-import { readConfig } from './config'
+import { readArtFormat, readConfig } from './config'
 import { ProcessPool } from './process-pool'
 import { runOnce } from './worker'
 
@@ -10,6 +10,7 @@ import { runOnce } from './worker'
 const config = readConfig(process.env)
 // /opt/bhnative/current links to the folder named after the build, e.g. dev-58fbc3c
 const build = basename(dirname(realpathSync(config.bhnativePath)))
+const artFormat = readArtFormat(config.animsPath)
 
 const pool = await ProcessPool.start({
   command: [config.bhnativePath],
@@ -31,7 +32,13 @@ console.log(
 async function loop(): Promise<void> {
   while (!isStopping) {
     try {
-      const outcome = await runOnce({ api, pool, workDir: config.workDir, renewEveryMs: config.renewEveryMs })
+      const outcome = await runOnce({
+        api,
+        pool,
+        workDir: config.workDir,
+        renewEveryMs: config.renewEveryMs,
+        artFormat,
+      })
 
       if (outcome === 'idle') await Bun.sleep(config.pollMs)
     } catch (error) {

@@ -15,6 +15,7 @@ type Received = {
   failures: { code: string; message: string }[]
   renewals: number
   authorizations: string[]
+  claims: unknown[]
 }
 
 describe('the replay worker', () => {
@@ -48,6 +49,8 @@ describe('the replay worker', () => {
         received.authorizations.push(request.headers.get('authorization') ?? '')
 
         if (path.endsWith('/claim')) {
+          received.claims.push(await request.json())
+
           if (nextReplay === null) return new Response(null, { status: 204 })
 
           const body = new TextEncoder().encode(nextReplay)
@@ -85,7 +88,7 @@ describe('the replay worker', () => {
 
   beforeEach(() => {
     nextReplay = null
-    received = { results: [], failures: [], renewals: 0, authorizations: [] }
+    received = { results: [], failures: [], renewals: 0, authorizations: [], claims: [] }
   })
 
   function deps(renewEveryMs = 60_000) {
@@ -94,6 +97,7 @@ describe('the replay worker', () => {
       pool,
       workDir: join(root, 'work'),
       renewEveryMs,
+      artFormat: 3,
     }
   }
 
@@ -104,6 +108,12 @@ describe('the replay worker', () => {
     expect(received.results).toHaveLength(1)
     expect(JSON.parse(received.results[0] as string)).toMatchObject({ replay: `${jobId}.replay`, exit: 0 })
     expect(received.authorizations.every((value) => value === `Bearer ${token}`)).toBe(true)
+  })
+
+  test('claims with its build, its patches and the art format it exports', async () => {
+    await runOnce(deps())
+
+    expect(received.claims).toEqual([{ build: 'dev-test', patches: ['11.00'], artFormat: 3 }])
   })
 
   test('posts patch-not-supported as a failure', async () => {
