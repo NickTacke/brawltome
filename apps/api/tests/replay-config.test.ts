@@ -65,6 +65,18 @@ describe('replay settings', () => {
     expect(() => readReplayConfig(artOnly)).toThrow('R2_ENDPOINT')
   })
 
+  test('an art base url ending in a slash is read without it, so art addresses join with one', () => {
+    const withArt = {
+      ...complete,
+      ART_R2_BUCKET: 'brawltome-art',
+      ART_R2_ACCESS_KEY_ID: 'art-key-id',
+      ART_R2_SECRET_ACCESS_KEY: 'art-secret',
+      ART_BASE_URL: 'https://art.brawltome.app/',
+    }
+
+    expect(readReplayConfig(withArt).art?.baseUrl).toBe('https://art.brawltome.app')
+  })
+
   test('an art base url that is not https is refused', () => {
     const withArt = {
       ...complete,
