@@ -1,7 +1,7 @@
 import type { MatchInsights, Moment, StageTrail } from '@brawltome/contracts'
-import type { Replay } from '@brawltome/replay-player'
 import { type CSSProperties, memo, type ReactNode, useMemo } from 'react'
 import { AnimatedPoses } from './AnimatedPoses'
+import { backgroundUrlOf } from './background-url'
 import type { CameraMode } from './camera-mode'
 import { MomentRing } from './MomentRing'
 import { PlayEffects } from './PlayEffects'
@@ -53,19 +53,6 @@ function markLayerStyle(camera: Camera): CSSProperties {
     top: `${-camera.y * camera.zoom * 100}%`,
     width: `${camera.zoom * 100}%`,
     height: `${camera.zoom * 100}%`,
-  }
-}
-
-// the level's background, from the art the replay worker exported; none until it loads, or for a map without one
-function backgroundUrlOf(replay: Replay | null): string | null {
-  const background = replay?.manifest.background
-
-  if (!replay || !background) return null
-
-  try {
-    return replay.assetUrl(background.asset)
-  } catch {
-    return null
   }
 }
 
