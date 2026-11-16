@@ -12,7 +12,19 @@ export type OpeningRecord = {
   damageLost: number
 }
 
-const kinds: LeadKind[] = ['free', 'swing', 'whiff', 'dodge', 'landing', 'trade', 'throw']
+// every way an opening can begin, in the order the lists show a tie; a record, so a kind the insights add and this
+// leaves out fails to compile
+const everyKind = {
+  free: true,
+  swing: true,
+  whiff: true,
+  dodge: true,
+  landing: true,
+  trade: true,
+  throw: true,
+} satisfies Record<LeadKind, true>
+
+const kinds = Object.keys(everyKind) as LeadKind[]
 
 function damageOf(moments: Moment[]): number {
   return moments.reduce((total, moment) => total + moment.damage, 0)

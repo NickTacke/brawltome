@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { Habit, MatchInsights, SummaryPlayer } from '@brawltome/contracts'
+import { type Habit, leadKinds, type MatchInsights, type SummaryPlayer } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
 import { matchPlayersOf } from '../src/components/match/match-players'
 import { HabitDetail } from '../src/components/match/modules/HabitDetail'
+import { readOpeningRecords } from '../src/components/match/modules/opening-records'
 import { moveCode } from '../src/components/match/review/move-notation'
 import { type InsightsFixture, matchDetailOf, readInsights } from './match-fixtures'
 
@@ -341,4 +342,10 @@ test('the dodge direction of duel-a’s second player adds up to its 58, where r
   expect(roundedAlone).toBe(59)
   expect(headerDamage(texts)).toBe(58)
   expect(shown.reduce((sum, damage) => sum + damage, 0)).toBe(58)
+})
+
+test('the openings lists know every way an opening can begin', () => {
+  const kinds = readOpeningRecords(readInsights('duel-a').insights.moments, 1).map((record) => record.kind)
+
+  expect([...kinds].sort()).toEqual([...leadKinds].sort())
 })
