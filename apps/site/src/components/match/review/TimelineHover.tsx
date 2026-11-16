@@ -19,6 +19,9 @@ type TimelineHoverProps = {
   opensBelow: boolean
 }
 
+// as wide as what it says, however near the timeline's end it is placed
+const readoutWidth = 'w-max'
+
 /**
  * The readout at the pointer. It slides along with it and is held by the same share of its own width, so it reaches
  * neither end of the timeline before the pointer does and never leaves it.
@@ -35,7 +38,7 @@ export function TimelineHover({ hover, insights, lanes, timeline, selectedSlot, 
 
   return (
     <div
-      className={`pointer-events-none absolute z-40 ${opensBelow ? 'top-full pt-2' : 'bottom-full pb-2'}`}
+      className={`pointer-events-none absolute z-40 ${readoutWidth} ${opensBelow ? 'top-full pt-2' : 'bottom-full pb-2'}`}
       style={{ left: `${leftShare}%`, transform: `translateX(-${leftShare}%)` }}
     >
       <TimelineReadout
