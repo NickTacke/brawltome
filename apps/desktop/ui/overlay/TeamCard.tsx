@@ -1,5 +1,5 @@
 import { BannerSlot, LegendPortrait, Spinner } from './CardHead'
-import { failureText } from './card-format'
+import { failureText, shownPeak } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
 import { WinRate } from './WinRate'
@@ -68,7 +68,7 @@ function TeamStanding({ data }: { data: TeamData }) {
       <span className="stat">
         <span className="stat-value">
           <span className="elo">{standing?.rating ?? '—'}</span>
-          {standing !== null && <span className="peak">{`/ ${standing.peakRating}`}</span>}
+          {standing !== null && <span className="peak">{`/ ${shownPeak(standing.rating, standing.peakRating)}`}</span>}
         </span>
         <span className="stat-label">{standingLabel(data, standing !== null)}</span>
       </span>
