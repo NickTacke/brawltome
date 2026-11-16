@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
-import type { MatchDetailContract } from '@brawltome/contracts'
+import type { MatchDetailContract, ReviewScope } from '@brawltome/contracts'
 import type { Replay } from '@brawltome/replay-player'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { formatClock } from '../src/components/match/match-format'
 import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
 
 // these render the stage in a browser-like dom, so its effects run: loading the art and the timeline, drawing, keys
@@ -37,7 +38,7 @@ mock.module('../src/components/match/stage/draw-moment', () => ({
 }))
 
 const { MatchByKind } = await import('../src/components/match/MatchByKind')
-const { MatchStage } = await import('../src/components/match/stage/MatchStage')
+const { ReviewReplay } = await import('../src/components/match/review/ReviewReplay')
 
 const timelineJson = JSON.stringify(readPlayback('duel-a'))
 
@@ -66,6 +67,11 @@ beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
   globalThis.fetch = (async () => new Response(timelineJson)) as unknown as typeof fetch
+
+  // frames never come, so the clock and the camera stand still between the steps a test takes, and nothing renders
+  // outside act
+  globalThis.requestAnimationFrame = () => 0
+  globalThis.cancelAnimationFrame = () => undefined
 
   // the stage takes the page's keys only while it is on screen, which this dom never works out on its own
   globalThis.IntersectionObserver = class {
@@ -114,12 +120,22 @@ describe('the stage in a browser', () => {
   test('keys held with a modifier stay the browser’s, so find and its other shortcuts keep working', async () => {
     const match = matchNamed('first')
 
-    await mount(<MatchStage insights={readInsights('duel-a')} art={match.art} playbackPath={match.playbackPath} />)
+    await mount(
+      <ReviewReplay
+        insights={readInsights('duel-a')}
+        art={match.art}
+        playbackPath={match.playbackPath}
+        selectedSlot={1}
+      />,
+    )
 
     const press = (init: KeyboardEventInit) => {
       const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true })
 
-      window.dispatchEvent(event)
+      // a key the stage takes moves its clock, which react has to be told of
+      act(() => {
+        window.dispatchEvent(event)
+      })
 
       return event.defaultPrevented
     }
@@ -136,9 +152,117 @@ describe('the stage in a browser', () => {
   test('a match without a timeline downloads no art', async () => {
     loadedManifests.length = 0
 
-    await mount(<MatchStage insights={readInsights('duel-a')} art={artAt('first')} playbackPath={null} />)
+    await mount(
+      <ReviewReplay insights={readInsights('duel-a')} art={artAt('first')} playbackPath={null} selectedSlot={1} />,
+    )
 
     expect(loadedManifests).toEqual([])
+
+    await unmount()
+  })
+})
+
+// the times of the stops along the lanes, as their buttons name them, in the order of the match
+function stopLabels(): string[] {
+  const buttons = [...container.querySelectorAll('button[aria-label^="Stop "]')]
+
+  return buttons.map((button) => button.getAttribute('aria-label') ?? '').sort(byStopNumber)
+}
+
+function byStopNumber(left: string, right: string): number {
+  return Number(left.split(' ')[1]) - Number(right.split(' ')[1])
+}
+
+function stopTimes(slot: number, scope: ReviewScope): number[] {
+  const { reviewStops } = readInsights('duel-a')
+
+  return reviewStops.filter((stop) => stop.slot === slot && stop.scope === scope).map((stop) => stop.timeMs)
+}
+
+function labelsOf(times: number[]): string[] {
+  return times.map((timeMs, index) => `Stop ${index + 1} at ${formatClock(timeMs)}`)
+}
+
+function clockNow(): number {
+  return Number(container.querySelector('[aria-label="Match time"]')?.getAttribute('aria-valuenow'))
+}
+
+async function pressLabelled(label: string): Promise<void> {
+  const button = container.querySelector(`button[aria-label="${label}"]`)
+
+  if (!(button instanceof HTMLElement)) throw new Error(`press ${label}: no such button`)
+
+  await act(async () => button.click())
+  await settle()
+}
+
+async function press(label: string): Promise<void> {
+  const button = [...container.querySelectorAll('button')].find((entry) => entry.textContent === label)
+
+  if (!button) throw new Error(`press ${label}: no such button`)
+
+  await act(async () => button.click())
+  await settle()
+}
+
+describe('the review in a browser', () => {
+  const match = matchNamed('first')
+
+  const replayFor = (slot: number) => (
+    <ReviewReplay
+      insights={readInsights('duel-a')}
+      art={match.art}
+      playbackPath={match.playbackPath}
+      selectedSlot={slot}
+    />
+  )
+
+  test('picking another player restarts the review on their stops and keeps the loaded replay', async () => {
+    loadedManifests.length = 0
+    drawnReplays.length = 0
+
+    await mount(replayFor(1))
+    await press('Review')
+    await pressLabelled('Review: Key moments · 12')
+    await press('Hits taken · 28')
+    await pressLabelled('Next stop')
+    await pressLabelled('Next stop')
+
+    expect(stopLabels()).toEqual(labelsOf(stopTimes(1, 'taken')))
+
+    const clockMs = clockNow()
+
+    await act(async () => root.render(replayFor(2)))
+    await settle()
+
+    const slotTwoTimes = stopTimes(2, 'taken')
+    const headedFor = slotTwoTimes.findIndex((timeMs) => timeMs > clockMs)
+
+    expect(stopLabels()).toEqual(labelsOf(slotTwoTimes))
+
+    expect(container.querySelector('button[aria-current="true"]')?.getAttribute('aria-label')).toBe(
+      labelsOf(slotTwoTimes)[headedFor],
+    )
+
+    expect(clockNow()).toBe((slotTwoTimes[headedFor] ?? 0) - 1500)
+    expect(loadedManifests).toEqual([match.art.manifestUrl ?? ''])
+    expect(new Set(drawnReplays)).toEqual(new Set([firstReplay]))
+
+    await unmount()
+  })
+
+  test('the lanes keep their full size when the review starts and when it ends', async () => {
+    await mount(replayFor(1))
+
+    for (const mode of ['Review', 'Watch']) {
+      await press(mode)
+
+      const lanes = [...container.querySelectorAll('[data-lane]')]
+
+      expect(lanes).toHaveLength(2)
+
+      for (const lane of lanes) expect(lane.className).toContain('h-6')
+    }
 
     await unmount()
   })

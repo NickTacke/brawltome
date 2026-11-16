@@ -1,5 +1,5 @@
 import type { MatchDetailContract, MatchInsights } from '@brawltome/contracts'
-import { MatchStage } from './stage/MatchStage'
+import { ReviewReplay } from './review/ReviewReplay'
 
 // past the content column on wide screens, as the replay wants the room; the rail is 3.5625rem
 const widePage =
@@ -12,7 +12,8 @@ export function MatchPage({ match, insights }: MatchPageProps) {
   return (
     <div className={`py-10 ${widePage}`}>
       <h1 className="mb-6 text-4xl font-black tracking-tight text-strong">{match.mapName}</h1>
-      <MatchStage insights={insights} art={match.art} playbackPath={match.playbackPath} />
+      {/* the first player until the page lets you pick one */}
+      <ReviewReplay insights={insights} art={match.art} playbackPath={match.playbackPath} selectedSlot={1} />
     </div>
   )
 }
