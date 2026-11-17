@@ -107,22 +107,32 @@ function PlayerRow({ player, onOpenProfile }: PlayerRowProps) {
   return (
     <button type="button" className="player" onClick={() => onOpenProfile(player.brawlhallaId)}>
       <LegendPortrait legend={player.legend} isSmall />
-      <span className="name">{player.name}</span>
-      <PlayerRating player={player} />
+      <span className="who">
+        <span className="name">{player.name}</span>
+        <PlayerStanding player={player} />
+      </span>
     </button>
   )
 }
 
-// the personal 2v2 elo from the game's memory, else the player's 1v1 elo, marked so it isn't read as 2v2
-function PlayerRating({ player }: { player: TeamPlayer }) {
-  if (player.personalRating2v2 !== null) return <span className="rating">{player.personalRating2v2}</span>
+// the player's own rank, the way the 1v1 card's subtitle reads: the personal 2v2 elo from the game's memory with
+// its tier, else the 1v1 elo marked as such, else an empty line so both rows keep their height
+function PlayerStanding({ player }: { player: TeamPlayer }) {
+  if (player.personalRating2v2 !== null) {
+    return <RatingLine lead={baseTierFor(player.personalRating2v2)} rating={player.personalRating2v2} />
+  }
 
-  if (player.oneVsOneRating === null) return null
+  if (player.oneVsOneRating !== null) return <RatingLine lead="1v1" rating={player.oneVsOneRating} />
 
+  return <span className="sub" />
+}
+
+function RatingLine({ lead, rating }: { lead: string; rating: number }) {
   return (
-    <span className="rating">
-      {player.oneVsOneRating}
-      <span className="label">1v1</span>
+    <span className="sub">
+      {lead}
+      <span className="dot">·</span>
+      <b>{rating}</b>
     </span>
   )
 }

@@ -172,12 +172,12 @@ describe('overlay cards', () => {
     expect(textOf(partOf(html, 'figures'))).toBe('')
   })
 
-  test('a team card shows the team Elo and each personal 2v2 Elo', () => {
+  test('a team card shows the team Elo and each personal 2v2 Elo with its tier', () => {
     const html = render(fixture('team'))
 
     expect(textOf(partOf(html, 'team-figures'))).toBe('2284/ 2301Team Elo / peak57%90 games')
     expect(partOf(html, 'banner-slot')).toContain('src="/banners/Diamond.png"')
-    expect(textOf(partOf(html, 'players'))).toBe('Shinigami2190tidecaller2075')
+    expect(textOf(partOf(html, 'players'))).toBe('ShinigamiDiamond·2190tidecallerDiamond·2075')
     expect(html).toContain('src="/legends/petra.png"')
     expect(html).not.toContain('1v1')
   })
@@ -202,7 +202,7 @@ describe('overlay cards', () => {
 
     expect(textOf(partOf(html, 'team-figures'))).toBe('—2v2 team')
     expect(html).not.toContain('/banners/')
-    expect(textOf(partOf(html, 'players'))).toBe('Shinigami21301v1tidecaller')
+    expect(textOf(partOf(html, 'players'))).toBe('Shinigami1v1·2130tidecaller')
   })
 
   test('a known player with no games this season shows zeros, not No ranked data', () => {
