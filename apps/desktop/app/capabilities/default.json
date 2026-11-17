@@ -2,12 +2,5 @@
   "identifier": "default",
   "description": "Default capability for BrawlTome overlay",
   "windows": ["overlay"],
-  "permissions": [
-    "core:default",
-    "log:default",
-    {
-      "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://brawltome.com/player/*" }]
-    }
-  ]
+  "permissions": ["core:default", "log:default"]
 }

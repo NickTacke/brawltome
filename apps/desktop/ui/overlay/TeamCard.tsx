@@ -1,5 +1,5 @@
 import { BannerSlot, LegendPortrait, Spinner } from './CardHead'
-import { failureText } from './card-format'
+import { baseTierFor, failureText, shownPeak, teamAverage } from './card-format'
 import type { TeamData, TeamPlayer } from './overlay-view'
 import { RetryRow, retryCountdown } from './RetryRow'
 import { WinRate } from './WinRate'
@@ -13,16 +13,18 @@ type TeamCardProps = {
 
 // the people on top and the team's standing below, the same order as the 1v1 card
 export function TeamCard({ data, players, onOpenProfile, onRetry }: TeamCardProps) {
+  const estimate = data.state === 'ready' && data.standing === null ? teamAverage(players) : null
+
   return (
     <div className={teamCardClass(data)}>
-      <BannerSlot tier={data.state === 'ready' ? (data.standing?.tier ?? null) : null} />
+      <BannerSlot tier={bannerTier(data, estimate)} />
       <span className="main">
         <span className="players">
           {players.map((player) => (
             <PlayerRow key={player.brawlhallaId} player={player} onOpenProfile={onOpenProfile} />
           ))}
         </span>
-        <TeamFigures data={data} />
+        <TeamFigures data={data} estimate={estimate} />
         {data.state === 'failed' && (
           <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
         )}
@@ -39,19 +41,30 @@ function teamCardClass(data: TeamData): string {
   return 'card'
 }
 
-function TeamFigures({ data }: { data: TeamData }) {
+function bannerTier(data: TeamData, estimate: number | null): string | null {
+  if (data.state !== 'ready') return null
+
+  if (data.standing !== null) return data.standing.tier
+
+  return estimate === null ? null : baseTierFor(estimate)
+}
+
+type TeamFiguresProps = { data: TeamData; estimate: number | null }
+
+function TeamFigures({ data, estimate }: TeamFiguresProps) {
   const isBusy = data.state === 'loading' || (data.state === 'ready' && data.isRefreshing)
 
   return (
     <span className="figures team-figures">
-      <TeamStanding data={data} />
+      <TeamStanding data={data} estimate={estimate} />
       {isBusy && <Spinner />}
     </span>
   )
 }
 
-// the team's elo, peak and win rate; the banner already says the tier, and a team we hold no rating for shows a dash
-function TeamStanding({ data }: { data: TeamData }) {
+// the team's elo, peak and win rate; the banner already says the tier. A team we hold no rating for shows the
+// players' average, or a dash without it
+function TeamStanding({ data, estimate }: TeamFiguresProps) {
   if (data.state === 'loading') {
     return (
       <span className="stat">
@@ -63,12 +76,23 @@ function TeamStanding({ data }: { data: TeamData }) {
 
   const standing = data.state === 'ready' ? data.standing : null
 
+  if (standing === null && estimate !== null) {
+    return (
+      <span className="stat">
+        <span className="stat-value">
+          <span className="elo">{estimate}</span>
+        </span>
+        <span className="stat-label">Team avg</span>
+      </span>
+    )
+  }
+
   return (
     <>
       <span className="stat">
         <span className="stat-value">
           <span className="elo">{standing?.rating ?? '—'}</span>
-          {standing !== null && <span className="peak">{`/ ${standing.peakRating}`}</span>}
+          {standing !== null && <span className="peak">{`/ ${shownPeak(standing.rating, standing.peakRating)}`}</span>}
         </span>
         <span className="stat-label">{standingLabel(data, standing !== null)}</span>
       </span>
@@ -83,22 +107,32 @@ function PlayerRow({ player, onOpenProfile }: PlayerRowProps) {
   return (
     <button type="button" className="player" onClick={() => onOpenProfile(player.brawlhallaId)}>
       <LegendPortrait legend={player.legend} isSmall />
-      <span className="name">{player.name}</span>
-      <PlayerRating player={player} />
+      <span className="who">
+        <span className="name">{player.name}</span>
+        <PlayerStanding player={player} />
+      </span>
     </button>
   )
 }
 
-// the personal 2v2 elo from the game's memory, else the player's 1v1 elo, marked so it isn't read as 2v2
-function PlayerRating({ player }: { player: TeamPlayer }) {
-  if (player.personalRating2v2 !== null) return <span className="rating">{player.personalRating2v2}</span>
+// the player's own rank, the way the 1v1 card's subtitle reads: the personal 2v2 elo from the game's memory with
+// its tier, else the 1v1 elo marked as such, else an empty line so both rows keep their height
+function PlayerStanding({ player }: { player: TeamPlayer }) {
+  if (player.personalRating2v2 !== null) {
+    return <RatingLine lead={baseTierFor(player.personalRating2v2)} rating={player.personalRating2v2} />
+  }
 
-  if (player.oneVsOneRating === null) return null
+  if (player.oneVsOneRating !== null) return <RatingLine lead="1v1" rating={player.oneVsOneRating} />
 
+  return <span className="sub" />
+}
+
+function RatingLine({ lead, rating }: { lead: string; rating: number }) {
   return (
-    <span className="rating">
-      {player.oneVsOneRating}
-      <span className="label">1v1</span>
+    <span className="sub">
+      {lead}
+      <span className="dot">·</span>
+      <b>{rating}</b>
     </span>
   )
 }

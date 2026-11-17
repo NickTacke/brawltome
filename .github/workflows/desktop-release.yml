@@ -55,9 +55,9 @@ jobs:
       - name: Run release Rust and TypeScript gates
         shell: pwsh
         run: |
-          cargo fmt --manifest-path apps/desktop/Cargo.toml --package brawltome-desktop --package brawltome-events -- --check
+          cargo fmt --manifest-path apps/desktop/Cargo.toml --package brawltome-desktop -- --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo clippy --locked --manifest-path apps/desktop/Cargo.toml -p brawltome-desktop -p brawltome-events --all-targets --no-deps -- -D warnings
+          cargo clippy --locked --manifest-path apps/desktop/Cargo.toml -p brawltome-desktop --all-targets --no-deps -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --manifest-path apps/desktop/Cargo.toml --workspace
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

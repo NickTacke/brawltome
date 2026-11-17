@@ -11,8 +11,9 @@ const OVERLAY_TOP_PX = 24
 
 type OverlayPreviewProps = { card: string; bannerSide: BannerSide }
 
-// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=tiers one
-// 1v1 card per tier; &side=right puts the cards in the middle of the right edge, mirrored like the app does there
+// ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=teams only the
+// 2v2 ones, &card=tiers one 1v1 card per tier; &side=right puts the cards in the middle of the right edge, mirrored like
+// the app does there
 export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
   if (card === 'post-match') return <PostMatchSheet bannerSide={bannerSide} />
 
@@ -27,8 +28,8 @@ export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
     )
   }
 
-  if (card === 'states' || card === 'tiers') {
-    return <StatesSheet cells={card === 'states' ? stateCells() : tierCells()} bannerSide={bannerSide} />
+  if (card === 'states' || card === 'tiers' || card === 'teams') {
+    return <StatesSheet cells={sheetCells(card)} bannerSide={bannerSide} />
   }
 
   const view = overlayFixture(card)
@@ -43,6 +44,14 @@ export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
       )}
     />
   )
+}
+
+function sheetCells(card: string): StateCell[] {
+  if (card === 'tiers') return tierCells()
+
+  if (card === 'teams') return stateCells().filter((cell) => cell.title.startsWith('2v2'))
+
+  return stateCells()
 }
 
 // the frame scales with the window height like the game does, and the cards scale on their own the way the app
