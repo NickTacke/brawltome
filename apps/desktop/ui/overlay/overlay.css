@@ -376,24 +376,6 @@ button.card {
   cursor: pointer;
 }
 
-.player .name {
-  flex: 1;
-}
-
-.player .rating {
-  font-size: 17px;
-  font-weight: 800;
-  color: hsl(var(--text));
-  font-variant-numeric: tabular-nums;
-}
-
-/* community notation, so it stays lowercase unlike the other labels */
-.rating .label {
-  margin-left: 4px;
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
 /* the team's standing, with the spinner at the far end while it loads */
 .team-figures {
   grid-template-columns: auto auto 1fr;
@@ -411,8 +393,7 @@ button.card {
   color: hsl(var(--primary));
 }
 
-.is-refreshing .figures .stat,
-.is-refreshing .rating {
+.is-refreshing .figures .stat {
   opacity: 0.6;
 }
 
