@@ -3,6 +3,7 @@ import '../shared/tokens.css'
 import './overlay.css'
 import { cardScale } from './card-format'
 import type { Card, OverlayView } from './overlay-view'
+import { PostMatchCard } from './PostMatchCard'
 import { SoloCard } from './SoloCard'
 import { TeamCard } from './TeamCard'
 
@@ -42,11 +43,18 @@ function OverlayCard({ card, onOpenProfile, onRetry }: OverlayCardProps) {
     return <TeamCard data={card.data} players={card.players} onOpenProfile={onOpenProfile} onRetry={onRetry} />
   }
 
+  // the card opens nothing until the app uploads replays and a match page exists
+  if (card.kind === 'postMatch') return <PostMatchCard match={card} onOpenMatchPage={() => {}} />
+
   return <SoloCard player={card.player} data={card.data} onOpenProfile={onOpenProfile} onRetry={onRetry} />
 }
 
 function cardKey(card: Card): string {
-  return card.kind === 'team' ? `team-${card.team}` : `solo-${card.player.brawlhallaId}`
+  if (card.kind === 'team') return `team-${card.team}`
+
+  if (card.kind === 'postMatch') return 'post-match'
+
+  return `solo-${card.player.brawlhallaId}`
 }
 
 // reports the size the cards take on screen, so the window can be cut to exactly that

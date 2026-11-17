@@ -1,5 +1,7 @@
 // what the overlay page draws, as the app sends it; the rust side serializes the same shape
 
+import type { PostMatchView } from './post-match'
+
 export type FailureReason = 'offline' | 'rateLimited' | 'unavailable' | 'updateRequired' | 'rejected'
 
 export type PlayerHead = { brawlhallaId: number; name: string; legend: string | null }
@@ -35,5 +37,6 @@ export type TeamPlayer = PlayerHead & { personalRating2v2: number | null; oneVsO
 export type Card =
   | { kind: 'solo'; player: PlayerHead; data: CardData }
   | { kind: 'team'; team: number; data: TeamData; players: TeamPlayer[] }
+  | ({ kind: 'postMatch' } & PostMatchView)
 
 export type OverlayView = { lobbyId: number; cards: Card[]; visibleMs: number }
