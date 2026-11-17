@@ -4,6 +4,7 @@ use brawltome_detection::{MatchSnapshot, MatchType, Player};
 use serde::Serialize;
 
 use crate::lobby_client::{LobbyAnswer, LobbyKind, LookupFailure};
+use crate::post_match::PostMatchCard;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +26,7 @@ pub enum Card {
         data: TeamData,
         players: Vec<TeamPlayer>,
     },
+    PostMatch(PostMatchCard),
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

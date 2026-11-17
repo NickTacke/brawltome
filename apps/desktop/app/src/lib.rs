@@ -7,6 +7,7 @@ pub mod lobby_client;
 mod log_prune;
 pub mod overlay_view;
 pub mod overlay_window;
+pub mod post_match;
 pub mod session;
 pub mod session_runner;
 pub mod tray;
