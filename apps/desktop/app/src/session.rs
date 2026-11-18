@@ -19,7 +19,8 @@ pub const POST_MATCH_VISIBLE_MS: u64 = 10_000;
 pub const CONNECTING_VISIBLE_MS: u64 = 30_000;
 pub const READY_VISIBLE_MS: u64 = 5_000;
 pub const UNSUPPORTED_VISIBLE_MS: u64 = 10_000;
-pub const REFRESH_REASK_DELAY_MS: u64 = 3_000;
+/// seen live, a lobby refresh lands 1 to 1.8 s after the first answer; the app asks only once more
+pub const REFRESH_REASK_DELAY_MS: u64 = 1_500;
 pub const RETRY_DELAYS_MS: [u64; 3] = [1_000, 2_000, 4_000];
 pub const MAX_RECENT_MATCHES: usize = 5;
 
@@ -1193,7 +1194,10 @@ mod tests {
         let refreshing_answer = refreshing(answer_for(&ranked_1v1()));
 
         let first = session.handle(answered(lobby_id, refreshing_answer.clone()), 500);
-        assert_eq!(timers(&first), vec![(Timer::LookUp, 3_000)]);
+        assert_eq!(
+            timers(&first),
+            vec![(Timer::LookUp, REFRESH_REASK_DELAY_MS)]
+        );
         let page_fixture = view_fixture(
             include_str!("../../tests/fixtures/overlay-view-solo-refreshing.json"),
             lobby_id,

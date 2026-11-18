@@ -7,7 +7,7 @@ use brawltome_desktop::lobby_client::{
     LobbyAnswer, LobbyLookup, LobbyRequest, LookupFailure, PlayerAnswer, Standing, TeamAnswer,
 };
 use brawltome_desktop::overlay_view::{Card, CardData, OverlayView};
-use brawltome_desktop::session::Input;
+use brawltome_desktop::session::{Input, REFRESH_REASK_DELAY_MS};
 use brawltome_desktop::session_runner::{self, LinkOpener, OverlaySurface, SessionHandle};
 use brawltome_detection::{Event, MatchSnapshot, MatchType, Player};
 use tokio::sync::mpsc;
@@ -299,7 +299,7 @@ async fn a_ranked_lobby_shows_loading_then_the_answer_then_hides_after_twelve_se
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_refreshing_answer_is_asked_for_again_three_seconds_later() {
+async fn a_refreshing_answer_is_asked_for_again_a_moment_later() {
     let harness = Harness::start(vec![
         Scripted {
             delay_ms: 0,
@@ -314,7 +314,10 @@ async fn a_refreshing_answer_is_asked_for_again_three_seconds_later() {
     harness.detect(ranked_1v1_against(SHINIGAMI)).await;
     wait_ms(20_000).await;
 
-    assert_eq!(harness.lookup.calls_at_ms(), vec![0, 3_000]);
+    assert_eq!(
+        harness.lookup.calls_at_ms(),
+        vec![0, REFRESH_REASK_DELAY_MS]
+    );
 }
 
 #[tokio::test(start_paused = true)]
