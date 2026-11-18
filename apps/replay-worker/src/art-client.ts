@@ -42,7 +42,7 @@ export type ArtClient = {
   claim(report: WorkerReport): Promise<ClaimedArt | null>
   missing(job: ArtJob, paths: string[]): Promise<string[]>
   readFile(job: ArtJob, path: string): Promise<Uint8Array>
-  putFile(job: ArtJob, path: string, bytes: Uint8Array): Promise<'stored' | 'held'>
+  putFile(job: ArtJob, path: string, bytes: Uint8Array): Promise<'stored' | 'held' | 'unanswered'>
   result(job: ArtJob, result: ArtResult): Promise<void>
   failure(job: ArtJob, code: ArtFailureCode, message: string): Promise<void>
   renew(job: ArtJob): Promise<boolean>
@@ -50,7 +50,7 @@ export type ArtClient = {
 
 type RequestInit = { method?: string; lease?: string; json?: unknown; bytes?: Uint8Array; timeoutMs?: number }
 
-export type ArtClientConfig = { apiUrl: string; token: string; resultTimeoutMs?: number }
+export type ArtClientConfig = { apiUrl: string; token: string; requestTimeoutMs?: number; resultTimeoutMs?: number }
 
 export function createArtClient(config: ArtClientConfig): ArtClient {
   const base = `${config.apiUrl.replace(/\/$/, '')}/internal/replays/art`
@@ -67,7 +67,7 @@ export function createArtClient(config: ArtClientConfig): ArtClient {
       headers,
       body: init.json === undefined ? bodyOf(init.bytes) : JSON.stringify(init.json),
       redirect: 'error',
-      signal: AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(init.timeoutMs ?? config.requestTimeoutMs ?? REQUEST_TIMEOUT_MS),
     })
   }
 
@@ -96,9 +96,14 @@ export function createArtClient(config: ArtClientConfig): ArtClient {
       return new Uint8Array(await response.arrayBuffer())
     },
 
-    // held: another attempt is uploading the same path (423), so this one sends it again later
+    // held: another attempt is uploading the same path (423), so this one sends it again later. unanswered: the
+    // request timed out, dropped or the api failed (5xx); sending it again is safe, since the api lets the same lease
+    // claim the path again and says it exists once an earlier send landed
     async putFile(job, path, bytes) {
-      const response = await send(`/${job.jobId}/files/${path}`, { method: 'PUT', lease: job.leaseToken, bytes })
+      const request = { method: 'PUT', lease: job.leaseToken, bytes }
+      const response = await send(`/${job.jobId}/files/${path}`, request).catch(() => null)
+
+      if (response === null || response.status >= 500) return 'unanswered'
 
       if (response.status === 423) return 'held'
 
