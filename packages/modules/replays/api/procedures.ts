@@ -12,16 +12,34 @@ import {
 import { internalProcedure, type ModuleRuntime, type ObjectStore } from '@brawltome/foundation'
 import { ORPCError } from '@orpc/server'
 import { z } from 'zod'
+import { readPlaybackFor } from '../playback'
 import { getMatch, getReplayFile, listMyReplays, listPlayerMatches } from '../reads'
 import { uploadReplays } from '../upload'
 
 const tags = ['replays']
+
+// the worker reports its build in at most 64 characters
+const buildSchema = z.string().min(1).max(64)
+
+const playbackInputSchema = z.object({
+  id: matchIdSchema,
+  build: buildSchema,
+  version: z.coerce.number().pipe(z.number().int().min(0).max(1000)),
+})
+
+// the site keeps a playback timeline private while replays are closed, and caches it for good once they're open
+const playbackOutputSchema = z.object({
+  headers: z.object({ 'x-replays-open': z.enum(['true', 'false']) }),
+  body: z.file(),
+})
 
 // the site calls these for its visitor; key holders of the public api will get the same procedures later
 export function createReplayProcedures(runtime: ModuleRuntime) {
   const { accounts } = createPostgresAccounts(runtime.database)
   const operators = new Set(runtime.replayOperatorAccountIds ?? [])
   const isOpen = runtime.replaysOpen ?? false
+  const artStore = runtime.replayArt?.store ?? null
+  const artBaseUrl = runtime.replayArt?.baseUrl ?? null
 
   // until replays open to everyone, only operators see anything; to others the pages don't exist yet
   async function canSee(sessionToken: string | undefined): Promise<boolean> {
@@ -85,7 +103,10 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .handler(async ({ context, input }) => {
       await requireSight(context.visitorSessionToken, 'NOT_FOUND')
 
-      const found = await getMatch(runtime.database.sql, input.id)
+      const found = await getMatch(
+        { database: runtime.database, objectStore: objectStore(), artStore, artBaseUrl },
+        input.id,
+      )
 
       if (!found) throw new ORPCError('NOT_FOUND')
 
@@ -131,6 +152,32 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       return new File([new Uint8Array(file.bytes)], file.fileName, { type: 'application/octet-stream' })
     })
 
+  const playback = internalProcedure
+    .route({
+      method: 'GET',
+      path: '/matches/{id}/playback/{build}/{version}',
+      operationId: 'replays.playback',
+      summary: 'Playback timeline',
+      tags,
+      outputStructure: 'detailed',
+    })
+    .input(playbackInputSchema)
+    .output(playbackOutputSchema)
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
+      const bytes = await readPlaybackFor({ database: runtime.database, objectStore: objectStore() }, input.id, {
+        build: input.build,
+        version: input.version,
+      })
+
+      if (!bytes) throw new ORPCError('NOT_FOUND')
+
+      const body = new File([new Uint8Array(bytes)], `${input.build}.json.gz`, { type: 'application/gzip' })
+
+      return { headers: { 'x-replays-open': isOpen ? 'true' : 'false' }, body } as const
+    })
+
   const mine = internalProcedure
     .route({ method: 'GET', path: '/me/replays', operationId: 'replays.mine', summary: 'Your uploads', tags })
     .output(myReplaysSchema)
@@ -152,7 +199,7 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       return { isOpen, canSee: isVisible, canUpload: isVisible && (await canUpload(sessionToken)) }
     })
 
-  return { access, upload, match, playerMatches, replayFile, mine }
+  return { access, upload, match, playerMatches, replayFile, playback, mine }
 }
 
 async function requireAccount(accounts: Accounts, sessionToken: string | undefined) {

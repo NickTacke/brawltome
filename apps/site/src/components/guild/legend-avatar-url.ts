@@ -42,6 +42,7 @@ export const knownLegendKeys: ReadonlySet<string> = new Set([
   'mako',
   'mirage',
   'mordex',
+  'morgwyn',
   'munin',
   'nix',
   'onyx',
