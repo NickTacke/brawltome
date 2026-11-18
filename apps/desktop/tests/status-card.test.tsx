@@ -23,7 +23,7 @@ describe('status card', () => {
     const html = render({ state: 'ready', patch: '11.01' })
 
     expect(textOf(html)).toBe('BrawlTomeReady·Patch 11.01')
-    expect(html).toContain('class="status-dot ready"')
+    expect(html).toContain('class="status-ready"')
     expect(html).not.toContain('class="spinner"')
   })
 
@@ -31,6 +31,6 @@ describe('status card', () => {
     const html = render({ state: 'unsupported', message: "Patch 11.02 isn't supported yet" })
 
     expect(textOf(html)).toBe('BrawlTomePatch 11.02 isn&#x27;t supported yet')
-    expect(html).toContain('class="status-dot warn"')
+    expect(html).toContain('class="sub status-warn"')
   })
 })

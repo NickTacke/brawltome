@@ -22,19 +22,12 @@ export function StatusCard({ status }: { status: StatusView }) {
 function StatusLine({ status }: { status: StatusView }) {
   if (status.state === 'connecting') return <span className="sub">Connecting to Brawlhalla</span>
 
-  if (status.state === 'unsupported') {
-    return (
-      <span className="sub">
-        <span className="status-dot warn" />
-        {status.message}
-      </span>
-    )
-  }
+  if (status.state === 'unsupported') return <span className="sub status-warn">{status.message}</span>
 
   return (
     <span className="sub">
-      <span className="status-dot ready" />
-      Ready<span className="dot">·</span>Patch {status.patch}
+      <span className="status-ready">Ready</span>
+      <span className="dot">·</span>Patch {status.patch}
     </span>
   )
 }
