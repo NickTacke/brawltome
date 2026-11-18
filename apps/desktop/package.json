@@ -8,8 +8,6 @@
     "build:ci": "tauri build --no-bundle",
     "test": "bun test tests",
     "typecheck": "tsc --noEmit",
-    "acceptance:windows": "pwsh -File scripts/windows-acceptance.ps1",
-    "acceptance:evaluate": "bun run src/windows-acceptance.ts",
     "updater:verify": "cargo run --locked --manifest-path Cargo.toml -p brawltome-desktop --bin verify_updater_artifact --"
   },
   "dependencies": {

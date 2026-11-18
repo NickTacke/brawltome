@@ -1,7 +1,6 @@
 //! System tray menu: show/hide overlay, open logs, quit.
 
 use crate::overlay::OverlayState;
-use crate::windows_acceptance::{AcceptanceCheck, AcceptanceProbe};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tauri::{
@@ -31,13 +30,7 @@ pub fn tray_effect(menu_id: &str, overlay_visible: bool) -> TrayEffect {
     }
 }
 
-fn record_check(probe: &AcceptanceProbe, check: AcceptanceCheck) {
-    if let Err(error) = probe.record_check(check) {
-        log::warn!("Could not record tray acceptance evidence: {error}");
-    }
-}
-
-pub fn install(app: &AppHandle, probe: Arc<AcceptanceProbe>) -> tauri::Result<()> {
+pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItemBuilder::with_id("toggle", "Show/Hide").build(app)?;
     let open_logs = MenuItemBuilder::with_id("open_logs", "Open log folder").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
@@ -65,30 +58,26 @@ pub fn install(app: &AppHandle, probe: Arc<AcceptanceProbe>) -> tauri::Result<()
                             Ok(()) => {
                                 let state: tauri::State<Arc<OverlayState>> = app.state();
                                 state.clickthrough.store(true, Ordering::Relaxed);
-                                record_check(&probe, AcceptanceCheck::ClickThroughEnabled);
                             }
                             Err(error) => {
                                 log::warn!("Could not restore click-through before hiding overlay: {error}")
                             }
                         }
-                        match window.hide() {
-                            Ok(()) => record_check(&probe, AcceptanceCheck::TrayHidden),
-                            Err(error) => log::warn!("Could not hide overlay from tray: {error}"),
+                        if let Err(error) = window.hide() {
+                            log::warn!("Could not hide overlay from tray: {error}");
                         }
                     }
                 }
                 TrayEffect::ShowOverlay => {
                     if let Some(window) = overlay {
-                        match window.show() {
-                            Ok(()) => record_check(&probe, AcceptanceCheck::TrayShown),
-                            Err(error) => log::warn!("Could not show overlay from tray: {error}"),
+                        if let Err(error) = window.show() {
+                            log::warn!("Could not show overlay from tray: {error}");
                         }
                     }
                 }
                 TrayEffect::OpenLogs => {
                     if let Ok(log_dir) = app.path().app_log_dir() {
-                        // Best-effort UX affordance. Lifecycle evidence does not
-                        // depend on opening Explorer successfully.
+                        // best-effort, opening Explorer may fail
                         let _ = app.opener().open_path(
                             log_dir.to_string_lossy().into_owned(),
                             None::<String>,
@@ -96,7 +85,6 @@ pub fn install(app: &AppHandle, probe: Arc<AcceptanceProbe>) -> tauri::Result<()
                     }
                 }
                 TrayEffect::Quit => {
-                    record_check(&probe, AcceptanceCheck::TrayQuit);
                     app.exit(0);
                 }
                 TrayEffect::None => {}
