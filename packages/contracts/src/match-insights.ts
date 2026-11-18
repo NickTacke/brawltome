@@ -31,7 +31,7 @@ const insightsSchema = z
 export const matchInsightsSchema = z
   .object({
     // bumped when a figure is worked out differently, so stored insights are worked out again
-    version: z.literal(1),
+    version: z.literal(2),
     summary: insightSummarySchema,
     extras: insightExtrasSchema,
     insights: insightsSchema,
