@@ -28,9 +28,15 @@ describe('status card', () => {
   })
 
   test('an unsupported patch says so', () => {
-    const html = render({ state: 'unsupported', message: "Patch 11.02 isn't supported yet" })
+    const html = render({ state: 'unsupported', patch: '11.02' })
 
     expect(textOf(html)).toBe('BrawlTomePatch 11.02 isn&#x27;t supported yet')
     expect(html).toContain('class="sub status-warn"')
+  })
+
+  test('a game version without a patch still says it is unsupported', () => {
+    expect(textOf(render({ state: 'unsupported', patch: null }))).toBe(
+      'BrawlTomeThis game version isn&#x27;t supported yet',
+    )
   })
 })

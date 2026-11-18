@@ -22,7 +22,11 @@ export function StatusCard({ status }: { status: StatusView }) {
 function StatusLine({ status }: { status: StatusView }) {
   if (status.state === 'connecting') return <span className="sub">Connecting to Brawlhalla</span>
 
-  if (status.state === 'unsupported') return <span className="sub status-warn">{status.message}</span>
+  if (status.state === 'unsupported') {
+    const version = status.patch === null ? 'This game version' : `Patch ${status.patch}`
+
+    return <span className="sub status-warn">{version} isn't supported yet</span>
+  }
 
   return (
     <span className="sub">

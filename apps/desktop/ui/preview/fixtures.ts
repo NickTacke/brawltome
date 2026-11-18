@@ -153,7 +153,7 @@ export function statusCells(): StateCell[] {
   const statuses: { title: string; status: StatusView }[] = [
     { title: 'Connecting', status: { state: 'connecting' } },
     { title: 'Ready', status: { state: 'ready', patch: '11.01' } },
-    { title: 'Patch not supported', status: { state: 'unsupported', message: "Patch 11.02 isn't supported yet" } },
+    { title: 'Patch not supported', status: { state: 'unsupported', patch: '11.02' } },
   ]
 
   return statuses.map(({ title, status }) => ({

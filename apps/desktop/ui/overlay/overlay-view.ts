@@ -37,7 +37,7 @@ export type TeamPlayer = PlayerHead & { personalRating2v2: number | null; oneVsO
 export type StatusView =
   | { state: 'connecting' }
   | { state: 'ready'; patch: string }
-  | { state: 'unsupported'; message: string }
+  | { state: 'unsupported'; patch: string | null }
 
 export type Card =
   | { kind: 'solo'; player: PlayerHead; data: CardData }

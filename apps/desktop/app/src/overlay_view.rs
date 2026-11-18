@@ -41,8 +41,13 @@ pub enum Card {
 )]
 pub enum StatusView {
     Connecting,
-    Ready { patch: String },
-    Unsupported { message: String },
+    Ready {
+        patch: String,
+    },
+    /// the patch, when the game said which it is
+    Unsupported {
+        patch: Option<String>,
+    },
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

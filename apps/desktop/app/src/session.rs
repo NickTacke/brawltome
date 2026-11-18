@@ -168,7 +168,9 @@ impl Session {
             Event::Unsupported { game_version, .. } => {
                 let message = unsupported_message(game_version.as_deref());
                 let status = StatusView::Unsupported {
-                    message: message.clone(),
+                    patch: game_version
+                        .as_deref()
+                        .map(|version| patch_of(version).to_string()),
                 };
                 self.report_game(game_version, DetectionStatus::Unsupported { message });
                 self.show_status(status, UNSUPPORTED_VISIBLE_MS)
@@ -1028,7 +1030,7 @@ mod tests {
         let effects = session.handle(detection(unsupported), 0);
 
         let expected = StatusView::Unsupported {
-            message: "Patch 11.02 isn't supported yet".to_string(),
+            patch: Some("11.02".to_string()),
         };
         assert_eq!(status_of(shown(&effects)[0]), &expected);
         assert_eq!(
