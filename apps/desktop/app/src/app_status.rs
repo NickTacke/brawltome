@@ -100,7 +100,7 @@ pub fn unsupported_message(game_version: Option<&str>) -> String {
 }
 
 /// the first two parts of a game version: 11.01.36258 is patch 11.01
-fn patch_of(game_version: &str) -> &str {
+pub fn patch_of(game_version: &str) -> &str {
     match game_version.match_indices('.').nth(1) {
         Some((index, _)) => &game_version[..index],
         None => game_version,
