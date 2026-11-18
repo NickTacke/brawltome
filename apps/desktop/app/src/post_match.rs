@@ -49,12 +49,19 @@ const TIERS_PER_RANK: u32 = 6;
 const RANKS_WITH_SUBDIVISIONS: [&str; 5] = ["Tin", "Bronze", "Silver", "Gold", "Platinum"];
 const DIAMOND_TIER_INDEX: u32 = 31;
 
+/// a 2v2 has two opponents
+const TWO_VS_TWO_OPPONENTS: usize = 2;
+
 pub fn post_match_card(opponents: Vec<PlayerHead>, result: &MatchResult) -> PostMatchCard {
-    let (rating, tier) = match &result.team {
+    // seen live: after a 1v1 the game's record can still hold team values, so only a 2v2 reads them
+    let team = result
+        .team
+        .filter(|_| opponents.len() == TWO_VS_TWO_OPPONENTS);
+    let (rating, tier) = match &team {
         Some(team) => (team.rating, team.tier),
         None => (result.rating, result.tier),
     };
-    let personal_2v2 = result.team.map(|_| PersonalRating {
+    let personal_2v2 = team.map(|_| PersonalRating {
         rating: result.rating.after,
         change: signed_change(result.rating),
     });
@@ -159,6 +166,27 @@ mod tests {
                 match_page: None,
             }
         );
+    }
+
+    #[test]
+    fn a_1v1_ignores_team_values_the_game_left_in_the_record() {
+        // seen live: a 1v1 from 1701 to 1717 came with team values 860 to 910
+        let result = MatchResult {
+            rating: change(1701, 1717),
+            tier: change(26, 26),
+            team: Some(TeamResult {
+                rating: change(860, 910),
+                tier: change(5, 8),
+            }),
+        };
+
+        let card = post_match_card(vec![shinigami()], &result);
+
+        assert_eq!(card.rating, 1717);
+        assert_eq!(card.rating_change, 16);
+        assert_eq!(card.tier.as_deref(), Some("Platinum 1"));
+        assert_eq!(card.tier_change, None);
+        assert_eq!(card.personal_2v2, None);
     }
 
     #[test]
