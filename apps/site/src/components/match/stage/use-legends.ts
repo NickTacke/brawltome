@@ -88,7 +88,14 @@ function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
       .then((replay) => {
         if (controller.signal.aborted) return
 
-        replay.loaded.catch((error) => reportUnlessAborted(`load the rest of the art at ${manifestUrl}`, error))
+        // art that fails after the first seconds could never be drawn, so the portraits play instead of waiting on it
+        replay.loaded.catch((error) => {
+          if (controller.signal.aborted) return
+
+          reportUnlessAborted(`load the rest of the art at ${manifestUrl}`, error)
+          setLoad({ status: 'failed' })
+        })
+
         setLoad({ status: 'loaded', value: replay })
       })
       .catch((error) => {

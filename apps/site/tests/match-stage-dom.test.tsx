@@ -27,6 +27,11 @@ const firstReplay = {
   assetUrl: (path: string) => `https://art.test/${path}`,
 } as unknown as Replay
 
+// a replay whose first seconds load but whose later art fails, made when loaded so the failure is always handled
+function brokenReplay(): Replay {
+  return { ...firstReplay, loaded: Promise.reject(new Error('fetch a sheet: 404')) } as Replay
+}
+
 // the first match's map file, which names an image for one of its two platforms
 const platformImage = 'sheets/10a43fccdae5677c.webp'
 const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
@@ -40,6 +45,8 @@ const tools: StageTools = {
   artCheckEveryMs: 1,
   loadReplay: async (manifestUrl) => {
     loadedManifests.push(String(manifestUrl))
+
+    if (String(manifestUrl).includes('broken')) return brokenReplay()
 
     return String(manifestUrl).includes('first') ? firstReplay : new Promise<Replay>(() => undefined)
   },
@@ -135,6 +142,22 @@ async function unmount(): Promise<void> {
 }
 
 describe('the stage in a browser', () => {
+  test('art that fails after the first seconds makes the legends unavailable, so the portraits play instead', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+
+    await mount(<MatchByKind match={matchNamed('broken')} />)
+
+    console.error = errorBefore
+
+    expect(container.querySelector('[data-stage-window]')?.parentElement?.textContent).toContain(
+      'Legends unavailable for this match',
+    )
+
+    await unmount()
+  })
+
   test('another match never shows the art of the one before', async () => {
     await mount(<MatchByKind match={matchNamed('first')} />)
 
