@@ -13,9 +13,9 @@ name = "brawltome-desktop"
 path = "src/main.rs"
 
 [dependencies]
-brawltome-events.workspace = true
 brawltome-detection.workspace = true
 brawltome-contracts = { path = "../../../packages/contracts/rust" }
+reqwest = "=0.13.2"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
@@ -33,13 +33,13 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22"
 minisign-verify = "0.2"
 sha2 = "0.10"
-uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { workspace = true, features = ["test-util"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
