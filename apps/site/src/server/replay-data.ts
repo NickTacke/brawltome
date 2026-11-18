@@ -104,3 +104,42 @@ export async function serveReplayFile(matchId: string, sessionToken?: string): P
     return new Response('The replay could not be loaded.', { status: 502 })
   }
 }
+
+// the api tells the site whether replays are open to everyone; only then may shared caches keep a timeline
+function playbackCacheControl(answer: Response): string {
+  const isOpen = answer.headers.get('x-replays-open') === 'true'
+
+  return isOpen ? 'public, max-age=31536000, immutable' : 'private, no-store'
+}
+
+/**
+ * A match's playback timeline for the browser: the api's gzip bytes go through untouched, so the browser unpacks them.
+ * The version is part of the address, so a cached answer never goes stale.
+ */
+export async function servePlaybackTimeline(
+  matchId: string,
+  build: string,
+  version: string,
+  sessionToken?: string,
+): Promise<Response> {
+  try {
+    const path = `/matches/${encodeURIComponent(matchId)}/playback/${encodeURIComponent(build)}/${encodeURIComponent(version)}`
+    const answer = await readApiFile(path, `load playback of match ${matchId}`, visitorHeaders(sessionToken))
+
+    return new Response(answer.body, {
+      headers: {
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+        'x-content-type-options': 'nosniff',
+        'cache-control': playbackCacheControl(answer),
+      },
+    })
+  } catch (error) {
+    if (error instanceof ApiAnswerError && (error.status === 404 || error.status === 400))
+      return new Response('No such timeline.', { status: 404 })
+
+    console.error(failureText(error))
+
+    return new Response('The timeline could not be loaded.', { status: 502 })
+  }
+}

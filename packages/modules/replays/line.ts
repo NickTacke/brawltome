@@ -70,7 +70,8 @@ const playerStatsSchema = z
     TimeInAir: z.number().int(),
     TimeOnGround: z.number().int(),
     TimeOnWall: z.number().int(),
-    Score: z.number().int(),
+    // only a timed match's dump has one
+    Score: z.number().int().optional(),
   })
   .loose()
 
@@ -100,7 +101,8 @@ export type LinePlayer = {
   timeInAirMs: number
   timeOnGroundMs: number
   timeOnWallMs: number
-  score: number
+  // null for a stock match, which the game doesn't score
+  score: number | null
   weapons: Record<string, Record<string, number>>
 }
 
@@ -204,7 +206,7 @@ function toPlayer(player: z.infer<typeof okLineSchema>['match']['players'][numbe
     timeInAirMs: stats.TimeInAir,
     timeOnGroundMs: stats.TimeOnGround,
     timeOnWallMs: stats.TimeOnWall,
-    score: stats.Score,
+    score: stats.Score ?? null,
     weapons: weaponsOf(stats),
   }
 }

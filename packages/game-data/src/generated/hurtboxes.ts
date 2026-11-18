@@ -7321,6 +7321,62 @@ const data = [
     "animName": "AttackSpecialAstroGirl3",
     "width": 0,
     "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerNFists",
+    "hurtboxId": 919,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker3",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerSFists",
+    "hurtboxId": 920,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker1",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerSFists2",
+    "hurtboxId": 921,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker1Hit",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerDFists",
+    "hurtboxId": 922,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker5",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerDFists2",
+    "hurtboxId": 923,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker5Hit",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerDFists3",
+    "hurtboxId": 924,
+    "animClass": "a__FistsAnimation",
+    "animName": "AttackSpecialOathbreaker5AI",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "hurtboxName": "OathbreakerSGreatsword",
+    "hurtboxId": 925,
+    "animClass": "a__GreatSwordAnimation",
+    "animName": "AttackSpecialOathbreaker5AI",
+    "width": 0,
+    "height": 0
   }
 ] as const
 

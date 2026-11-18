@@ -253,6 +253,17 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/modules/match-insights": {
+      "name": "@brawltome/match-insights",
+      "dependencies": {
+        "@brawltome/contracts": "workspace:*",
+        "zod": "4.6.7",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/modules/player": {
       "name": "@brawltome/player",
       "dependencies": {
@@ -314,6 +325,7 @@
         "@brawltome/accounts": "workspace:*",
         "@brawltome/contracts": "workspace:*",
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/match-insights": "workspace:*",
         "@orpc/server": "1.16.2",
         "drizzle-orm": "0.45.4",
         "postgres": "3.4.9",
@@ -343,6 +355,13 @@
       },
       "devDependencies": {
         "@brawltome/telemetry": "workspace:*",
+        "@types/bun": "latest",
+        "typescript": "^5.7.0",
+      },
+    },
+    "packages/replay-player": {
+      "name": "@brawltome/replay-player",
+      "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.7.0",
       },
@@ -511,6 +530,8 @@
 
     "@brawltome/game-data": ["@brawltome/game-data@workspace:packages/game-data"],
 
+    "@brawltome/match-insights": ["@brawltome/match-insights@workspace:packages/modules/match-insights"],
+
     "@brawltome/player": ["@brawltome/player@workspace:packages/modules/player"],
 
     "@brawltome/queue": ["@brawltome/queue@workspace:packages/modules/queue"],
@@ -518,6 +539,8 @@
     "@brawltome/ranking": ["@brawltome/ranking@workspace:packages/modules/ranking"],
 
     "@brawltome/replay-analysis": ["@brawltome/replay-analysis@workspace:packages/modules/replay-analysis"],
+
+    "@brawltome/replay-player": ["@brawltome/replay-player@workspace:packages/replay-player"],
 
     "@brawltome/replay-worker": ["@brawltome/replay-worker@workspace:apps/replay-worker"],
 

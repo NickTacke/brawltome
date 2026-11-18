@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createPostgresAccounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
@@ -100,13 +102,18 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
     form.append('files[0]', new File([bytes], 'x.replay'))
     await app.fetch(new Request('http://api.test/v1/replays', { method: 'POST', headers: siteHeaders(), body: form }))
 
-    const jobs = createReplayJobs({ database, objectStore, accounts: createPostgresAccounts(database).accounts })
+    const jobs = createReplayJobs({
+      database,
+      objectStore,
+      artStore: null,
+      accounts: createPostgresAccounts(database).accounts,
+    })
 
     // finish every queued job with a made-up line, so a match exists
     for (
-      let claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'] });
+      let claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null });
       claimed;
-      claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'] })
+      claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null })
     ) {
       await jobs.complete({ jobId: claimed.jobId, leaseToken: claimed.leaseToken, line: madeUpLine() })
     }
@@ -124,6 +131,42 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
     expect((await response.arrayBuffer()).byteLength).toBe(40)
   })
 
+  test('the playback timeline downloads gzipped, with whether replays are open', async () => {
+    const form = new FormData()
+
+    form.append('files[0]', new File([replayBytes()], 'y.replay'))
+    await app.fetch(new Request('http://api.test/v1/replays', { method: 'POST', headers: siteHeaders(), body: form }))
+
+    const jobs = createReplayJobs({
+      database,
+      objectStore,
+      artStore: null,
+      accounts: createPostgresAccounts(database).accounts,
+    })
+
+    const claimed = await jobs.claim({ build: 'dev-1', patches: ['11.00'], artFormat: null })
+
+    await jobs.complete({
+      jobId: claimed?.jobId as string,
+      leaseToken: claimed?.leaseToken as string,
+      line: realLine(),
+    })
+
+    const [match] = await database.sql<{ id: string }[]>`
+      SELECT id FROM replays.matches ORDER BY created_at DESC LIMIT 1
+    `
+
+    const response = await app.fetch(
+      new Request(`http://api.test/v1/matches/${match?.id}/playback/dev-1/1`, { headers: siteHeaders() }),
+    )
+
+    const timeline = JSON.parse(new TextDecoder().decode(Bun.gunzipSync(await response.bytes())))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-replays-open')).toBe('false')
+    expect(timeline).toMatchObject({ stepMs: 16 })
+  })
+
   test('the OpenAPI document lists the replay paths', async () => {
     const response = await app.fetch(new Request('http://api.test/openapi.json'))
     const document = (await response.json()) as { paths: Record<string, unknown> }
@@ -134,11 +177,23 @@ describe.skipIf(!connectionString)('replays over /v1', () => {
         '/matches/{id}',
         '/players/{brawlhallaId}/matches',
         '/matches/{id}/replay',
+        '/matches/{id}/playback/{build}/{version}',
         '/me/replays',
       ]),
     )
+
+    const playback = document.paths['/matches/{id}/playback/{build}/{version}'] as { get?: { operationId?: string } }
+
+    expect(playback.get?.operationId).toBe('replays.playback')
   })
 })
+
+// a real anonymised 1v1, shared with the match-insights module's tests
+function realLine(): string {
+  const path = resolve(import.meta.dir, '../../../packages/modules/match-insights/tests/fixtures/duel-a.line.gz')
+
+  return new TextDecoder().decode(Bun.gunzipSync(readFileSync(path)))
+}
 
 function madeUpLine(): string {
   const player = (slot: number, brawlhallaId: number) => ({
@@ -183,7 +238,6 @@ function madeUpLine(): string {
         { slot: 2, brawlhallaId: 3002, name: 'Player 2', team: 0, legend: { id: 2, name: 'CASSIDY' } },
       ],
     },
-    timeline: { events: [] },
     reliability: { isReliable: true, checks: [], unchecked: [] },
   })
 }
