@@ -272,7 +272,7 @@ button.card {
   height: 18px;
   border-radius: 4px;
   background: hsl(var(--raised) / 0.7);
-  animation: waiting 1.4s ease-in-out infinite;
+  animation: waiting 2s ease-in-out infinite;
 }
 
 /* what is still on its way pulses, so it reads as loading rather than greyed out */
@@ -282,7 +282,7 @@ button.card {
     opacity: 1;
   }
   50% {
-    opacity: 0.4;
+    opacity: 0.6;
   }
 }
 
@@ -640,7 +640,7 @@ button.card:hover .arrow {
 /* memory's elo stays bright; only what the lookup gave waits for its refresh */
 .is-refreshing-lookup .peak,
 .is-refreshing-lookup .figures .stat + .stat {
-  animation: waiting 1.4s ease-in-out infinite;
+  animation: waiting 2s ease-in-out infinite;
 }
 
 button.card:hover .main {
