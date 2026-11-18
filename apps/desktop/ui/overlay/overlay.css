@@ -628,7 +628,7 @@ button.card:hover .arrow {
 /* memory's elo stays bright; only what the lookup gave waits for its refresh */
 .is-refreshing-lookup .peak,
 .is-refreshing-lookup .figures .stat + .stat {
-  opacity: 0.6;
+  opacity: 0.35;
 }
 
 button.card:hover .main {
