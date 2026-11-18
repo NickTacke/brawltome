@@ -1,0 +1,9 @@
+{
+  "game": { "state": "notRunning" },
+  "detection": { "state": "waiting" },
+  "service": { "state": "ok" },
+  "update": { "state": "idle" },
+  "isOverlayPaused": false,
+  "isMatchRunning": false,
+  "recentMatches": []
+}
