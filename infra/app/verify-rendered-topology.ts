@@ -54,6 +54,8 @@ const expectedSecretFiles: Record<string, string> = {
   otel_authorization: 'otel-authorization',
   postgres_owner_password: 'postgres-owner-password',
   postgres_runtime_password: 'postgres-runtime-password',
+  art_r2_access_key_id: 'art-r2-access-key-id',
+  art_r2_secret_access_key: 'art-r2-secret-access-key',
   r2_access_key_id: 'r2-access-key-id',
   r2_secret_access_key: 'r2-secret-access-key',
   refresh_trust_cookie_secret: 'refresh-trust-cookie-secret',
@@ -69,6 +71,8 @@ const expectedServiceSecrets: Record<string, string[]> = {
     'internal_api_secret',
     'metrics_scrape_secret',
     'otel_authorization',
+    'art_r2_access_key_id',
+    'art_r2_secret_access_key',
     'r2_access_key_id',
     'r2_secret_access_key',
     'refresh_trust_cookie_secret',
@@ -90,7 +94,7 @@ const siteRouterRule =
   'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || PathPrefix(`/match/`) || ' +
   'Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
   'Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || ' +
-  'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
+  'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || Path(`/images/legends/avatars/morgwyn.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
 
 const expectedSiteLabels: Record<string, string> = {
   'traefik.docker.network': 'dokploy-network',
@@ -250,6 +254,14 @@ export function verifyAppRenderedTopology(document: unknown): string[] {
       !/^https:\/\/[0-9a-f]{32}\.r2\.cloudflarestorage\.com$/.test(String(readPath(api, 'environment', 'R2_ENDPOINT')))
     ) {
       violations.push('api must reach R2 at the account endpoint')
+    }
+
+    if (readPath(api, 'environment', 'ART_R2_BUCKET') !== 'brawltome-art') {
+      violations.push('api must keep match art in the brawltome-art bucket')
+    }
+
+    if (readPath(api, 'environment', 'ART_BASE_URL') !== 'https://art.brawltome.app') {
+      violations.push('api must point pages at art.brawltome.app for match art')
     }
 
     if (readPath(api, 'environment', 'STEAM_RETURN_URL') !== 'https://api.brawltome.app/auth/steam/callback') {
@@ -429,6 +441,8 @@ function checkSecretEnvironment(violations: string[], name: string, value: unkno
     'OTEL_EXPORTER_OTLP_AUTHORIZATION',
     'POSTGRES_DEAD_LETTER_PASSWORD',
     'POSTGRES_PASSWORD',
+    'ART_R2_ACCESS_KEY_ID',
+    'ART_R2_SECRET_ACCESS_KEY',
     'R2_ACCESS_KEY_ID',
     'R2_SECRET_ACCESS_KEY',
     'REFRESH_TRUST_COOKIE_SECRET',
