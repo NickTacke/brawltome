@@ -58,6 +58,7 @@
       "!**/apps/web/next-env.d.ts",
       "!**/apps/site/src/routeTree.gen.ts",
       "!**/apps/site/public",
+      "!**/apps/site/tests/fixtures/*.insights.json",
       "!**/apps/desktop/app/gen",
       "!**/*.md",
       "!**/*.yml",

@@ -26,6 +26,7 @@ import { Route as MatchIdRouteImport } from './routes/match.$id'
 import { Route as PatchImagesNameRouteImport } from './routes/patch-images.$name'
 import { Route as PlayerIdRouteImport } from './routes/player.$id'
 import { Route as MatchIdReplayRouteImport } from './routes/match.$id.replay'
+import { Route as MatchIdPlaybackBuildVersionRouteImport } from './routes/match.$id.playback.$build.$version'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -112,6 +113,12 @@ const MatchIdReplayRoute = MatchIdReplayRouteImport.update({
   path: '/replay',
   getParentRoute: () => MatchIdRoute,
 } as any)
+const MatchIdPlaybackBuildVersionRoute =
+  MatchIdPlaybackBuildVersionRouteImport.update({
+    id: '/playback/$build/$version',
+    path: '/playback/$build/$version',
+    getParentRoute: () => MatchIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
   '/match/$id/replay': typeof MatchIdReplayRoute
+  '/match/$id/playback/$build/$version': typeof MatchIdPlaybackBuildVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -150,6 +158,7 @@ export interface FileRoutesByTo {
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
   '/match/$id/replay': typeof MatchIdReplayRoute
+  '/match/$id/playback/$build/$version': typeof MatchIdPlaybackBuildVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
   '/match/$id/replay': typeof MatchIdReplayRoute
+  '/match/$id/playback/$build/$version': typeof MatchIdPlaybackBuildVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/patch-images/$name'
     | '/player/$id'
     | '/match/$id/replay'
+    | '/match/$id/playback/$build/$version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/patch-images/$name'
     | '/player/$id'
     | '/match/$id/replay'
+    | '/match/$id/playback/$build/$version'
   id:
     | '__root__'
     | '/'
@@ -229,6 +241,7 @@ export interface FileRouteTypes {
     | '/patch-images/$name'
     | '/player/$id'
     | '/match/$id/replay'
+    | '/match/$id/playback/$build/$version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -371,15 +384,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatchIdReplayRouteImport
       parentRoute: typeof MatchIdRoute
     }
+    '/match/$id/playback/$build/$version': {
+      id: '/match/$id/playback/$build/$version'
+      path: '/playback/$build/$version'
+      fullPath: '/match/$id/playback/$build/$version'
+      preLoaderRoute: typeof MatchIdPlaybackBuildVersionRouteImport
+      parentRoute: typeof MatchIdRoute
+    }
   }
 }
 
 interface MatchIdRouteChildren {
   MatchIdReplayRoute: typeof MatchIdReplayRoute
+  MatchIdPlaybackBuildVersionRoute: typeof MatchIdPlaybackBuildVersionRoute
 }
 
 const MatchIdRouteChildren: MatchIdRouteChildren = {
   MatchIdReplayRoute: MatchIdReplayRoute,
+  MatchIdPlaybackBuildVersionRoute: MatchIdPlaybackBuildVersionRoute,
 }
 
 const MatchIdRouteWithChildren =
