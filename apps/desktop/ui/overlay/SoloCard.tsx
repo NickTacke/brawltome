@@ -59,10 +59,10 @@ export function SoloCard({ player, known, data, onOpenProfile, onRetry }: SoloCa
 function cardClass(data: CardData, known: Known | null): string {
   if (data.state === 'loading' && known === null) return 'card is-loading'
 
-  if (data.state !== 'ranked' || !data.isRefreshing) return 'card'
+  // stored figures beside memory's live elo are worth showing plainly; the refresh only nudges them
+  if (data.state === 'ranked' && data.isRefreshing && known === null) return 'card is-refreshing'
 
-  // memory's elo is live, so only the lookup's own figures wait for the refresh
-  return known === null ? 'card is-refreshing' : 'card is-refreshing-lookup'
+  return 'card'
 }
 
 // the lookup's tier is the game's own, subdivision included; memory alone knows the base tier
