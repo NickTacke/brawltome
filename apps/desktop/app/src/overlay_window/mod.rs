@@ -36,6 +36,7 @@ const CLEAR_EVENT: &str = "overlay://clear";
 /// (a diamond banner hangs below both kinds of card, so it sets their height)
 const FIRST_SOLO_SIZE_PX: (u32, u32) = (294, 134);
 const FIRST_TEAM_SIZE_PX: (u32, u32) = (294, 134);
+const FIRST_POST_MATCH_SIZE_PX: (u32, u32) = (294, 134);
 
 /// what the overlay page draws, how tall the monitor it draws on is, and which side the banners hang on
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -59,6 +60,7 @@ struct OverlayState {
     shown: Option<ShownCards>,
     measured_solo: Option<MeasuredSize>,
     measured_team: Option<MeasuredSize>,
+    measured_post_match: Option<MeasuredSize>,
 }
 
 struct ShownCards {
@@ -73,6 +75,7 @@ struct ShownCards {
 enum CardKind {
     Solo,
     Team,
+    PostMatch,
 }
 
 /// the physical size the page reported, and the height of the monitor it was on
@@ -294,6 +297,7 @@ impl OverlayState {
         let measured = match kind {
             CardKind::Solo => self.measured_solo,
             CardKind::Team => self.measured_team,
+            CardKind::PostMatch => self.measured_post_match,
         };
         let measured = measured.unwrap_or(MeasuredSize {
             size_px: kind.first_size_px(),
@@ -331,6 +335,7 @@ impl OverlayState {
         match kind {
             CardKind::Solo => self.measured_solo = Some(measured),
             CardKind::Team => self.measured_team = Some(measured),
+            CardKind::PostMatch => self.measured_post_match = Some(measured),
         }
 
         rect
@@ -341,6 +346,7 @@ impl CardKind {
     fn of(view: &OverlayView) -> Self {
         match view.cards.first() {
             Some(Card::Team { .. }) => Self::Team,
+            Some(Card::PostMatch(_)) => Self::PostMatch,
             _ => Self::Solo,
         }
     }
@@ -349,6 +355,7 @@ impl CardKind {
         match self {
             Self::Solo => FIRST_SOLO_SIZE_PX,
             Self::Team => FIRST_TEAM_SIZE_PX,
+            Self::PostMatch => FIRST_POST_MATCH_SIZE_PX,
         }
     }
 }

@@ -1,6 +1,6 @@
 //! decides what the overlay shows for each event, answer and timer; it runs nothing itself
 
-use brawltome_detection::{Event, MatchSnapshot};
+use brawltome_detection::{Event, MatchResult, MatchSnapshot};
 
 use crate::app_status::{
     unsupported_message, AppStatus, DetectionStatus, GameStatus, RecentMatch, ServiceStatus,
@@ -9,10 +9,12 @@ use crate::app_status::{
 use crate::lobby_client::{LobbyAnswer, LobbyPlayer, LobbyRequest, LookupFailure};
 use crate::overlay_view::{
     answered_view, failed_view, failure_reason, loading_view, Card, CardData, Failure,
-    FailureReason, LobbyOpponents, OverlayView, TeamData,
+    FailureReason, LobbyOpponents, OverlayView, PlayerHead, TeamData,
 };
+use crate::post_match::post_match_card;
 
 pub const CARDS_VISIBLE_MS: u64 = 12_000;
+pub const POST_MATCH_VISIBLE_MS: u64 = 10_000;
 pub const REFRESH_REASK_DELAY_MS: u64 = 3_000;
 pub const RETRY_DELAYS_MS: [u64; 3] = [1_000, 2_000, 4_000];
 pub const MAX_RECENT_MATCHES: usize = 5;
@@ -66,6 +68,8 @@ pub struct Session {
     status: AppStatus,
     phase: Phase,
     last_lobby_id: u64,
+    /// the opponents of the match whose result is still to come; none when its cards weren't shown
+    awaiting_result: Option<Vec<PlayerHead>>,
 }
 
 #[derive(Debug, Default)]
@@ -75,6 +79,11 @@ enum Phase {
     /// from the preview until the cards hide
     Loading(Lobby),
     InMatch,
+    /// the post-match card is up
+    PostMatch {
+        lobby_id: u64,
+        view: OverlayView,
+    },
 }
 
 /// a lobby whose cards are up, and where its lookup stands
@@ -135,6 +144,7 @@ impl Session {
     pub fn overlay_view(&self) -> Option<&OverlayView> {
         match &self.phase {
             Phase::Loading(lobby) => Some(&lobby.view),
+            Phase::PostMatch { view, .. } => Some(view),
             _ => None,
         }
     }
@@ -150,11 +160,20 @@ impl Session {
                 self.report_game(game_version, DetectionStatus::Unsupported { message })
             }
             Event::MatchStarted(snapshot) => self.on_match_started(&snapshot, now_ms),
-            Event::Queueing => self.change_phase(Phase::Menus),
-            Event::MatchEnded | Event::MatchSkipped { .. } => self.leave_match(),
+            Event::Queueing => {
+                self.awaiting_result = None;
+                self.change_phase(Phase::Menus)
+            }
+            Event::MatchEnded => self.leave_match(),
+            Event::MatchSkipped { .. } => {
+                self.awaiting_result = None;
+                self.leave_match()
+            }
+            Event::MatchResult(result) => self.on_match_result(&result),
             Event::GameClosed => {
                 self.status.game = GameStatus::NotRunning;
                 self.status.detection = DetectionStatus::Waiting;
+                self.awaiting_result = None;
                 self.leave_match()
             }
         }
@@ -180,11 +199,13 @@ impl Session {
             if was_loading {
                 self.forget_newest_match();
             }
+            self.awaiting_result = None;
             // nothing to show, but the game is in a match from here on
             return self.change_phase(Phase::InMatch);
         };
 
         self.remember_match(&opponents, was_loading, now_ms);
+        self.awaiting_result = Some(opponents.heads());
         self.show_lobby(opponents, now_ms)
     }
 
@@ -323,6 +344,10 @@ impl Session {
     }
 
     fn on_timer_fired(&mut self, lobby_id: u64, timer: Timer, now_ms: u64) -> Vec<Effect> {
+        if self.is_post_match_of(lobby_id) && timer == Timer::HideCards {
+            return self.change_phase(Phase::Menus);
+        }
+
         let Some(lobby) = self.loading_lobby(lobby_id) else {
             return Vec::new();
         };
@@ -362,13 +387,61 @@ impl Session {
 
     fn on_overlay_paused(&mut self, is_paused: bool) -> Vec<Effect> {
         self.status.is_overlay_paused = is_paused;
-
-        let is_loading = matches!(self.phase, Phase::Loading(_));
-        if !is_paused || !is_loading {
+        if !is_paused {
             return Vec::new();
         }
 
-        self.change_phase(Phase::InMatch)
+        match self.phase {
+            Phase::Loading(_) => self.change_phase(Phase::InMatch),
+            Phase::PostMatch { .. } => self.change_phase(Phase::Menus),
+            _ => Vec::new(),
+        }
+    }
+
+    /// the result belongs to the match whose cards were shown; the main window gets it too
+    fn on_match_result(&mut self, result: &MatchResult) -> Vec<Effect> {
+        let Some(opponents) = self.awaiting_result.take() else {
+            return Vec::new();
+        };
+
+        let card = post_match_card(opponents, result);
+        if let Some(recent_match) = self.status.recent_matches.first_mut() {
+            recent_match.is_win = Some(card.is_win);
+            recent_match.rating_change = Some(card.rating_change);
+        }
+
+        if self.status.is_overlay_paused {
+            return Vec::new();
+        }
+
+        self.show_post_match(Card::PostMatch(card))
+    }
+
+    fn show_post_match(&mut self, card: Card) -> Vec<Effect> {
+        self.last_lobby_id += 1;
+        let lobby_id = self.last_lobby_id;
+        let view = OverlayView {
+            lobby_id,
+            cards: vec![card],
+            visible_ms: POST_MATCH_VISIBLE_MS,
+        };
+
+        let mut effects = self.change_phase(Phase::PostMatch {
+            lobby_id,
+            view: view.clone(),
+        });
+        effects.push(Effect::ShowCards(view));
+        effects.push(Effect::StartTimer {
+            lobby_id,
+            timer: Timer::HideCards,
+            after_ms: POST_MATCH_VISIBLE_MS,
+        });
+
+        effects
+    }
+
+    fn is_post_match_of(&self, lobby_id: u64) -> bool {
+        matches!(&self.phase, Phase::PostMatch { lobby_id: shown, .. } if *shown == lobby_id)
     }
 
     /// moving on from a lobby takes its cards down and drops its work
@@ -377,6 +450,7 @@ impl Session {
 
         match previous_phase {
             Phase::Loading(_) => vec![Effect::HideCards, Effect::DropLobbyWork],
+            Phase::PostMatch { .. } => vec![Effect::HideCards],
             _ => Vec::new(),
         }
     }
@@ -583,6 +657,8 @@ mod tests {
     use crate::app_status::{DetectionStatus, GameStatus, ServiceStatus};
     use crate::lobby_client::{LobbyKind, LobbyPlayer, PlayerAnswer, Standing, TeamAnswer};
     use crate::overlay_view::{Card, CardData, Failure, FailureReason, PlayerHead, TeamData};
+    use crate::post_match::PostMatchCard;
+    use brawltome_detection::Change;
 
     const SHINIGAMI: u32 = 91_913_839;
     const TIDECALLER: u32 = 50_427_113;
@@ -1692,5 +1768,112 @@ mod tests {
             "../../tests/fixtures/app-status-unsupported.json"
         ));
         assert_eq!(as_json(unsupported.status()), expected);
+    }
+
+    fn won_1v1() -> Input {
+        detection(Event::MatchResult(MatchResult {
+            rating: Change {
+                before: 1652,
+                after: 1667,
+            },
+            tier: Change {
+                before: 24,
+                after: 24,
+            },
+            team: None,
+        }))
+    }
+
+    fn post_match(view: &OverlayView) -> &PostMatchCard {
+        match &view.cards[..] {
+            [Card::PostMatch(card)] => card,
+            other => panic!("expected a post-match card, got {other:?}"),
+        }
+    }
+
+    /// a ranked 1v1 shown, played and ended, waiting for its result
+    fn ended_match(session: &mut Session) {
+        let lobby_id = start(session, ranked_1v1(), 0);
+        session.handle(fired(lobby_id, Timer::HideCards), 12_000);
+        session.handle(detection(Event::MatchEnded), 200_000);
+    }
+
+    #[test]
+    fn the_result_shows_the_post_match_card_against_the_match_opponents() {
+        let mut session = Session::new();
+        ended_match(&mut session);
+
+        let effects = session.handle(won_1v1(), 201_000);
+
+        let card = post_match(only_shown(&effects));
+        assert!(card.is_win);
+        assert_eq!(card.rating, 1667);
+        assert_eq!(card.rating_change, 15);
+        assert_eq!(card.opponents[0].brawlhalla_id, SHINIGAMI);
+        assert_eq!(timers(&effects), vec![(Timer::HideCards, 10_000)]);
+    }
+
+    #[test]
+    fn the_result_fills_in_the_recent_match() {
+        let mut session = Session::new();
+        ended_match(&mut session);
+
+        session.handle(won_1v1(), 201_000);
+
+        let recent_match = &session.status().recent_matches[0];
+        assert_eq!(recent_match.is_win, Some(true));
+        assert_eq!(recent_match.rating_change, Some(15));
+    }
+
+    #[test]
+    fn the_post_match_card_hides_after_its_time_or_on_the_next_queue() {
+        let mut timed = Session::new();
+        ended_match(&mut timed);
+        let lobby_id = only_shown(&timed.handle(won_1v1(), 201_000)).lobby_id;
+
+        let effects = timed.handle(fired(lobby_id, Timer::HideCards), 211_000);
+        assert_eq!(effects, vec![Effect::HideCards]);
+        assert!(timed.overlay_view().is_none());
+
+        let mut queued = Session::new();
+        ended_match(&mut queued);
+        queued.handle(won_1v1(), 201_000);
+
+        let effects = queued.handle(detection(Event::Queueing), 203_000);
+        assert_eq!(effects, vec![Effect::HideCards]);
+    }
+
+    #[test]
+    fn a_result_without_shown_cards_shows_nothing() {
+        let mut session = Session::new();
+        session.handle(detection(Event::MatchEnded), 200_000);
+
+        let effects = session.handle(won_1v1(), 201_000);
+
+        assert_eq!(effects, vec![]);
+    }
+
+    #[test]
+    fn a_result_comes_once_per_match() {
+        let mut session = Session::new();
+        ended_match(&mut session);
+        session.handle(won_1v1(), 201_000);
+        session.handle(detection(Event::Queueing), 203_000);
+
+        let effects = session.handle(won_1v1(), 204_000);
+
+        assert_eq!(effects, vec![]);
+    }
+
+    #[test]
+    fn a_paused_overlay_keeps_the_result_for_the_main_window_only() {
+        let mut session = Session::new();
+        ended_match(&mut session);
+        session.handle(Input::OverlayPaused(true), 200_500);
+
+        let effects = session.handle(won_1v1(), 201_000);
+
+        assert!(shown(&effects).is_empty());
+        assert_eq!(session.status().recent_matches[0].is_win, Some(true));
     }
 }

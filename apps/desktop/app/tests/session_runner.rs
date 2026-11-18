@@ -262,7 +262,7 @@ fn is_ranked_card_of(view: &OverlayView, brawlhalla_id: u32) -> bool {
         Card::Solo { player, data } => {
             player.brawlhalla_id == brawlhalla_id && matches!(data, CardData::Ranked { .. })
         }
-        Card::Team { .. } => false,
+        Card::Team { .. } | Card::PostMatch(_) => false,
     })
 }
 
