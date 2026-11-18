@@ -7,7 +7,7 @@ use brawltome_desktop::lobby_client::{
     LobbyAnswer, LobbyLookup, LobbyRequest, LookupFailure, PlayerAnswer, Standing, TeamAnswer,
 };
 use brawltome_desktop::overlay_view::{Card, CardData, OverlayView};
-use brawltome_desktop::session::Input;
+use brawltome_desktop::session::{Input, REFRESH_REASK_DELAY_MS};
 use brawltome_desktop::session_runner::{self, LinkOpener, OverlaySurface, SessionHandle};
 use brawltome_detection::{Event, MatchSnapshot, MatchType, Player};
 use tokio::sync::mpsc;
@@ -23,7 +23,9 @@ fn player(brawlhalla_id: u32, name: &str, team: u32, is_local: bool) -> Player {
         team,
         legend: Some("Hattori".to_string()),
         is_local,
-        personal_rating_2v2: None,
+        is_in_party: is_local,
+        clan: None,
+        ranked: None,
     }
 }
 
@@ -259,10 +261,12 @@ fn solo_data(view: &OverlayView) -> &CardData {
 
 fn is_ranked_card_of(view: &OverlayView, brawlhalla_id: u32) -> bool {
     view.cards.iter().any(|card| match card {
-        Card::Solo { player, data } => {
+        Card::Solo { player, data, .. } => {
             player.brawlhalla_id == brawlhalla_id && matches!(data, CardData::Ranked { .. })
         }
-        Card::Team { .. } | Card::PostMatch(_) | Card::Status { .. } => false,
+        Card::Team { .. } | Card::Teammate { .. } | Card::PostMatch(_) | Card::Status { .. } => {
+            false
+        }
     })
 }
 
@@ -295,7 +299,7 @@ async fn a_ranked_lobby_shows_loading_then_the_answer_then_hides_after_twelve_se
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_refreshing_answer_is_asked_for_again_three_seconds_later() {
+async fn a_refreshing_answer_is_asked_for_again_a_moment_later() {
     let harness = Harness::start(vec![
         Scripted {
             delay_ms: 0,
@@ -310,7 +314,10 @@ async fn a_refreshing_answer_is_asked_for_again_three_seconds_later() {
     harness.detect(ranked_1v1_against(SHINIGAMI)).await;
     wait_ms(20_000).await;
 
-    assert_eq!(harness.lookup.calls_at_ms(), vec![0, 3_000]);
+    assert_eq!(
+        harness.lookup.calls_at_ms(),
+        vec![0, REFRESH_REASK_DELAY_MS]
+    );
 }
 
 #[tokio::test(start_paused = true)]

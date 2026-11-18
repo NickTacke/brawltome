@@ -118,9 +118,7 @@ function PlayerRow({ player, onOpenProfile }: PlayerRowProps) {
 // the player's own rank, the way the 1v1 card's subtitle reads: the personal 2v2 elo from the game's memory with
 // its tier, else the 1v1 elo marked as such, else an empty line so both rows keep their height
 function PlayerStanding({ player }: { player: TeamPlayer }) {
-  if (player.personalRating2v2 !== null) {
-    return <RatingLine lead={baseTierFor(player.personalRating2v2)} rating={player.personalRating2v2} />
-  }
+  if (player.known !== null) return <RatingLine lead={baseTierFor(player.known.rating)} rating={player.known.rating} />
 
   if (player.oneVsOneRating !== null) return <RatingLine lead="1v1" rating={player.oneVsOneRating} />
 

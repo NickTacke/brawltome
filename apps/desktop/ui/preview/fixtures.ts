@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Card, CardData, OverlayView, StatusView, TeamData } from '../overlay/overlay-view'
+import type { Card, CardData, Known, OverlayView, StatusView, TeamData } from '../overlay/overlay-view'
 
 // the json files are the shape the app sends; the rust tests compare against the same files
 const fixtureFiles = import.meta.glob<OverlayView>('../../tests/fixtures/overlay-view-*.json', {
@@ -41,6 +41,22 @@ function withSoloData(data: CardData): OverlayView {
   return { ...view, cards: [{ ...soloCard(view), data }] }
 }
 
+function withSoloKnown(known: Known | null, data: CardData): OverlayView {
+  const view = requireFixture('solo-ranked')
+
+  return { ...view, cards: [{ ...soloCard(view), known, data }] }
+}
+
+function withRandomTeammate(view: OverlayView): OverlayView {
+  const teammate: Card = {
+    kind: 'teammate',
+    player: { brawlhallaId: 129934401, name: 'Fox', legend: 'Ember' },
+    known: { rating: 1987, games: 117 },
+  }
+
+  return { ...view, cards: [...view.cards, teammate] }
+}
+
 function withSoloPlayer(name: string, legend: string | null): OverlayView {
   const view = requireFixture('solo-ranked')
   const card = soloCard(view)
@@ -61,6 +77,21 @@ function withNewDuo(view: OverlayView): OverlayView {
 }
 
 export type StateCell = { title: string; view: OverlayView }
+
+// what the game's memory gives before the lookup answers, and what stays when the lookup fails
+export function memoryCells(): StateCell[] {
+  const loading: CardData = { state: 'loading' }
+  const down: CardData = { state: 'failed', reason: 'unavailable', retryInSeconds: 4, canRetry: true }
+
+  return [
+    { title: 'From memory, looking up', view: withSoloKnown({ rating: 2130, games: 1204 }, loading) },
+    { title: 'Lookup answered', view: requireFixture('solo-ranked') },
+    { title: 'From memory, server down', view: withSoloKnown({ rating: 2130, games: 1204 }, down) },
+    { title: 'In placement', view: withSoloKnown({ rating: 1186, games: 3 }, loading) },
+    { title: 'Nothing in memory, looking up', view: withSoloKnown(null, loading) },
+    { title: '2v2 with a random teammate', view: withRandomTeammate(requireFixture('team')) },
+  ]
+}
 
 export function stateCells(): StateCell[] {
   const team = requireFixture('team')

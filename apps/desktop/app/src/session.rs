@@ -19,7 +19,8 @@ pub const POST_MATCH_VISIBLE_MS: u64 = 10_000;
 pub const CONNECTING_VISIBLE_MS: u64 = 30_000;
 pub const READY_VISIBLE_MS: u64 = 5_000;
 pub const UNSUPPORTED_VISIBLE_MS: u64 = 10_000;
-pub const REFRESH_REASK_DELAY_MS: u64 = 3_000;
+/// seen live, a lobby refresh lands 1 to 1.8 s after the first answer; the app asks only once more
+pub const REFRESH_REASK_DELAY_MS: u64 = 1_500;
 pub const RETRY_DELAYS_MS: [u64; 3] = [1_000, 2_000, 4_000];
 pub const MAX_RECENT_MATCHES: usize = 5;
 
@@ -675,13 +676,17 @@ fn offers_retry(card: &Card) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use brawltome_detection::{MatchSnapshot, MatchType, Player, SkipReason, UnsupportedReason};
+    use brawltome_detection::{
+        MatchSnapshot, MatchType, Player, RankedStanding, SkipReason, UnsupportedReason,
+    };
     use serde_json::Value;
 
     use super::*;
     use crate::app_status::{DetectionStatus, GameStatus, ServiceStatus};
     use crate::lobby_client::{LobbyKind, LobbyPlayer, PlayerAnswer, Standing, TeamAnswer};
-    use crate::overlay_view::{Card, CardData, Failure, FailureReason, PlayerHead, TeamData};
+    use crate::overlay_view::{
+        Card, CardData, Failure, FailureReason, Known, PlayerHead, TeamData,
+    };
     use crate::post_match::PostMatchCard;
     use brawltome_detection::Change;
 
@@ -697,20 +702,31 @@ mod tests {
             team,
             legend: Some(legend.to_string()),
             is_local: false,
-            personal_rating_2v2: None,
+            is_in_party: false,
+            clan: None,
+            ranked: None,
         }
     }
 
     fn local_player() -> Player {
         Player {
             is_local: true,
+            is_in_party: true,
             ..player(1, "me", 1, "Bodvar")
+        }
+    }
+
+    /// a teammate the local player queued with
+    fn party_mate() -> Player {
+        Player {
+            is_in_party: true,
+            ..player(2, "mate", 1, "Ember")
         }
     }
 
     fn with_personal_rating(player: Player, rating: u32) -> Player {
         Player {
-            personal_rating_2v2: Some(rating),
+            ranked: Some(RankedStanding { rating, games: 40 }),
             ..player
         }
     }
@@ -723,10 +739,15 @@ mod tests {
     }
 
     fn ranked_1v1() -> MatchSnapshot {
-        snapshot(
-            MatchType::Ranked1v1,
-            vec![local_player(), player(SHINIGAMI, "Shinigami", 2, "Hattori")],
-        )
+        let shinigami = Player {
+            ranked: Some(RankedStanding {
+                rating: 2130,
+                games: 1204,
+            }),
+            ..player(SHINIGAMI, "Shinigami", 2, "Hattori")
+        };
+
+        snapshot(MatchType::Ranked1v1, vec![local_player(), shinigami])
     }
 
     fn ranked_1v1_against(brawlhalla_id: u32, name: &str) -> MatchSnapshot {
@@ -744,7 +765,7 @@ mod tests {
             MatchType::Ranked2v2,
             vec![
                 local_player(),
-                player(2, "mate", 1, "Ember"),
+                party_mate(),
                 with_personal_rating(shinigami, 2190),
                 with_personal_rating(tidecaller, 2075),
             ],
@@ -1116,6 +1137,10 @@ mod tests {
                     name: "Shinigami".to_string(),
                     legend: Some("Hattori".to_string()),
                 },
+                known: Some(Known {
+                    rating: 2130,
+                    games: 1204,
+                }),
                 data: CardData::Loading,
             }],
             visible_ms: 12_000,
@@ -1169,7 +1194,10 @@ mod tests {
         let refreshing_answer = refreshing(answer_for(&ranked_1v1()));
 
         let first = session.handle(answered(lobby_id, refreshing_answer.clone()), 500);
-        assert_eq!(timers(&first), vec![(Timer::LookUp, 3_000)]);
+        assert_eq!(
+            timers(&first),
+            vec![(Timer::LookUp, REFRESH_REASK_DELAY_MS)]
+        );
         let page_fixture = view_fixture(
             include_str!("../../tests/fixtures/overlay-view-solo-refreshing.json"),
             lobby_id,
@@ -1408,12 +1436,12 @@ mod tests {
         ];
         let one_opponent = vec![
             local_player(),
-            player(2, "mate", 1, "Ember"),
+            party_mate(),
             player(SHINIGAMI, "Shinigami", 2, "Hattori"),
         ];
         let opponents_on_two_teams = vec![
             local_player(),
-            player(2, "mate", 1, "Ember"),
+            party_mate(),
             player(SHINIGAMI, "Shinigami", 2, "Hattori"),
             player(TIDECALLER, "tidecaller", 3, "Petra"),
         ];
@@ -1501,11 +1529,46 @@ mod tests {
     }
 
     #[test]
+    fn a_random_teammate_gets_a_card_below_the_opponents() {
+        let mut session = Session::new();
+        let mut lobby = ranked_2v2();
+        lobby.players[1] = with_personal_rating(player(3, "random", 1, "Ember"), 1200);
+
+        let effects = session.handle(started(lobby), 0);
+
+        let cards = &only_shown(&effects).cards;
+        assert!(matches!(cards[0], Card::Team { .. }));
+        assert_eq!(
+            cards[1],
+            Card::Teammate {
+                player: PlayerHead {
+                    brawlhalla_id: 3,
+                    name: "random".to_string(),
+                    legend: Some("Ember".to_string()),
+                },
+                known: Some(Known {
+                    rating: 1200,
+                    games: 40,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn a_teammate_in_the_party_gets_no_card() {
+        let mut session = Session::new();
+
+        let effects = session.handle(started(ranked_2v2()), 0);
+
+        assert_eq!(only_shown(&effects).cards.len(), 1);
+    }
+
+    #[test]
     fn a_2v2_card_without_memory_ratings_carries_the_1v1_elo() {
         let mut session = Session::new();
         let mut lobby = ranked_2v2();
         for player in &mut lobby.players {
-            player.personal_rating_2v2 = None;
+            player.ranked = None;
         }
         let lobby_id = start(&mut session, lobby.clone(), 0);
         let mut answer = answer_for(&lobby);
@@ -1877,7 +1940,7 @@ mod tests {
             MatchType::Ranked2v2,
             vec![
                 local_player(),
-                player(2, "mate", 1, "Ember"),
+                party_mate(),
                 player(KOA, "Koa", 2, "Ada"),
                 player(RIMELIGHT, "rimelight", 2, "Lucien"),
             ],

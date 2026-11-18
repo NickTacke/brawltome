@@ -81,15 +81,15 @@ describe('card format', () => {
 
     expect(
       teamAverage([
-        { ...player, personalRating2v2: 2244 },
-        { ...player, personalRating2v2: 2208 },
+        { ...player, known: { rating: 2244, games: 40 } },
+        { ...player, known: { rating: 2208, games: 40 } },
       ]),
     ).toBe(2226)
 
     expect(
       teamAverage([
-        { ...player, personalRating2v2: 2244 },
-        { ...player, personalRating2v2: null },
+        { ...player, known: { rating: 2244, games: 40 } },
+        { ...player, known: null },
       ]),
     ).toBeNull()
   })

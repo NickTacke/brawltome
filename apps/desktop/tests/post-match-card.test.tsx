@@ -23,10 +23,10 @@ function textOf(html: string): string {
 }
 
 describe('post-match card', () => {
-  test('a win shows the result, the opponent and the new elo with its change', () => {
+  test('a win shows the result, the opponent and the elo from before to after with its change', () => {
     const html = render(won)
 
-    expect(textOf(html)).toBe('WonvsShinigami2130+18Elo')
+    expect(textOf(html)).toBe('WonvsShinigami2112 →2130+18Elo')
     expect(html).toContain('class="result won"')
     expect(html).toContain('src="/banners/Diamond.png"')
   })
@@ -39,10 +39,10 @@ describe('post-match card', () => {
     expect(signedChange(-16)).toBe('−16')
   })
 
-  test('a new tier is the second figure', () => {
+  test('a new tier gets its own row under the elo', () => {
     const html = render({ ...won, tierChange: 'up' })
 
-    expect(textOf(html)).toContain('DiamondUp a tier')
+    expect(textOf(html)).toContain('Up a tierDiamond')
   })
 
   test('a 2v2 names both opponents and shows your own 2v2 elo', () => {
@@ -50,7 +50,7 @@ describe('post-match card', () => {
     const html = render({ ...won, opponents: [...won.opponents, koa], personal2v2: { rating: 2190, change: 9 } })
 
     expect(textOf(html)).toContain('Shinigami + Koa')
-    expect(textOf(html)).toContain('Team Elo2190+9Your 2v2 Elo')
+    expect(textOf(html)).toContain('Team EloYour 2v2 Elo2181 → 2190+9')
   })
 
   test('the card only opens the match page once it is ready', () => {

@@ -24,13 +24,14 @@ export function PostMatchCard({ match, onOpenMatchPage }: PostMatchCardProps) {
         <span className="figures">
           <span className="stat">
             <span className="stat-value">
+              <span className="elo-before">{`${match.rating - match.ratingChange} →`}</span>
               <span className="elo">{match.rating}</span>
               <Change change={match.ratingChange} />
             </span>
             <span className="stat-label">{match.opponents.length > 1 ? 'Team Elo' : 'Elo'}</span>
           </span>
-          <SecondFigure match={match} />
         </span>
+        <SecondRow match={match} />
         {match.matchPage !== null && <MatchPageRow state={match.matchPage} />}
       </span>
     </>
@@ -64,26 +65,29 @@ function Change({ change }: { change: number }) {
   return <span className={change < 0 ? 'change down' : 'change up'}>{signedChange(change)}</span>
 }
 
-// a new tier is the news when there is one; in a 2v2 the player's own elo comes next
-function SecondFigure({ match }: { match: PostMatchView }) {
+// a new tier is the news when there is one; in a 2v2 the player's own elo comes next. It gets its own row, since
+// the elo above already takes the card's width
+function SecondRow({ match }: { match: PostMatchView }) {
   if (match.tierChange !== null && match.tier !== null) {
     return (
-      <span className="stat">
-        <span className={`stat-value rate tier-${match.tierChange}`}>{tierLabel(match.tier)}</span>
-        <span className="stat-label">{match.tierChange === 'up' ? 'Up a tier' : 'Down a tier'}</span>
+      <span className="second-row">
+        <span>{match.tierChange === 'up' ? 'Up a tier' : 'Down a tier'}</span>
+        <span className={`second-value tier-${match.tierChange}`}>{tierLabel(match.tier)}</span>
       </span>
     )
   }
 
   if (match.personal2v2 === null) return null
 
+  const { rating, change } = match.personal2v2
+
   return (
-    <span className="stat">
-      <span className="stat-value rate">
-        {match.personal2v2.rating}
-        <Change change={match.personal2v2.change} />
+    <span className="second-row">
+      <span>Your 2v2 Elo</span>
+      <span className="second-value">
+        {`${rating - change} → ${rating}`}
+        <Change change={change} />
       </span>
-      <span className="stat-label">Your 2v2 Elo</span>
     </span>
   )
 }

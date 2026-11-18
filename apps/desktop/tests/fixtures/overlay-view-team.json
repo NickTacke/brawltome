@@ -6,7 +6,13 @@
       "team": 2,
       "data": {
         "state": "ready",
-        "standing": { "tier": "Diamond", "rating": 2284, "peakRating": 2301, "wins": 51, "games": 90 },
+        "standing": {
+          "tier": "Diamond",
+          "rating": 2284,
+          "peakRating": 2301,
+          "wins": 51,
+          "games": 90
+        },
         "isRefreshing": false
       },
       "players": [
@@ -14,15 +20,21 @@
           "brawlhallaId": 91913839,
           "name": "Shinigami",
           "legend": "Hattori",
-          "personalRating2v2": 2190,
-          "oneVsOneRating": null
+          "oneVsOneRating": null,
+          "known": {
+            "rating": 2190,
+            "games": 40
+          }
         },
         {
           "brawlhallaId": 50427113,
           "name": "tidecaller",
           "legend": "Petra",
-          "personalRating2v2": 2075,
-          "oneVsOneRating": null
+          "oneVsOneRating": null,
+          "known": {
+            "rating": 2075,
+            "games": 40
+          }
         }
       ]
     }

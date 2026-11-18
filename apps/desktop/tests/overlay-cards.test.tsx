@@ -4,7 +4,7 @@ import path from 'node:path'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { type BannerSide, Overlay } from '../ui/overlay/Overlay'
-import type { CardData, OverlayView } from '../ui/overlay/overlay-view'
+import type { CardData, Known, OverlayView } from '../ui/overlay/overlay-view'
 import { SoloCard } from '../ui/overlay/SoloCard'
 
 function fixture(name: string): OverlayView {
@@ -90,6 +90,75 @@ function withSoloName(view: OverlayView, name: string): OverlayView {
   return { ...view, cards: [{ ...card, player: { ...card.player, name } }] }
 }
 
+// a player the game's memory holds nothing about, like one in another playlist's first match
+function withoutMemory(view: OverlayView): OverlayView {
+  const [card] = view.cards
+
+  if (card?.kind !== 'solo') throw new Error('expected a solo card in the fixture')
+
+  return { ...view, cards: [{ ...card, known: null }] }
+}
+
+function withKnown(view: OverlayView, known: Known): OverlayView {
+  const [card] = view.cards
+
+  if (card?.kind !== 'solo') throw new Error('expected a solo card in the fixture')
+
+  return { ...view, cards: [{ ...card, known }] }
+}
+
+describe('cards from memory', () => {
+  test('a card shows the Elo, base tier and games before the lookup answers, without a spinner', () => {
+    const html = render(fixture('solo-loading'))
+
+    expect(textOf(partOf(html, 'sub'))).toBe('Diamond')
+    expect(html).toContain('src="/banners/Diamond.png"')
+    expect(textOf(partOf(html, 'figures'))).toBe('2130Elo / peak1,204 games')
+    expect(html).toContain('peak-bar')
+    expect(html).not.toContain('class="spinner"')
+  })
+
+  test('a failed lookup keeps the memory figures and says why where the win rate goes', () => {
+    const html = render(fixture('solo-failed'))
+
+    expect(textOf(partOf(html, 'figures'))).toBe('2130Elo—BrawlTome is down')
+    expect(html).not.toContain('Retry')
+  })
+
+  test('a player in placement shows how far, and no banner', () => {
+    const html = render(withKnown(fixture('solo-loading'), { rating: 1186, games: 3 }))
+
+    expect(textOf(partOf(html, 'sub'))).toBe('Placement 3/10')
+    expect(html).toContain('banner-empty')
+  })
+
+  test('the Elo from memory wins over an older one from the lookup', () => {
+    const html = render(withKnown(fixture('solo-ranked'), { rating: 2141, games: 1205 }))
+
+    expect(textOf(partOf(html, 'figures'))).toContain('2141/ 2204')
+  })
+
+  test('a random teammate gets a card under the opponents', () => {
+    const team = fixture('team')
+
+    const view: OverlayView = {
+      ...team,
+      cards: [
+        ...team.cards,
+        {
+          kind: 'teammate',
+          player: { brawlhallaId: 7, name: 'Fox', legend: 'Ember' },
+          known: { rating: 1987, games: 117 },
+        },
+      ],
+    }
+
+    const html = render(view)
+
+    expect(textOf(partOf(html, 'teammate-card'))).toBe('FoxYour teammate·Platinum1987Their 2v2 Elo117games')
+  })
+})
+
 describe('overlay cards', () => {
   test('a ranked card shows tier, rank, Elo, peak, win rate and games, and no region', () => {
     const html = render(fixture('solo-ranked'))
@@ -103,8 +172,16 @@ describe('overlay cards', () => {
     expect(html).not.toContain('class="spinner"')
   })
 
-  test('a card with stored data that is refreshing shows the spinner', () => {
+  test('a refresh with memory figures on the card shows the stored figures plainly, without a spinner', () => {
     const html = render(fixture('solo-refreshing'))
+
+    expect(html).not.toContain('is-refreshing')
+    expect(html).not.toContain('class="spinner"')
+    expect(textOf(partOf(html, 'figures'))).toContain('2130')
+  })
+
+  test('a card with stored data that is refreshing shows the spinner', () => {
+    const html = render(withoutMemory(fixture('solo-refreshing')))
 
     expect(textOf(partOf(html, 'sub'))).toBe('Diamond·#48')
     expect(html).toContain('class="spinner"')
@@ -113,7 +190,7 @@ describe('overlay cards', () => {
   })
 
   test('an unknown player reads No ranked data and has no figures', () => {
-    const html = render(fixture('solo-no-data'))
+    const html = render(withoutMemory(fixture('solo-no-data')))
 
     expect(textOf(partOf(html, 'sub'))).toBe('No ranked data')
     expect(html).not.toContain('figures')
@@ -121,7 +198,7 @@ describe('overlay cards', () => {
   })
 
   test('a failed card says why and when it tries again', () => {
-    const html = render(fixture('solo-failed'))
+    const html = render(withoutMemory(fixture('solo-failed')))
 
     expect(textOf(partOf(html, 'sub'))).toBe('BrawlTome is down')
     expect(textOf(partOf(html, 'note'))).toBe('Try again in 4s')
@@ -129,7 +206,7 @@ describe('overlay cards', () => {
   })
 
   test('a failed card still opens the profile from its head', () => {
-    const view = fixture('solo-failed')
+    const view = withoutMemory(fixture('solo-failed'))
     const [card] = view.cards
 
     if (card?.kind !== 'solo') throw new Error('expected a solo card in the fixture')
@@ -139,6 +216,7 @@ describe('overlay cards', () => {
 
     const failedCard = SoloCard({
       player: card.player,
+      known: null,
       data: card.data,
       onOpenProfile: (brawlhallaId) => opened.push(brawlhallaId),
       onRetry: ignore,
@@ -155,14 +233,14 @@ describe('overlay cards', () => {
 
   test('a failed card without a retry has no retry row', () => {
     const failed: CardData = { state: 'failed', reason: 'updateRequired', retryInSeconds: null, canRetry: false }
-    const html = render(withSoloData(fixture('solo-failed'), failed))
+    const html = render(withSoloData(withoutMemory(fixture('solo-failed')), failed))
 
     expect(textOf(partOf(html, 'sub'))).toBe('Update BrawlTome')
     expect(html).not.toContain('plain-row')
   })
 
-  test('a loading card already shows the name and legend', () => {
-    const html = render(fixture('solo-loading'))
+  test('a loading card without memory data shows the name and legend', () => {
+    const html = render(withoutMemory(fixture('solo-loading')))
 
     expect(textOf(partOf(html, 'name'))).toBe('Shinigami')
     expect(html).toContain('src="/legends/hattori.png"')
@@ -206,7 +284,7 @@ describe('overlay cards', () => {
   })
 
   test('a known player with no games this season shows zeros, not No ranked data', () => {
-    const ranked = fixture('solo-ranked')
+    const ranked = withoutMemory(fixture('solo-ranked'))
 
     const zeroGames: CardData = {
       state: 'ranked',

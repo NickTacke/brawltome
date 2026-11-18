@@ -272,6 +272,18 @@ button.card {
   height: 18px;
   border-radius: 4px;
   background: hsl(var(--raised) / 0.7);
+  animation: waiting 2s ease-in-out infinite;
+}
+
+/* what is still on its way pulses, so it reads as loading rather than greyed out */
+@keyframes waiting {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .bar.lead {
@@ -288,6 +300,26 @@ button.card {
 .bar.label-bar {
   width: 64px;
   height: 8px;
+}
+
+/* the peak and the win rate while the lookup runs, beside figures memory already gave */
+.bar.peak-bar {
+  display: inline-block;
+  width: 48px;
+  height: 16px;
+  margin-left: 6px;
+  vertical-align: -1px;
+}
+
+.bar.rate-bar {
+  width: 54px;
+  height: 22px;
+  margin: 4px 0;
+}
+
+/* says whose card it is, since it shows the player's own side */
+.teammate-lead {
+  color: hsl(var(--primary));
 }
 
 .note {
@@ -472,6 +504,14 @@ button.card:hover .arrow {
   transform: translateX(3px);
 }
 
+/* where the elo stood before the match, so the change reads from one number to the other */
+.elo-before {
+  margin-right: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  color: hsl(var(--soft));
+}
+
 .change {
   margin-left: 6px;
   font-size: 17px;
@@ -485,6 +525,31 @@ button.card:hover .arrow {
 
 .change.down {
   color: hsl(var(--lost));
+}
+
+/* a tier change or the own 2v2 elo, one line under the elo */
+.second-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  font-size: 13px;
+  font-weight: 700;
+  color: hsl(var(--soft));
+  white-space: nowrap;
+}
+
+.second-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: hsl(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.second-value .change {
+  font-size: 14px;
 }
 
 .tier-up {
@@ -582,7 +647,8 @@ button.card:hover .name {
 
 @media (prefers-reduced-motion: reduce) {
   .banner,
-  .spinner {
+  .spinner,
+  .bar {
     animation: none;
   }
 }

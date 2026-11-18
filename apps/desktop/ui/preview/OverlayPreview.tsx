@@ -3,7 +3,7 @@ import { type BannerSide, Overlay } from '../overlay/Overlay'
 import type { OverlayView } from '../overlay/overlay-view'
 import { PostMatchCard } from '../overlay/PostMatchCard'
 import type { PostMatchView } from '../overlay/post-match'
-import { overlayFixture, type StateCell, stateCells, statusCells, tierCells } from './fixtures'
+import { memoryCells, overlayFixture, type StateCell, stateCells, statusCells, tierCells } from './fixtures'
 import { postMatchCells } from './post-match-fixtures'
 
 const FRAME_HEIGHT_PX = 1080
@@ -12,7 +12,7 @@ const OVERLAY_TOP_PX = 24
 type OverlayPreviewProps = { card: string; bannerSide: BannerSide }
 
 // ?page=overlay&card=<fixture> draws one fixture over a game frame, &card=states draws them all, &card=teams only the
-// 2v2 ones, &card=tiers one 1v1 card per tier, &card=status the app's status card; &side=right puts the cards in the middle of the right edge, mirrored like
+// 2v2 ones, &card=tiers one 1v1 card per tier, &card=status the app's status card, &card=memory what shows from the game's memory; &side=right puts the cards in the middle of the right edge, mirrored like
 // the app does there
 export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
   if (card === 'post-match') return <PostMatchSheet bannerSide={bannerSide} />
@@ -28,7 +28,7 @@ export function OverlayPreview({ card, bannerSide }: OverlayPreviewProps) {
     )
   }
 
-  if (card === 'states' || card === 'tiers' || card === 'teams' || card === 'status') {
+  if (card === 'states' || card === 'tiers' || card === 'teams' || card === 'status' || card === 'memory') {
     return <StatesSheet cells={sheetCells(card)} bannerSide={bannerSide} />
   }
 
@@ -52,6 +52,8 @@ function sheetCells(card: string): StateCell[] {
   if (card === 'teams') return stateCells().filter((cell) => cell.title.startsWith('2v2'))
 
   if (card === 'status') return statusCells()
+
+  if (card === 'memory') return memoryCells()
 
   return stateCells()
 }

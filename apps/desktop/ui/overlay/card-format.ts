@@ -1,4 +1,4 @@
-import type { FailureReason, TeamPlayer } from './overlay-view'
+import type { FailureReason, Known, TeamPlayer } from './overlay-view'
 
 const REFERENCE_HEIGHT_PX = 1080
 // the cards are drawn at 392 px wide; on a real screen three quarters of that is enough
@@ -92,10 +92,22 @@ export function baseTierFor(rating: number): string {
   return floor?.[0] ?? 'Tin'
 }
 
+// the game counts a player with fewer ranked games than this as in placement
+export const PLACEMENT_GAMES = 10
+
+export function isInPlacement(known: Known): boolean {
+  return known.games < PLACEMENT_GAMES
+}
+
+// the tier memory alone can tell: the base tier of the elo, none while in placement
+export function knownTier(known: Known): string | null {
+  return isInPlacement(known) ? null : baseTierFor(known.rating)
+}
+
 // a team without a stored rating, usually a new duo, is shown by the mean of the players' personal 2v2 elo, when
 // the game gave it for every player
 export function teamAverage(players: TeamPlayer[]): number | null {
-  const ratings = players.map((player) => player.personalRating2v2)
+  const ratings = players.map((player) => player.known?.rating ?? null)
 
   if (ratings.length === 0 || ratings.some((rating) => rating === null)) return null
 
