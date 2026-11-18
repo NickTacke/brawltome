@@ -59,11 +59,13 @@ function markLayerStyle(camera: Camera): CSSProperties {
   }
 }
 
-// why the legends aren't drawn, when they aren't coming
-function LegendsNote() {
-  return (
-    <span className="rounded-sm bg-ink/80 px-1.5 text-xs leading-5 text-soft">Legends unavailable for this match</span>
-  )
+// why the legends aren't drawn: they are still being drawn, or they aren't coming
+function LegendsNote({ state }: { state: Legends['state'] }) {
+  if (state !== 'drawing' && state !== 'unavailable') return null
+
+  const text = state === 'drawing' ? 'Drawing legends…' : 'Legends unavailable for this match'
+
+  return <span className="rounded-sm bg-ink/80 px-1.5 text-xs leading-5 text-soft">{text}</span>
 }
 
 type PlayersProps = Pick<StagePlayProps, 'legends' | 'timeMs' | 'selectedSlot' | 'onBuffering'> & {
@@ -105,7 +107,7 @@ export function StagePlay(props: StagePlayProps) {
   const poses = legends.timeline ? posesAt(legends.timeline, stage.box, timeMs) : []
   const backgroundUrl = backgroundUrlOf(legends.replay)
   const art = useMapArt(legends.replay, stage.art)
-  const note = legends.state === 'unavailable' ? <LegendsNote /> : null
+  const note = <LegendsNote state={legends.state} />
 
   return (
     <StageCameraContext.Provider value={camera}>

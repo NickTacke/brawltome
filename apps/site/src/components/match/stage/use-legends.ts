@@ -10,7 +10,8 @@ import { useStageTools } from './stage-tools'
 
 type Art = MatchDetailContract['art']
 
-export type LegendsState = 'loading' | 'ready' | 'unavailable'
+// drawing: the replay worker hasn't exported the match's art yet
+export type LegendsState = 'drawing' | 'loading' | 'ready' | 'unavailable'
 
 export type Legends = {
   replay: Replay | null
@@ -44,7 +45,7 @@ function manifestOf(art: Art, playbackPath: string | null): { manifestUrl: strin
 export function legendsStateOf(art: Art, replay: Load<Replay>, timeline: Load<Timeline>): LegendsState {
   if (replay.status === 'failed' || timeline.status === 'failed') return 'unavailable'
 
-  if (replay.status === 'idle') return art.state === 'queued' ? 'loading' : 'unavailable'
+  if (replay.status === 'idle') return art.state === 'queued' ? 'drawing' : 'unavailable'
 
   if (replay.status === 'loaded' && timeline.status === 'loaded') return 'ready'
 

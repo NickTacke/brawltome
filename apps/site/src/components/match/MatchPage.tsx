@@ -8,6 +8,7 @@ import { ReviewReplay } from './review/ReviewReplay'
 import { Scoreboard } from './Scoreboard'
 import { backgroundUrlOf } from './stage/background-url'
 import { useLegends } from './stage/use-legends'
+import { useMatchArt } from './stage/use-match-art'
 import { usePickedPlayer } from './use-picked-player'
 import { useStickyTop } from './use-sticky-top'
 import { WatchProvider } from './watch-moment'
@@ -24,7 +25,8 @@ type MatchPageProps = { match: MatchDetailContract; insights: MatchInsights }
  */
 export function MatchPage({ match, insights }: MatchPageProps) {
   const { players, picked, pick } = usePickedPlayer(insights)
-  const legends = useLegends(match.art, match.playbackPath)
+  const art = useMatchArt(match.id, match.art)
+  const legends = useLegends(art, match.playbackPath)
   const sideRef = useRef<HTMLElement>(null)
   const sideTopPx = useStickyTop(sideRef)
 

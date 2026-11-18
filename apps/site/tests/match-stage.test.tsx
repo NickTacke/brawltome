@@ -61,11 +61,12 @@ describe('the match stage', () => {
     expect(markup).toContain(unavailableNote)
   })
 
-  test('with art still queued, it draws portrait tokens without the note', () => {
+  test('with art still queued, it draws portrait tokens and says the legends are being drawn', () => {
     const markup = renderStagePlay(queuedArt)
 
     expect(markup).toContain('alt="Player A"')
     expect(markup).toContain('alt="Player B"')
+    expect(markup).toContain('Drawing legends…')
     expect(markup).not.toContain(unavailableNote)
   })
 

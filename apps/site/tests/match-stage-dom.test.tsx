@@ -31,8 +31,13 @@ const firstReplay = {
 const platformImage = 'sheets/10a43fccdae5677c.webp'
 const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
 
+// the page's checks on art still being drawn, each waiting for the test to answer it
+const artChecks: ((art: Art) => void)[] = []
+
 // the stage loads and draws through these instead of the real ones, so the test sees which art it loaded and drew
 const tools: StageTools = {
+  readMatchArt: () => new Promise<Art>((resolve) => artChecks.push(resolve)),
+  artCheckEveryMs: 1,
   loadReplay: async (manifestUrl) => {
     loadedManifests.push(String(manifestUrl))
 
@@ -385,6 +390,90 @@ describe('the match page in a browser', () => {
 
     expect(openedRows()).toBe(0)
     expect(openings()?.querySelector('[aria-label="Close details"]')).toBeNull()
+
+    await unmount()
+  })
+})
+
+const queuedArt: Art = { state: 'queued', manifestUrl: null, baseUrl: null }
+const failedArt: Art = { state: 'failed', manifestUrl: null, baseUrl: null }
+
+// lets time pass until the page has checked on its art again, or a while, when it no longer does
+async function waitForArtCheck(): Promise<boolean> {
+  for (let round = 0; round < 20 && artChecks.length === 0; round++) {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)))
+  }
+
+  return artChecks.length > 0
+}
+
+async function answerArtCheck(art: Art): Promise<void> {
+  if (!(await waitForArtCheck())) throw new Error(`answer an art check with ${art.state}: the page asked for none`)
+
+  const answer = artChecks.shift()
+
+  await act(async () => answer?.(art))
+  await settle()
+}
+
+function stageText(): string {
+  return container.querySelector('[data-stage-window]')?.parentElement?.textContent ?? ''
+}
+
+describe('a match whose legends are still being drawn', () => {
+  const pendingMatch = () => ({ ...matchNamed('first'), art: queuedArt })
+
+  test('says so, checks again, and draws them once they are in without starting the match over', async () => {
+    artChecks.length = 0
+    drawnReplays.length = 0
+
+    await mount(<MatchByKind match={pendingMatch()} />)
+
+    expect(stageText()).toContain('Drawing legends…')
+
+    await answerArtCheck(queuedArt)
+
+    expect(stageText()).toContain('Drawing legends…')
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+    })
+
+    const clockMs = clockNow()
+
+    expect(clockMs).toBeGreaterThan(0)
+
+    await answerArtCheck(artAt('first'))
+
+    expect(drawnReplays).toContain(firstReplay)
+    expect(stageText()).not.toContain('Drawing legends…')
+    expect(clockNow()).toBe(clockMs)
+    expect(await waitForArtCheck()).toBe(false)
+
+    await unmount()
+  })
+
+  test('says they are unavailable once drawing them failed, and stops checking', async () => {
+    artChecks.length = 0
+
+    await mount(<MatchByKind match={pendingMatch()} />)
+    await answerArtCheck(failedArt)
+
+    expect(stageText()).toContain('Legends unavailable for this match')
+    expect(stageText()).not.toContain('Drawing legends…')
+    expect(await waitForArtCheck()).toBe(false)
+
+    await unmount()
+  })
+
+  test('stops checking after five minutes of checks', async () => {
+    artChecks.length = 0
+
+    await mount(<MatchByKind match={pendingMatch()} />)
+
+    for (let check = 0; check < 30; check++) await answerArtCheck(queuedArt)
+
+    expect(await waitForArtCheck()).toBe(false)
 
     await unmount()
   })

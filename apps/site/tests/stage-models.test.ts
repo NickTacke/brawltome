@@ -176,10 +176,10 @@ describe('the legends’ state', () => {
     }
   })
 
-  test('without a manifest, failed or missing art is unavailable and queued art is on its way', () => {
+  test('without a manifest, failed or missing art is unavailable and queued art is still being drawn', () => {
     expect(initialLegends(art('failed', false), playbackPath).state).toBe('unavailable')
     expect(initialLegends(art('none', false), playbackPath).state).toBe('unavailable')
-    expect(initialLegends(art('queued', false), playbackPath).state).toBe('loading')
+    expect(initialLegends(art('queued', false), playbackPath).state).toBe('drawing')
     expect(initialLegends(art('queued', false), playbackPath).isDownloading).toBe(false)
   })
 
