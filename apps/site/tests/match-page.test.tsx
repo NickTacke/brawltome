@@ -374,3 +374,24 @@ describe('the stored replay', () => {
     expect(markupOf(withoutReplay)).not.toContain(`/match/${match.id}/replay"`)
   })
 })
+
+describe('a match whose numbers failed a check', () => {
+  const warning = 'Some numbers in this match may be off'
+
+  test('says some numbers may be off', () => {
+    const match = { ...matchDetailOf('doubles-b', noArt), isReliable: false }
+
+    expect(markupOf(match)).toContain(warning)
+  })
+
+  test('says so too when only the insights were worked out from a line that failed one', () => {
+    const match = matchDetailOf('doubles-a', noArt)
+
+    expect(match.insights?.extras.isReliable).toBe(false)
+    expect(markupOf(match)).toContain(warning)
+  })
+
+  test('says nothing when every check passed', () => {
+    expect(markupOf(matchDetailOf('doubles-b', noArt))).not.toContain(warning)
+  })
+})
