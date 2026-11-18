@@ -40,6 +40,8 @@ describe('the art runner', () => {
   let isLeaseGone: boolean
   // how many more times an upload of each path answers that another attempt holds it
   let heldUploads: Map<string, number>
+  // how many more times an upload of each path fails: 'stall' answers after the client gave up, 'error' answers 503
+  let failedUploads: Map<string, { kind: 'stall' | 'error'; count: number }>
   // how long the api takes to answer a result
   let resultDelayMs: number
 
@@ -66,6 +68,7 @@ describe('the art runner', () => {
     claimedJobId = jobId
     isLeaseGone = false
     heldUploads = new Map()
+    failedUploads = new Map()
     resultDelayMs = 0
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
@@ -87,7 +90,7 @@ describe('the art runner', () => {
 
     if (action === 'files' && request.method === 'GET') return fileOf(rest.join('/'))
 
-    if (action === 'files') return stored(rest.join('/'), new Uint8Array(await request.arrayBuffer()))
+    if (action === 'files') return await stored(rest.join('/'), new Uint8Array(await request.arrayBuffer()))
 
     if (action === 'result') {
       received.results.push(await request.json())
@@ -143,9 +146,19 @@ describe('the art runner', () => {
     return bytes ? new Response(new Uint8Array(bytes)) : new Response(null, { status: 404 })
   }
 
-  function stored(path: string, bytes: Uint8Array): Response {
+  async function stored(path: string, bytes: Uint8Array): Promise<Response> {
     received.calls.push('put')
     received.puts.push(path)
+
+    const failed = failedUploads.get(path)
+
+    if (failed && failed.count > 0) {
+      failed.count -= 1
+
+      if (failed.kind === 'error') return new Response('upstream failed', { status: 503 })
+
+      await Bun.sleep(500)
+    }
 
     const held = heldUploads.get(path) ?? 0
 
@@ -323,6 +336,42 @@ describe('the art runner', () => {
     expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(5)
     expect(received.results).toEqual([])
     expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining(fakeMap) }])
+  })
+
+  test('an upload that gets no answer in time is sent again, and the job still completes', async () => {
+    failedUploads.set(fakeMap, { kind: 'stall', count: 2 })
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    const art = createArtClient({ apiUrl: `http://localhost:${server.port}`, token, requestTimeoutMs: 100 })
+
+    await runner({ art }).runOnce()
+
+    expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(3)
+    expect(bucket.has(fakeMap)).toBe(true)
+    expect(received.results).toHaveLength(1)
+    expect(received.failures).toEqual([])
+  })
+
+  test('an upload the api fails with a 5xx is sent again, and the job still completes', async () => {
+    failedUploads.set(fakeMap, { kind: 'error', count: 3 })
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(4)
+    expect(received.results).toHaveLength(1)
+    expect(received.failures).toEqual([])
+  })
+
+  test('an upload that never gets an answer fails the job with worker-error after the last try', async () => {
+    failedUploads.set(fakeMap, { kind: 'error', count: 100 })
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.puts.filter((path) => path === fakeMap)).toHaveLength(5)
+    expect(received.results).toEqual([])
+    expect(received.failures).toEqual([{ code: 'worker-error', message: expect.stringContaining('no answer') }])
   })
 
   test('a result that gets no answer in time is sent once, and no failure follows it', async () => {
