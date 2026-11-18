@@ -37,6 +37,13 @@ describe('legends', () => {
       weaponOne: 'Orb',
       weaponTwo: 'Cannon',
     })
+
+    expect(getLegendById(73)).toMatchObject({
+      heroName: 'Oathbreaker',
+      displayName: 'MORGWYN',
+      weaponOne: 'Greatsword',
+      weaponTwo: 'Fists',
+    })
   })
 
   test('unknown id returns undefined', () => {

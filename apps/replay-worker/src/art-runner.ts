@@ -40,7 +40,7 @@ export type ArtRunnerDeps = {
   // how long a plan or render may take, and how long a warm may
   exportTimeoutMs: number
   warmTimeoutMs: number
-  // the waits between tries of a file another attempt is uploading
+  // the waits between tries of a file another attempt is uploading, or whose send got no answer
   uploadRetryDelaysMs: number[]
 }
 
@@ -213,8 +213,9 @@ export class ArtRunner {
     for (const path of missing.filter((path) => writtenPaths.has(path))) await this.sendFile(attempt, path)
   }
 
-  // another attempt may be uploading the same path, a sheet two matches share. the file is sent again a few times; if
-  // it is still held after that the job fails as worker-error, to run again, and no manifest goes out before it
+  // another attempt may be uploading the same path, a sheet two matches share, or one request may get no answer. the
+  // file is sent again a few times rather than dropping the job's whole export; if it still isn't stored after that
+  // the job fails as worker-error, to run again, and no manifest goes out before it
   private async sendFile(attempt: Attempt, path: string): Promise<void> {
     const bytes = readFileSync(join(attempt.files.store, path))
     const delaysMs = this.deps.uploadRetryDelaysMs
@@ -222,12 +223,16 @@ export class ArtRunner {
     for (let tries = 1; ; tries++) {
       throwIfLeaseLost(attempt)
 
-      if ((await this.deps.art.putFile(attempt.job, path, bytes)) === 'stored') return
+      const outcome = await this.deps.art.putFile(attempt.job, path, bytes)
+
+      if (outcome === 'stored') return
 
       const delayMs = delaysMs[tries - 1]
 
       if (delayMs === undefined) {
-        throw new Error(`send art file ${path}: another attempt still holds it after ${tries} tries`)
+        const reason = outcome === 'held' ? 'another attempt still holds it' : 'the api gave no answer'
+
+        throw new Error(`send art file ${path}: ${reason} after ${tries} tries`)
       }
 
       await Bun.sleep(delayMs)

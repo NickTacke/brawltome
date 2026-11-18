@@ -6051,6 +6051,14 @@ const data = [
     "imageUrl": null
   },
   {
+    "skinId": 801,
+    "skinName": "EpicCelestial",
+    "legendId": 45,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
     "skinId": 802,
     "skinName": "AstroLunarBun",
     "legendId": 72,
@@ -6062,6 +6070,118 @@ const data = [
     "skinId": 803,
     "skinName": "AstroRoboBun",
     "legendId": 72,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 804,
+    "skinName": "BP14Magyar03",
+    "legendId": 56,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 805,
+    "skinName": "BP14Magyar02",
+    "legendId": 56,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 806,
+    "skinName": "BP14Magyar01",
+    "legendId": 56,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 807,
+    "skinName": "VraxxAngel",
+    "legendId": 6,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 808,
+    "skinName": "BarbAngel",
+    "legendId": 26,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 810,
+    "skinName": "GhostSidra",
+    "legendId": 39,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 811,
+    "skinName": "ClericElysium",
+    "legendId": 69,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 814,
+    "skinName": "MythicMinotaur",
+    "legendId": 16,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 818,
+    "skinName": "Oathbreaker",
+    "legendId": 73,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 819,
+    "skinName": "RobojetAnniversary",
+    "legendId": 51,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 820,
+    "skinName": "MetadevKor",
+    "legendId": 28,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 822,
+    "skinName": "OathbreakerHunter",
+    "legendId": 73,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 823,
+    "skinName": "Oathsuitor",
+    "legendId": 73,
+    "isCrossover": false,
+    "displayName": null,
+    "imageUrl": null
+  },
+  {
+    "skinId": 824,
+    "skinName": "Oathkeeper",
+    "legendId": 73,
     "isCrossover": false,
     "displayName": null,
     "imageUrl": null

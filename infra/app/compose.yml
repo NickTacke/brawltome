@@ -142,6 +142,9 @@ services:
       # replay files and timelines; the key pair is limited to this bucket and to this server's address
       R2_BUCKET: brawltome-replays
       R2_ENDPOINT: https://75bca8c1b0af15912e4f9efdbde6ec32.r2.cloudflarestorage.com
+      # match art the worker exports, served from art.brawltome.app; its key pair is limited to this bucket and address
+      ART_R2_BUCKET: brawltome-art
+      ART_BASE_URL: https://art.brawltome.app
       # accounts that may upload any replay, for testing; Nick's
       REPLAY_OPERATOR_ACCOUNTS: 14b22ce8-bb52-4181-a5de-dcc1349c5b70
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
@@ -161,6 +164,8 @@ services:
       - internal_api_secret
       - metrics_scrape_secret
       - otel_authorization
+      - art_r2_access_key_id
+      - art_r2_secret_access_key
       - r2_access_key_id
       - r2_secret_access_key
       - refresh_trust_cookie_secret
@@ -318,7 +323,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
-      - traefik.http.routers.brawltome-site.rule=Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || PathPrefix(`/match/`) || Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || Path(`/images/legends/avatars/qinghua-and-baobao.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\.svg$$`))
+      - traefik.http.routers.brawltome-site.rule=Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || PathPrefix(`/match/`) || Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || Path(`/images/legends/avatars/qinghua-and-baobao.png`) || Path(`/images/legends/avatars/morgwyn.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\.svg$$`))
       - traefik.http.routers.brawltome-site.priority=1000
       - traefik.http.routers.brawltome-site.entrypoints=websecure
       - traefik.http.routers.brawltome-site.tls.certresolver=letsencrypt
@@ -526,6 +531,12 @@ secrets:
   postgres_runtime_password:
     name: brawltome_postgres_runtime_password
     file: /var/lib/brawltome-secrets/postgres-runtime-password
+  art_r2_access_key_id:
+    name: brawltome_art_r2_access_key_id
+    file: /var/lib/brawltome-secrets/art-r2-access-key-id
+  art_r2_secret_access_key:
+    name: brawltome_art_r2_secret_access_key
+    file: /var/lib/brawltome-secrets/art-r2-secret-access-key
   r2_access_key_id:
     name: brawltome_r2_access_key_id
     file: /var/lib/brawltome-secrets/r2-access-key-id
