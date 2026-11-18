@@ -535,7 +535,14 @@ button.card:hover .arrow {
 }
 
 .status-card .head {
+  gap: 14px;
   padding-right: 18px;
+}
+
+/* the same divider as between two figures, so the icon reads as its own part */
+.status-card .who {
+  padding-left: 14px;
+  border-left: 1px solid hsl(var(--line) / 0.6);
 }
 
 .app-icon {
