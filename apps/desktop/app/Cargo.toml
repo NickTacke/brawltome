@@ -16,6 +16,7 @@ path = "src/main.rs"
 brawltome-events.workspace = true
 brawltome-detection.workspace = true
 brawltome-contracts = { path = "../../../packages/contracts/rust" }
+reqwest = "=0.13.2"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
