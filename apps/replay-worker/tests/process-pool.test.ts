@@ -9,6 +9,7 @@ const pools: ProcessPool[] = []
 const folders: string[] = []
 
 afterEach(async () => {
+  delete process.env.FAKE_READY_DELAY_MS
   for (const pool of pools.splice(0)) pool.close()
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
 })
@@ -30,6 +31,13 @@ function setup(patches: string[]) {
   }
 
   return { gameRoot: join(root, 'games'), replay }
+}
+
+// the fake bh-native processes running for a game root, starting ones included
+function gameProcesses(gameRoot: string): number {
+  const found = Bun.spawnSync(['pgrep', '-f', gameRoot]).stdout.toString()
+
+  return found.split('\n').filter(Boolean).length
 }
 
 // the worker waits for this before it claims again
@@ -149,5 +157,96 @@ describe('the bh-native process pool', () => {
     await Bun.sleep(1500)
 
     expect(pool.isReady()).toBe(true)
+  })
+
+  test('limited to one process, it stops the others and still plays; unlimited, it starts them again', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 2, 1)
+
+    await pool.limitTo(1)
+
+    expect(pool.runningCount()).toBe(1)
+    expect((await pool.play(replay('a.replay', 'ok'))).kind).toBe('line')
+
+    pool.unlimit()
+
+    for (let waited = 0; pool.runningCount() < 3 && waited < 5000; waited += 20) await Bun.sleep(20)
+
+    expect(pool.runningCount()).toBe(3)
+  })
+
+  test('a limit waits for the replays already playing on the processes it stops', async () => {
+    const { gameRoot, replay } = setup(['11.00'])
+    const pool = await startPool(gameRoot, 2, 0)
+
+    const playing = Promise.all([pool.play(replay('a.replay', 'slow')), pool.play(replay('b.replay', 'slow'))])
+
+    await Bun.sleep(50)
+    await pool.limitTo(1)
+
+    expect((await playing).map((answer) => answer.kind)).toEqual(['line', 'line'])
+    expect(pool.runningCount()).toBe(1)
+  })
+
+  test('a replay of a patch the limit left with no process waits for the limit to lift', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    let isAnswered = false
+
+    const answer = pool.play(replay('old.replay', 'old')).finally(() => {
+      isAnswered = true
+    })
+
+    await Bun.sleep(300)
+    expect(isAnswered).toBe(false)
+
+    pool.unlimit()
+
+    const answered = await answer
+
+    expect(answered.kind).toBe('line')
+    expect(JSON.parse(answered.kind === 'line' ? answered.raw : '{}').patch).toBe('10.09')
+  })
+
+  test('while limited it still reports the patches of the processes it stopped', async () => {
+    const { gameRoot } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    expect(pool.report()).toEqual({ build: 'dev-test', patches: ['11.00', '10.09'] })
+  })
+
+  test('a limit set while a stopped process is starting again waits for that start and stops it', async () => {
+    const { gameRoot } = setup(['11.00'])
+    const pool = await startPool(gameRoot, 2, 0)
+
+    await pool.limitTo(1)
+
+    // the restart unlimit starts takes 500 ms to be ready, and the next limit comes before that
+    process.env.FAKE_READY_DELAY_MS = '500'
+    pool.unlimit()
+    await Bun.sleep(100)
+    await pool.limitTo(1)
+
+    expect(gameProcesses(gameRoot)).toBe(1)
+  })
+
+  test('a replay reaching a patch whose process is starting again after the limit waits for it', async () => {
+    const { gameRoot, replay } = setup(['11.00', '10.09'])
+    const pool = await startPool(gameRoot, 1, 1)
+
+    await pool.limitTo(1)
+
+    process.env.FAKE_READY_DELAY_MS = '500'
+    pool.unlimit()
+
+    const answer = await pool.play(replay('old.replay', 'old'))
+
+    expect(answer.kind).toBe('line')
+    expect(JSON.parse(answer.kind === 'line' ? answer.raw : '{}').patch).toBe('10.09')
   })
 })

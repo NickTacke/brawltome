@@ -22,11 +22,13 @@ const nodeBuiltins = new Set(
 )
 
 const allowedRoleDependencies: Record<WorkspaceRole, WorkspaceRole[]> = {
-  application: ['adapter', 'capability', 'contracts', 'foundation'],
+  application: ['adapter', 'browser', 'capability', 'contracts', 'foundation'],
   capability: ['capability', 'contracts', 'foundation'],
   foundation: ['foundation'],
   contracts: ['foundation'],
   adapter: ['capability', 'contracts', 'foundation'],
+  // code that runs in a page, so it can't lean on server packages
+  browser: [],
   tooling: ['adapter', 'capability', 'contracts', 'foundation'],
 }
 

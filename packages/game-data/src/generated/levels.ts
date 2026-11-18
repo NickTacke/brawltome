@@ -1293,10 +1293,18 @@ const data = [
   {
     "levelId": 26,
     "levelName": "Elysium",
-    "displayName": "Tree Fort",
-    "devOnly": true,
+    "displayName": "Elysium Arena",
+    "devOnly": false,
     "testLevel": false,
     "fileName": "Level_Wacky.swf"
+  },
+  {
+    "levelId": 46,
+    "levelName": "CelestialLongSidesShortWalls",
+    "displayName": "Eternity's End",
+    "devOnly": false,
+    "testLevel": false,
+    "fileName": "Level_GameModes.swf"
   }
 ] as const
 
