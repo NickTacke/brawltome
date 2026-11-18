@@ -34,9 +34,15 @@ export type TeamData =
 
 export type TeamPlayer = PlayerHead & { personalRating2v2: number | null; oneVsOneRating: number | null }
 
+export type StatusView =
+  | { state: 'connecting' }
+  | { state: 'ready'; patch: string }
+  | { state: 'unsupported'; message: string }
+
 export type Card =
   | { kind: 'solo'; player: PlayerHead; data: CardData }
   | { kind: 'team'; team: number; data: TeamData; players: TeamPlayer[] }
   | ({ kind: 'postMatch' } & PostMatchView)
+  | { kind: 'status'; status: StatusView }
 
 export type OverlayView = { lobbyId: number; cards: Card[]; visibleMs: number }

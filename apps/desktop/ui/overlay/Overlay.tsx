@@ -5,6 +5,7 @@ import { cardScale } from './card-format'
 import type { Card, OverlayView } from './overlay-view'
 import { PostMatchCard } from './PostMatchCard'
 import { SoloCard } from './SoloCard'
+import { StatusCard } from './StatusCard'
 import { TeamCard } from './TeamCard'
 
 // the banner goes on the side of the card that faces the nearest screen edge
@@ -46,6 +47,8 @@ function OverlayCard({ card, onOpenProfile, onRetry }: OverlayCardProps) {
   // the card opens nothing until the app uploads replays and a match page exists
   if (card.kind === 'postMatch') return <PostMatchCard match={card} onOpenMatchPage={() => {}} />
 
+  if (card.kind === 'status') return <StatusCard status={card.status} />
+
   return <SoloCard player={card.player} data={card.data} onOpenProfile={onOpenProfile} onRetry={onRetry} />
 }
 
@@ -53,6 +56,8 @@ function cardKey(card: Card): string {
   if (card.kind === 'team') return `team-${card.team}`
 
   if (card.kind === 'postMatch') return 'post-match'
+
+  if (card.kind === 'status') return 'status'
 
   return `solo-${card.player.brawlhallaId}`
 }
