@@ -395,3 +395,12 @@ describe('a match whose numbers failed a check', () => {
     expect(markupOf(matchDetailOf('doubles-b', noArt))).not.toContain(warning)
   })
 })
+
+test('every player links to their profile, apart from picking them', () => {
+  const match = matchDetailOf('doubles-b', noArt)
+  const markup = markupOf(match)
+
+  for (const player of match.insights?.summary.players ?? []) {
+    expect(markup).toContain(`href="/player/${player.brawlhallaId}"`)
+  }
+})
