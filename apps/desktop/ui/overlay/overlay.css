@@ -1,0 +1,413 @@
+* {
+  box-sizing: border-box;
+}
+
+/* the window is exactly the cards, so whatever the cards don't cover shows the game */
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font-family: var(--sans);
+  color: hsl(var(--text));
+  -webkit-font-smoothing: antialiased;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: max-content;
+}
+
+/* ---------- cards ---------- */
+
+/* the panel and the banner share one grid cell row, so a long banner hangs below the panel and still counts
+   towards the window size */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 10px 96px 1fr;
+  width: 392px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+button.card {
+  cursor: pointer;
+}
+
+/* the card's panel, under the banner, with its content right of it */
+.main {
+  position: relative;
+  display: block;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: start;
+  min-width: 0;
+  padding-left: 114px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--line) / 0.9);
+  border-radius: 10px;
+  background: hsl(var(--ink) / 0.9);
+}
+
+/* the banner hangs from the top edge of the card, like it does in game; higher tiers hang longer */
+.banner-slot {
+  position: relative;
+  z-index: 1;
+  display: block;
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
+}
+
+.banner {
+  display: block;
+  width: 100%;
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.55));
+  animation: unroll 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* the banner unrolls from its rod, like it does on the game's ranked screen */
+@keyframes unroll {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-6px);
+  }
+  to {
+    clip-path: inset(0 0 -20% 0);
+    transform: translateY(0);
+  }
+}
+
+/* without a tier the slot shows the diamond banner's outline, so loading and failed cards keep their shape */
+.banner-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 190 / 326;
+  background: hsl(var(--raised) / 0.8);
+  mask: url("/banners/Diamond.png") top / 100% auto no-repeat;
+}
+
+/* on the right of the screen the card is mirrored, so the banner hangs on the outer edge */
+[data-banner-side="right"] .card {
+  grid-template-columns: 1fr 96px 10px;
+}
+
+[data-banner-side="right"] .main {
+  padding-right: 114px;
+  padding-left: 0;
+}
+
+/* the clickable head of a card that also holds a retry button */
+.card-link {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px 10px;
+}
+
+.portrait {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border: 2px solid hsl(var(--line));
+  border-radius: 10px;
+  background: hsl(var(--raised));
+  object-fit: cover;
+}
+
+.portrait.small {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+}
+
+.who {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  display: block;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+  color: hsl(var(--strong));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* kept at one line when empty, so a loading card is as tall as the card that replaces it */
+.sub {
+  display: block;
+  min-height: 18px;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: hsl(var(--soft));
+  white-space: nowrap;
+}
+
+.sub b {
+  font-weight: 800;
+  color: hsl(var(--strong));
+  font-variant-numeric: tabular-nums;
+}
+.sub .dot {
+  margin: 0 6px;
+  opacity: 0.5;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px;
+  align-items: end;
+  padding: 9px 14px 11px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+  white-space: nowrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stat + .stat {
+  padding-left: 14px;
+  border-left: 1px solid hsl(var(--line) / 0.6);
+}
+
+.stat-value {
+  font-size: 19px;
+  white-space: nowrap;
+  font-weight: 800;
+  line-height: 22px;
+  color: hsl(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.peak {
+  margin-left: 5px;
+  font-size: 16px;
+  font-weight: 700;
+  color: hsl(var(--soft) / 0.8);
+}
+
+.stat-value.rate {
+  font-size: 20px;
+  line-height: 30px;
+}
+
+.stat-label {
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--soft) / 0.75);
+  text-overflow: ellipsis;
+}
+
+.elo {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+  color: hsl(var(--strong));
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--soft) / 0.75);
+}
+
+.rate-high {
+  color: hsl(var(--won));
+}
+.rate-mid {
+  color: hsl(var(--primary));
+}
+.rate-low {
+  color: hsl(var(--soft));
+}
+
+/* where a figure goes once the answer comes in */
+.bar {
+  display: block;
+  width: 56px;
+  height: 18px;
+  border-radius: 4px;
+  background: hsl(var(--raised) / 0.7);
+}
+
+.bar.lead {
+  width: 150px;
+  height: 26px;
+}
+
+.bar.sub-bar {
+  width: 112px;
+  height: 10px;
+  margin-top: 5px;
+}
+
+.bar.label-bar {
+  width: 64px;
+  height: 8px;
+}
+
+.note {
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--soft));
+}
+
+.plain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 12px;
+  border-top: 1px solid hsl(var(--line) / 0.6);
+}
+
+.text-button {
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 6px;
+  background: hsl(var(--raised) / 0.7);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: hsl(var(--strong));
+  cursor: pointer;
+}
+
+.text-button:hover {
+  border-color: hsl(var(--primary) / 0.8);
+}
+
+.unknown {
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: hsl(var(--soft) / 0.6);
+}
+
+.unknown.small {
+  font-size: 16px;
+}
+
+/* at the right end of the head, on its middle line, while the card waits for its data or refreshes it */
+.spinner {
+  flex: none;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: 2.5px solid hsl(0 0% 100% / 0.14);
+  border-top-color: hsl(0 0% 100% / 0.65);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- 2v2 ---------- */
+
+.players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 0;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 2px 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* the team's standing, with the spinner at the far end while it loads */
+.team-figures {
+  grid-template-columns: auto auto 1fr;
+}
+
+.team-figures .spinner {
+  grid-column: 3;
+  justify-self: end;
+}
+
+/* ---------- states, last so they win over the parts above ---------- */
+
+.player:hover .name,
+.card-link:hover .name {
+  color: hsl(var(--primary));
+}
+
+.is-refreshing .figures .stat {
+  opacity: 0.6;
+}
+
+button.card:hover .main {
+  border-color: hsl(var(--primary) / 0.8);
+}
+
+button.card:hover .name {
+  color: hsl(var(--primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner,
+  .spinner {
+    animation: none;
+  }
+}
