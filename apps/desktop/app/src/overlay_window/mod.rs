@@ -37,6 +37,7 @@ const CLEAR_EVENT: &str = "overlay://clear";
 const FIRST_SOLO_SIZE_PX: (u32, u32) = (294, 134);
 const FIRST_TEAM_SIZE_PX: (u32, u32) = (294, 134);
 const FIRST_POST_MATCH_SIZE_PX: (u32, u32) = (294, 134);
+const FIRST_STATUS_SIZE_PX: (u32, u32) = (210, 50);
 
 /// what the overlay page draws, how tall the monitor it draws on is, and which side the banners hang on
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -61,6 +62,7 @@ struct OverlayState {
     measured_solo: Option<MeasuredSize>,
     measured_team: Option<MeasuredSize>,
     measured_post_match: Option<MeasuredSize>,
+    measured_status: Option<MeasuredSize>,
 }
 
 struct ShownCards {
@@ -76,6 +78,7 @@ enum CardKind {
     Solo,
     Team,
     PostMatch,
+    Status,
 }
 
 /// the physical size the page reported, and the height of the monitor it was on
@@ -298,6 +301,7 @@ impl OverlayState {
             CardKind::Solo => self.measured_solo,
             CardKind::Team => self.measured_team,
             CardKind::PostMatch => self.measured_post_match,
+            CardKind::Status => self.measured_status,
         };
         let measured = measured.unwrap_or(MeasuredSize {
             size_px: kind.first_size_px(),
@@ -336,6 +340,7 @@ impl OverlayState {
             CardKind::Solo => self.measured_solo = Some(measured),
             CardKind::Team => self.measured_team = Some(measured),
             CardKind::PostMatch => self.measured_post_match = Some(measured),
+            CardKind::Status => self.measured_status = Some(measured),
         }
 
         rect
@@ -347,6 +352,7 @@ impl CardKind {
         match view.cards.first() {
             Some(Card::Team { .. }) => Self::Team,
             Some(Card::PostMatch(_)) => Self::PostMatch,
+            Some(Card::Status { .. }) => Self::Status,
             _ => Self::Solo,
         }
     }
@@ -356,6 +362,7 @@ impl CardKind {
             Self::Solo => FIRST_SOLO_SIZE_PX,
             Self::Team => FIRST_TEAM_SIZE_PX,
             Self::PostMatch => FIRST_POST_MATCH_SIZE_PX,
+            Self::Status => FIRST_STATUS_SIZE_PX,
         }
     }
 }

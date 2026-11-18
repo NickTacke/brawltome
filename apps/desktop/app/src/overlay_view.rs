@@ -27,6 +27,27 @@ pub enum Card {
         players: Vec<TeamPlayer>,
     },
     PostMatch(PostMatchCard),
+    /// says the app found the game, and whether it can read this patch
+    Status {
+        status: StatusView,
+    },
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(
+    tag = "state",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum StatusView {
+    Connecting,
+    Ready {
+        patch: String,
+    },
+    /// the patch, when the game said which it is
+    Unsupported {
+        patch: Option<String>,
+    },
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

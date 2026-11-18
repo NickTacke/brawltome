@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { Card, CardData, OverlayView, TeamData } from '../overlay/overlay-view'
+import type { Card, CardData, OverlayView, StatusView, TeamData } from '../overlay/overlay-view'
 
 // the json files are the shape the app sends; the rust tests compare against the same files
 const fixtureFiles = import.meta.glob<OverlayView>('../../tests/fixtures/overlay-view-*.json', {
@@ -145,5 +145,19 @@ export function tierCells(): StateCell[] {
       games: 1204,
       isRefreshing: false,
     }),
+  }))
+}
+
+// the card that says the app found the game, in each of its states
+export function statusCells(): StateCell[] {
+  const statuses: { title: string; status: StatusView }[] = [
+    { title: 'Connecting', status: { state: 'connecting' } },
+    { title: 'Ready', status: { state: 'ready', patch: '11.01' } },
+    { title: 'Patch not supported', status: { state: 'unsupported', patch: '11.02' } },
+  ]
+
+  return statuses.map(({ title, status }) => ({
+    title,
+    view: { lobbyId: 1, cards: [{ kind: 'status', status }], visibleMs: 5_000 },
   }))
 }

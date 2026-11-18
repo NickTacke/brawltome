@@ -3,18 +3,22 @@
 use brawltome_detection::{Event, MatchResult, MatchSnapshot};
 
 use crate::app_status::{
-    unsupported_message, AppStatus, DetectionStatus, GameStatus, RecentMatch, ServiceStatus,
-    UpdateStatus,
+    patch_of, unsupported_message, AppStatus, DetectionStatus, GameStatus, RecentMatch,
+    ServiceStatus, UpdateStatus,
 };
 use crate::lobby_client::{LobbyAnswer, LobbyPlayer, LobbyRequest, LookupFailure};
 use crate::overlay_view::{
     answered_view, failed_view, failure_reason, loading_view, Card, CardData, Failure,
-    FailureReason, LobbyOpponents, OverlayView, PlayerHead, TeamData,
+    FailureReason, LobbyOpponents, OverlayView, PlayerHead, StatusView, TeamData,
 };
 use crate::post_match::post_match_card;
 
 pub const CARDS_VISIBLE_MS: u64 = 12_000;
 pub const POST_MATCH_VISIBLE_MS: u64 = 10_000;
+/// the game can sit on its splash screens for a while before the app can read it
+pub const CONNECTING_VISIBLE_MS: u64 = 30_000;
+pub const READY_VISIBLE_MS: u64 = 5_000;
+pub const UNSUPPORTED_VISIBLE_MS: u64 = 10_000;
 pub const REFRESH_REASK_DELAY_MS: u64 = 3_000;
 pub const RETRY_DELAYS_MS: [u64; 3] = [1_000, 2_000, 4_000];
 pub const MAX_RECENT_MATCHES: usize = 5;
@@ -79,10 +83,11 @@ enum Phase {
     /// from the preview until the cards hide
     Loading(Lobby),
     InMatch,
-    /// the post-match card is up
-    PostMatch {
+    /// a card shown on its own for a while: the post-match card, or the app's status when the game starts
+    Notice {
         lobby_id: u64,
         view: OverlayView,
+        is_status: bool,
     },
 }
 
@@ -144,20 +149,31 @@ impl Session {
     pub fn overlay_view(&self) -> Option<&OverlayView> {
         match &self.phase {
             Phase::Loading(lobby) => Some(&lobby.view),
-            Phase::PostMatch { view, .. } => Some(view),
+            Phase::Notice { view, .. } => Some(view),
             _ => None,
         }
     }
 
     fn on_detection(&mut self, event: Event, now_ms: u64) -> Vec<Effect> {
         match event {
-            Event::GameFound { .. } => self.report_game(None, DetectionStatus::Starting),
+            Event::GameFound { .. } => {
+                self.report_game(None, DetectionStatus::Starting);
+                self.show_status(StatusView::Connecting, CONNECTING_VISIBLE_MS)
+            }
             Event::Ready { game_version, .. } => {
-                self.report_game(Some(game_version), DetectionStatus::Ready)
+                let patch = patch_of(&game_version).to_string();
+                self.report_game(Some(game_version), DetectionStatus::Ready);
+                self.show_status(StatusView::Ready { patch }, READY_VISIBLE_MS)
             }
             Event::Unsupported { game_version, .. } => {
                 let message = unsupported_message(game_version.as_deref());
-                self.report_game(game_version, DetectionStatus::Unsupported { message })
+                let status = StatusView::Unsupported {
+                    patch: game_version
+                        .as_deref()
+                        .map(|version| patch_of(version).to_string()),
+                };
+                self.report_game(game_version, DetectionStatus::Unsupported { message });
+                self.show_status(status, UNSUPPORTED_VISIBLE_MS)
             }
             Event::MatchStarted(snapshot) => self.on_match_started(&snapshot, now_ms),
             Event::Queueing => {
@@ -179,15 +195,23 @@ impl Session {
         }
     }
 
-    fn report_game(
-        &mut self,
-        game_version: Option<String>,
-        detection: DetectionStatus,
-    ) -> Vec<Effect> {
+    fn report_game(&mut self, game_version: Option<String>, detection: DetectionStatus) {
         self.status.game = GameStatus::Running { game_version };
         self.status.detection = detection;
+    }
 
-        Vec::new()
+    /// only over the menus or an earlier status, so it never covers a lobby's cards or a result
+    fn show_status(&mut self, status: StatusView, visible_ms: u64) -> Vec<Effect> {
+        let is_free = match self.phase {
+            Phase::Menus => true,
+            Phase::Notice { is_status, .. } => is_status,
+            Phase::Loading(_) | Phase::InMatch => false,
+        };
+        if !is_free || self.status.is_overlay_paused {
+            return Vec::new();
+        }
+
+        self.show_notice(Card::Status { status }, visible_ms, true)
     }
 
     fn on_match_started(&mut self, snapshot: &MatchSnapshot, now_ms: u64) -> Vec<Effect> {
@@ -344,7 +368,7 @@ impl Session {
     }
 
     fn on_timer_fired(&mut self, lobby_id: u64, timer: Timer, now_ms: u64) -> Vec<Effect> {
-        if self.is_post_match_of(lobby_id) && timer == Timer::HideCards {
+        if self.is_notice_of(lobby_id) && timer == Timer::HideCards {
             return self.change_phase(Phase::Menus);
         }
 
@@ -393,7 +417,7 @@ impl Session {
 
         match self.phase {
             Phase::Loading(_) => self.change_phase(Phase::InMatch),
-            Phase::PostMatch { .. } => self.change_phase(Phase::Menus),
+            Phase::Notice { .. } => self.change_phase(Phase::Menus),
             _ => Vec::new(),
         }
     }
@@ -414,34 +438,35 @@ impl Session {
             return Vec::new();
         }
 
-        self.show_post_match(Card::PostMatch(card))
+        self.show_notice(Card::PostMatch(card), POST_MATCH_VISIBLE_MS, false)
     }
 
-    fn show_post_match(&mut self, card: Card) -> Vec<Effect> {
+    fn show_notice(&mut self, card: Card, visible_ms: u64, is_status: bool) -> Vec<Effect> {
         self.last_lobby_id += 1;
         let lobby_id = self.last_lobby_id;
         let view = OverlayView {
             lobby_id,
             cards: vec![card],
-            visible_ms: POST_MATCH_VISIBLE_MS,
+            visible_ms,
         };
 
-        let mut effects = self.change_phase(Phase::PostMatch {
+        let mut effects = self.change_phase(Phase::Notice {
             lobby_id,
             view: view.clone(),
+            is_status,
         });
         effects.push(Effect::ShowCards(view));
         effects.push(Effect::StartTimer {
             lobby_id,
             timer: Timer::HideCards,
-            after_ms: POST_MATCH_VISIBLE_MS,
+            after_ms: visible_ms,
         });
 
         effects
     }
 
-    fn is_post_match_of(&self, lobby_id: u64) -> bool {
-        matches!(&self.phase, Phase::PostMatch { lobby_id: shown, .. } if *shown == lobby_id)
+    fn is_notice_of(&self, lobby_id: u64) -> bool {
+        matches!(&self.phase, Phase::Notice { lobby_id: shown, .. } if *shown == lobby_id)
     }
 
     /// moving on from a lobby takes its cards down and drops its work
@@ -450,7 +475,7 @@ impl Session {
 
         match previous_phase {
             Phase::Loading(_) => vec![Effect::HideCards, Effect::DropLobbyWork],
-            Phase::PostMatch { .. } => vec![Effect::HideCards],
+            Phase::Notice { .. } => vec![Effect::HideCards],
             _ => Vec::new(),
         }
     }
@@ -921,10 +946,7 @@ mod tests {
             GameStatus::Running { game_version: None }
         );
         assert_eq!(session.status().detection, DetectionStatus::Starting);
-        assert_eq!(
-            effects,
-            vec![Effect::StatusChanged(session.status().clone())]
-        );
+        assert!(effects.contains(&Effect::StatusChanged(session.status().clone())));
 
         let ready = Event::Ready {
             local_brawlhalla_id: 1,
@@ -939,6 +961,120 @@ mod tests {
 
         session.handle(detection(Event::GameClosed), 200);
         assert_eq!(*session.status(), AppStatus::default());
+    }
+
+    fn ready_on(game_version: &str) -> Input {
+        detection(Event::Ready {
+            local_brawlhalla_id: 1,
+            game_version: game_version.to_string(),
+        })
+    }
+
+    fn status_of(view: &OverlayView) -> &StatusView {
+        match &view.cards[..] {
+            [Card::Status { status }] => status,
+            other => panic!("expected a status card, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_game_starting_shows_connecting_then_ready_for_five_seconds() {
+        let mut session = Session::new();
+
+        let found = session.handle(detection(Event::GameFound { process_id: 4242 }), 0);
+        assert_eq!(status_of(shown(&found)[0]), &StatusView::Connecting);
+        assert_eq!(
+            timers(&found),
+            vec![(Timer::HideCards, CONNECTING_VISIBLE_MS)]
+        );
+
+        let ready = session.handle(ready_on("11.01.17529"), 2_000);
+        let expected = StatusView::Ready {
+            patch: "11.01".to_string(),
+        };
+        assert_eq!(ready[0], Effect::HideCards);
+        assert_eq!(status_of(shown(&ready)[0]), &expected);
+        assert_eq!(timers(&ready), vec![(Timer::HideCards, READY_VISIBLE_MS)]);
+        assert_eq!(
+            as_json(&shown(&ready)[0].cards[0]),
+            serde_json::json!({ "kind": "status", "status": { "state": "ready", "patch": "11.01" } })
+        );
+
+        let ready_id = shown(&ready)[0].lobby_id;
+        let hidden = session.handle(fired(ready_id, Timer::HideCards), 7_000);
+        assert_eq!(hidden, vec![Effect::HideCards]);
+    }
+
+    #[test]
+    fn the_connecting_card_hides_when_its_time_is_up() {
+        let mut session = Session::new();
+        let found = session.handle(detection(Event::GameFound { process_id: 4242 }), 0);
+        let connecting_id = shown(&found)[0].lobby_id;
+
+        let hidden = session.handle(
+            fired(connecting_id, Timer::HideCards),
+            CONNECTING_VISIBLE_MS,
+        );
+
+        assert_eq!(hidden, vec![Effect::HideCards]);
+    }
+
+    #[test]
+    fn an_unsupported_patch_says_so_for_ten_seconds() {
+        let mut session = Session::new();
+        let unsupported = Event::Unsupported {
+            game_version: Some("11.02.1".to_string()),
+            reason: UnsupportedReason::MissingRole("lobby".to_string()),
+        };
+
+        let effects = session.handle(detection(unsupported), 0);
+
+        let expected = StatusView::Unsupported {
+            patch: Some("11.02".to_string()),
+        };
+        assert_eq!(status_of(shown(&effects)[0]), &expected);
+        assert_eq!(
+            timers(&effects),
+            vec![(Timer::HideCards, UNSUPPORTED_VISIBLE_MS)]
+        );
+    }
+
+    #[test]
+    fn the_status_never_covers_a_lobby_a_match_or_a_result() {
+        let mut loading = Session::new();
+        start(&mut loading, ranked_1v1(), 0);
+        assert!(shown(&loading.handle(ready_on("11.01.1"), 1_000)).is_empty());
+
+        let mut playing = Session::new();
+        let lobby_id = start(&mut playing, ranked_1v1(), 0);
+        playing.handle(fired(lobby_id, Timer::HideCards), 12_000);
+        assert!(shown(&playing.handle(ready_on("11.01.1"), 13_000)).is_empty());
+
+        let mut after_match = Session::new();
+        ended_match(&mut after_match);
+        after_match.handle(won_1v1(), 201_000);
+        assert!(shown(&after_match.handle(ready_on("11.01.1"), 202_000)).is_empty());
+    }
+
+    #[test]
+    fn a_paused_overlay_shows_no_status() {
+        let mut session = Session::new();
+        session.handle(Input::OverlayPaused(true), 0);
+
+        let effects = session.handle(detection(Event::GameFound { process_id: 4242 }), 1_000);
+
+        assert!(shown(&effects).is_empty());
+    }
+
+    #[test]
+    fn a_lobby_takes_over_from_the_status() {
+        let mut session = Session::new();
+        session.handle(ready_on("11.01.1"), 0);
+
+        let effects = session.handle(started(ranked_1v1()), 1_000);
+
+        assert_eq!(shown(&effects).len(), 1);
+        assert!(matches!(shown(&effects)[0].cards[0], Card::Solo { .. }));
     }
 
     #[test]

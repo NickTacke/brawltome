@@ -520,6 +520,47 @@ button.card:hover .arrow {
   bottom: 0;
 }
 
+/* ---------- status ---------- */
+
+/* no banner, so the card is only as wide as its text */
+.status-card {
+  display: block;
+  width: max-content;
+  min-width: 260px;
+}
+
+.status-card .main,
+[data-banner-side="right"] .status-card .main {
+  padding: 0;
+}
+
+.status-card .head {
+  gap: 14px;
+  padding-right: 18px;
+}
+
+/* the same divider as between two figures, so the icon reads as its own part */
+.status-card .who {
+  padding-left: 14px;
+  border-left: 1px solid hsl(var(--line) / 0.6);
+}
+
+.app-icon {
+  flex: none;
+  width: 40px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.45));
+}
+
+.status-ready {
+  color: hsl(var(--won));
+}
+
+.status-warn {
+  color: hsl(var(--warn));
+}
+
 /* ---------- states, last so they win over the parts above ---------- */
 
 .player:hover .name,
