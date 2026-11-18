@@ -171,8 +171,16 @@ describe('overlay cards', () => {
     expect(html).not.toContain('class="spinner"')
   })
 
-  test('a card with stored data that is refreshing shows the spinner', () => {
+  test('a refresh with memory figures on the card only dims the lookup figures, without a spinner', () => {
     const html = render(fixture('solo-refreshing'))
+
+    expect(html).toContain('is-refreshing-lookup')
+    expect(html).not.toContain('class="spinner"')
+    expect(textOf(partOf(html, 'figures'))).toContain('2130')
+  })
+
+  test('a card with stored data that is refreshing shows the spinner', () => {
+    const html = render(withoutMemory(fixture('solo-refreshing')))
 
     expect(textOf(partOf(html, 'sub'))).toBe('Diamond·#48')
     expect(html).toContain('class="spinner"')

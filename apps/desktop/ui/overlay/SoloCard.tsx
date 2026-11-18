@@ -42,7 +42,8 @@ export function SoloCard({ player, known, data, onOpenProfile, onRetry }: SoloCa
   }
 
   const ranked = data.state === 'ranked' ? data : null
-  const isBusy = (data.state === 'loading' && known === null) || ranked?.isRefreshing === true
+  // with memory's figures on the card, a lookup still running isn't worth a spinner
+  const isBusy = known === null && (data.state === 'loading' || ranked?.isRefreshing === true)
 
   return (
     <button type="button" className={cardClass(data, known)} onClick={() => onOpenProfile(player.brawlhallaId)}>
@@ -58,9 +59,10 @@ export function SoloCard({ player, known, data, onOpenProfile, onRetry }: SoloCa
 function cardClass(data: CardData, known: Known | null): string {
   if (data.state === 'loading' && known === null) return 'card is-loading'
 
-  if (data.state === 'ranked' && data.isRefreshing) return 'card is-refreshing'
+  if (data.state !== 'ranked' || !data.isRefreshing) return 'card'
 
-  return 'card'
+  // memory's elo is live, so only the lookup's own figures wait for the refresh
+  return known === null ? 'card is-refreshing' : 'card is-refreshing-lookup'
 }
 
 // the lookup's tier is the game's own, subdivision included; memory alone knows the base tier
