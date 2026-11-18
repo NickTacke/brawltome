@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
-import type { ReplayJobs } from '@brawltome/replays'
+import type { ReplayArtJobs, ReplayJobs } from '@brawltome/replays'
 import { createReplayWorkerRoutes } from '../src/routes/replay-worker.routes'
 
 const token = 'replay-worker-token-for-tests-32-bytes-long'
@@ -14,17 +14,18 @@ function routes(overrides: Partial<ReplayJobs> = {}) {
     fail: mock(async () => true),
     renew: mock(async () => true),
     release: mock(async () => true),
+    art: {} as ReplayArtJobs,
     ...overrides,
   }
 
   return { app: createReplayWorkerRoutes({ jobs, token }), jobs }
 }
 
-function claimRequest(headers: Record<string, string> = auth) {
+function claimRequest(headers: Record<string, string> = auth, report: object = { build: 'dev-1', patches: ['11.00'] }) {
   return {
     method: 'POST',
     headers: { ...headers, 'content-type': 'application/json' },
-    body: JSON.stringify({ build: 'dev-1', patches: ['11.00'] }),
+    body: JSON.stringify(report),
   }
 }
 
@@ -64,7 +65,23 @@ describe('replay worker routes', () => {
     expect(response.headers.get('x-replay-lease')).toBe(leaseToken)
     expect(response.headers.get('x-replay-kind')).toBe('parse')
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(Uint8Array.of(0x78, 0xda, 1))
-    expect(claim).toHaveBeenCalledWith({ build: 'dev-1', patches: ['11.00'] })
+    expect(claim).toHaveBeenCalledWith({ build: 'dev-1', patches: ['11.00'], artFormat: null })
+  })
+
+  test('a claim passes on the art format the worker exports', async () => {
+    const { app, jobs } = routes()
+
+    await app.request('/claim', claimRequest(auth, { build: 'dev-1', patches: ['11.00'], artFormat: 3 }))
+
+    expect(jobs.claim).toHaveBeenCalledWith({ build: 'dev-1', patches: ['11.00'], artFormat: 3 })
+  })
+
+  test('a claim with an art format that is not a whole number is refused', async () => {
+    const { app } = routes()
+
+    const response = await app.request('/claim', claimRequest(auth, { build: 'dev-1', patches: [], artFormat: 2.5 }))
+
+    expect(response.status).toBe(400)
   })
 
   test('a result arrives gzipped and reaches the jobs as text', async () => {

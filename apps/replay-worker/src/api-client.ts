@@ -6,8 +6,11 @@ export type ClaimedReplay = { jobId: string; leaseToken: string; kind: string; b
 
 export type FailureCode = 'patch-not-supported' | 'worker-error'
 
+// artFormat is the art export format the worker runs, null when it has no export
+export type WorkerReport = { build: string; patches: string[]; artFormat: number | null }
+
 export type ApiClient = {
-  claim(report: { build: string; patches: string[] }): Promise<ClaimedReplay | null>
+  claim(report: WorkerReport): Promise<ClaimedReplay | null>
   result(jobId: string, leaseToken: string, line: string): Promise<void>
   failure(jobId: string, leaseToken: string, code: FailureCode, message: string): Promise<void>
   renew(jobId: string, leaseToken: string): Promise<boolean>

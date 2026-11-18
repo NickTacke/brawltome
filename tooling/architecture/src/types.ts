@@ -1,4 +1,11 @@
-export type WorkspaceRole = 'application' | 'capability' | 'foundation' | 'contracts' | 'adapter' | 'tooling'
+export type WorkspaceRole =
+  | 'application'
+  | 'capability'
+  | 'foundation'
+  | 'contracts'
+  | 'adapter'
+  | 'browser'
+  | 'tooling'
 
 export type ArchitectureRule =
   | 'app-to-app'

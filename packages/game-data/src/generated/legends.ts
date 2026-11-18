@@ -937,6 +937,19 @@ const data = [
     "weaponTwo": "Cannon",
     "isActive": true,
     "isBeta": false
+  },
+  {
+    "heroId": 73,
+    "heroName": "Oathbreaker",
+    "displayName": "MORGWYN",
+    "strength": 5,
+    "dexterity": 8,
+    "weight": 3,
+    "speed": 6,
+    "weaponOne": "Greatsword",
+    "weaponTwo": "Fists",
+    "isActive": true,
+    "isBeta": false
   }
 ] as const
 
