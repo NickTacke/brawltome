@@ -259,6 +259,7 @@
       "name": "@brawltome/match-insights",
       "dependencies": {
         "@brawltome/contracts": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "zod": "4.6.7",
       },
       "devDependencies": {
