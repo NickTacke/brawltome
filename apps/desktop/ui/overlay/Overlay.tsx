@@ -7,6 +7,7 @@ import { PostMatchCard } from './PostMatchCard'
 import { SoloCard } from './SoloCard'
 import { StatusCard } from './StatusCard'
 import { TeamCard } from './TeamCard'
+import { TeammateCard } from './TeammateCard'
 
 // the banner goes on the side of the card that faces the nearest screen edge
 export type BannerSide = 'left' | 'right'
@@ -49,7 +50,17 @@ function OverlayCard({ card, onOpenProfile, onRetry }: OverlayCardProps) {
 
   if (card.kind === 'status') return <StatusCard status={card.status} />
 
-  return <SoloCard player={card.player} data={card.data} onOpenProfile={onOpenProfile} onRetry={onRetry} />
+  if (card.kind === 'teammate') return <TeammateCard player={card.player} known={card.known} />
+
+  return (
+    <SoloCard
+      player={card.player}
+      known={card.known}
+      data={card.data}
+      onOpenProfile={onOpenProfile}
+      onRetry={onRetry}
+    />
+  )
 }
 
 function cardKey(card: Card): string {
@@ -58,6 +69,8 @@ function cardKey(card: Card): string {
   if (card.kind === 'postMatch') return 'post-match'
 
   if (card.kind === 'status') return 'status'
+
+  if (card.kind === 'teammate') return `teammate-${card.player.brawlhallaId}`
 
   return `solo-${card.player.brawlhallaId}`
 }

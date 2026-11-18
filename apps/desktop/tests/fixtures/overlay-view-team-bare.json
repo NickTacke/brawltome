@@ -4,21 +4,25 @@
     {
       "kind": "team",
       "team": 2,
-      "data": { "state": "ready", "standing": null, "isRefreshing": false },
+      "data": {
+        "state": "ready",
+        "standing": null,
+        "isRefreshing": false
+      },
       "players": [
         {
           "brawlhallaId": 91913839,
           "name": "Shinigami",
           "legend": "Hattori",
-          "personalRating2v2": null,
-          "oneVsOneRating": 2130
+          "oneVsOneRating": 2130,
+          "known": null
         },
         {
           "brawlhallaId": 50427113,
           "name": "tidecaller",
           "legend": "Petra",
-          "personalRating2v2": null,
-          "oneVsOneRating": null
+          "oneVsOneRating": null,
+          "known": null
         }
       ]
     }

@@ -290,6 +290,26 @@ button.card {
   height: 8px;
 }
 
+/* the peak and the win rate while the lookup runs, beside figures memory already gave */
+.bar.peak-bar {
+  display: inline-block;
+  width: 48px;
+  height: 16px;
+  margin-left: 6px;
+  vertical-align: -1px;
+}
+
+.bar.rate-bar {
+  width: 54px;
+  height: 22px;
+  margin: 4px 0;
+}
+
+/* says whose card it is, since it shows the player's own side */
+.teammate-lead {
+  color: hsl(var(--primary));
+}
+
 .note {
   font-size: 13px;
   font-weight: 600;

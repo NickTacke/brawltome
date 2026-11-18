@@ -3,8 +3,21 @@
   "cards": [
     {
       "kind": "solo",
-      "player": { "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" },
-      "data": { "state": "failed", "reason": "unavailable", "retryInSeconds": 4, "canRetry": true }
+      "player": {
+        "brawlhallaId": 91913839,
+        "name": "Shinigami",
+        "legend": "Hattori"
+      },
+      "data": {
+        "state": "failed",
+        "reason": "unavailable",
+        "retryInSeconds": 4,
+        "canRetry": true
+      },
+      "known": {
+        "rating": 2130,
+        "games": 1204
+      }
     }
   ],
   "visibleMs": 12000

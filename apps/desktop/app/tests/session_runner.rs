@@ -23,7 +23,9 @@ fn player(brawlhalla_id: u32, name: &str, team: u32, is_local: bool) -> Player {
         team,
         legend: Some("Hattori".to_string()),
         is_local,
-        personal_rating_2v2: None,
+        is_in_party: is_local,
+        clan: None,
+        ranked: None,
     }
 }
 
@@ -259,10 +261,12 @@ fn solo_data(view: &OverlayView) -> &CardData {
 
 fn is_ranked_card_of(view: &OverlayView, brawlhalla_id: u32) -> bool {
     view.cards.iter().any(|card| match card {
-        Card::Solo { player, data } => {
+        Card::Solo { player, data, .. } => {
             player.brawlhalla_id == brawlhalla_id && matches!(data, CardData::Ranked { .. })
         }
-        Card::Team { .. } | Card::PostMatch(_) | Card::Status { .. } => false,
+        Card::Team { .. } | Card::Teammate { .. } | Card::PostMatch(_) | Card::Status { .. } => {
+            false
+        }
     })
 }
 

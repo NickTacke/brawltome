@@ -3,7 +3,11 @@
   "cards": [
     {
       "kind": "solo",
-      "player": { "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" },
+      "player": {
+        "brawlhallaId": 91913839,
+        "name": "Shinigami",
+        "legend": "Hattori"
+      },
       "data": {
         "state": "ranked",
         "tier": "Diamond",
@@ -13,6 +17,10 @@
         "wins": 734,
         "games": 1204,
         "isRefreshing": false
+      },
+      "known": {
+        "rating": 2130,
+        "games": 1204
       }
     }
   ],

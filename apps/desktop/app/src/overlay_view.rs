@@ -1,6 +1,6 @@
 //! what the overlay page draws, built from a lobby's opponents and the answer about them
 
-use brawltome_detection::{MatchSnapshot, MatchType, Player};
+use brawltome_detection::{MatchSnapshot, MatchType, Player, RankedStanding};
 use serde::Serialize;
 
 use crate::lobby_client::{LobbyAnswer, LobbyKind, LookupFailure};
@@ -19,12 +19,19 @@ pub struct OverlayView {
 pub enum Card {
     Solo {
         player: PlayerHead,
+        /// from the game's memory, so it shows before the lookup answers
+        known: Option<Known>,
         data: CardData,
     },
     Team {
         team: u32,
         data: TeamData,
         players: Vec<TeamPlayer>,
+    },
+    /// a 2v2 teammate the game matched at random, from its memory only
+    Teammate {
+        player: PlayerHead,
+        known: Option<Known>,
     },
     PostMatch(PostMatchCard),
     /// says the app found the game, and whether it can read this patch
@@ -56,6 +63,23 @@ pub struct PlayerHead {
     pub brawlhalla_id: u32,
     pub name: String,
     pub legend: Option<String>,
+}
+
+/// what the game's memory holds of a player in a ranked match: the 1v1 elo, or the own 2v2 elo in a 2v2
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Known {
+    pub rating: u32,
+    pub games: u32,
+}
+
+impl From<&RankedStanding> for Known {
+    fn from(standing: &RankedStanding) -> Self {
+        Self {
+            rating: standing.rating,
+            games: standing.games,
+        }
+    }
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -110,7 +134,7 @@ pub struct TeamPlayer {
     pub brawlhalla_id: u32,
     pub name: String,
     pub legend: Option<String>,
-    pub personal_rating_2v2: Option<u32>,
+    pub known: Option<Known>,
     pub one_vs_one_rating: Option<u32>,
 }
 
@@ -139,6 +163,8 @@ pub enum FailureReason {
 pub struct LobbyOpponents {
     kind: LobbyKind,
     players: Vec<Player>,
+    /// a 2v2 teammate outside the local party, so one the game matched at random
+    random_teammate: Option<Player>,
 }
 
 impl LobbyOpponents {
@@ -163,8 +189,20 @@ impl LobbyOpponents {
             }
             _ => return None,
         };
+        let random_teammate = snapshot
+            .players
+            .iter()
+            .find(|player| {
+                player.team == local_player.team && !player.is_local && !player.is_in_party
+            })
+            .filter(|_| kind == LobbyKind::TwoVsTwo)
+            .cloned();
 
-        Some(Self { kind, players })
+        Some(Self {
+            kind,
+            players,
+            random_teammate,
+        })
     }
 
     pub fn kind(&self) -> LobbyKind {
@@ -191,14 +229,14 @@ pub fn failure_reason(failure: &LookupFailure) -> FailureReason {
     }
 }
 
-/// the cards before the answer: names and legends from memory
+/// the cards before the answer, with what the game's memory holds
 pub fn loading_view(lobby_id: u64, visible_ms: u64, opponents: &LobbyOpponents) -> OverlayView {
     let card = match opponents.kind {
         LobbyKind::OneVsOne => solo_card(&opponents.players[0], CardData::Loading),
         LobbyKind::TwoVsTwo => team_card(&opponents.players, TeamData::Loading, None),
     };
 
-    view(lobby_id, visible_ms, card)
+    view(lobby_id, visible_ms, card, opponents)
 }
 
 /// none when the answer misses one of the opponents
@@ -216,7 +254,7 @@ pub fn answered_view(
         LobbyKind::TwoVsTwo => answered_team_card(&opponents.players, answer, is_refresh_pending)?,
     };
 
-    Some(view(lobby_id, visible_ms, card))
+    Some(view(lobby_id, visible_ms, card, opponents))
 }
 
 pub fn failed_view(
@@ -230,13 +268,22 @@ pub fn failed_view(
         LobbyKind::TwoVsTwo => team_card(&opponents.players, TeamData::Failed(failure), None),
     };
 
-    view(lobby_id, visible_ms, card)
+    view(lobby_id, visible_ms, card, opponents)
 }
 
-fn view(lobby_id: u64, visible_ms: u64, card: Card) -> OverlayView {
+/// the opponents' card, then a random teammate's below it
+fn view(lobby_id: u64, visible_ms: u64, card: Card, opponents: &LobbyOpponents) -> OverlayView {
+    let teammate_card = opponents
+        .random_teammate
+        .as_ref()
+        .map(|teammate| Card::Teammate {
+            player: player_head(teammate),
+            known: known_of(teammate),
+        });
+
     OverlayView {
         lobby_id,
-        cards: vec![card],
+        cards: std::iter::once(card).chain(teammate_card).collect(),
         visible_ms,
     }
 }
@@ -305,8 +352,13 @@ fn answered_team_card(
 fn solo_card(opponent: &Player, data: CardData) -> Card {
     Card::Solo {
         player: player_head(opponent),
+        known: known_of(opponent),
         data,
     }
+}
+
+fn known_of(player: &Player) -> Option<Known> {
+    player.ranked.as_ref().map(Known::from)
 }
 
 fn team_card(opponents: &[Player], data: TeamData, answer: Option<&LobbyAnswer>) -> Card {
@@ -324,7 +376,8 @@ fn team_card(opponents: &[Player], data: TeamData, answer: Option<&LobbyAnswer>)
 
 /// the 1v1 Elo stands in only for a player whose personal 2v2 Elo memory doesn't hold
 fn team_player(opponent: &Player, answer: Option<&LobbyAnswer>) -> TeamPlayer {
-    let fallback_answer = answer.filter(|_| opponent.personal_rating_2v2.is_none());
+    let known = known_of(opponent);
+    let fallback_answer = answer.filter(|_| known.is_none());
     let one_vs_one_rating = fallback_answer
         .and_then(|answer| answer.player(opponent.brawlhalla_id))
         .and_then(|player_answer| player_answer.one_vs_one.as_ref())
@@ -334,7 +387,7 @@ fn team_player(opponent: &Player, answer: Option<&LobbyAnswer>) -> TeamPlayer {
         brawlhalla_id: opponent.brawlhalla_id,
         name: opponent.name.clone(),
         legend: opponent.legend.clone(),
-        personal_rating_2v2: opponent.personal_rating_2v2,
+        known,
         one_vs_one_rating,
     }
 }
