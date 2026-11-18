@@ -1,18 +1,20 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { MatchDetailContract, ReviewScope } from '@brawltome/contracts'
 import type { Replay } from '@brawltome/replay-player'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { MatchByKind } from '../src/components/match/MatchByKind'
 import { formatClock } from '../src/components/match/match-format'
+import { type StageTools, StageToolsContext } from '../src/components/match/stage/stage-tools'
 import { matchDetailOf, readInsights, readPlayback } from './match-fixtures'
+import { ReplayWithArt } from './replay-with-art'
 
 // these render the stage in a browser-like dom, so its effects run: loading the art and the timeline, drawing, keys
 
 type Art = MatchDetailContract['art']
 type Drawn = { replay: Replay }
 
-const realPlayer = { ...(await import('@brawltome/replay-player')) }
 const drawnReplays: Replay[] = []
 const loadedManifests: string[] = []
 
@@ -29,25 +31,23 @@ const firstReplay = {
 const platformImage = 'sheets/10a43fccdae5677c.webp'
 const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
 
-mock.module('@brawltome/replay-player', () => ({
-  ...realPlayer,
-  loadReplay: (manifestUrl: string) => {
-    loadedManifests.push(manifestUrl)
+// the stage loads and draws through these instead of the real ones, so the test sees which art it loaded and drew
+const tools: StageTools = {
+  loadReplay: async (manifestUrl) => {
+    loadedManifests.push(String(manifestUrl))
 
-    return manifestUrl.includes('first') ? Promise.resolve(firstReplay) : new Promise(() => undefined)
+    return String(manifestUrl).includes('first') ? firstReplay : new Promise<Replay>(() => undefined)
   },
-}))
-
-mock.module('../src/components/match/stage/draw-moment', () => ({
-  drawMoment: (_canvas: unknown, match: Drawn) => {
+  drawMoment: (_canvas, match: Drawn) => {
     drawnReplays.push(match.replay)
 
     return true
   },
-}))
+}
 
-const { MatchByKind } = await import('../src/components/match/MatchByKind')
-const { ReplayWithArt } = await import('./replay-with-art')
+function withTools(element: ReactNode): ReactNode {
+  return <StageToolsContext value={tools}>{element}</StageToolsContext>
+}
 
 const timelineJson = JSON.stringify(readPlayback('duel-a'))
 
@@ -71,7 +71,20 @@ async function settle(): Promise<void> {
 let root: Root
 let container: HTMLElement
 
+// what this file swaps on the global object, put back after it, as other test files share the process
+const swappedGlobals = [
+  'fetch',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'IntersectionObserver',
+  'IS_REACT_ACT_ENVIRONMENT',
+] as const
+
+let globalsBefore: Map<string, PropertyDescriptor | undefined>
+
 beforeAll(() => {
+  globalsBefore = new Map(swappedGlobals.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]))
+
   GlobalRegistrator.register()
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -95,6 +108,11 @@ beforeAll(() => {
 
 afterAll(async () => {
   await GlobalRegistrator.unregister()
+
+  for (const [name, descriptor] of globalsBefore) {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+    else Reflect.deleteProperty(globalThis, name)
+  }
 })
 
 async function mount(element: ReactNode): Promise<void> {
@@ -102,7 +120,7 @@ async function mount(element: ReactNode): Promise<void> {
   document.body.append(container)
   root = createRoot(container)
 
-  await act(async () => root.render(element))
+  await act(async () => root.render(withTools(element)))
   await settle()
 }
 
@@ -119,7 +137,7 @@ describe('the stage in a browser', () => {
 
     drawnReplays.length = 0
 
-    await act(async () => root.render(<MatchByKind match={matchNamed('second')} />))
+    await act(async () => root.render(withTools(<MatchByKind match={matchNamed('second')} />)))
     await settle()
 
     expect(drawnReplays).not.toContain(firstReplay)
@@ -263,7 +281,7 @@ describe('the review in a browser', () => {
 
     const clockMs = clockNow()
 
-    await act(async () => root.render(replayFor(2)))
+    await act(async () => root.render(withTools(replayFor(2))))
     await settle()
 
     const slotTwoTimes = stopTimes(2, 'taken')

@@ -1,8 +1,9 @@
 import type { StageBox } from '@brawltome/contracts'
 import { type RefObject, useLayoutEffect, useRef, useState } from 'react'
-import { type DrawnMatch, drawMoment } from './draw-moment'
+import type { DrawnMatch } from './draw-moment'
 import { type Camera, levelToCanvas, viewOf } from './play-camera'
 import { stepAt } from './playback-timeline'
+import { useStageTools } from './stage-tools'
 import { useCanvasSize } from './use-canvas-size'
 
 type MomentDrawing = {
@@ -21,6 +22,7 @@ export function useMomentDrawing({ canvasRef, match, box, camera, timeMs }: Mome
   // the step of the last frame drawn whole, which stays on screen while the next one waits for its art
   const lastWholeStep = useRef<number | null>(null)
   const sizeVersion = useCanvasSize(canvasRef)
+  const { drawMoment } = useStageTools()
   const [isBuffering, setIsBuffering] = useState(false)
   const [retries, setRetries] = useState(0)
 
@@ -44,7 +46,7 @@ export function useMomentDrawing({ canvasRef, match, box, camera, timeMs }: Mome
     const frame = requestAnimationFrame(() => setRetries((current) => current + 1))
 
     return () => cancelAnimationFrame(frame)
-  }, [canvasRef, timeMs, match, box, camera, sizeVersion, retries])
+  }, [canvasRef, timeMs, match, box, camera, sizeVersion, retries, drawMoment])
 
   return isBuffering
 }

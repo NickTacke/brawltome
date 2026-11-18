@@ -1,14 +1,8 @@
 import type { MatchDetailContract } from '@brawltome/contracts'
-import {
-  type CameraTrack,
-  cameraOptions,
-  cameraTrack,
-  loadReplay,
-  type Replay,
-  type Timeline,
-} from '@brawltome/replay-player'
+import { type CameraTrack, cameraOptions, cameraTrack, type Replay, type Timeline } from '@brawltome/replay-player'
 import { useEffect, useMemo, useState } from 'react'
 import { fetchPlaybackTimeline } from './playback-timeline'
+import { useStageTools } from './stage-tools'
 
 // what drawing the match's legends needs: the art the replay worker exported for it, and the playback timeline the
 // legends, the tokens and the game's camera are drawn from. the timeline loads whatever the art's state, as the
@@ -79,6 +73,7 @@ function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
   const manifest = manifestOf(art, playbackPath)
   const manifestUrl = manifest?.manifestUrl ?? null
   const baseUrl = manifest?.baseUrl ?? null
+  const { loadReplay } = useStageTools()
   const [load, setLoad] = useState<Load<Replay>>(manifest ? { status: 'loading' } : { status: 'idle' })
 
   useEffect(() => {
@@ -103,7 +98,7 @@ function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
       })
 
     return () => controller.abort()
-  }, [manifestUrl, baseUrl])
+  }, [manifestUrl, baseUrl, loadReplay])
 
   return load
 }
