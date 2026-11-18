@@ -145,6 +145,8 @@ services:
       # match art the worker exports, served from art.brawltome.app; its key pair is limited to this bucket and address
       ART_R2_BUCKET: brawltome-art
       ART_BASE_URL: https://art.brawltome.app
+      # everyone can upload replays and see match pages, not only the operators below
+      REPLAYS_OPEN: "true"
       # accounts that may upload any replay, for testing; Nick's
       REPLAY_OPERATOR_ACCOUNTS: 14b22ce8-bb52-4181-a5de-dcc1349c5b70
       RUNTIME_CLEANUP_RESERVE_MS: "5000"
