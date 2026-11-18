@@ -42,6 +42,11 @@ export type StatusView =
   | { state: 'ready'; patch: string }
   | { state: 'unsupported'; patch: string | null }
 
+export type StatusView =
+  | { state: 'connecting' }
+  | { state: 'ready'; patch: string }
+  | { state: 'unsupported'; patch: string | null }
+
 export type Card =
   | { kind: 'solo'; player: PlayerHead; known: Known | null; data: CardData }
   | { kind: 'team'; team: number; data: TeamData; players: TeamPlayer[] }

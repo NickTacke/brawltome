@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // @brawltome/replay-player imports its own files with their .ts extension, which tsc only allows without emitting
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": ["src", "vite.config.ts"]
 }

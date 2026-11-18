@@ -1,5 +1,6 @@
 import type { InsightSummary, SummaryKo, SummaryPlayer } from '@brawltome/contracts'
 import type { MatchFacts } from './facts'
+import { legendNamesOf } from './legend-names'
 import type { LinePlayer } from './line'
 import { readMoveRows, readWeaponRows } from './moves'
 import { type MatchRecord, sideOf, statsOf, toMs } from './record'
@@ -35,12 +36,6 @@ function perMinute(record: MatchRecord, value: number): number {
   return minutes > 0 ? value / minutes : 0
 }
 
-function legendNames(player: LinePlayer): { legendKey: string; legendName: string } {
-  const name = player.legend.name
-
-  return { legendKey: name.toLowerCase(), legendName: name.charAt(0) + name.slice(1).toLowerCase() }
-}
-
 function readPlayer(facts: MatchFacts, result: SideResult, player: LinePlayer): SummaryPlayer {
   const { record } = facts
   const stats = statsOf(record, player.slot)
@@ -56,7 +51,7 @@ function readPlayer(facts: MatchFacts, result: SideResult, player: LinePlayer): 
     slot: player.slot,
     brawlhallaId: player.brawlhallaId,
     name: player.name,
-    ...legendNames(player),
+    ...legendNamesOf(player.legend),
     side,
     isWinner: isWinningSide(result, side),
     stocksLeft: Math.max(0, (record.line.match.rules.stocks ?? 0) - stats.Deaths),

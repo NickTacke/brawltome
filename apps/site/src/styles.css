@@ -43,6 +43,17 @@
   }
 }
 
+/*
+ * a phone held upright: the replay's controls, lanes and review card go under its stage instead of over it. held
+ * sideways a phone's stage fills the screen's height, so its controls stay on it as on a desktop. phoneQuery in
+ * components/match/use-phone-layout.ts asks the same
+ */
+@custom-variant phone {
+  @media (width < 40rem) and (orientation: portrait) {
+    @slot;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-ink);
