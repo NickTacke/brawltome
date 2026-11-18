@@ -10,7 +10,7 @@ import { readReviewStops } from './review-stops'
 import { readSummary } from './summary'
 
 // bumped when a figure is worked out differently, so stored insights are worked out again
-export const INSIGHTS_VERSION = 1 satisfies MatchInsights['version']
+export const INSIGHTS_VERSION = 2 satisfies MatchInsights['version']
 
 /**
  * Everything the match page shows, from a stored line. Null when the line isn't a stock 1v1 or 2v2 with a timeline;

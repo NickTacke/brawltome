@@ -1,0 +1,26 @@
+import type { MatchInsights } from '@brawltome/contracts'
+import type { MatchPlayer } from '../match-players'
+import { MoveLeaders } from './MoveLeaders'
+import { MovementTable } from './MovementTable'
+import { OpeningLists } from './OpeningLists'
+import { PlayerHabits } from './PlayerHabits'
+
+type MatchModulesProps = {
+  insights: MatchInsights
+  players: MatchPlayer[]
+  picked: MatchPlayer
+  onPick: (slot: number) => void
+}
+
+/** What sits under the replay: the numbers behind the moments, each with its own way into the replay. */
+export function MatchModules({ insights, players, picked, onPick }: MatchModulesProps) {
+  return (
+    <>
+      <PlayerHabits matchPlayer={picked} players={players} durationMs={insights.summary.durationMs} />
+      {/* keyed by the player, so an opened way of opening, which was about the player before, closes */}
+      <OpeningLists key={picked.slot} moments={insights.insights.moments} slot={picked.slot} />
+      <MoveLeaders players={players} selectedSlot={picked.slot} onPick={onPick} />
+      <MovementTable players={players} selectedSlot={picked.slot} onSelect={onPick} />
+    </>
+  )
+}

@@ -62,7 +62,7 @@ export const currentArchitecturePolicy: ArchitecturePolicy = {
     '@brawltome/accounts': ['.', './dead-letter-hooks', './testing'],
     '@brawltome/analytics': ['.'],
     '@brawltome/clan': ['.', './dead-letter-hooks'],
-    '@brawltome/contracts': ['.', './legend-weapons'],
+    '@brawltome/contracts': ['.', './legend-weapons', './match-insights-rules'],
     '@brawltome/discovery': ['.'],
     '@brawltome/match-insights': ['.'],
     '@brawltome/player': ['.', './dead-letter-hooks'],

@@ -105,8 +105,6 @@ export {
 } from './leaderboard'
 export { type LevelArt, type LevelBounds, type LevelLayout, type LevelSegment, levelLayoutSchema } from './level-layout'
 export {
-  ADVANTAGE_SAMPLE_MS,
-  ADVANTAGE_STOCK_DAMAGE,
   type Insights,
   type MatchInsights,
   matchInsightsSchema,
@@ -140,6 +138,19 @@ export type {
   PlayerInsight,
   Stock,
 } from './match-insights-players'
+export {
+  ADVANTAGE_SAMPLE_MS,
+  ADVANTAGE_STOCK_DAMAGE,
+  BIG_PUNISH_DAMAGE,
+  EARLY_KO_DAMAGE,
+  LEAD_DODGE_MS,
+  LEAD_DODGE_STEPS,
+  LEAD_LANDING_MS,
+  LEAD_LANDING_STEPS,
+  LEAD_TRADE_MS,
+  LEAD_TRADE_STEPS,
+  LINE_STEP_MS,
+} from './match-insights-rules'
 export type {
   Stage,
   StageArt,

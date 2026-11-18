@@ -1,4 +1,4 @@
-import type { Lead, Punish } from '@brawltome/contracts'
+import { LEAD_DODGE_STEPS, LEAD_LANDING_STEPS, LEAD_TRADE_STEPS, type Lead, type Punish } from '@brawltome/contracts'
 import { playerOf } from './events'
 import type { MatchFacts } from './facts'
 import type { AttackEvent, LineEvent } from './line'
@@ -12,10 +12,7 @@ import { weaponLabel } from './weapon-names'
 
 // a swing or the attacker's own move can start this long before the hit and still be the one in play
 const swingSteps = 90
-const dodgeSteps = 30
-const landingSteps = 8
 const movementSteps = 30
-const tradeSteps = 10
 
 const movementWords: Record<string, string> = { jump: 'jumped', dash: 'dashed', throw: 'threw a weapon' }
 
@@ -47,7 +44,7 @@ function tradeLead(facts: MatchFacts, punish: Punish): Found {
     (blow) =>
       blow.attacker === punish.target &&
       blow.target === punish.attacker &&
-      Math.abs(blow.step - punish.startStep) <= tradeSteps,
+      Math.abs(blow.step - punish.startStep) <= LEAD_TRADE_STEPS,
   )
 
   const gapSteps = answer ? Math.abs(answer.step - punish.startStep) : null
@@ -69,7 +66,7 @@ function swingLead(facts: MatchFacts, punish: Punish): Found | null {
 
 function dodgeLead(facts: MatchFacts, punish: Punish): Found | null {
   const hitStep = punish.startStep
-  const dodge = lastEvent(facts, punish.target, ['dodge'], hitStep - dodgeSteps, hitStep)
+  const dodge = lastEvent(facts, punish.target, ['dodge'], hitStep - LEAD_DODGE_STEPS, hitStep)
 
   if (dodge?.type !== 'dodge') return null
 
@@ -82,7 +79,7 @@ function dodgeLead(facts: MatchFacts, punish: Punish): Found | null {
 function landingLead(facts: MatchFacts, punish: Punish): Found | null {
   const hitStep = punish.startStep
   const inAir = stateOf(facts.record, punish.target).inAir
-  const landed = lastBecameWithin(inAir, false, hitStep - landingSteps, hitStep - 1)
+  const landed = lastBecameWithin(inAir, false, hitStep - LEAD_LANDING_STEPS, hitStep - 1)
 
   if (landed === null) return null
 

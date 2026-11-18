@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
+import { INSIGHTS_VERSION } from '@brawltome/match-insights'
 import { replaysModule } from '../index'
 import { readMatchInsightsFor } from '../insights'
 import { claimJob, completeJob } from '../jobs'
@@ -91,19 +92,19 @@ describe.skipIf(!connectionString)('match insights', () => {
   test('a stored match gets its insights, kept under the version and no layout', async () => {
     const matchId = await storedMatch()
 
-    expect(insightKeys(matchId)).toEqual([`insights/${matchId}/dev-1/1-none.json.gz`])
+    expect(insightKeys(matchId)).toEqual([`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`])
   })
 
   test('a first read stores the insights and a second read reuses them', async () => {
     const matchId = await storedMatch()
-    const key = `insights/${matchId}/dev-1/1-none.json.gz`
+    const key = `insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`
 
     await deps.objectStore.delete(key)
 
     const put = spyOn(deps.objectStore, 'put')
     const first = await readMatchInsightsFor(deps, matchId)
 
-    expect(first?.version).toBe(1)
+    expect(first?.version).toBe(INSIGHTS_VERSION)
     expect(put.mock.calls.map(([putKey]) => putKey)).toEqual([key])
 
     const second = await readMatchInsightsFor(deps, matchId)
@@ -120,8 +121,8 @@ describe.skipIf(!connectionString)('match insights', () => {
 
     const insights = await readMatchInsightsFor(deps, matchId)
 
-    expect(insights?.version).toBe(1)
-    expect(insightKeys(matchId)).toContain(`insights/${matchId}/dev-1/1-${layoutHash}.json.gz`)
+    expect(insights?.version).toBe(INSIGHTS_VERSION)
+    expect(insightKeys(matchId)).toContain(`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-${layoutHash}.json.gz`)
   })
 
   test('a map file whose layout does not read leaves the insights without one', async () => {
@@ -129,28 +130,28 @@ describe.skipIf(!connectionString)('match insights', () => {
 
     await addMapFile()
     await deps.artStore.put(mapPath, new TextEncoder().encode('{"format":3}'), 'application/json')
-    await deps.objectStore.delete(`insights/${matchId}/dev-1/1-none.json.gz`)
+    await deps.objectStore.delete(`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`)
 
     const errors = spyOn(console, 'error').mockImplementation(() => undefined)
     const insights = await readMatchInsightsFor(deps, matchId)
 
     errors.mockRestore()
 
-    expect(insights?.version).toBe(1)
-    expect(insightKeys(matchId)).toEqual([`insights/${matchId}/dev-1/1-none.json.gz`])
+    expect(insights?.version).toBe(INSIGHTS_VERSION)
+    expect(insightKeys(matchId)).toEqual([`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`])
   })
 
   test('insights stored under an older version are not served', async () => {
     const matchId = await storedMatch()
     const stale = Bun.gzipSync(new TextEncoder().encode(JSON.stringify({ version: 0 })))
 
-    await deps.objectStore.delete(`insights/${matchId}/dev-1/1-none.json.gz`)
+    await deps.objectStore.delete(`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`)
     await deps.objectStore.put(`insights/${matchId}/dev-1/0-none.json.gz`, stale, 'application/gzip')
 
     const insights = await readMatchInsightsFor(deps, matchId)
 
-    expect(insights?.version).toBe(1)
-    expect(insightKeys(matchId)).toContain(`insights/${matchId}/dev-1/1-none.json.gz`)
+    expect(insights?.version).toBe(INSIGHTS_VERSION)
+    expect(insightKeys(matchId)).toContain(`insights/${matchId}/dev-1/${INSIGHTS_VERSION}-none.json.gz`)
   })
 
   test('a merged match answers the surviving match’s insights', async () => {
@@ -185,7 +186,7 @@ describe.skipIf(!connectionString)('match insights', () => {
 
     const match = await getMatch(readDeps, matchId)
 
-    expect(match?.insights?.version).toBe(1)
+    expect(match?.insights?.version).toBe(INSIGHTS_VERSION)
     expect(match?.art).toEqual({ state: 'queued', manifestUrl: null, baseUrl: artBaseUrl })
     expect(match?.playbackPath).toBe(`/match/${matchId}/playback/dev-1/1`)
   })
