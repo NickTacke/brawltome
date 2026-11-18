@@ -19,11 +19,12 @@ pub struct Rect {
 #[serde(rename_all = "camelCase")]
 pub enum OverlayPosition {
     TopLeft,
-    #[default]
     TopCenter,
     TopRight,
     MiddleLeft,
     Center,
+    /// the owner's pick: the right edge is clear on the loading screen
+    #[default]
     MiddleRight,
     BottomLeft,
     BottomCenter,
@@ -36,7 +37,23 @@ enum Anchor {
     End,
 }
 
+/// which side of the card the rank banner hangs on
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BannerSide {
+    Left,
+    Right,
+}
+
 impl OverlayPosition {
+    /// the banner faces the nearest screen edge, so cards in the right column carry it on their right
+    pub fn banner_side(self) -> BannerSide {
+        match self.anchors() {
+            (Anchor::End, _) => BannerSide::Right,
+            _ => BannerSide::Left,
+        }
+    }
+
     fn anchors(self) -> (Anchor, Anchor) {
         match self {
             Self::TopLeft => (Anchor::Start, Anchor::Start),
@@ -62,6 +79,18 @@ pub fn monitor_for(point: Option<(i32, i32)>, monitors: &[Rect]) -> Option<Rect>
     let holding_point = monitors.iter().find(|monitor| contains(monitor, x, y));
 
     Some(holding_point.copied().unwrap_or(first))
+}
+
+/// the monitors with the primary one first, so monitor_for falls back to it
+pub fn primary_first(mut monitors: Vec<Rect>, primary: Option<Rect>) -> Vec<Rect> {
+    let Some(primary) = primary else {
+        return monitors;
+    };
+
+    monitors.retain(|monitor| *monitor != primary);
+    monitors.insert(0, primary);
+
+    monitors
 }
 
 /// where the cards go, in physical pixels; None for an empty content size
@@ -104,6 +133,21 @@ pub fn physical_size(
     let height = to_physical_px(height_css_px, device_pixel_ratio)?;
 
     Some((width, height))
+}
+
+/// a size measured on a monitor of one height, as big relative to a monitor of another height, rounded up
+pub fn rescaled_size(size_px: (u32, u32), from_height_px: u32, to_height_px: u32) -> (u32, u32) {
+    if from_height_px == 0 {
+        return size_px;
+    }
+
+    let rescale = |length_px: u32| {
+        let scaled =
+            (u64::from(length_px) * u64::from(to_height_px)).div_ceil(u64::from(from_height_px));
+        u32::try_from(scaled).unwrap_or(u32::MAX)
+    };
+
+    (rescale(size_px.0), rescale(size_px.1))
 }
 
 fn to_physical_px(css_px: f64, device_pixel_ratio: f64) -> Option<u32> {
@@ -233,6 +277,23 @@ mod tests {
     }
 
     #[test]
+    fn a_minimized_game_puts_the_cards_on_the_primary_monitor() {
+        let left = rect(-2560, 0, 2560, 1440);
+        let primary = rect(0, 0, 1920, 1080);
+        let monitors = primary_first(vec![left, primary], Some(primary));
+
+        // windows parks a minimized window at -32000,-32000
+        let minimized_centre = Some((-32_000 + 80, -32_000 + 14));
+
+        assert_eq!(monitors, vec![primary, left]);
+        assert_eq!(monitor_for(minimized_centre, &monitors), Some(primary));
+        assert_eq!(
+            primary_first(vec![left, primary], None),
+            vec![left, primary]
+        );
+    }
+
+    #[test]
     fn css_pixels_become_physical_pixels() {
         assert_eq!(physical_size(340.0, 130.5, 1.25), Some((425, 164)));
         assert_eq!(physical_size(340.0, 130.0, f64::NAN), None);
@@ -242,10 +303,37 @@ mod tests {
     }
 
     #[test]
+    fn a_size_measured_on_one_monitor_fits_another() {
+        assert_eq!(rescaled_size((340, 131), 1080, 1080), (340, 131));
+        assert_eq!(rescaled_size((340, 155), 1080, 1440), (454, 207));
+        assert_eq!(rescaled_size((454, 175), 1440, 1080), (341, 132));
+        assert_eq!(rescaled_size((340, 131), 0, 1080), (340, 131));
+    }
+
+    #[test]
     fn the_position_setting_uses_camel_case_names() {
         let parsed: OverlayPosition = serde_json::from_str("\"bottomCenter\"").unwrap();
 
         assert_eq!(parsed, OverlayPosition::BottomCenter);
-        assert_eq!(OverlayPosition::default(), OverlayPosition::TopCenter);
+        assert_eq!(OverlayPosition::default(), OverlayPosition::MiddleRight);
+    }
+
+    #[test]
+    fn the_banner_hangs_on_the_side_of_the_nearest_edge() {
+        assert_eq!(OverlayPosition::TopRight.banner_side(), BannerSide::Right);
+        assert_eq!(
+            OverlayPosition::MiddleRight.banner_side(),
+            BannerSide::Right
+        );
+        assert_eq!(
+            OverlayPosition::BottomRight.banner_side(),
+            BannerSide::Right
+        );
+        assert_eq!(OverlayPosition::TopCenter.banner_side(), BannerSide::Left);
+        assert_eq!(OverlayPosition::BottomLeft.banner_side(), BannerSide::Left);
+        assert_eq!(
+            serde_json::to_string(&BannerSide::Right).unwrap(),
+            "\"right\""
+        );
     }
 }

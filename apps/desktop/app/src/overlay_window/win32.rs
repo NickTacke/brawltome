@@ -2,14 +2,53 @@
 
 use std::mem;
 
-use windows_sys::Win32::Foundation::{GetLastError, SetLastError, BOOL, HWND, LPARAM, RECT};
+use windows_sys::core::BOOL;
+use windows_sys::Win32::Foundation::{GetLastError, SetLastError, HWND, LPARAM, RECT};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
-    SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_EX_NOACTIVATE,
+    SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_HIDEWINDOW,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WS_EX_NOACTIVATE,
 };
 
+use tauri::WebviewWindow;
+
 use super::placement::Rect;
+
+/// tao rewrites the extended style on some window changes and can drop the no-focus flag, so it is checked first
+pub fn place(window: &WebviewWindow, rect: Rect) -> Result<(), String> {
+    let handle = window_handle(window)?;
+
+    if ensure_never_activates(handle) {
+        log::warn!("the overlay window lost its no-focus style; it is back before placing");
+    }
+
+    place_without_activating(handle, rect)
+}
+
+pub fn hide(window: &WebviewWindow) -> Result<(), String> {
+    let handle = window_handle(window)?;
+
+    hide_without_activating(handle)
+}
+
+/// logs when the window could take focus, which focusable(false) should have ruled out
+pub fn make_never_activate(window: &WebviewWindow) {
+    match window_handle(window) {
+        Ok(handle) if ensure_never_activates(handle) => {
+            log::warn!("the overlay window could take focus at start; it no longer can");
+        }
+        Ok(_) => {}
+        Err(error) => log::warn!("{error}"),
+    }
+}
+
+fn window_handle(window: &WebviewWindow) -> Result<isize, String> {
+    let handle = window
+        .hwnd()
+        .map_err(|error| format!("find the overlay window handle: {error}"))?;
+
+    Ok(handle.0 as isize)
+}
 
 /// moves, sizes, raises and shows in one call that cannot activate the window
 pub fn place_without_activating(window_handle: isize, rect: Rect) -> Result<(), String> {
@@ -44,6 +83,34 @@ pub fn place_without_activating(window_handle: isize, rect: Rect) -> Result<(), 
         return Err(format!(
             "place the overlay window at {},{} size {}x{}: SetWindowPos failed with error {error_code}",
             rect.x, rect.y, rect.width, rect.height
+        ));
+    }
+
+    Ok(())
+}
+
+/// hides the window without handing activation to anything
+///
+/// tauri's own hide only acts when tao thinks the window is visible, and tao never learns that
+/// place_without_activating showed it
+pub fn hide_without_activating(window_handle: isize) -> Result<(), String> {
+    // SAFETY: SetWindowPos only reads its arguments; a stale handle makes it fail, not crash
+    let succeeded = unsafe {
+        SetWindowPos(
+            window_handle as HWND,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_HIDEWINDOW | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+        )
+    };
+    if succeeded == 0 {
+        // SAFETY: GetLastError reads the calling thread's own error code
+        let error_code = unsafe { GetLastError() };
+        return Err(format!(
+            "hide the overlay window: SetWindowPos failed with error {error_code}"
         ));
     }
 
@@ -262,6 +329,25 @@ mod tests {
         assert_eq!(foreground_after, foreground_before);
         assert_ne!(foreground_after, window.0);
         assert_ne!(extended_style & WS_EX_TOPMOST, 0);
+    }
+
+    #[test]
+    fn hiding_takes_a_placed_window_off_screen() {
+        let window = TestWindow::new();
+        let rect = Rect {
+            x: 40,
+            y: 50,
+            width: 340,
+            height: 131,
+        };
+        place_without_activating(window.handle(), rect).expect("place the test window");
+
+        let hidden = hide_without_activating(window.handle());
+
+        // SAFETY: the handle is the live test window
+        let is_visible = unsafe { IsWindowVisible(window.0) } != 0;
+        assert_eq!(hidden, Ok(()));
+        assert!(!is_visible);
     }
 
     #[test]

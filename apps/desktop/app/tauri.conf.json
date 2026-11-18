@@ -1,6 +1,6 @@
 {
   "productName": "BrawlTome",
-  "version": "0.1.4",
+  "version": "0.2.0-beta.1",
   "identifier": "com.brawltome.overlay",
   "build": {
     "beforeDevCommand": "bun run vite dev",
@@ -13,15 +13,18 @@
       {
         "label": "overlay",
         "title": "BrawlTome Overlay",
-        "width": 350,
-        "height": 600,
-        "resizable": false,
-        "decorations": false,
+        "url": "overlay.html",
+        "width": 340,
+        "height": 131,
+        "visible": false,
+        "focusable": false,
+        "focus": false,
         "transparent": true,
+        "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "shadow": false,
-        "visible": true
+        "resizable": false
       }
     ]
   },
