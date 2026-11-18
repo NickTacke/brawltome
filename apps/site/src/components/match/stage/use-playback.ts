@@ -53,9 +53,16 @@ export function usePlayback(durationMs: number) {
     }
   }, [isPlaying, isBuffering, speed, scale, durationMs])
 
+  const isAtEnd = timeMs >= durationMs
+
+  // the match is over: it stops playing, so its frames stop and one press plays it again
+  useEffect(() => {
+    if (isPlaying && isAtEnd) setIsPlaying(false)
+  }, [isPlaying, isAtEnd])
+
   // playing on from the end starts over
   function toggle() {
-    if (!isPlaying && timeMs >= durationMs) setTimeMs(0)
+    if (!isPlaying && isAtEnd) setTimeMs(0)
 
     setIsPlaying(!isPlaying)
   }
@@ -63,8 +70,6 @@ export function usePlayback(durationMs: number) {
   function seek(nextMs: number) {
     setTimeMs(Math.min(Math.max(nextMs, 0), durationMs))
   }
-
-  const isAtEnd = timeMs >= durationMs
 
   return {
     timeMs,
