@@ -1,4 +1,4 @@
-import type { MyReplayContract } from '@brawltome/contracts'
+import type { MyReplayContract, ReplayUploadResultContract } from '@brawltome/contracts'
 
 export type MatchesPage =
   | { kind: 'comingSoon' }
@@ -23,6 +23,18 @@ export function replayStatusText(replay: MyReplayContract): string {
   if (replay.status === 'done') return 'Ready'
 
   return (replay.rejection && rejectionText[replay.rejection]) ?? 'Couldn’t read this replay'
+}
+
+export type RefusedFile = { fileName: string; reason: string }
+
+/** Files refused before they were stored; they get no row in the list, so the upload names them itself. */
+export function refusedFiles(outcomes: ReplayUploadResultContract['outcomes']): RefusedFile[] {
+  return outcomes
+    .filter((outcome) => outcome.uploadId === null)
+    .map((outcome) => ({
+      fileName: outcome.fileName,
+      reason: (outcome.rejection && rejectionText[outcome.rejection]) ?? 'Couldn’t read this replay',
+    }))
 }
 
 /** 187000 → "3:07" */
