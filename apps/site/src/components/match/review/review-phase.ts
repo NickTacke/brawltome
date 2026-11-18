@@ -36,18 +36,20 @@ export type ReviewPhase = {
 /** Where the review stands, worked out from its state and the clock alone. */
 export function reviewPhaseOf({ stops, index, isArriving, timeMs, isPlaying, isOn }: ReviewState): ReviewPhase {
   const stop = stops[index] ?? null
-  const hasNext = index + 1 < stops.length
+  const next = stops[index + 1] ?? null
   const untilStopMs = stop ? stop.timeMs + holdMs - timeMs : null
   const isHeading = isOn && isArriving && untilStopMs !== null
   // before the first stop there is none to play on from, and the first is the next
   const isPastStop = untilStopMs === null || untilStopMs < -nearMs
   const isNear = untilStopMs !== null && Math.abs(untilStopMs) < nearMs
+  // a next stop close behind this one is headed for before the easing into it begins, or it would be played past
+  const isNextClose = next !== null && next.timeMs + holdMs - timeMs < easeMs
 
   return {
     stop,
     hasArrived: isHeading && untilStopMs <= 0,
     isEasing: isHeading && untilStopMs > 0 && untilStopMs < easeMs,
-    hasPlayedOn: isOn && !isArriving && isPlaying && hasNext && isPastStop,
+    hasPlayedOn: isOn && !isArriving && isPlaying && next !== null && (isPastStop || isNextClose),
     isStopped: isOn && !isArriving && !isPlaying && isNear,
     backIndex: isNear || isArriving ? index - 1 : index,
   }

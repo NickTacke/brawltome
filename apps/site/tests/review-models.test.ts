@@ -282,6 +282,18 @@ describe('where a review stands', () => {
     })
   })
 
+  test('playing on from a stop with the next one close behind, it heads for that one before the replay gets there', () => {
+    const keyStops = reviewChoicesOf(readInsights('doubles-a'), 2)[0]?.stops ?? []
+    const index = keyStops.findIndex((stop) => stop.timeMs === 54_096)
+    const next = keyStops[index + 1]?.timeMs ?? 0
+
+    expect(next).toBe(54_496)
+
+    const playing = { stops: keyStops, index, isArriving: false, timeMs: 54_096 + 80, isPlaying: true, isOn: true }
+
+    expect(reviewPhaseOf(playing)).toMatchObject({ hasPlayedOn: true })
+  })
+
   test('watching, it never stops', () => {
     expect(reviewPhaseOf({ ...heading, isOn: false, timeMs: first + 60 })).toMatchObject({
       hasArrived: false,
