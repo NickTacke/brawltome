@@ -140,6 +140,7 @@ describe('cards from memory', () => {
 
   test('a random teammate gets a card under the opponents', () => {
     const team = fixture('team')
+
     const view: OverlayView = {
       ...team,
       cards: [
