@@ -158,6 +158,35 @@ describe('the stage in a browser', () => {
     await unmount()
   })
 
+  test('where the browser refuses fullscreen, the stage is laid over the screen from the body, outside the page', async () => {
+    const requestBefore = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen')
+
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new TypeError('fullscreen is not allowed'))
+
+    await mount(<MatchByKind match={matchNamed('first')} />)
+
+    const press = async (label: string) => {
+      await act(async () => container.ownerDocument.querySelector<HTMLElement>(`[aria-label="${label}"]`)?.click())
+      await settle()
+    }
+
+    await press('Fullscreen')
+
+    const overlaid = document.querySelector('[data-stage-window]')
+
+    expect(container.contains(overlaid)).toBe(false)
+    expect(overlaid?.closest('body > *')?.className).toContain('fixed inset-0')
+
+    await press('Leave fullscreen')
+
+    expect(container.contains(document.querySelector('[data-stage-window]'))).toBe(true)
+
+    await unmount()
+
+    if (requestBefore) Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', requestBefore)
+    else Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen')
+  })
+
   test('another match never shows the art of the one before', async () => {
     await mount(<MatchByKind match={matchNamed('first')} />)
 

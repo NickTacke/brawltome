@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import type { Fullscreen } from './use-fullscreen'
 import type { StageControlsState } from './use-stage-controls'
 
@@ -23,7 +24,7 @@ export function StageFrame({ frameRef, fullscreen, controls, aspect, children }:
   // letterboxed: as wide as the screen, or as wide as its height allows at the stage's own shape
   const stageSize = fullscreen.isOn ? { width: `min(100%, calc(100dvh * ${aspect}))` } : undefined
 
-  return (
+  const frame = (
     <div ref={frameRef} className={`min-w-0 ${frameLook}`}>
       {/* moving over the stage shows the controls, a press on it plays or pauses */}
       <div {...controls.stage} style={stageSize} className={fullscreen.isOn ? undefined : phoneBleed}>
@@ -31,4 +32,8 @@ export function StageFrame({ frameRef, fullscreen, controls, aspect, children }:
       </div>
     </div>
   )
+
+  // a transformed ancestor, like the wide page's centring, would hold a fixed frame inside itself instead of the
+  // screen, so the overlay hangs from the body
+  return fullscreen.isOverlay ? createPortal(frame, document.body) : frame
 }
