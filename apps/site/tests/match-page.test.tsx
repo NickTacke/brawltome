@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { type Habit, leadKinds, type MatchInsights, type SummaryPlayer } from '@brawltome/contracts'
+import {
+  type Habit,
+  leadKinds,
+  type MatchDetailContract,
+  type MatchInsights,
+  type SummaryPlayer,
+} from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
 import { matchPlayersOf } from '../src/components/match/match-players'
@@ -348,4 +354,23 @@ test('the openings lists know every way an opening can begin', () => {
   const kinds = readOpeningRecords(readInsights('duel-a').insights.moments, 1).map((record) => record.kind)
 
   expect([...kinds].sort()).toEqual([...leadKinds].sort())
+})
+
+function markupOf(match: MatchDetailContract): string {
+  return renderToStaticMarkup(<MatchPage match={match} insights={match.insights as MatchInsights} />)
+}
+
+describe('the stored replay', () => {
+  test('is offered as a download when the match has one', () => {
+    const match = matchDetailOf('duel-b', noArt)
+
+    expect(markupOf(match)).toContain(`href="/match/${match.id}/replay" download="match.replay"`)
+  })
+
+  test('is not offered when the match has none', () => {
+    const match = matchDetailOf('duel-b', noArt)
+    const withoutReplay = { ...match, replay: { ...match.replay, available: false } }
+
+    expect(markupOf(withoutReplay)).not.toContain(`/match/${match.id}/replay"`)
+  })
 })

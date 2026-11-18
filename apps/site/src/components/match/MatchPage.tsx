@@ -5,6 +5,7 @@ import { columnPiece, mainColumn, modulesColumn, pageColumns, sideColumn } from 
 import { MatchModules } from './modules/MatchModules'
 import { NeutralByStock } from './NeutralByStock'
 import { ReviewReplay } from './review/ReviewReplay'
+import { SaveReplay } from './SaveReplay'
 import { Scoreboard } from './Scoreboard'
 import { backgroundUrlOf } from './stage/background-url'
 import { useLegends } from './stage/use-legends'
@@ -40,6 +41,7 @@ export function MatchPage({ match, insights }: MatchPageProps) {
         <aside ref={sideRef} className={sideColumn} style={{ top: sideTopPx }}>
           <div data-column-piece="identity" className={`${columnPiece} max-xl:order-1 max-xl:pt-0`}>
             <MatchIdentity insights={insights} mapImage={mapImage} />
+            <SaveReplay match={match} />
           </div>
           {/* on a phone the replay comes straight under the map's name, who played after it */}
           <div data-column-piece="players" className={`${columnPiece} max-xl:order-1 phone:order-3`}>
