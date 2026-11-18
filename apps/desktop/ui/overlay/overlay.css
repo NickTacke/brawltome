@@ -272,6 +272,18 @@ button.card {
   height: 18px;
   border-radius: 4px;
   background: hsl(var(--raised) / 0.7);
+  animation: waiting 1.4s ease-in-out infinite;
+}
+
+/* what is still on its way pulses, so it reads as loading rather than greyed out */
+@keyframes waiting {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .bar.lead {
@@ -628,7 +640,7 @@ button.card:hover .arrow {
 /* memory's elo stays bright; only what the lookup gave waits for its refresh */
 .is-refreshing-lookup .peak,
 .is-refreshing-lookup .figures .stat + .stat {
-  opacity: 0.35;
+  animation: waiting 1.4s ease-in-out infinite;
 }
 
 button.card:hover .main {
@@ -641,7 +653,16 @@ button.card:hover .name {
 
 @media (prefers-reduced-motion: reduce) {
   .banner,
-  .spinner {
+  .spinner,
+  .bar,
+  .is-refreshing-lookup .peak,
+  .is-refreshing-lookup .figures .stat + .stat {
     animation: none;
+  }
+
+  /* without the pulse, a plain dim still says these are waiting */
+  .is-refreshing-lookup .peak,
+  .is-refreshing-lookup .figures .stat + .stat {
+    opacity: 0.5;
   }
 }
