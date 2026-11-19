@@ -41,6 +41,26 @@ test('readPack round-trips a pack written by the export', () => {
   )
 })
 
+// a level's animations move across the whole map: Shrek's Swamp's dragonflies fly past 2048 units out, which BHA2's
+// 16-bit moves can't hold
+test('readPack reads a draw moved further than 2048 units', () => {
+  const dragonfly = { name: 'DragonFly2', spriteFrame: 0, opacity: 1, matrix: [0.25, 0, 0, 0.25, -2049.875, 30000.5] }
+  const bytes = writePack([{ index: 0, frameCount: 900, frames: new Map([[870, [dragonfly]]]) }])
+
+  const draws = readPack(bytes.buffer).animations.get(0)?.frames.get(870)
+
+  expect([...(draws ?? [])]).toEqual(float32([0, 0, 1, 0.25, 0, 0, 0.25, -2049.875, 30000.5]))
+})
+
+// packs the export wrote before BHA3 stay in the bucket and are still drawn
+test('readPack still reads a BHA2 pack', () => {
+  const bytes = writePack([{ index: 7, frameCount: 12, frames: new Map([[0, [torso, arm]]]) }], 2)
+
+  expect([...(readPack(bytes.buffer).animations.get(7)?.frames.get(0) ?? [])]).toEqual(
+    float32([0, 3, 1, 1, 0, 0, 1, 12.5, -40, 1, 0, 0.2, 0.5, -0.25, 0.25, 0.5, -3.0625, 7]),
+  )
+})
+
 test('readPack rejects a file that is not an animation pack', () => {
   expect(() => readPack(new Uint8Array([1, 2, 3, 4, 0, 0, 0, 0]).buffer)).toThrow('not an animation pack')
 })
