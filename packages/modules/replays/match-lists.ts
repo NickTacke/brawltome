@@ -83,7 +83,7 @@ type RecordLine = {
   legendName: string
 }
 
-/** How a player did across every uploaded match they played in: games, wins and each legend they played. */
+/** How a player did across every uploaded match they played in: games, wins, draws and each legend they played. */
 export async function readMatchRecord(sql: Sql, brawlhallaId: number): Promise<MatchRecord> {
   const lines = await sql<RecordLine[]>`
     SELECT player.match_id AS "matchId", match.has_teams AS "hasTeams", match.parsed_at AS "parsedAt", player.slot,
@@ -107,6 +107,7 @@ export function recordOf(lines: RecordLine[], brawlhallaId: number): MatchRecord
   const legends = new Map<number, MatchRecord['legends'][number]>()
   let games = 0
   let wins = 0
+  let draws = 0
   let lastParsedAt: Date | null = null
 
   for (const matchLines of groupByMatch(lines).values()) {
@@ -114,29 +115,41 @@ export function recordOf(lines: RecordLine[], brawlhallaId: number): MatchRecord
 
     if (!own) continue
 
-    const isWin = isOutrightWin(matchLines, own)
+    const outcome = outcomeOf(matchLines, own)
+    const win = outcome === 'won' ? 1 : 0
+    const draw = outcome === 'draw' ? 1 : 0
     const names = legendNamesOf({ id: own.legendId, name: own.legendName })
-    const legend = legends.get(own.legendId) ?? { legendId: own.legendId, ...names, games: 0, wins: 0 }
+    const legend = legends.get(own.legendId) ?? { legendId: own.legendId, ...names, games: 0, wins: 0, draws: 0 }
 
     games += 1
-    wins += isWin ? 1 : 0
-    legends.set(own.legendId, { ...legend, games: legend.games + 1, wins: legend.wins + (isWin ? 1 : 0) })
+    wins += win
+    draws += draw
+
+    legends.set(own.legendId, {
+      ...legend,
+      games: legend.games + 1,
+      wins: legend.wins + win,
+      draws: legend.draws + draw,
+    })
 
     if (!lastParsedAt || own.parsedAt > lastParsedAt) lastParsedAt = own.parsedAt
   }
 
   const byGames = [...legends.values()].sort((left, right) => right.games - left.games || right.wins - left.wins)
 
-  return { games, wins, lastParsedAt: lastParsedAt?.toISOString() ?? null, legends: byGames }
+  return { games, wins, draws, lastParsedAt: lastParsedAt?.toISOString() ?? null, legends: byGames }
 }
 
-// a draw leaves both sides winning; the record counts only a match the player's side won alone
-function isOutrightWin(matchLines: RecordLine[], own: RecordLine): boolean {
+// a draw leaves more than one side winning; only a match the player's side won alone is a win
+function outcomeOf(matchLines: RecordLine[], own: RecordLine): 'won' | 'draw' | 'lost' {
   const winners = winningSlots(matchLines, own.hasTeams)
+
+  if (!winners.has(own.slot)) return 'lost'
+
   const winningLines = matchLines.filter((line) => winners.has(line.slot))
   const winningSides = new Set(winningLines.map((line) => sideOf(line, own.hasTeams)))
 
-  return winners.has(own.slot) && winningSides.size === 1
+  return winningSides.size === 1 ? 'won' : 'draw'
 }
 
 function groupByMatch(lines: RecordLine[]): Map<string, RecordLine[]> {

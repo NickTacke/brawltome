@@ -251,7 +251,7 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     expect(mine).toEqual({
       player: null,
-      record: { games: 0, wins: 0, lastParsedAt: null, legends: [] },
+      record: { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] },
       matches: [],
       nextCursor: null,
     })

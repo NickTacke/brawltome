@@ -244,7 +244,7 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
   return { access, upload, match, playerMatches, recentMatches, myMatches, replayFile, playback, mine }
 }
 
-const emptyRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
+const emptyRecord = { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] }
 
 async function requireAccount(accounts: Accounts, sessionToken: string | undefined) {
   const authentication = await accounts.authenticate(sessionToken ?? null)

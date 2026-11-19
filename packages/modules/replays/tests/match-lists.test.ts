@@ -67,22 +67,25 @@ describe('a player’s record', () => {
     expect(recordOf(lines, 7)).toEqual({
       games: 3,
       wins: 2,
+      draws: 0,
       lastParsedAt: later.toISOString(),
       legends: [
-        { legendId: 930, legendName: 'Legend 930', legendKey: 'legend 930', games: 2, wins: 1 },
-        { legendId: 941, legendName: 'Legend 941', legendKey: 'legend 941', games: 1, wins: 1 },
+        { legendId: 930, legendName: 'Legend 930', legendKey: 'legend 930', games: 2, wins: 1, draws: 0 },
+        { legendId: 941, legendName: 'Legend 941', legendKey: 'legend 941', games: 1, wins: 1, draws: 0 },
       ],
     })
   })
 
-  test('a draw is not a win', () => {
+  test('a draw is neither a win nor a loss', () => {
     const drawn = [recordLine('a', 1, 7, 2, 930), recordLine('a', 2, 8, 2, 12)]
+    const record = recordOf(drawn, 7)
 
-    expect(recordOf(drawn, 7)).toMatchObject({ games: 1, wins: 0 })
+    expect(record).toMatchObject({ games: 1, wins: 0, draws: 1 })
+    expect(record.legends[0]).toMatchObject({ games: 1, wins: 0, draws: 1 })
   })
 
   test('a player in no match has an empty record', () => {
-    expect(recordOf([], 7)).toEqual({ games: 0, wins: 0, lastParsedAt: null, legends: [] })
+    expect(recordOf([], 7)).toEqual({ games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] })
   })
 })
 
