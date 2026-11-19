@@ -79,6 +79,8 @@ describe('oRPC router built from a module list', () => {
       'upload',
       'match',
       'playerMatches',
+      'recentMatches',
+      'myMatches',
       'replayFile',
       'playback',
       'mine',

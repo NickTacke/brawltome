@@ -1,14 +1,18 @@
-import type { MatchDetailContract, MatchSummaryContract, MyReplayContract } from '@brawltome/contracts'
+import type { MatchDetailContract, MyReplayContract } from '@brawltome/contracts'
 import type { ObjectStore, Sql } from '@brawltome/foundation'
+import { legendNamesOf } from '@brawltome/match-insights'
 import { insightsOf, logInsightsFailure } from './insights'
 import { replayKey } from './keys'
-import { findMatchRow, type MatchRow, type StoredMatchRow } from './match-row'
+import type { MapPictures } from './map-picture'
+import { winningSlots } from './match-result'
+import { findMatchRow, type StoredMatchRow } from './match-row'
+import { summaryOf } from './match-summary'
 import type { ReplaysDeps } from './model'
 import { playbackPathOf } from './playback'
 
 // what /v1 serves about matches and uploads; shapes come from @brawltome/contracts
 
-type PlayerRow = MatchDetailContract['players'][number] & { matchId: string }
+type PlayerRow = Omit<MatchDetailContract['players'][number], 'isWinner' | 'legendKey'> & { matchId: string }
 
 /** The game's own replay file names: `[11.00] BigCrystalTemple.replay`. */
 export function replayFileName(patch: string, mapName: string): string {
@@ -32,29 +36,11 @@ async function playersOf(sql: Sql, matchIds: string[]): Promise<PlayerRow[]> {
   return rows.map((row) => ({ ...row, brawlhallaId: Number(row.brawlhallaId) }))
 }
 
-function summaryOf(row: MatchRow, players: PlayerRow[]): MatchSummaryContract {
-  return {
-    id: row.id,
-    patch: row.patch,
-    mapName: row.mapName,
-    modeName: row.modeName,
-    isRanked: row.isRanked,
-    isCustom: row.isCustom,
-    durationMs: row.durationMs,
-    parsedAt: row.parsedAt.toISOString(),
-    players: players.map(({ slot, brawlhallaId, name, team, legendId, legendName }) => ({
-      slot,
-      brawlhallaId,
-      name,
-      team,
-      legendId,
-      legendName,
-    })),
-  }
-}
-
 /** What reading a match needs: the art bucket's address is null when this process has no art bucket. */
-export type MatchReadDeps = Pick<ReplaysDeps, 'database' | 'objectStore' | 'artStore'> & { artBaseUrl: string | null }
+export type MatchReadDeps = Pick<ReplaysDeps, 'database' | 'objectStore' | 'artStore'> & {
+  artBaseUrl: string | null
+  mapPictures: MapPictures
+}
 
 // a queued or failed export keeps the last good manifest, so its address is given whatever the state
 function artOf(row: StoredMatchRow, artBaseUrl: string | null): MatchDetailContract['art'] {
@@ -85,87 +71,22 @@ export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDe
   // the page only plays back the matches it has insights for
   const playbackPath = insights ? playbackPathOf(row) : null
 
+  const winners = winningSlots(players, row.hasTeams)
+
   return {
-    ...summaryOf(row, players),
-    queue: row.queue,
-    hasTeams: row.hasTeams,
+    ...summaryOf(row, players, await deps.mapPictures(row.patch, row.mapId)),
     hasTeamDamage: row.hasTeamDamage,
-    stocks: row.stocks,
     isReliable: row.isReliable,
     failedChecks: row.failedChecks,
-    players: players.map(({ matchId: _matchId, ...player }) => player),
+    players: players.map(({ matchId: _matchId, ...player }) => ({
+      ...player,
+      ...legendNamesOf({ id: player.legendId, name: player.legendName }),
+      isWinner: winners.has(player.slot),
+    })),
     replay: { available: !row.fileDeleted, patch: row.patch, fileName: replayFileName(row.patch, row.mapName) },
     insights,
     art: artOf(row, deps.artBaseUrl),
     playbackPath,
-  }
-}
-
-type Cursor = { parsedAt: string; id: string }
-
-function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(`${cursor.parsedAt}|${cursor.id}`).toString('base64url')
-}
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// a cursor that doesn't decode to a date and an id starts from the first page; anything else would reach postgres
-function decodeCursor(value: string | undefined): Cursor | null {
-  if (!value) return null
-
-  const [parsedAt, id] = Buffer.from(value, 'base64url').toString().split('|')
-
-  if (!parsedAt || !id || !uuidPattern.test(id)) return null
-
-  const time = Date.parse(parsedAt)
-
-  if (Number.isNaN(time)) return null
-
-  return { parsedAt: new Date(time).toISOString(), id }
-}
-
-/** A player's matches, newest first; the cursor continues where the previous page stopped. */
-export async function listPlayerMatches(
-  sql: Sql,
-  brawlhallaId: number,
-  cursorValue: string | undefined,
-  limit = 20,
-): Promise<{ matches: MatchSummaryContract[]; nextCursor: string | null }> {
-  const cursor = decodeCursor(cursorValue)
-
-  const rows = await sql<MatchRow[]>`
-    SELECT match.id, match.merged_into AS "mergedInto", match.digest, match.patch, match.map_name AS "mapName",
-      match.mode_name AS "modeName", match.queue, match.is_ranked AS "isRanked", match.is_custom AS "isCustom",
-      match.has_teams AS "hasTeams", match.has_team_damage AS "hasTeamDamage", match.stocks,
-      match.duration_ms AS "durationMs", match.is_reliable AS "isReliable", match.failed_checks AS "failedChecks",
-      match.parsed_at AS "parsedAt", false AS "fileDeleted"
-    FROM replays.matches AS match
-    WHERE match.merged_into IS NULL
-      AND EXISTS (SELECT 1 FROM replays.match_players AS player
-                  WHERE player.match_id = match.id AND player.brawlhalla_id = ${brawlhallaId})
-      ${cursor ? sql`AND (match.parsed_at, match.id) < (${cursor.parsedAt}::timestamptz, ${cursor.id}::uuid)` : sql``}
-    ORDER BY match.parsed_at DESC, match.id DESC
-    LIMIT ${limit + 1}
-  `
-
-  const page = rows.slice(0, limit)
-
-  const players = await playersOf(
-    sql,
-    page.map((row) => row.id),
-  )
-
-  const last = page.at(-1)
-
-  return {
-    matches: page.map((row) =>
-      summaryOf(
-        row,
-        players.filter((player) => player.matchId === row.id),
-      ),
-    ),
-    nextCursor:
-      rows.length > limit && last ? encodeCursor({ parsedAt: last.parsedAt.toISOString(), id: last.id }) : null,
   }
 }
 

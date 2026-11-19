@@ -2,9 +2,12 @@ import { type Accounts, createPostgresAccounts } from '@brawltome/accounts'
 import {
   matchDetailSchema,
   matchIdSchema,
+  matchPageInputSchema,
+  myMatchesSchema,
   myReplaysSchema,
   playerMatchesInputSchema,
   playerMatchesSchema,
+  recentMatchesSchema,
   replayAccessSchema,
   replayUploadInputSchema,
   replayUploadResultSchema,
@@ -12,8 +15,10 @@ import {
 import { internalProcedure, type ModuleRuntime, type ObjectStore } from '@brawltome/foundation'
 import { ORPCError } from '@orpc/server'
 import { z } from 'zod'
+import { createMapPictures } from '../map-picture'
+import { listPlayerMatches, listRecentMatches, readMatchRecord } from '../match-lists'
 import { readPlaybackFor } from '../playback'
-import { getMatch, getReplayFile, listMyReplays, listPlayerMatches } from '../reads'
+import { getMatch, getReplayFile, listMyReplays } from '../reads'
 import { uploadReplays } from '../upload'
 
 const tags = ['replays']
@@ -40,6 +45,8 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
   const isOpen = runtime.replaysOpen ?? false
   const artStore = runtime.replayArt?.store ?? null
   const artBaseUrl = runtime.replayArt?.baseUrl ?? null
+  const mapPictures = createMapPictures({ sql: runtime.database.sql, artStore, artBaseUrl })
+  const lists = { sql: runtime.database.sql, mapPictures }
 
   // until replays open to everyone, only operators see anything; to others the pages don't exist yet
   async function canSee(sessionToken: string | undefined): Promise<boolean> {
@@ -104,7 +111,7 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       await requireSight(context.visitorSessionToken, 'NOT_FOUND')
 
       const found = await getMatch(
-        { database: runtime.database, objectStore: objectStore(), artStore, artBaseUrl },
+        { database: runtime.database, objectStore: objectStore(), artStore, artBaseUrl, mapPictures },
         input.id,
       )
 
@@ -126,7 +133,41 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
     .handler(async ({ context, input }) => {
       await requireSight(context.visitorSessionToken, 'NOT_FOUND')
 
-      return listPlayerMatches(runtime.database.sql, input.brawlhallaId, input.cursor)
+      return listPlayerMatches(lists, input.brawlhallaId, input.cursor)
+    })
+
+  const recentMatches = internalProcedure
+    .route({ method: 'GET', path: '/matches', operationId: 'replays.recentMatches', summary: 'Recent matches', tags })
+    .input(matchPageInputSchema)
+    .output(recentMatchesSchema)
+    .handler(async ({ context, input }) => {
+      await requireSight(context.visitorSessionToken, 'NOT_FOUND')
+
+      return listRecentMatches(lists, input.cursor)
+    })
+
+  // the matches of the visitor's verified player, whoever uploaded them; an operator without one has none
+  const myMatches = internalProcedure
+    .route({ method: 'GET', path: '/me/matches', operationId: 'replays.myMatches', summary: 'Your matches', tags })
+    .input(matchPageInputSchema)
+    .output(myMatchesSchema)
+    .handler(async ({ context, input }) => {
+      const account = await requireAccount(accounts, context.visitorSessionToken)
+
+      await requireSight(context.visitorSessionToken, 'FORBIDDEN')
+
+      const { primaryPlayer } = await accounts.getPrimaryPlayerVerificationState(account.id)
+
+      if (!primaryPlayer) return { player: null, record: emptyRecord, matches: [], nextCursor: null }
+
+      const [record, page] = await Promise.all([
+        readMatchRecord(runtime.database.sql, primaryPlayer.brawlhallaId),
+        listPlayerMatches(lists, primaryPlayer.brawlhallaId, input.cursor),
+      ])
+
+      const player = { brawlhallaId: primaryPlayer.brawlhallaId, name: primaryPlayer.name }
+
+      return { player, record, ...page }
     })
 
   const replayFile = internalProcedure
@@ -199,8 +240,10 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
       return { isOpen, canSee: isVisible, canUpload: isVisible && (await canUpload(sessionToken)) }
     })
 
-  return { access, upload, match, playerMatches, replayFile, playback, mine }
+  return { access, upload, match, playerMatches, recentMatches, myMatches, replayFile, playback, mine }
 }
+
+const emptyRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
 
 async function requireAccount(accounts: Accounts, sessionToken: string | undefined) {
   const authentication = await accounts.authenticate(sessionToken ?? null)
