@@ -2,6 +2,7 @@ import { matchIdSchema } from '@brawltome/contracts'
 import { createServerFn } from '@tanstack/react-start'
 import { setResponseHeader } from '@tanstack/react-start/server'
 import { loadMatchesPage } from './load-matches-page'
+import { loadMyMatches, loadRecentMatches } from './match-lists'
 import { loadMatch, uploadForVisitor } from './replay-data'
 import { currentSession } from './session-cookie'
 import { currentWriteRequest } from './write-request'
@@ -32,4 +33,30 @@ export const getMatch = createServerFn({ method: 'GET' })
     setResponseHeader('cache-control', 'private, no-store')
 
     return loadMatch(id, currentSession().token)
+  })
+
+type MorePageInput = { list: 'mine' | 'recent'; cursor: string }
+
+/** The next page of one of the matches page's lists. */
+export const getMoreMatches = createServerFn({ method: 'GET' })
+  .validator((data: unknown): MorePageInput => {
+    const input = data as Partial<MorePageInput> | null
+    const isList = input?.list === 'mine' || input?.list === 'recent'
+
+    if (!isList || typeof input?.cursor !== 'string') throw new Error('load more matches: expected a list and a cursor')
+
+    return { list: input.list as MorePageInput['list'], cursor: input.cursor }
+  })
+  .handler(async ({ data }) => {
+    setResponseHeader('cache-control', 'private, no-store')
+
+    const token = currentSession().token
+
+    if (data.list === 'recent') return loadRecentMatches(token, data.cursor)
+
+    if (!token) return { matches: [], nextCursor: null }
+
+    const page = await loadMyMatches(token, data.cursor)
+
+    return { matches: page.matches, nextCursor: page.nextCursor }
   })

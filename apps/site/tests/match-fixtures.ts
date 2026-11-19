@@ -34,6 +34,7 @@ export function matchDetailOf(name: InsightsFixture, art: MatchDetailContract['a
     isCustom: false,
     durationMs: summary.durationMs,
     parsedAt: '2026-11-13T20:00:00.000Z',
+    mapPictureUrl: null,
     queue: 'ranked',
     hasTeams: summary.players.length > 2,
     hasTeamDamage: false,
