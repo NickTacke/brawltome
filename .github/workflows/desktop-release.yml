@@ -193,10 +193,17 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
+          # a tag with a suffix (v0.2.0-beta.1) is a beta: a pre-release stays out of "latest", where the updater
+          # looks, so stable installs don't move to it
+          release_type=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_type=(--prerelease)
+          fi
           gh release create "$RELEASE_TAG" \
             release/BrawlTome-Setup.exe \
             release/BrawlTome-Setup.exe.sig \
             release/latest.json \
             --verify-tag \
             --generate-notes \
+            "${release_type[@]}" \
             --title "BrawlTome $RELEASE_TAG"
