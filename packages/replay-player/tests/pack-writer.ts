@@ -1,9 +1,15 @@
 // The export's pack writer (brawlhalla-anims scripts), copied here only so the tests can make packs from synthetic
-// draws; the player itself only reads them. The layout is at the top of src/pack.ts
-const MAGIC = 0x32414842
+// draws; the player itself only reads them. The layout is at the top of src/pack.ts. It writes the current format,
+// BHA3, or the older BHA2 that packs already in the bucket have
 const MATRIX = 1024
 const TRANSLATE = 16
-const DRAW_BYTES = 18
+
+export type PackVersion = 2 | 3
+
+const formats = {
+  2: { magic: 0x32414842, drawBytes: 18 },
+  3: { magic: 0x33414842, drawBytes: 22 },
+} as const
 
 export type DrawToPack = { name: string; spriteFrame: number; opacity: number; matrix: readonly number[] }
 export type AnimationToPack = { index: number; frameCount: number; frames: Map<number, DrawToPack[]> }
@@ -34,6 +40,15 @@ class PackBytes {
     this.at += 4
   }
 
+  i32(value: number, unit: number) {
+    const quantized = Math.round(value * unit)
+
+    if (quantized < -0x80000000 || quantized > 0x7fffffff) throw new Error(`pack: ${value} doesn't fit in ${unit}ths`)
+
+    this.view.setInt32(this.at, quantized, true)
+    this.at += 4
+  }
+
   i16(value: number, unit: number) {
     const quantized = Math.round(value * unit)
 
@@ -58,19 +73,19 @@ function namesOf(animations: AnimationToPack[]): string[] {
   return [...new Set(names)]
 }
 
-function sizeOf(encodedNames: Uint8Array[], animations: AnimationToPack[]): number {
+function sizeOf(encodedNames: Uint8Array[], animations: AnimationToPack[], drawBytes: number): number {
   let size = 4 + 2 + encodedNames.reduce((total, encoded) => total + 1 + encoded.length, 0) + 2
 
   for (const animation of animations) {
     size += 6
 
-    for (const draws of animation.frames.values()) size += 4 + draws.length * DRAW_BYTES
+    for (const draws of animation.frames.values()) size += 4 + draws.length * drawBytes
   }
 
   return size
 }
 
-function writeDraw(out: PackBytes, draw: DrawToPack, nameIndex: number) {
+function writeDraw(out: PackBytes, draw: DrawToPack, nameIndex: number, version: PackVersion) {
   out.u16(nameIndex)
   out.u16(draw.spriteFrame)
   out.u8(Math.round(Math.max(0, Math.min(1, draw.opacity)) * 255))
@@ -78,17 +93,25 @@ function writeDraw(out: PackBytes, draw: DrawToPack, nameIndex: number) {
 
   for (let m = 0; m < 4; m++) out.i16(draw.matrix[m] ?? 0, MATRIX)
 
-  out.i16(draw.matrix[4] ?? 0, TRANSLATE)
-  out.i16(draw.matrix[5] ?? 0, TRANSLATE)
+  if (version === 2) {
+    out.i16(draw.matrix[4] ?? 0, TRANSLATE)
+    out.i16(draw.matrix[5] ?? 0, TRANSLATE)
+
+    return
+  }
+
+  out.i32(draw.matrix[4] ?? 0, TRANSLATE)
+  out.i32(draw.matrix[5] ?? 0, TRANSLATE)
 }
 
 // writePack writes animations into a pack; it throws on a value the format can't hold
-export function writePack(animations: AnimationToPack[]): Uint8Array<ArrayBuffer> {
+export function writePack(animations: AnimationToPack[], version: PackVersion = 3): Uint8Array<ArrayBuffer> {
+  const { magic, drawBytes } = formats[version]
   const names = namesOf(animations)
   const encodedNames = names.map((name) => new TextEncoder().encode(name))
-  const out = new PackBytes(sizeOf(encodedNames, animations))
+  const out = new PackBytes(sizeOf(encodedNames, animations, drawBytes))
 
-  out.u32(MAGIC)
+  out.u32(magic)
   out.u16(names.length)
 
   for (const encoded of encodedNames) out.text(encoded)
@@ -106,7 +129,7 @@ export function writePack(animations: AnimationToPack[]): Uint8Array<ArrayBuffer
       out.u16(frame)
       out.u16(draws.length)
 
-      for (const draw of draws) writeDraw(out, draw, names.indexOf(draw.name))
+      for (const draw of draws) writeDraw(out, draw, names.indexOf(draw.name), version)
     }
   }
 
