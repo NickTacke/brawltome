@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { getMoreMatches } from '../../server/replays'
 import { sectionTitle } from '../player/player-styles'
 import { MatchRow } from './MatchRow'
@@ -16,11 +16,10 @@ type MatchListProps = {
 
 /** A titled list of matches that fetches its next page in place. */
 export function MatchList({ title, list, page, yourId, now, empty }: MatchListProps) {
-  const [shown, setShown] = useState(page)
+  // pages loaded with Show more; a reload while an upload is read brings a new first page and keeps these
+  const [more, setMore] = useState<MatchListData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-
-  // a reload after an upload brings a fresh first page
-  useEffect(() => setShown(page), [page])
+  const shown = joinPages(page, more)
 
   async function showMore() {
     if (!shown.nextCursor) return
@@ -31,7 +30,8 @@ export function MatchList({ title, list, page, yourId, now, empty }: MatchListPr
 
     setIsLoading(false)
 
-    if (next) setShown({ matches: [...shown.matches, ...next.matches], nextCursor: next.nextCursor })
+    if (next)
+      setMore((loaded) => ({ matches: [...(loaded?.matches ?? []), ...next.matches], nextCursor: next.nextCursor }))
   }
 
   return (
@@ -60,4 +60,14 @@ export function MatchList({ title, list, page, yourId, now, empty }: MatchListPr
       )}
     </section>
   )
+}
+
+// the first page, then the loaded ones without the matches a newer first page already shows
+function joinPages(first: MatchListData, more: MatchListData | null): MatchListData {
+  if (!more) return first
+
+  const onFirst = new Set(first.matches.map((match) => match.id))
+  const rest = more.matches.filter((match) => !onFirst.has(match.id))
+
+  return { matches: [...first.matches, ...rest], nextCursor: more.nextCursor }
 }

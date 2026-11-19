@@ -14,21 +14,29 @@ import type { ReplayUpload } from './use-replay-upload'
 const column =
   'min-w-0 self-start border-b border-line/50 pb-5 md:max-2xl:grid md:max-2xl:grid-cols-2 md:max-2xl:gap-x-12 2xl:sticky 2xl:top-10 2xl:flex 2xl:flex-col 2xl:divide-y 2xl:divide-line/50 2xl:border-b-0 2xl:pb-0 2xl:[&>*]:py-3.5 2xl:[&>*:first-child]:pt-0'
 
+type MatchRecord = NonNullable<MyMatchesContract['record']>
+
+const emptyRecord: MatchRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
+
 type YourColumnProps = { mine: MyMatchesContract; uploads: MyReplayContract[]; upload: ReplayUpload; now: Date }
 
 export function YourColumn({ mine, uploads, upload, now }: YourColumnProps) {
+  // the first page always carries the record
+  const record = mine.record ?? emptyRecord
+
   return (
     <aside className={column}>
-      <Identity mine={mine} upload={upload} now={now} />
-      <Record record={mine.record} />
+      <Identity player={mine.player} record={record} upload={upload} now={now} />
+      <Record record={record} />
       <Uploads uploads={uploads} message={upload.message} />
-      <Legends legends={mine.record.legends} />
+      <Legends legends={record.legends} />
     </aside>
   )
 }
 
-function Identity({ mine, upload, now }: { mine: MyMatchesContract; upload: ReplayUpload; now: Date }) {
-  const { player, record } = mine
+type IdentityProps = { player: MyMatchesContract['player']; record: MatchRecord; upload: ReplayUpload; now: Date }
+
+function Identity({ player, record, upload, now }: IdentityProps) {
   const mainLegend = record.legends[0]?.legendKey ?? null
 
   return (
@@ -79,7 +87,7 @@ function UploadButton({ upload }: { upload: ReplayUpload }) {
   )
 }
 
-function Record({ record }: { record: MyMatchesContract['record'] }) {
+function Record({ record }: { record: MatchRecord }) {
   return (
     <section className="max-md:border-t max-md:border-line/50 max-md:pt-3">
       <h2 className={sectionTitle}>Record</h2>
@@ -114,7 +122,7 @@ function Uploads({ uploads, message }: { uploads: MyReplayContract[]; message: s
   )
 }
 
-function Legends({ legends }: { legends: MyMatchesContract['record']['legends'] }) {
+function Legends({ legends }: { legends: MatchRecord['legends'] }) {
   if (legends.length === 0) return null
 
   return (
