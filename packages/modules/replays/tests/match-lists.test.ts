@@ -108,9 +108,10 @@ describe('map pictures for a page of matches', () => {
   const background = { background: { asset: 'sheets/0a595e48e9f677f4.webp' } }
 
   // stands in for postgres: every query answers with the stored map files
-  function fakeSql(queries: { count: number }) {
-    return (() => {
+  function fakeSql(queries: { count: number; asked?: unknown[] }) {
+    return ((_strings: TemplateStringsArray, ...values: unknown[]) => {
       queries.count += 1
+      queries.asked = values[0] as unknown[]
 
       return Promise.resolve(mapFiles)
     }) as unknown as Parameters<typeof createMapPictures>[0]['sql']
@@ -123,7 +124,7 @@ describe('map pictures for a page of matches', () => {
   }
 
   test('finds every map of a page in one query, then keeps what it found', async () => {
-    const queries = { count: 0 }
+    const queries: { count: number; asked?: unknown[] } = { count: 0 }
     const bytes = new TextEncoder().encode(JSON.stringify(background))
 
     const pictures = createMapPictures({
@@ -140,6 +141,8 @@ describe('map pictures for a page of matches', () => {
     expect(await pictures(page)).toEqual(new Map([['11.01/223', 'https://art.test/sheets/0a595e48e9f677f4.webp']]))
     expect(await pictures(page)).toHaveProperty('size', 1)
     expect(queries.count).toBe(1)
+    // two matches on one map ask for, and download, its file once
+    expect(queries.asked).toEqual(['11.01'])
   })
 
   test('a bucket that doesn’t answer leaves the map without a picture instead of failing the list', async () => {

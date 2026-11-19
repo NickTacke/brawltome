@@ -32,7 +32,9 @@ export function createMapPictures({ sql, artStore, artBaseUrl }: MapPictureDeps)
   }
 
   return async (maps) => {
-    const missing = maps.filter((map) => !found.has(mapKey(map)))
+    // a page often has several matches on one map; its file is asked for and read once
+    const distinct = new Map(maps.map((map) => [mapKey(map), map]))
+    const missing = [...distinct.values()].filter((map) => !found.has(mapKey(map)))
 
     if (artStore && artBaseUrl && missing.length > 0) await findPictures(missing)
 
