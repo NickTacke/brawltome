@@ -23,15 +23,29 @@ function sidesOf(match: MatchSummaryContract): RowPlayer[][] {
   return [...bySide.values()]
 }
 
-function fallsOf(side: RowPlayer[]): number {
-  return side.reduce((total, player) => total + player.deaths, 0)
+function isTimed(match: MatchSummaryContract): boolean {
+  return match.players.length > 0 && match.players.every((player) => player.score !== null)
 }
 
-// a timed match is placed by score, a stock match by who fell least
+function total(side: RowPlayer[], pick: (player: RowPlayer) => number): number {
+  return side.reduce((sum, player) => sum + pick(player), 0)
+}
+
+// the winners first, then a timed match by score and a stock match by who fell least. the summary doesn't say when
+// a stocked-out player went out, so two who lost every stock are told apart by their KOs
 function placeOrder(left: RowPlayer, right: RowPlayer): number {
+  const byWin = Number(right.isWinner) - Number(left.isWinner)
+
+  if (byWin !== 0) return byWin
+
   if (left.score !== null && right.score !== null) return right.score - left.score
 
   return left.deaths - right.deaths || right.kos - left.kos
+}
+
+/** A player's place in a free for all: one more than the players strictly ahead, so a tie shares a place. */
+export function placeOf(players: RowPlayer[], player: RowPlayer): number {
+  return 1 + players.filter((other) => placeOrder(other, player) < 0).length
 }
 
 /** The row's layout: the visitor's side first in a match they played, the winners first otherwise. */
@@ -45,13 +59,30 @@ export function rowViewOf(match: MatchSummaryContract, yourId: number | null): R
   const leadsFirst = (side: RowPlayer[]) => (yourId !== null && sides.some(isYours) ? isYours(side) : isWinning(side))
   const [first, second] = leadsFirst(sides[0] ?? []) ? sides : [...sides].reverse()
 
-  // a side scores the stocks the other side lost, the same count that decides the winner
+  const firstSide = first ?? []
+  const secondSide = second ?? []
+
+  // the same count that decides the winner: a timed match's score, or in a stock match the stocks the other side lost
+  if (isTimed(match)) {
+    const score = (player: RowPlayer) => player.score ?? 0
+
+    return {
+      kind: 'versus',
+      first: firstSide,
+      second: secondSide,
+      firstScore: total(firstSide, score),
+      secondScore: total(secondSide, score),
+    }
+  }
+
+  const falls = (player: RowPlayer) => player.deaths
+
   return {
     kind: 'versus',
-    first: first ?? [],
-    second: second ?? [],
-    firstScore: fallsOf(second ?? []),
-    secondScore: fallsOf(first ?? []),
+    first: firstSide,
+    second: secondSide,
+    firstScore: total(secondSide, falls),
+    secondScore: total(firstSide, falls),
   }
 }
 
@@ -63,7 +94,7 @@ export function resultFor(match: MatchSummaryContract, yourId: number | null): R
 
   const view = rowViewOf(match, yourId)
 
-  if (view.kind === 'freeForAll') return { kind: 'place', place: view.placed.indexOf(you) + 1 }
+  if (view.kind === 'freeForAll') return { kind: 'place', place: placeOf(view.placed, you) }
 
   const bothWon = view.second.some((player) => player.isWinner) && you.isWinner
 
@@ -79,7 +110,7 @@ export function queueLabel(match: MatchSummaryContract): string {
 
   if (match.isRanked) return `Ranked ${size}`
 
-  return match.queue === 'unranked' ? `Unranked ${size}` : `Custom ${size}`
+  return match.isCustom ? `Custom ${size}` : `Unranked ${size}`
 }
 
 /** `1st`, `2nd`, `3rd`, `4th` */

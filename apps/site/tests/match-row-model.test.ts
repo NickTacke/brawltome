@@ -92,6 +92,34 @@ describe('a match row', () => {
     expect(queueLabel(freeForAll)).toBe('Custom FFA')
   })
 
+  test('players tied for first in a free for all share the place', () => {
+    const tied = matchOf([
+      { slot: 1, id: 11, deaths: 1, isWinner: true },
+      { slot: 2, id: 12, deaths: 1, isWinner: true },
+      { slot: 3, id: 13, deaths: 3, isWinner: false },
+    ])
+
+    expect(resultFor(tied, 12)).toEqual({ kind: 'place', place: 1 })
+    expect(resultFor(tied, 13)).toEqual({ kind: 'place', place: 3 })
+  })
+
+  test('a timed 1v1 shows the scores that decided it', () => {
+    const timed = matchOf(
+      [
+        { slot: 1, id: 11, deaths: 2, isWinner: false, score: 40 },
+        { slot: 2, id: 22, deaths: 3, isWinner: true, score: 61 },
+      ],
+      { stocks: null },
+    )
+
+    expect(rowViewOf(timed, null)).toMatchObject({ kind: 'versus', firstScore: 61, secondScore: 40 })
+  })
+
+  test('a match outside ranked that isn’t a custom game reads as unranked, whatever its queue', () => {
+    expect(queueLabel(matchOf([], { isRanked: false, isCustom: false, queue: null }))).toBe('Unranked FFA')
+    expect(queueLabel({ ...oneVsOne, isRanked: false, isCustom: true, queue: 'other' })).toBe('Custom 1v1')
+  })
+
   test('a match both sides won is a draw', () => {
     const drawn = matchOf([
       { slot: 1, id: 11, deaths: 2, isWinner: true },
