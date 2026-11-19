@@ -1,4 +1,4 @@
-import { sectionBody, sectionTitle, statLabel } from '../player/player-styles'
+import { sectionBody, sectionTitle, smallCaps } from '../player/player-styles'
 import type { MatchPlayer } from './match-players'
 import { PlayerNumbers } from './PlayerNumbers'
 import { PlayerPick } from './PlayerPick'
@@ -35,7 +35,7 @@ export function Scoreboard({ players, selectedSlot, stocks, onSelect }: Scoreboa
       <div className={`space-y-2 ${sectionBody}`}>
         {sidesOf(players).map((side) => (
           <div key={side.key}>
-            <div className={`mb-0.5 ${statLabel} ${side.isWinner ? 'text-emerald-400' : ''}`}>
+            <div className={`mb-0.5 ${smallCaps} ${side.isWinner ? 'text-emerald-400' : 'text-soft'}`}>
               {side.isWinner ? 'Won' : 'Lost'}
             </div>
             {side.players.map((matchPlayer) => (
