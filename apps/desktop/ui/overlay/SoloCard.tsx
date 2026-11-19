@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BannerSlot, CardHead } from './CardHead'
+import { BannerSlot, ProfileHead } from './CardHead'
 import {
   failureText,
   formatCount,
@@ -32,9 +32,7 @@ export function SoloCard({ player, known, data, onOpenProfile, onRetry }: SoloCa
       <div className="card">
         <BannerSlot tier={null} />
         <span className="main">
-          <button type="button" className="card-link" onClick={() => onOpenProfile(player.brawlhallaId)}>
-            <CardHead name={player.name} legend={player.legend} sub={failureText(data.reason)} isBusy={false} />
-          </button>
+          <ProfileHead player={player} sub={failureText(data.reason)} isBusy={false} onOpenProfile={onOpenProfile} />
           <RetryRow note={retryCountdown(data.retryInSeconds)} canRetry={data.canRetry} onRetry={onRetry} />
         </span>
       </div>
@@ -46,13 +44,13 @@ export function SoloCard({ player, known, data, onOpenProfile, onRetry }: SoloCa
   const isBusy = known === null && (data.state === 'loading' || ranked?.isRefreshing === true)
 
   return (
-    <button type="button" className={cardClass(data, known)} onClick={() => onOpenProfile(player.brawlhallaId)}>
+    <div className={cardClass(data, known)}>
       <BannerSlot tier={bannerTier(ranked, known)} />
       <span className="main">
-        <CardHead name={player.name} legend={player.legend} sub={subLine(known, data)} isBusy={isBusy} />
+        <ProfileHead player={player} sub={subLine(known, data)} isBusy={isBusy} onOpenProfile={onOpenProfile} />
         <Figures known={known} data={data} />
       </span>
-    </button>
+    </div>
   )
 }
 

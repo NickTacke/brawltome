@@ -1,18 +1,22 @@
-import { BannerSlot, CardHead } from './CardHead'
+import { BannerSlot, ProfileHead } from './CardHead'
 import { formatCount, isInPlacement, knownTier, PLACEMENT_GAMES, tierLabel } from './card-format'
 import type { Known, PlayerHead } from './overlay-view'
 
-type TeammateCardProps = { player: PlayerHead; known: Known | null }
+type TeammateCardProps = {
+  player: PlayerHead
+  known: Known | null
+  onOpenProfile: (brawlhallaId: number) => void
+}
 
 // a teammate the game matched at random, under the opponents' card, from the game's memory only
-export function TeammateCard({ player, known }: TeammateCardProps) {
+export function TeammateCard({ player, known, onOpenProfile }: TeammateCardProps) {
   const tier = known === null ? null : knownTier(known)
 
   return (
     <div className="card teammate-card">
       <BannerSlot tier={tier} />
       <span className="main">
-        <CardHead name={player.name} legend={player.legend} sub={subLine(known, tier)} isBusy={false} />
+        <ProfileHead player={player} sub={subLine(known, tier)} isBusy={false} onOpenProfile={onOpenProfile} />
         {known !== null && <TeammateFigures known={known} />}
       </span>
     </div>

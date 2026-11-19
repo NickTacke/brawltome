@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { type BannerSide, Overlay } from '../ui/overlay/Overlay'
 import type { CardData, Known, OverlayView } from '../ui/overlay/overlay-view'
 import { SoloCard } from '../ui/overlay/SoloCard'
+import { TeammateCard } from '../ui/overlay/TeammateCard'
 
 function fixture(name: string): OverlayView {
   const file = path.join(import.meta.dir, 'fixtures', `overlay-view-${name}.json`)
@@ -62,6 +63,13 @@ function elementWithClass(node: ReactNode, className: string): ElementProps | nu
   }
 
   if (typeof node !== 'object' || node === null || !('props' in node)) return null
+
+  // a component's element only holds its props, so render it to reach the elements it returns
+  if ('type' in node && typeof node.type === 'function') {
+    const component = node.type as (props: unknown) => ReactNode
+
+    return elementWithClass(component(node.props), className)
+  }
 
   const props = node.props as ElementProps
 
@@ -156,6 +164,47 @@ describe('cards from memory', () => {
     const html = render(view)
 
     expect(textOf(partOf(html, 'teammate-card'))).toBe('FoxYour teammate·Platinum1987Their 2v2 Elo117games')
+  })
+})
+
+describe('profile links', () => {
+  test('a 1v1 card opens the profile from its head, not from the whole card', () => {
+    const view = fixture('solo-ranked')
+    const [card] = view.cards
+
+    if (card?.kind !== 'solo') throw new Error('expected a solo card in the fixture')
+
+    const opened: number[] = []
+
+    const rankedCard = SoloCard({
+      player: card.player,
+      known: card.known,
+      data: card.data,
+      onOpenProfile: (brawlhallaId) => opened.push(brawlhallaId),
+      onRetry: () => {},
+    })
+
+    elementWithClass(rankedCard, 'card-link')?.onClick?.()
+
+    const html = render(view)
+
+    expect(opened).toEqual([card.player.brawlhallaId])
+    expect(html).toContain('<div class="card"><span class="banner-slot">')
+    expect(textOf(partOf(html, 'card-link'))).toBe('ShinigamiDiamond·#48')
+  })
+
+  test("a random teammate's card opens their profile from its head", () => {
+    const opened: number[] = []
+
+    const teammateCard = TeammateCard({
+      player: { brawlhallaId: 7, name: 'Fox', legend: 'Ember' },
+      known: { rating: 1987, games: 117 },
+      onOpenProfile: (brawlhallaId) => opened.push(brawlhallaId),
+    })
+
+    elementWithClass(teammateCard, 'card-link')?.onClick?.()
+
+    expect(opened).toEqual([7])
   })
 })
 
