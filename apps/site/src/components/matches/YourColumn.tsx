@@ -16,7 +16,7 @@ const column =
 
 type MatchRecord = NonNullable<MyMatchesContract['record']>
 
-const emptyRecord: MatchRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
+const emptyRecord: MatchRecord = { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] }
 
 type YourColumnProps = { mine: MyMatchesContract; uploads: MyReplayContract[]; upload: ReplayUpload; now: Date }
 
@@ -87,12 +87,16 @@ function UploadButton({ upload }: { upload: ReplayUpload }) {
   )
 }
 
+// a draw is neither a win nor a loss, so the split and its win rate count only the matches someone won
 function Record({ record }: { record: MatchRecord }) {
+  const decided = { wins: record.wins, games: record.games - record.draws }
+  const emptyText = record.games > 0 ? 'Only draws so far' : 'No matches yet'
+
   return (
     <section className="max-md:border-t max-md:border-line/50 max-md:pt-3">
       <h2 className={sectionTitle}>Record</h2>
       <div className={sectionBody}>
-        <SplitRecord standing={record} emptyText="No matches yet" />
+        <SplitRecord standing={decided} emptyText={emptyText} />
       </div>
     </section>
   )
@@ -137,12 +141,17 @@ function Legends({ legends }: { legends: MatchRecord['legends'] }) {
               className="size-8 shrink-0 rounded-md bg-raised object-cover object-top"
             />
             <span className="min-w-0 flex-1 truncate font-semibold text-strong">{legend.legendName}</span>
-            <span className="font-mono text-sm whitespace-nowrap text-soft">
-              {legend.wins}W {legend.games - legend.wins}L
-            </span>
+            <span className="font-mono text-sm whitespace-nowrap text-soft">{legendRecord(legend)}</span>
           </li>
         ))}
       </ul>
     </section>
   )
+}
+
+// `4W 2L`, with the draws after only when there are some: `4W 2L 1D`
+function legendRecord({ games, wins, draws }: MatchRecord['legends'][number]): string {
+  const split = `${wins}W ${games - wins - draws}L`
+
+  return draws > 0 ? `${split} ${draws}D` : split
 }

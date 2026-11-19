@@ -113,7 +113,7 @@ function summary(overrides: Partial<MatchSummaryContract> = {}): MatchSummaryCon
 }
 
 const loadedAt = '2026-11-18T22:00:00.000Z'
-const emptyRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
+const emptyRecord = { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] }
 
 function signedInPage(overrides: Partial<Extract<MatchesPage, { kind: 'signedIn' }>> = {}): MatchesPage {
   return {
@@ -123,7 +123,7 @@ function signedInPage(overrides: Partial<Extract<MatchesPage, { kind: 'signedIn'
     replays: [],
     mine: {
       player: { brawlhallaId: 1002, name: 'Bravo' },
-      record: { games: 1, wins: 0, lastParsedAt: '2026-11-18T21:48:00.000Z', legends: [] },
+      record: { games: 1, wins: 0, draws: 0, lastParsedAt: '2026-11-18T21:48:00.000Z', legends: [] },
       matches: [summary()],
       nextCursor: null,
     },
@@ -161,6 +161,18 @@ describe('the matches page', () => {
     expect(html).toContain('Ranked 1v1')
     expect(html).toContain('Lost')
     expect(html).toContain('Show more')
+  })
+
+  test('a draw in the record is neither a win nor a loss', async () => {
+    const ember = { legendId: 3, legendName: 'Ember', legendKey: 'ember', games: 3, wins: 1, draws: 1 }
+    const record = { games: 3, wins: 1, draws: 1, lastParsedAt: '2026-11-18T21:48:00.000Z', legends: [ember] }
+    const mine = { player: { brawlhallaId: 1002, name: 'Bravo' }, record, matches: [summary()], nextCursor: null }
+
+    const html = await renderInRouter(<MatchesView page={signedInPage({ mine })} />)
+
+    expect(html).toContain('3 matches')
+    expect(html).toContain('50.0%')
+    expect(html).toContain('1W 1L 1D')
   })
 
   test('with no matches yet, it shows where to drop replays and where the game keeps them', async () => {

@@ -20,7 +20,7 @@ function stubApi(answer: (path: string) => Response): Call[] {
   return calls
 }
 
-const emptyRecord = { games: 0, wins: 0, lastParsedAt: null, legends: [] }
+const emptyRecord = { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] }
 const replay = () => new File([Uint8Array.of(0x78, 0xda, 1)], '[11.00] BigCrystalTemple.replay')
 const signedIn = { session: { token: 'raw-session-token', drop: () => undefined }, isSameOrigin: true }
 
