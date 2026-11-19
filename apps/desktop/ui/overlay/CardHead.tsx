@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react'
 import { legendPortraitPath, tierBannerPath } from './card-format'
+import type { PlayerHead } from './overlay-view'
 
 type LegendPortraitProps = { legend: string | null; isSmall?: boolean }
 
@@ -38,6 +39,22 @@ export function CardHead({ name, legend, sub, isBusy }: CardHeadProps) {
       </span>
       {isBusy && <Spinner />}
     </span>
+  )
+}
+
+type ProfileHeadProps = {
+  player: PlayerHead
+  sub: ReactNode
+  isBusy: boolean
+  onOpenProfile: (brawlhallaId: number) => void
+}
+
+// the head opens the player's profile, the way each 2v2 player row does; the card around it isn't a link
+export function ProfileHead({ player, sub, isBusy, onOpenProfile }: ProfileHeadProps) {
+  return (
+    <button type="button" className="card-link" onClick={() => onOpenProfile(player.brawlhallaId)}>
+      <CardHead name={player.name} legend={player.legend} sub={sub} isBusy={isBusy} />
+    </button>
   )
 }
 

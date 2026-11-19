@@ -50,7 +50,9 @@ function OverlayCard({ card, onOpenProfile, onRetry }: OverlayCardProps) {
 
   if (card.kind === 'status') return <StatusCard status={card.status} />
 
-  if (card.kind === 'teammate') return <TeammateCard player={card.player} known={card.known} />
+  if (card.kind === 'teammate') {
+    return <TeammateCard player={card.player} known={card.known} onOpenProfile={onOpenProfile} />
+  }
 
   return (
     <SoloCard
