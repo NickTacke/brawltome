@@ -87,7 +87,7 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     return new File([fakeReplay().bytes], '[11.00] Big Crystal Temple.replay')
   }
 
-  async function parsedMatch(): Promise<string> {
+  async function parsedMatch(opponentId = 1002): Promise<string> {
     const { account, sessionToken } = await signIn()
     const brawlhallaId = ++brawlhallaIds
 
@@ -103,7 +103,7 @@ describe.skipIf(!connectionString)('replay procedures', () => {
       line: makeLine({
         players: [
           { slot: 1, brawlhallaId, name: 'Alpha' },
-          { slot: 2, brawlhallaId: 1002, name: 'Bravo' },
+          { slot: 2, brawlhallaId: opponentId, name: 'Bravo' },
         ],
       }),
     })
@@ -195,6 +195,70 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     const listed = await call(procedures.playerMatches, { brawlhallaId: 1002 }, visitor())
 
     expect(listed.matches.map((summary) => summary.id)).toContain(matchId)
+  })
+
+  test('recent matches list every parsed match, newest first, each with its result and no picture yet', async () => {
+    const older = await parsedMatch()
+    const newer = await parsedMatch()
+
+    const recent = await call(procedures.recentMatches, {}, visitor())
+    const ids = recent.matches.map((summary) => summary.id)
+
+    expect(ids.indexOf(newer)).toBeLessThan(ids.indexOf(older))
+    expect(recent.matches[0]?.mapPictureUrl).toBeNull()
+    expect(recent.matches[0]?.players.some((player) => player.isWinner)).toBe(true)
+  })
+
+  test('the next page starts right after the last match, even one parsed microseconds before it', async () => {
+    const later = await parsedMatch()
+    const earlier = await parsedMatch()
+
+    await database.sql`UPDATE replays.matches SET parsed_at = '2026-11-18 21:00:00.000500+00' WHERE id = ${later}`
+    await database.sql`UPDATE replays.matches SET parsed_at = '2026-11-18 21:00:00.000497+00' WHERE id = ${earlier}`
+
+    const micros = String(Date.parse('2026-11-18T21:00:00.000Z') * 1000 + 500)
+    const cursor = Buffer.from(`${micros}|${later}`).toString('base64url')
+
+    const next = await call(procedures.recentMatches, { cursor }, visitor())
+    const ids = next.matches.map((summary) => summary.id)
+
+    expect(ids).toContain(earlier)
+    expect(ids).not.toContain(later)
+  })
+
+  test('your matches are the ones your verified player played in, whoever uploaded them', async () => {
+    const { account, sessionToken } = await signIn()
+    const yourId = ++brawlhallaIds
+
+    await verify(account.id, yourId)
+
+    const matchId = await parsedMatch(yourId)
+
+    await parsedMatch()
+
+    const mine = await call(procedures.myMatches, {}, visitor(sessionToken))
+
+    expect(mine.player).toEqual({ brawlhallaId: yourId, name: 'Alpha' })
+    expect(mine.matches.map((summary) => summary.id)).toEqual([matchId])
+    expect(mine.record?.games).toBe(1)
+    expect(mine.record?.legends).toHaveLength(1)
+  })
+
+  test('a visitor without a verified player has no matches', async () => {
+    const { sessionToken } = await signIn()
+
+    const mine = await call(procedures.myMatches, {}, visitor(sessionToken))
+
+    expect(mine).toEqual({
+      player: null,
+      record: { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] },
+      matches: [],
+      nextCursor: null,
+    })
+  })
+
+  test('your matches need you to be signed in', async () => {
+    expect(await errorCode(call(procedures.myMatches, {}, visitor()))).toBe('UNAUTHORIZED')
   })
 
   test('a malformed cursor starts from the first page instead of failing', async () => {

@@ -23,6 +23,9 @@ const mapFile = { format: 3, mapId: 135, patch: '11.00', background: null, layou
 
 type MemoryStore = ReturnType<typeof createMemoryObjectStore>
 
+// these tests are about insights and art, so no map has a picture
+const noPictures = async () => new Map<string, string>()
+
 describe.skipIf(!connectionString)('match insights', () => {
   let database: TestDatabase
   let deps: ReplaysDeps & { objectStore: MemoryStore; artStore: MemoryStore }
@@ -182,7 +185,7 @@ describe.skipIf(!connectionString)('match insights', () => {
 
   test('the match carries its insights, its art and where its playback is served', async () => {
     const matchId = await storedMatch()
-    const readDeps = { ...deps, artBaseUrl }
+    const readDeps = { ...deps, artBaseUrl, mapPictures: noPictures }
 
     const match = await getMatch(readDeps, matchId)
 
@@ -201,7 +204,7 @@ describe.skipIf(!connectionString)('match insights', () => {
       WHERE id = ${matchId}
     `
 
-    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+    const match = await getMatch({ ...deps, mapPictures: noPictures, artBaseUrl }, matchId)
 
     expect(match?.art).toEqual({ state: 'failed', manifestUrl: `${artBaseUrl}/${manifestKey}`, baseUrl: artBaseUrl })
   })
@@ -209,7 +212,7 @@ describe.skipIf(!connectionString)('match insights', () => {
   test('without an art bucket the art has no addresses', async () => {
     const matchId = await storedMatch()
 
-    const match = await getMatch({ ...deps, artStore: null, artBaseUrl: null }, matchId)
+    const match = await getMatch({ ...deps, mapPictures: noPictures, artStore: null, artBaseUrl: null }, matchId)
 
     expect(match?.art).toEqual({ state: 'queued', manifestUrl: null, baseUrl: null })
   })
@@ -217,7 +220,7 @@ describe.skipIf(!connectionString)('match insights', () => {
   test('a timed match has no insights and no playback', async () => {
     const matchId = await storedMatch(timedLine())
 
-    const match = await getMatch({ ...deps, artBaseUrl }, matchId)
+    const match = await getMatch({ ...deps, mapPictures: noPictures, artBaseUrl }, matchId)
 
     expect(match?.insights).toBeNull()
     expect(match?.playbackPath).toBeNull()

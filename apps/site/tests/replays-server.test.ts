@@ -20,6 +20,7 @@ function stubApi(answer: (path: string) => Response): Call[] {
   return calls
 }
 
+const emptyRecord = { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] }
 const replay = () => new File([Uint8Array.of(0x78, 0xda, 1)], '[11.00] BigCrystalTemple.replay')
 const signedIn = { session: { token: 'raw-session-token', drop: () => undefined }, isSameOrigin: true }
 
@@ -40,6 +41,7 @@ const matchDetail = {
   isCustom: false,
   durationMs: 180000,
   parsedAt: '2026-11-13T20:00:00.000Z',
+  mapPictureUrl: null,
   queue: 'ranked',
   hasTeams: false,
   hasTeamDamage: false,
@@ -231,10 +233,30 @@ describe('the matches page for a signed-in visitor', () => {
       '/replays/access': { isOpen: false, canSee: true, canUpload: true },
       '/account': { status: 'signedIn', account, sessionExpiresAt: '2026-11-20T12:00:00.000Z' },
       '/me/replays': { replays: [] },
+      '/me/matches': { player: null, record: emptyRecord, matches: [], nextCursor: null },
+      '/matches': { matches: [], nextCursor: null },
     }
 
     stubApi((path) => Response.json(answers[path] ?? {}))
 
     expect(await loadMatchesPage('raw-session-token')).toMatchObject({ kind: 'signedIn', canUpload: true })
+  })
+})
+
+describe('the matches page for a signed-out visitor', () => {
+  useApiSettings()
+
+  test('lists everyone’s latest matches without asking for the visitor’s own', async () => {
+    process.env.PUBLIC_API_URL = 'https://api.test'
+
+    const answers: Record<string, unknown> = {
+      '/replays/access': { isOpen: true, canSee: true, canUpload: false },
+      '/matches': { matches: [], nextCursor: 'next-page' },
+    }
+
+    const calls = stubApi((path) => Response.json(answers[path] ?? {}))
+
+    expect(await loadMatchesPage(undefined)).toMatchObject({ kind: 'signedOut', recent: { nextCursor: 'next-page' } })
+    expect(calls.map((call) => call.path)).toEqual(['/replays/access', '/matches'])
   })
 })
