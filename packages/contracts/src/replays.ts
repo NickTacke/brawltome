@@ -29,7 +29,16 @@ const matchPlayerSummarySchema = z
     name: z.string(),
     team: z.number().int(),
     legendId: z.number().int(),
+    // the legend as the game data names it, and the key the site finds its portrait by
     legendName: z.string(),
+    legendKey: z.string(),
+    kos: z.number().int(),
+    deaths: z.number().int(),
+    damageDealt: z.number(),
+    // null for a stock match, which the game doesn't score
+    score: z.number().int().nullable(),
+    // the side that fell least wins a stock match, the side that scored most a timed one; a tie has two winners
+    isWinner: z.boolean(),
   })
   .strict()
 
@@ -41,8 +50,13 @@ export const matchSummarySchema = z
     modeName: z.string(),
     isRanked: z.boolean(),
     isCustom: z.boolean(),
+    queue: z.string().nullable(),
+    hasTeams: z.boolean(),
+    stocks: z.number().int().nullable(),
     durationMs: z.number().int().nonnegative(),
     parsedAt: dateTimeSchema,
+    // the level's background from the match art, once the replay worker has drawn its map
+    mapPictureUrl: z.string().url().nullable(),
     players: z.array(matchPlayerSummarySchema),
   })
   .strict()
@@ -66,8 +80,6 @@ const matchPlayerSchema = matchPlayerSummarySchema
     timeInAirMs: z.number().int(),
     timeOnGroundMs: z.number().int(),
     timeOnWallMs: z.number().int(),
-    // null for a stock match, which the game doesn't score
-    score: z.number().int().nullable(),
     weapons: z.record(z.string(), z.record(z.string(), z.number())),
   })
   .strict()
@@ -84,10 +96,7 @@ const matchArtSchema = z
 
 export const matchDetailSchema = matchSummarySchema
   .extend({
-    queue: z.string().nullable(),
-    hasTeams: z.boolean(),
     hasTeamDamage: z.boolean(),
-    stocks: z.number().int().nullable(),
     isReliable: z.boolean(),
     failedChecks: z.array(z.string()),
     players: z.array(matchPlayerSchema),
@@ -105,6 +114,44 @@ export const playerMatchesSchema = z
   .object({ matches: z.array(matchSummarySchema), nextCursor: z.string().nullable() })
   .strict()
   .meta({ id: 'PlayerMatches' })
+
+export const recentMatchesSchema = z
+  .object({ matches: z.array(matchSummarySchema), nextCursor: z.string().nullable() })
+  .strict()
+  .meta({ id: 'RecentMatches' })
+
+export const matchPageInputSchema = z.object({ cursor: z.string().max(200).optional() })
+
+// how a player has done in their uploaded matches, all of them, not just the page shown
+const matchRecordSchema = z
+  .object({
+    games: z.number().int().nonnegative(),
+    wins: z.number().int().nonnegative(),
+    lastParsedAt: dateTimeSchema.nullable(),
+    legends: z.array(
+      z
+        .object({
+          legendId: z.number().int(),
+          legendName: z.string(),
+          legendKey: z.string(),
+          games: z.number().int().positive(),
+          wins: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+
+// the visitor's verified player and every uploaded match they played in, whoever uploaded it
+export const myMatchesSchema = z
+  .object({
+    player: z.object({ brawlhallaId: brawlhallaIdSchema, name: z.string().nullable() }).strict().nullable(),
+    record: matchRecordSchema,
+    matches: z.array(matchSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict()
+  .meta({ id: 'MyMatches' })
 
 export const playerMatchesInputSchema = z.object({
   brawlhallaId: z.coerce.number().pipe(brawlhallaIdSchema),
@@ -156,5 +203,7 @@ export type ReplayAccessContract = z.infer<typeof replayAccessSchema>
 export type MatchSummaryContract = z.infer<typeof matchSummarySchema>
 export type MatchDetailContract = z.infer<typeof matchDetailSchema>
 export type PlayerMatchesContract = z.infer<typeof playerMatchesSchema>
+export type RecentMatchesContract = z.infer<typeof recentMatchesSchema>
+export type MyMatchesContract = z.infer<typeof myMatchesSchema>
 export type MyReplayContract = z.infer<typeof myReplaySchema>
 export type ReplayUploadResultContract = z.infer<typeof replayUploadResultSchema>
