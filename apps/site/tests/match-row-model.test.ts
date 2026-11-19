@@ -92,15 +92,31 @@ describe('a match row', () => {
     expect(queueLabel(freeForAll)).toBe('Custom FFA')
   })
 
-  test('players tied for first in a free for all share the place', () => {
-    const tied = matchOf([
-      { slot: 1, id: 11, deaths: 1, isWinner: true },
-      { slot: 2, id: 12, deaths: 1, isWinner: true },
-      { slot: 3, id: 13, deaths: 3, isWinner: false },
-    ])
+  test('players tied on score in a timed free for all share the place', () => {
+    const tied = matchOf(
+      [
+        { slot: 1, id: 11, deaths: 1, isWinner: true, score: 60 },
+        { slot: 2, id: 12, deaths: 2, isWinner: true, score: 60 },
+        { slot: 3, id: 13, deaths: 3, isWinner: false, score: 20 },
+      ],
+      { stocks: null },
+    )
 
     expect(resultFor(tied, 12)).toEqual({ kind: 'place', place: 1 })
     expect(resultFor(tied, 13)).toEqual({ kind: 'place', place: 3 })
+  })
+
+  // the summary doesn't say who went out first, so a stock free for all only knows who won
+  test('a stock free for all gives the survivor the win and everyone else the loss, not a guessed place', () => {
+    const stock = matchOf([
+      { slot: 1, id: 11, deaths: 2, isWinner: true },
+      { slot: 2, id: 12, deaths: 3, isWinner: false },
+      { slot: 3, id: 13, deaths: 3, isWinner: false },
+    ])
+
+    expect(resultFor(stock, 11)).toEqual({ kind: 'won' })
+    expect(resultFor(stock, 12)).toEqual({ kind: 'lost' })
+    expect(resultFor(stock, 13)).toEqual({ kind: 'lost' })
   })
 
   test('a timed 1v1 shows the scores that decided it', () => {

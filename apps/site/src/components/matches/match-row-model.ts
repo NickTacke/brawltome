@@ -11,11 +11,15 @@ export type RowView =
   | { kind: 'versus'; first: RowPlayer[]; second: RowPlayer[]; firstScore: number; secondScore: number }
   | { kind: 'freeForAll'; placed: RowPlayer[] }
 
+function sideOf(match: MatchSummaryContract, player: RowPlayer): number {
+  return match.hasTeams ? player.team : player.slot
+}
+
 function sidesOf(match: MatchSummaryContract): RowPlayer[][] {
   const bySide = new Map<number, RowPlayer[]>()
 
   for (const player of match.players) {
-    const side = match.hasTeams ? player.team : player.slot
+    const side = sideOf(match, player)
 
     bySide.set(side, [...(bySide.get(side) ?? []), player])
   }
@@ -32,7 +36,8 @@ function total(side: RowPlayer[], pick: (player: RowPlayer) => number): number {
 }
 
 // the winners first, then a timed match by score and a stock match by who fell least. the summary doesn't say when
-// a stocked-out player went out, so two who lost every stock are told apart by their KOs
+// a stocked-out player went out, so two who lost every stock are told apart by their KOs; that orders the portraits,
+// but isn't a place anyone can be told they finished in
 function placeOrder(left: RowPlayer, right: RowPlayer): number {
   const byWin = Number(right.isWinner) - Number(left.isWinner)
 
@@ -92,15 +97,16 @@ export function resultFor(match: MatchSummaryContract, yourId: number | null): R
 
   if (!you) return null
 
-  const view = rowViewOf(match, yourId)
+  // only scores give every player of a free for all a place; a stock one says who survived, not who went out first
+  const isPlaced = sidesOf(match).length !== 2 && isTimed(match)
 
-  if (view.kind === 'freeForAll') return { kind: 'place', place: placeOf(view.placed, you) }
+  if (isPlaced) return { kind: 'place', place: placeOf(match.players, you) }
 
-  const bothWon = view.second.some((player) => player.isWinner) && you.isWinner
+  if (!you.isWinner) return { kind: 'lost' }
 
-  if (bothWon) return { kind: 'draw' }
+  const anotherSideWon = match.players.some((player) => player.isWinner && sideOf(match, player) !== sideOf(match, you))
 
-  return you.isWinner ? { kind: 'won' } : { kind: 'lost' }
+  return anotherSideWon ? { kind: 'draw' } : { kind: 'won' }
 }
 
 /** The queue and size as players say it: `Ranked 2v2`, `Custom FFA`. */
