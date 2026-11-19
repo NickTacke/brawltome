@@ -122,11 +122,13 @@ export const recentMatchesSchema = z
 
 export const matchPageInputSchema = z.object({ cursor: z.string().max(200).optional() })
 
-// how a player has done in their uploaded matches, all of them, not just the page shown
+// how a player has done in their uploaded matches, all of them, not just the page shown. a draw counts as a game
+// but neither a win nor a loss
 const matchRecordSchema = z
   .object({
     games: z.number().int().nonnegative(),
     wins: z.number().int().nonnegative(),
+    draws: z.number().int().nonnegative(),
     lastParsedAt: dateTimeSchema.nullable(),
     legends: z.array(
       z
@@ -136,6 +138,7 @@ const matchRecordSchema = z
           legendKey: z.string(),
           games: z.number().int().positive(),
           wins: z.number().int().nonnegative(),
+          draws: z.number().int().nonnegative(),
         })
         .strict(),
     ),

@@ -143,7 +143,7 @@ describe('my matches', () => {
   test('a visitor with no verified player has an empty record and no matches', () => {
     const empty = {
       player: null,
-      record: { games: 0, wins: 0, lastParsedAt: null, legends: [] },
+      record: { games: 0, wins: 0, draws: 0, lastParsedAt: null, legends: [] },
       matches: [],
       nextCursor: null,
     }
@@ -157,8 +157,9 @@ describe('my matches', () => {
       record: {
         games: 1,
         wins: 1,
+        draws: 0,
         lastParsedAt: summary.parsedAt,
-        legends: [{ legendId: 3, legendName: 'Ember', legendKey: 'ember', games: 1, wins: 1 }],
+        legends: [{ legendId: 3, legendName: 'Ember', legendKey: 'ember', games: 1, wins: 1, draws: 0 }],
       },
       matches: [summary],
       nextCursor: null,
