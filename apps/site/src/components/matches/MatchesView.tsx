@@ -124,22 +124,33 @@ function useRefreshWhileReading(isReading: boolean) {
 function DropZone({ upload, children }: { upload: ReplayUpload; children: ReactNode }) {
   const [isDragging, setIsDragging] = useState(false)
 
+  // a dragged link or bit of text isn't an upload
+  const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files')
+
   function onDragOver(event: DragEvent) {
+    if (!carriesFiles(event) || upload.isUploading) return
+
     event.preventDefault()
     setIsDragging(true)
+  }
+
+  // moving between the page's own elements fires a leave too; only leaving the page ends the drag
+  function onDragLeave(event: DragEvent) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragging(false)
   }
 
   function onDrop(event: DragEvent) {
     event.preventDefault()
     setIsDragging(false)
-    void upload.upload([...event.dataTransfer.files])
+
+    if (!upload.isUploading) void upload.upload([...event.dataTransfer.files])
   }
 
   return (
     <section
       aria-label="Your matches; drop replay files here to upload them"
       onDragOver={onDragOver}
-      onDragLeave={() => setIsDragging(false)}
+      onDragLeave={onDragLeave}
       onDrop={onDrop}
       className="relative"
     >
