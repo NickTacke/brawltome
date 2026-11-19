@@ -209,6 +209,23 @@ describe.skipIf(!connectionString)('replay procedures', () => {
     expect(recent.matches[0]?.players.some((player) => player.isWinner)).toBe(true)
   })
 
+  test('the next page starts right after the last match, even one parsed microseconds before it', async () => {
+    const later = await parsedMatch()
+    const earlier = await parsedMatch()
+
+    await database.sql`UPDATE replays.matches SET parsed_at = '2026-11-18 21:00:00.000500+00' WHERE id = ${later}`
+    await database.sql`UPDATE replays.matches SET parsed_at = '2026-11-18 21:00:00.000497+00' WHERE id = ${earlier}`
+
+    const micros = String(Date.parse('2026-11-18T21:00:00.000Z') * 1000 + 500)
+    const cursor = Buffer.from(`${micros}|${later}`).toString('base64url')
+
+    const next = await call(procedures.recentMatches, { cursor }, visitor())
+    const ids = next.matches.map((summary) => summary.id)
+
+    expect(ids).toContain(earlier)
+    expect(ids).not.toContain(later)
+  })
+
   test('your matches are the ones your verified player played in, whoever uploaded them', async () => {
     const { account, sessionToken } = await signIn()
     const yourId = ++brawlhallaIds
@@ -223,8 +240,8 @@ describe.skipIf(!connectionString)('replay procedures', () => {
 
     expect(mine.player).toEqual({ brawlhallaId: yourId, name: 'Alpha' })
     expect(mine.matches.map((summary) => summary.id)).toEqual([matchId])
-    expect(mine.record.games).toBe(1)
-    expect(mine.record.legends).toHaveLength(1)
+    expect(mine.record?.games).toBe(1)
+    expect(mine.record?.legends).toHaveLength(1)
   })
 
   test('a visitor without a verified player has no matches', async () => {

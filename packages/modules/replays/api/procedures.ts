@@ -160,8 +160,9 @@ export function createReplayProcedures(runtime: ModuleRuntime) {
 
       if (!primaryPlayer) return { player: null, record: emptyRecord, matches: [], nextCursor: null }
 
+      // the record covers every match, so only the first page carries it
       const [record, page] = await Promise.all([
-        readMatchRecord(runtime.database.sql, primaryPlayer.brawlhallaId),
+        input.cursor ? null : readMatchRecord(runtime.database.sql, primaryPlayer.brawlhallaId),
         listPlayerMatches(lists, primaryPlayer.brawlhallaId, input.cursor),
       ])
 

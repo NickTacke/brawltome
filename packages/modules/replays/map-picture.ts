@@ -1,39 +1,70 @@
 import type { ObjectStore, Sql } from '@brawltome/foundation'
 import { parseArtPath } from './art-paths'
 
-// a match list shows each map's background, which the map file the art export stored for that patch names. map files
-// are named by their content and never change, so a background found once is kept for the life of the process
+// a match list shows each map's background, which the map file the art export stored for that patch names. a map
+// file is named by its content and never changes, so a picture once found is kept for the life of the process. a map
+// not drawn yet, or a bucket that didn't answer, is asked again next time
 
 export type MapPictureDeps = { sql: Sql; artStore: ObjectStore | null; artBaseUrl: string | null }
 
-export type MapPictures = (patch: string, mapId: number) => Promise<string | null>
+export type MapRef = { patch: string; mapId: number }
 
-/** Finds the address of a map's background; null without an art bucket or before the map was drawn. */
+/** The address of each map's background by `mapKey`; a map without one is left out. */
+export type MapPictures = (maps: MapRef[]) => Promise<Map<string, string>>
+
+export function mapKey({ patch, mapId }: MapRef): string {
+  return `${patch}/${mapId}`
+}
+
 export function createMapPictures({ sql, artStore, artBaseUrl }: MapPictureDeps): MapPictures {
-  const backgroundByPath = new Map<string, string | null>()
+  const found = new Map<string, string>()
 
-  async function backgroundOf(path: string): Promise<string | null> {
-    if (backgroundByPath.has(path)) return backgroundByPath.get(path) ?? null
+  async function pictureIn(path: string): Promise<string | null> {
+    try {
+      const background = backgroundIn(await artStore?.get(path))
 
-    const background = backgroundIn(await artStore?.get(path))
+      return background ? `${artBaseUrl}/${background}` : null
+    } catch (error) {
+      console.error(`read the background in map file ${path}:`, error)
 
-    backgroundByPath.set(path, background)
-
-    return background
+      return null
+    }
   }
 
-  return async (patch, mapId) => {
-    if (!artStore || !artBaseUrl) return null
+  return async (maps) => {
+    const missing = maps.filter((map) => !found.has(mapKey(map)))
 
-    const [mapFile] = await sql<{ path: string }[]>`
-      SELECT path FROM replays.map_files WHERE patch = ${patch} AND map_id = ${mapId}
+    if (artStore && artBaseUrl && missing.length > 0) await findPictures(missing)
+
+    const pictures = new Map<string, string>()
+
+    for (const map of maps) {
+      const picture = found.get(mapKey(map))
+
+      if (picture) pictures.set(mapKey(map), picture)
+    }
+
+    return pictures
+  }
+
+  async function findPictures(maps: MapRef[]): Promise<void> {
+    const patches = maps.map((map) => map.patch)
+    const mapIds = maps.map((map) => map.mapId)
+
+    const files = await sql<{ patch: string; mapId: number; path: string }[]>`
+      SELECT file.patch, file.map_id AS "mapId", file.path
+      FROM replays.map_files AS file
+      JOIN unnest(${patches}::text[], ${mapIds}::int[]) AS wanted (patch, map_id)
+        ON wanted.patch = file.patch AND wanted.map_id = file.map_id
     `
 
-    if (!mapFile) return null
+    await Promise.all(
+      files.map(async (file) => {
+        const picture = await pictureIn(file.path)
 
-    const background = await backgroundOf(mapFile.path)
-
-    return background ? `${artBaseUrl}/${background}` : null
+        if (picture) found.set(mapKey(file), picture)
+      }),
+    )
   }
 }
 

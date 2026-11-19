@@ -3,7 +3,7 @@ import type { ObjectStore, Sql } from '@brawltome/foundation'
 import { legendNamesOf } from '@brawltome/match-insights'
 import { insightsOf, logInsightsFailure } from './insights'
 import { replayKey } from './keys'
-import type { MapPictures } from './map-picture'
+import { type MapPictures, mapKey } from './map-picture'
 import { winningSlots } from './match-result'
 import { findMatchRow, type StoredMatchRow } from './match-row'
 import { summaryOf } from './match-summary'
@@ -72,9 +72,10 @@ export async function getMatch(deps: MatchReadDeps, id: string): Promise<MatchDe
   const playbackPath = insights ? playbackPathOf(row) : null
 
   const winners = winningSlots(players, row.hasTeams)
+  const pictures = await deps.mapPictures([row])
 
   return {
-    ...summaryOf(row, players, await deps.mapPictures(row.patch, row.mapId)),
+    ...summaryOf(row, players, pictures.get(mapKey(row)) ?? null),
     hasTeamDamage: row.hasTeamDamage,
     isReliable: row.isReliable,
     failedChecks: row.failedChecks,

@@ -24,7 +24,7 @@ const mapFile = { format: 3, mapId: 135, patch: '11.00', background: null, layou
 type MemoryStore = ReturnType<typeof createMemoryObjectStore>
 
 // these tests are about insights and art, so no map has a picture
-const noPictures = async () => null
+const noPictures = async () => new Map<string, string>()
 
 describe.skipIf(!connectionString)('match insights', () => {
   let database: TestDatabase

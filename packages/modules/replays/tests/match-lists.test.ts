@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { backgroundIn } from '../map-picture'
+import { backgroundIn, createMapPictures } from '../map-picture'
 import { recordOf } from '../match-lists'
 import { type ResultLine, winningSlots } from '../match-result'
 
@@ -75,6 +75,12 @@ describe('a player’s record', () => {
     })
   })
 
+  test('a draw is not a win', () => {
+    const drawn = [recordLine('a', 1, 7, 2, 930), recordLine('a', 2, 8, 2, 12)]
+
+    expect(recordOf(drawn, 7)).toMatchObject({ games: 1, wins: 0 })
+  })
+
   test('a player in no match has an empty record', () => {
     expect(recordOf([], 7)).toEqual({ games: 0, wins: 0, lastParsedAt: null, legends: [] })
   })
@@ -94,5 +100,57 @@ describe('a map’s picture', () => {
     expect(backgroundIn(encode({ background: { asset: '../matches/x/manifest.json' } }))).toBeNull()
     expect(backgroundIn(new TextEncoder().encode('{'))).toBeNull()
     expect(backgroundIn(null)).toBeNull()
+  })
+})
+
+describe('map pictures for a page of matches', () => {
+  const mapFiles = [{ patch: '11.01', mapId: 223, path: 'maps/aaaa.json' }]
+  const background = { background: { asset: 'sheets/0a595e48e9f677f4.webp' } }
+
+  // stands in for postgres: every query answers with the stored map files
+  function fakeSql(queries: { count: number }) {
+    return (() => {
+      queries.count += 1
+
+      return Promise.resolve(mapFiles)
+    }) as unknown as Parameters<typeof createMapPictures>[0]['sql']
+  }
+
+  function artStore(get: () => Promise<Uint8Array | null>) {
+    return { get, put: async () => undefined, delete: async () => undefined } as unknown as Parameters<
+      typeof createMapPictures
+    >[0]['artStore']
+  }
+
+  test('finds every map of a page in one query, then keeps what it found', async () => {
+    const queries = { count: 0 }
+    const bytes = new TextEncoder().encode(JSON.stringify(background))
+
+    const pictures = createMapPictures({
+      sql: fakeSql(queries),
+      artStore: artStore(async () => bytes),
+      artBaseUrl: 'https://art.test',
+    })
+
+    const page = [
+      { patch: '11.01', mapId: 223 },
+      { patch: '11.01', mapId: 223 },
+    ]
+
+    expect(await pictures(page)).toEqual(new Map([['11.01/223', 'https://art.test/sheets/0a595e48e9f677f4.webp']]))
+    expect(await pictures(page)).toHaveProperty('size', 1)
+    expect(queries.count).toBe(1)
+  })
+
+  test('a bucket that doesn’t answer leaves the map without a picture instead of failing the list', async () => {
+    const pictures = createMapPictures({
+      sql: fakeSql({ count: 0 }),
+      artStore: artStore(async () => {
+        throw new Error('bucket down')
+      }),
+      artBaseUrl: 'https://art.test',
+    })
+
+    expect(await pictures([{ patch: '11.01', mapId: 223 }])).toEqual(new Map())
   })
 })

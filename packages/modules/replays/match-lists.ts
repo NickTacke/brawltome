@@ -1,8 +1,8 @@
 import type { MatchSummaryContract, MyMatchesContract } from '@brawltome/contracts'
 import type { Sql } from '@brawltome/foundation'
 import { legendNamesOf } from '@brawltome/match-insights'
-import type { MapPictures } from './map-picture'
-import { winningSlots } from './match-result'
+import { type MapPictures, mapKey } from './map-picture'
+import { sideOf, winningSlots } from './match-result'
 import { type SummaryRow, summaryOf, summaryPlayersOf } from './match-summary'
 
 // the match lists: a player's matches, everyone's latest, and a player's record across all of theirs. newest
@@ -11,6 +11,8 @@ import { type SummaryRow, summaryOf, summaryPlayersOf } from './match-summary'
 export type MatchListDeps = { sql: Sql; mapPictures: MapPictures }
 
 export type MatchPage = { matches: MatchSummaryContract[]; nextCursor: string | null }
+
+export type MatchRecord = NonNullable<MyMatchesContract['record']>
 
 const pageSize = 20
 
@@ -35,13 +37,14 @@ async function listMatches(deps: MatchListDeps, brawlhallaId: number | null, cur
       : sql`AND EXISTS (SELECT 1 FROM replays.match_players AS player
           WHERE player.match_id = match.id AND player.brawlhalla_id = ${brawlhallaId})`
 
-  const rows = await sql<SummaryRow[]>`
+  const rows = await sql<(SummaryRow & { parsedAtMicros: string })[]>`
     SELECT match.id, match.patch, match.map_id AS "mapId", match.map_name AS "mapName", match.mode_name AS "modeName",
       match.queue, match.is_ranked AS "isRanked", match.is_custom AS "isCustom", match.has_teams AS "hasTeams",
-      match.stocks, match.duration_ms AS "durationMs", match.parsed_at AS "parsedAt"
+      match.stocks, match.duration_ms AS "durationMs", match.parsed_at AS "parsedAt",
+      (extract(epoch FROM match.parsed_at) * 1000000)::bigint::text AS "parsedAtMicros"
     FROM replays.matches AS match
     WHERE match.merged_into IS NULL ${playedIn}
-      ${cursor ? sql`AND (match.parsed_at, match.id) < (${cursor.parsedAt}::timestamptz, ${cursor.id}::uuid)` : sql``}
+      ${cursor ? sql`AND (match.parsed_at, match.id) < (${cursorTime(sql, cursor)}, ${cursor.id}::uuid)` : sql``}
     ORDER BY match.parsed_at DESC, match.id DESC
     LIMIT ${pageSize + 1}
   `
@@ -53,18 +56,18 @@ async function listMatches(deps: MatchListDeps, brawlhallaId: number | null, cur
     page.map((row) => row.id),
   )
 
-  const matches = await Promise.all(
-    page.map(async (row) => {
-      const ofMatch = players.filter((player) => player.matchId === row.id)
+  const pictures = await deps.mapPictures(page)
 
-      return summaryOf(row, ofMatch, await deps.mapPictures(row.patch, row.mapId))
-    }),
-  )
+  const matches = page.map((row) => {
+    const ofMatch = players.filter((player) => player.matchId === row.id)
+
+    return summaryOf(row, ofMatch, pictures.get(mapKey(row)) ?? null)
+  })
 
   const last = page.at(-1)
   const hasMore = rows.length > pageSize && last
 
-  return { matches, nextCursor: hasMore ? encodeCursor({ parsedAt: last.parsedAt.toISOString(), id: last.id }) : null }
+  return { matches, nextCursor: hasMore ? encodeCursor({ parsedAtMicros: last.parsedAtMicros, id: last.id }) : null }
 }
 
 type RecordLine = {
@@ -81,7 +84,7 @@ type RecordLine = {
 }
 
 /** How a player did across every uploaded match they played in: games, wins and each legend they played. */
-export async function readMatchRecord(sql: Sql, brawlhallaId: number): Promise<MyMatchesContract['record']> {
+export async function readMatchRecord(sql: Sql, brawlhallaId: number): Promise<MatchRecord> {
   const lines = await sql<RecordLine[]>`
     SELECT player.match_id AS "matchId", match.has_teams AS "hasTeams", match.parsed_at AS "parsedAt", player.slot,
       player.brawlhalla_id AS "brawlhallaId", player.team, player.deaths, player.score, player.legend_id AS "legendId",
@@ -100,8 +103,8 @@ export async function readMatchRecord(sql: Sql, brawlhallaId: number): Promise<M
 }
 
 /** The record from every player's line in the player's matches; kept apart from the query so it can be tested. */
-export function recordOf(lines: RecordLine[], brawlhallaId: number): MyMatchesContract['record'] {
-  const legends = new Map<number, MyMatchesContract['record']['legends'][number]>()
+export function recordOf(lines: RecordLine[], brawlhallaId: number): MatchRecord {
+  const legends = new Map<number, MatchRecord['legends'][number]>()
   let games = 0
   let wins = 0
   let lastParsedAt: Date | null = null
@@ -111,7 +114,7 @@ export function recordOf(lines: RecordLine[], brawlhallaId: number): MyMatchesCo
 
     if (!own) continue
 
-    const isWin = winningSlots(matchLines, own.hasTeams).has(own.slot)
+    const isWin = isOutrightWin(matchLines, own)
     const names = legendNamesOf({ id: own.legendId, name: own.legendName })
     const legend = legends.get(own.legendId) ?? { legendId: own.legendId, ...names, games: 0, wins: 0 }
 
@@ -127,6 +130,15 @@ export function recordOf(lines: RecordLine[], brawlhallaId: number): MyMatchesCo
   return { games, wins, lastParsedAt: lastParsedAt?.toISOString() ?? null, legends: byGames }
 }
 
+// a draw leaves both sides winning; the record counts only a match the player's side won alone
+function isOutrightWin(matchLines: RecordLine[], own: RecordLine): boolean {
+  const winners = winningSlots(matchLines, own.hasTeams)
+  const winningLines = matchLines.filter((line) => winners.has(line.slot))
+  const winningSides = new Set(winningLines.map((line) => sideOf(line, own.hasTeams)))
+
+  return winners.has(own.slot) && winningSides.size === 1
+}
+
 function groupByMatch(lines: RecordLine[]): Map<string, RecordLine[]> {
   const byMatch = new Map<string, RecordLine[]>()
 
@@ -135,25 +147,27 @@ function groupByMatch(lines: RecordLine[]): Map<string, RecordLine[]> {
   return byMatch
 }
 
-type Cursor = { parsedAt: string; id: string }
+// a cursor keeps the time to the microsecond, as postgres stores it; a millisecond cursor would skip a match parsed
+// a few microseconds before the last one on a page
+type Cursor = { parsedAtMicros: string; id: string }
 
 function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(`${cursor.parsedAt}|${cursor.id}`).toString('base64url')
+  return Buffer.from(`${cursor.parsedAtMicros}|${cursor.id}`).toString('base64url')
+}
+
+function cursorTime(sql: Sql, cursor: Cursor) {
+  return sql`('epoch'::timestamptz + ${cursor.parsedAtMicros}::bigint * interval '1 microsecond')`
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// a cursor that doesn't decode to a date and an id starts from the first page; anything else would reach postgres
+// a cursor that doesn't decode to a time and an id starts from the first page; anything else would reach postgres
 function decodeCursor(value: string | undefined): Cursor | null {
   if (!value) return null
 
-  const [parsedAt, id] = Buffer.from(value, 'base64url').toString().split('|')
+  const [parsedAtMicros, id] = Buffer.from(value, 'base64url').toString().split('|')
 
-  if (!parsedAt || !id || !uuidPattern.test(id)) return null
+  if (!parsedAtMicros || !/^\d{1,17}$/.test(parsedAtMicros) || !id || !uuidPattern.test(id)) return null
 
-  const time = Date.parse(parsedAt)
-
-  if (Number.isNaN(time)) return null
-
-  return { parsedAt: new Date(time).toISOString(), id }
+  return { parsedAtMicros, id }
 }
