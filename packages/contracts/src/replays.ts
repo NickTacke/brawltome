@@ -146,7 +146,8 @@ const matchRecordSchema = z
 export const myMatchesSchema = z
   .object({
     player: z.object({ brawlhallaId: brawlhallaIdSchema, name: z.string().nullable() }).strict().nullable(),
-    record: matchRecordSchema,
+    // only on the first page: it covers every match, not just the page
+    record: matchRecordSchema.nullable(),
     matches: z.array(matchSummarySchema),
     nextCursor: z.string().nullable(),
   })
