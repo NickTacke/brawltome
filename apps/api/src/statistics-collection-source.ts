@@ -16,8 +16,8 @@ export const STATISTICS_COLLECTION_SPACING_MS = collectionWindowMs / LAUNCH_COHO
 const firstOutageHoldMs = 15_000
 const longestOutageHoldMs = 5 * 60_000
 
-// the shared worker queue is sized for the V0 key; collection only calls V1, and at full speed it would take
-// every background slot there and hold on-demand refreshes behind it. evenly spaced calls also stay under V1's bursts
+// collection only calls V1, and at full speed it would take every background slot in the worker's shared V1 queue and
+// hold on-demand calls behind it. evenly spaced calls also stay under V1's bursts
 export function createStatisticsCollectionQueue(): RequestQueue {
   return new RequestQueue({
     minSpacingMs: STATISTICS_COLLECTION_SPACING_MS,

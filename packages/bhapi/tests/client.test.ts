@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { BhApiClient, RateLimitError } from '../src/client'
+import { RequestQueue } from '../src/request-queue'
 
 let server: ReturnType<typeof Bun.serve>
 let lastUrl = ''
@@ -273,6 +274,24 @@ describe('v1 client', () => {
       const result = await client.getGuildStatsV1(GUILD_ID)
 
       expect(result?.legacy_xp).toBe(4620759)
+    } finally {
+      v1.stop()
+    }
+  })
+
+  it('spends V1 calls from the V1 budget, not the V0 key budget', async () => {
+    const v1 = makeV1Server()
+    const v0Queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 1, sustainedWindowMs: 60_000 })
+    const v1Queue = new RequestQueue({ minSpacingMs: 0, sustainedLimit: 10, sustainedWindowMs: 60_000 })
+
+    try {
+      const client = new BhApiClient({ apiKey: 'test', baseUrl: `http://localhost:${v1.port}`, v0Queue, v1Queue })
+
+      await client.getGuildStatsV1(GUILD_ID)
+      await client.getGuildStatsV1(GUILD_ID)
+
+      expect(v1Queue.remainingBackground).toBe(8)
+      expect(v0Queue.remainingBackground).toBe(1)
     } finally {
       v1.stop()
     }

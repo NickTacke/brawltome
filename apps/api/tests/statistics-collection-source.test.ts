@@ -123,7 +123,7 @@ describe('Statistics collection worker wiring', () => {
     const server = Bun.serve({ port: 0, fetch: respond })
 
     const collection = createStatisticsCollection(
-      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue, fetchTimeoutMs: 50 }),
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, v1Queue: queue, fetchTimeoutMs: 50 }),
     )
 
     const lease = {
@@ -151,7 +151,7 @@ describe('Statistics collection worker wiring', () => {
 
   test('an unreachable host is reported as an outage', async () => {
     const collection = createStatisticsCollection(
-      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: 'http://127.0.0.1:1', queue }),
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: 'http://127.0.0.1:1', v1Queue: queue }),
     )
 
     await expect(collection.collectEvidence(collectionLease)).rejects.toBeInstanceOf(StatisticsSourceOutageError)
@@ -183,7 +183,7 @@ describe('Statistics collection worker wiring', () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response('missing', { status: 404 }) })
 
     const collection = createStatisticsCollection(
-      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue }),
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, v1Queue: queue }),
     )
 
     const lease = {
@@ -213,7 +213,7 @@ describe('Statistics collection worker wiring', () => {
     })
 
     const collection = createStatisticsCollection(
-      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, queue }),
+      (queue) => new BhApiClient({ apiKey: 'test', baseUrl: server.url.origin, v1Queue: queue }),
     )
 
     const lease = {
