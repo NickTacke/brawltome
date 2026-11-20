@@ -42,7 +42,10 @@ describe('Steam Primary Player evidence', () => {
       () => checkedAt,
     )
 
+    const noAccount = createSteamPlayerEvidenceResolver({ searchBySteamId: async () => [] }, () => checkedAt)
+
     await expect(absent.resolve('76561198000000000')).resolves.toBeNull()
+    await expect(noAccount.resolve('76561198000000000')).resolves.toBeNull()
     await expect(malformed.resolve('76561198000000000')).rejects.toThrow('Malformed Steam player evidence')
   })
 })

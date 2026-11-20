@@ -21,7 +21,10 @@ export function createSteamPlayerEvidenceResolver(
     async resolve(steamId) {
       const result = await source.searchBySteamId(steamId, { caller: 'background' })
 
-      if (result === null) return null
+      // a steam account without brawlhalla gets an empty list, not a 404
+      const hasNoAccount = result === null || (Array.isArray(result) && result.length === 0)
+
+      if (hasNoAccount) return null
 
       if (!isCanonicalSearchResult(result)) throw new Error('Malformed Steam player evidence')
 
