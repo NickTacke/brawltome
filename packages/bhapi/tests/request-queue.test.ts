@@ -166,4 +166,39 @@ describe('RequestQueue headroom', () => {
     expect(q.remainingBackground).toBe(10)
     expect(q.remainingOnDemand).toBe(10)
   })
+
+  it('lets on-demand calls pass a background call that is waiting for budget', async () => {
+    const q = new RequestQueue({
+      minSpacingMs: 0,
+      sustainedLimit: 10,
+      sustainedWindowMs: 60_000,
+      onDemandHeadroom: 3,
+    })
+
+    for (let i = 0; i < 7; i++) {
+      await q.acquire('background')
+    }
+
+    // this one waits a full minute for the window, ahead of the on-demand call in the queue
+    void q.acquire('background')
+
+    const onDemand = await Promise.race([
+      q.acquire('on-demand').then(() => 'acquired'),
+      Bun.sleep(100).then(() => 'blocked'),
+    ])
+
+    expect(onDemand).toBe('acquired')
+  })
+
+  it('keeps arrival order while every caller has budget', async () => {
+    const q = new RequestQueue({ minSpacingMs: 10, sustainedLimit: 10, sustainedWindowMs: 60_000, onDemandHeadroom: 3 })
+    const order: string[] = []
+
+    await Promise.all([
+      q.acquire('background').then(() => order.push('background')),
+      q.acquire('on-demand').then(() => order.push('on-demand')),
+    ])
+
+    expect(order).toEqual(['background', 'on-demand'])
+  })
 })

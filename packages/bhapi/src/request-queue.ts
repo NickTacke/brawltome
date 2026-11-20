@@ -23,6 +23,7 @@ export class RequestQueue {
   private lastRequestTime = 0
   private pausedUntil = 0
   private processing = false
+  private wakeForNewRequest: (() => void) | undefined
   private readonly pending: Array<{ resolve: (waitMs: number) => void; enqueuedAt: number; caller: Caller }> = []
 
   constructor(opts: RequestQueueOptions) {
@@ -81,6 +82,7 @@ export class RequestQueue {
   async acquire(caller: Caller): Promise<number> {
     return new Promise<number>((resolve) => {
       this.pending.push({ resolve, enqueuedAt: Date.now(), caller })
+      this.wakeForNewRequest?.()
       this.processNext()
     })
   }
@@ -93,58 +95,67 @@ export class RequestQueue {
     this.processing = true
 
     while (this.pending.length > 0) {
-      const next = this.pending[0]
+      await this.waitForPauseAndSpacing()
 
-      await this.waitForSlot(next.caller)
-      const popped = this.pending.shift()
+      // in arrival order, but a background call out of budget must not hold up on-demand calls behind it
+      const index = this.pending.findIndex((entry) => this.hasBudget(entry.caller))
 
-      if (!popped) break
+      if (index === -1) {
+        await this.waitForBudgetOrNewRequest()
+        continue
+      }
 
+      const [granted] = this.pending.splice(index, 1)
       const now = Date.now()
 
       this.lastRequestTime = now
       this.timestamps.push(now)
-      popped.resolve(now - popped.enqueuedAt)
+      granted.resolve(now - granted.enqueuedAt)
     }
 
     this.processing = false
   }
 
-  private async waitForSlot(caller: Caller): Promise<void> {
-    const limit = this.effectiveLimit(caller)
+  private hasBudget(caller: Caller): boolean {
+    this.pruneTimestamps()
 
-    while (this.isPaused) {
-      const pauseWait = this.pausedUntil - Date.now()
+    return this.timestamps.length < this.effectiveLimit(caller)
+  }
 
-      if (pauseWait > 0) await Bun.sleep(pauseWait)
-    }
+  private async waitForPauseAndSpacing(): Promise<void> {
+    await this.waitWhilePaused()
 
     const sinceLast = Date.now() - this.lastRequestTime
 
     if (this.lastRequestTime > 0 && sinceLast < this.minSpacingMs) {
       await Bun.sleep(this.minSpacingMs - sinceLast)
-      while (this.isPaused) {
-        const pauseWait = this.pausedUntil - Date.now()
-
-        if (pauseWait > 0) await Bun.sleep(pauseWait)
-      }
+      await this.waitWhilePaused()
     }
+  }
 
-    while (true) {
-      while (this.isPaused) {
-        const pauseWait = this.pausedUntil - Date.now()
+  private async waitWhilePaused(): Promise<void> {
+    while (this.isPaused) {
+      const pauseWait = this.pausedUntil - Date.now()
 
-        if (pauseWait > 0) await Bun.sleep(pauseWait)
+      if (pauseWait > 0) await Bun.sleep(pauseWait)
+    }
+  }
+
+  // a new request can be on-demand and fit in the headroom, so it ends the wait early
+  private waitForBudgetOrNewRequest(): Promise<void> {
+    const budgetWaitMs = Math.max(0, this.timestamps[0] + this.sustainedWindowMs - Date.now())
+
+    return new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer)
+        this.wakeForNewRequest = undefined
+        resolve()
       }
 
-      this.pruneTimestamps()
-      if (this.timestamps.length < limit) break
+      const timer = setTimeout(finish, budgetWaitMs)
 
-      const oldest = this.timestamps[0]
-      const sustainedWait = oldest + this.sustainedWindowMs - Date.now()
-
-      if (sustainedWait > 0) await Bun.sleep(sustainedWait)
-    }
+      this.wakeForNewRequest = finish
+    })
   }
 
   private pruneTimestamps(): void {
