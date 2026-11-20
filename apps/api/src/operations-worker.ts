@@ -5,6 +5,7 @@ import {
   type BhApiClientOptions,
   brawlhallaV0RequestLimit,
   createBhApiRequestQueue,
+  createBhApiV1RequestQueue,
   type RequestQueue,
 } from '@brawltome/bhapi'
 import {
@@ -274,7 +275,8 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
   minimumSourceSpacingMs: 150,
 })
 
-const bhapiQueue = createBhApiRequestQueue()
+const bhapiV0Queue = createBhApiRequestQueue()
+const bhapiV1Queue = createBhApiV1RequestQueue(brawlhallaV1RequestLimit)
 
 // not tools.createSourceAdmitter: verification spends background budget under a key of its own, whatever its work class
 function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {
@@ -294,12 +296,13 @@ function createPrimaryPlayerEvidenceResolver(lease: Lease<unknown>) {
 
 function createWorkerBhApiClient(
   beforeRequest?: BhApiClientOptions['beforeRequest'],
-  queue: RequestQueue = bhapiQueue,
+  v1Queue: RequestQueue = bhapiV1Queue,
 ): BhApiClient {
   return new BhApiClient({
     apiKey,
     telemetry,
-    queue,
+    v0Queue: bhapiV0Queue,
+    v1Queue,
     beforeRequest,
     onRateLimited: ({ domain, retryAfterMs }) =>
       requestAdmission.pauseSource(domain, Math.max(1, Math.ceil(retryAfterMs / 1_000))),
