@@ -59,7 +59,14 @@ describe('Brawlhalla source telemetry', () => {
       remainingBackground: 10,
     }
 
-    const client = new BhApiClient({ apiKey: 'irreplaceable-secret', baseUrl, telemetry, queue: queue as never })
+    const client = new BhApiClient({
+      apiKey: 'irreplaceable-secret',
+      baseUrl,
+      telemetry,
+      v0Queue: queue as never,
+      v1Queue: queue as never,
+    })
+
     const log = console.log
     const warn = console.warn
     const consoleLines: unknown[] = []

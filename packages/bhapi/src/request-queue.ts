@@ -1,4 +1,9 @@
-import { brawlhallaV0RequestLimit, brawlhallaV0WindowMs } from './budget'
+import {
+  brawlhallaV0RequestLimit,
+  brawlhallaV0WindowMs,
+  brawlhallaV1RequestLimit,
+  brawlhallaV1WindowMs,
+} from './budget'
 
 export type Caller = 'on-demand' | 'background'
 
@@ -156,6 +161,18 @@ export function createBhApiRequestQueue(onDemandHeadroom = 30): RequestQueue {
     minSpacingMs: 150,
     sustainedLimit: brawlhallaV0RequestLimit,
     sustainedWindowMs: brawlhallaV0WindowMs,
+    onDemandHeadroom,
+  })
+}
+
+export function createBhApiV1RequestQueue(
+  requestLimit = brawlhallaV1RequestLimit,
+  onDemandHeadroom = 30,
+): RequestQueue {
+  return new RequestQueue({
+    minSpacingMs: 150,
+    sustainedLimit: requestLimit,
+    sustainedWindowMs: brawlhallaV1WindowMs,
     onDemandHeadroom,
   })
 }

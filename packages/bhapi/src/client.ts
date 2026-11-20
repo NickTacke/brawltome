@@ -1,5 +1,5 @@
 import type { Telemetry } from '@brawltome/telemetry'
-import { type Caller, createBhApiRequestQueue, type RequestQueue } from './request-queue'
+import { type Caller, createBhApiRequestQueue, createBhApiV1RequestQueue, type RequestQueue } from './request-queue'
 
 export class RateLimitError extends Error {
   constructor(
@@ -54,7 +54,9 @@ export interface BhApiClientOptions {
   baseUrl?: string
   fetchTimeoutMs?: number
   telemetry?: Telemetry
-  queue?: RequestQueue
+  v0Queue?: RequestQueue
+  // V1 has its own limit, so its calls must not spend the V0 key's budget or wait behind V0 calls
+  v1Queue?: RequestQueue
   beforeRequest?: (request: { domain: BhApiSourceDomain; path: string }) => Promise<void>
   onRateLimited?: (event: { domain: BhApiSourceDomain; path: string; retryAfterMs: number }) => Promise<void>
 }
@@ -67,7 +69,8 @@ export interface CallOptions {
 export class BhApiClient {
   private readonly apiKey: string
   private readonly baseUrl: string
-  private readonly queue: RequestQueue
+  private readonly v0Queue: RequestQueue
+  private readonly v1Queue: RequestQueue
   private readonly fetchTimeoutMs: number
   private readonly telemetry?: Telemetry
   private readonly beforeRequest?: BhApiClientOptions['beforeRequest']
@@ -80,7 +83,8 @@ export class BhApiClient {
     this.telemetry = opts.telemetry
     this.beforeRequest = opts.beforeRequest
     this.onRateLimited = opts.onRateLimited
-    this.queue = opts.queue ?? createBhApiRequestQueue(opts.onDemandHeadroom)
+    this.v0Queue = opts.v0Queue ?? createBhApiRequestQueue(opts.onDemandHeadroom)
+    this.v1Queue = opts.v1Queue ?? createBhApiV1RequestQueue(undefined, opts.onDemandHeadroom)
   }
 
   async searchBySteamId(steamId: string, opts: CallOptions = {}): Promise<BhApiSearchResult | null> {
@@ -118,20 +122,21 @@ export class BhApiClient {
     return this.sendRequest<T>(url, path, endpoint, 'brawlhalla-v1', true, opts.onAttempt)
   }
 
+  private queueFor(domain: BhApiSourceDomain): RequestQueue {
+    return domain === 'brawlhalla-v1' ? this.v1Queue : this.v0Queue
+  }
+
   private async acquire(caller: Caller, path: string, domain: BhApiSourceDomain): Promise<void> {
-    const waitMs = await this.queue.acquire(caller)
+    const queue = this.queueFor(domain)
+    const waitMs = await queue.acquire(caller)
 
     this.telemetry?.logger.debug('source.queue.acquired', {
       domain,
       path: logPath(path),
       caller,
       waitMs,
-      remainingTokens: this.remainingTokens(caller),
+      remainingTokens: caller === 'on-demand' ? queue.remainingOnDemand : queue.remainingBackground,
     })
-  }
-
-  private remainingTokens(caller: Caller): number {
-    return caller === 'on-demand' ? this.queue.remainingOnDemand : this.queue.remainingBackground
   }
 
   private async sendRequest<T>(
@@ -236,7 +241,7 @@ export class BhApiClient {
 
       // The queue should have prevented this; the pause protects the shared upstream quota.
       logResponse('warn', 429, 'rate_limited', fetchMs, { retryAfterSeconds: retryAfter, queuePausedMs: pauseMs })
-      this.queue.pause(pauseMs)
+      this.queueFor(domain).pause(pauseMs)
 
       throw new RateLimitError(`Brawlhalla API rate limited for ${endpoint}`, pauseMs)
     }
