@@ -109,7 +109,6 @@ export interface PrimaryPlayerVerificationState {
 }
 
 export interface PrimaryPlayerEvidence extends PrimaryPlayerReference {
-  name: string
   checkedAt: Date
   source: 'brawlhalla-v0-steam-search'
 }

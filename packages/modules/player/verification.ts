@@ -1,6 +1,6 @@
 export interface SteamPlayerEvidence {
   brawlhallaId: number
-  name: string
+  name: string | null
   checkedAt: Date
   source: 'brawlhalla-v0-steam-search'
 }
@@ -25,9 +25,11 @@ export function createSteamPlayerEvidenceResolver(
 
       if (!isCanonicalSearchResult(result)) throw new Error('Malformed Steam player evidence')
 
+      const name = result.name?.trim() ? result.name : null
+
       return {
         brawlhallaId: result.brawlhalla_id,
-        name: result.name,
+        name,
         checkedAt: now(),
         source: 'brawlhalla-v0-steam-search',
       }
@@ -35,15 +37,13 @@ export function createSteamPlayerEvidenceResolver(
   }
 }
 
-function isCanonicalSearchResult(value: unknown): value is { brawlhalla_id: number; name: string } {
+// only the id proves the mapping, brawlhalla's steam search answers with an empty name since 2026-11
+function isCanonicalSearchResult(value: unknown): value is { brawlhalla_id: number; name?: string } {
   if (!value || typeof value !== 'object') return false
 
   const result = value as Record<string, unknown>
+  const hasValidId = Number.isSafeInteger(result.brawlhalla_id) && (result.brawlhalla_id as number) > 0
+  const hasValidName = result.name === undefined || typeof result.name === 'string'
 
-  return (
-    Number.isSafeInteger(result.brawlhalla_id) &&
-    (result.brawlhalla_id as number) > 0 &&
-    typeof result.name === 'string' &&
-    result.name.trim().length > 0
-  )
+  return hasValidId && hasValidName
 }
