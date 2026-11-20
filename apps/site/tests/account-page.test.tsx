@@ -137,6 +137,7 @@ describe('your account', () => {
   })
 
   test.each([
+    ['stalled', 'Verification didn&#x27;t finish.'],
     ['failed', 'Steam found no Brawlhalla account'],
     ['conflict', 'Another BrawlTome account already verified'],
   ] as const)('explains a %s check and offers another try', async (status, text) => {

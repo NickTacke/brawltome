@@ -26,6 +26,7 @@ export function playerLabel(player: Pick<PinnedPlayerRow, 'brawlhallaId' | 'name
 export type Verification =
   | { status: 'verified'; player: PinnedPlayerRow }
   | { status: 'pending' }
+  | { status: 'stalled' }
   | { status: 'failed' }
   | { status: 'conflict' }
   | { status: 'unverified' }
@@ -71,10 +72,14 @@ export function toPinnedPlayerRow(brawlhallaId: number, facts: PlayerFacts | und
   }
 }
 
+// a check finishes within a few minutes, so one still pending after this is stuck and the visitor should try again
+const stalledAfterMs = 15 * 60 * 1000
+
 /** The verified account wins over any later attempt; without one, the latest attempt says where verification is. */
 export function toVerification(
   state: PrimaryPlayerVerificationStateContract,
   factsById: ReadonlyMap<number, PlayerFacts>,
+  now: Date,
 ): Verification {
   const primaryPlayer = state.primaryPlayer
 
@@ -84,11 +89,15 @@ export function toVerification(
     return { status: 'verified', player: { ...row, name: row.name ?? primaryPlayer.name } }
   }
 
-  const latestStatus = state.attempts[0]?.status
+  const latest = state.attempts[0]
 
-  if (latestStatus === 'pending' || latestStatus === 'failed' || latestStatus === 'conflict') {
-    return { status: latestStatus }
+  if (latest?.status === 'pending') {
+    const pendingMs = now.getTime() - Date.parse(latest.startedAt)
+
+    return { status: pendingMs > stalledAfterMs ? 'stalled' : 'pending' }
   }
+
+  if (latest?.status === 'failed' || latest?.status === 'conflict') return { status: latest.status }
 
   return { status: 'unverified' }
 }
