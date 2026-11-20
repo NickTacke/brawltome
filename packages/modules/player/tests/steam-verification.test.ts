@@ -20,11 +20,11 @@ describe('Steam Primary Player evidence', () => {
     })
   })
 
-  test('accepts evidence without a name', async () => {
-    const resolver = createSteamPlayerEvidenceResolver(
-      { searchBySteamId: async () => ({ brawlhalla_id: 234446, name: '' }) },
-      () => checkedAt,
-    )
+  test.each([
+    { case: 'an empty name', payload: { brawlhalla_id: 234446, name: '' } },
+    { case: 'no name', payload: { brawlhalla_id: 234446 } },
+  ])('accepts evidence with $case', async ({ payload }) => {
+    const resolver = createSteamPlayerEvidenceResolver({ searchBySteamId: async () => payload }, () => checkedAt)
 
     await expect(resolver.resolve('76561198000000000')).resolves.toEqual({
       brawlhallaId: 234446,
