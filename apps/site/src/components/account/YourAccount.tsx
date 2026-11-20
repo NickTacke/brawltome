@@ -58,8 +58,9 @@ function VerifiedPlayer({ player }: { player: PinnedPlayerRow }) {
   )
 }
 
-const unverifiedText: Record<'unverified' | 'failed' | 'conflict', string> = {
+const unverifiedText: Record<'unverified' | 'stalled' | 'failed' | 'conflict', string> = {
   unverified: 'Verify through Steam to link your Brawlhalla account. It stays at the top of your pinned players.',
+  stalled: "Verification didn't finish.",
   failed: 'Steam found no Brawlhalla account for that Steam account.',
   conflict: 'Another BrawlTome account already verified this Brawlhalla account.',
 }

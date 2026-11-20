@@ -29,6 +29,8 @@ const attempt = (status: string) => ({
   player: null,
 })
 
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
+
 const unverified = { primaryPlayer: null, attempts: [] }
 
 const verified = {
@@ -229,7 +231,8 @@ describe('loadAccount verification', () => {
 
   test.each([
     ['unverified', unverified],
-    ['pending', { primaryPlayer: null, attempts: [attempt('pending')] }],
+    ['pending', { primaryPlayer: null, attempts: [{ ...attempt('pending'), startedAt: minutesAgo(1) }] }],
+    ['stalled', { primaryPlayer: null, attempts: [{ ...attempt('pending'), startedAt: minutesAgo(20) }] }],
     ['failed', { primaryPlayer: null, attempts: [attempt('failed')] }],
     ['conflict', { primaryPlayer: null, attempts: [attempt('conflict')] }],
   ])('shows %s', async (status, state) => {

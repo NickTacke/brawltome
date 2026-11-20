@@ -76,7 +76,7 @@ async function loadSignedInParts(sessionToken: string) {
     .filter((brawlhallaId) => brawlhallaId !== primaryId)
     .map((brawlhallaId) => toPinnedPlayerRow(brawlhallaId, factsById.get(brawlhallaId)))
 
-  return { verification: toVerification(verificationState, factsById), pins: otherPins, pinOrder }
+  return { verification: toVerification(verificationState, factsById, new Date()), pins: otherPins, pinOrder }
 }
 
 export type SignedInParts = Omit<Extract<AccountPage, { kind: 'signedIn' }>, 'kind' | 'verifySteamUrl'>
