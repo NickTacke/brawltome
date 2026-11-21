@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Users } from 'lucide-react'
 import { fixEncoding, formatWhole } from '../../lib'
 import { HighlightedText } from './HighlightedText'
+import { keepFieldFocus } from './keep-field-focus'
 import { activeResultRowStyle, resultRowStyle } from './search-styles'
 
 type GuildResultProps = { guild: DiscoveryClanHitContract; query: string; isActive: boolean; onOpen: () => void }
@@ -12,6 +13,7 @@ export function GuildResult({ guild, query, isActive, onOpen }: GuildResultProps
     <Link
       to="/guild/$id"
       params={{ id: String(guild.clanId) }}
+      onMouseDown={keepFieldFocus}
       onClick={onOpen}
       data-active={isActive}
       className={`${resultRowStyle} ${isActive ? activeResultRowStyle : ''}`}
