@@ -1,13 +1,8 @@
-import type { MouseEvent } from 'react'
 import { GuildResult } from './GuildResult'
+import { keepFieldFocus } from './keep-field-focus'
 import { PlayerResult } from './PlayerResult'
 import { stripButtonStyle } from './search-styles'
 import type { ResultView } from './use-result-view'
-
-// pressing these keeps the cursor in the field, so the arrow keys carry on working
-function keepFieldFocus(event: MouseEvent) {
-  event.preventDefault()
-}
 
 type SearchResultListProps = { view: ResultView; query: string; onOpen: (position: number) => void }
 

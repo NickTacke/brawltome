@@ -5,6 +5,7 @@ import { fixEncoding, formatWhole } from '../../lib'
 import { legendAvatarUrl } from '../guild/legend-avatar-url'
 import { regionOption } from '../regions'
 import { HighlightedText } from './HighlightedText'
+import { keepFieldFocus } from './keep-field-focus'
 import { activeResultRowStyle, resultRowStyle } from './search-styles'
 
 type PlayerResultProps = { player: DiscoveryPlayerHitContract; query: string; isActive: boolean; onOpen: () => void }
@@ -39,6 +40,7 @@ export function PlayerResult({ player, query, isActive, onOpen }: PlayerResultPr
     <Link
       to="/player/$id"
       params={{ id: String(player.brawlhallaId) }}
+      onMouseDown={keepFieldFocus}
       onClick={onOpen}
       data-active={isActive}
       className={`${resultRowStyle} ${isActive ? activeResultRowStyle : ''}`}
