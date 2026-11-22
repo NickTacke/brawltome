@@ -11,12 +11,12 @@
     "updater:verify": "cargo run --locked --manifest-path Cargo.toml -p brawltome-desktop --bin verify_updater_artifact --"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "2.12.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@tauri-apps/cli": "2.12.6",
     "@types/bun": "^1.4.4",
     "@types/node": "^25.5.0",
     "@types/react": "^19",
