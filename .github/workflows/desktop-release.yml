@@ -190,6 +190,8 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # this job has no checkout, so gh can't read the repository from git
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
