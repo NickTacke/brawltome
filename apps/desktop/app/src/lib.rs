@@ -10,6 +10,7 @@ pub mod overlay_window;
 pub mod post_match;
 pub mod session;
 pub mod session_runner;
+pub mod settings;
 pub mod tray;
 pub mod updater_artifact;
 
@@ -21,8 +22,9 @@ use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
 
 use lobby_client::LobbyClient;
-use overlay_window::OverlayWindow;
+use overlay_window::{OverlayPosition, OverlayWindow};
 use session_runner::{LinkOpener, OverlaySurface};
+use settings::SettingsStore;
 
 const DEFAULT_API_URL: &str = "https://api.brawltome.app";
 
@@ -69,6 +71,8 @@ pub fn run() {
             overlay_window::get_overlay_view,
             overlay_window::open_player_profile,
             overlay_window::retry_lookup,
+            settings::get_settings,
+            settings::set_overlay_position,
         ])
         .setup(|app| {
             // Best-effort: keep the log dir bounded. Runs synchronously on
@@ -78,7 +82,9 @@ pub fn run() {
                 log_prune::prune_log_dir(&log_dir, 10);
             }
 
-            start_overlay(app.handle())?;
+            let settings = open_settings(app.handle())?;
+            start_overlay(app.handle(), settings.get().overlay_position)?;
+            app.manage(settings);
             tray::install(app.handle())?;
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
@@ -136,9 +142,23 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+fn open_settings(app: &AppHandle) -> Result<SettingsStore, String> {
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("find the config folder for settings: {error}"))?;
+
+    // the first start has no config folder yet
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("create the config folder {}: {error}", directory.display()))?;
+
+    Ok(SettingsStore::open(&directory))
+}
+
 /// detection feeds the session, and the session drives the overlay window
-fn start_overlay(app: &AppHandle) -> Result<(), String> {
+fn start_overlay(app: &AppHandle, position: OverlayPosition) -> Result<(), String> {
     let overlay = OverlayWindow::new(app);
+    overlay.set_position(position);
     let app_version = app.package_info().version.to_string();
     let lookup = LobbyClient::new(&api_url(), &app_version)
         .map_err(|error| format!("start the lobby client: {error}"))?;
