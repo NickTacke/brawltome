@@ -1,6 +1,6 @@
 import type { Moment } from '@brawltome/contracts'
 import { type ReactNode, useRef, useState } from 'react'
-import { inFrame, useStageCamera } from '../stage/play-camera'
+import { inFrame, useStageView } from '../stage/play-camera'
 import type { Pose } from '../stage/pose'
 import type { StopCount } from '../stage/ReviewControls'
 import { transportCornerPx } from '../stage/StageControls'
@@ -101,7 +101,7 @@ export function ReviewDeck(props: ReviewDeckProps) {
   const [isOnLanes, setIsOnLanes] = useState(false)
   const isPhone = usePhoneLayout()
   const topLeft = useStageBox(topLeftRef, String(fullscreen.isOn))
-  const camera = useStageCamera()
+  const { camera } = useStageView()
   // at a stop the lanes keep clear of its two players; on a pause, of everyone
   const isOfStop = (pose: Pose) => pose.slot === explained?.victim || pose.slot === explained?.attacker
   const inPlay = poses.filter((pose) => pose.isInPlay)

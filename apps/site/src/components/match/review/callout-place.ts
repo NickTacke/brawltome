@@ -1,4 +1,6 @@
+import type { BodyPx } from '../stage/body-ring'
 import type { Pose } from '../stage/pose'
+import { tagWidthPx } from '../stage/tag-stack'
 
 // where a review's card sits on the stage, measured in pixels of the stage
 
@@ -11,6 +13,8 @@ export type Point = { x: number; y: number }
 export type CardSpace = {
   card: Size
   stage: Size
+  // how big the players are drawn on the stage: the ring around each and the tag over them
+  body: BodyPx
   panel: { edge: 'top' | 'bottom'; bandPx: number }
   obstacles: Rect[]
 }
@@ -25,32 +29,29 @@ export type CardPlace = Point & {
 
 // between the card and the stage's edges, as the panel of lanes keeps
 const gapPx = 8
-// the stage width the players' sizes below were taken at; they grow and shrink with the stage
-const measuredStageWidthPx = 780
-// what a player takes up around their feet: the body, the tag over it, and the ring of a review's stop
-const bodyHalfWidthPx = 40
-const bodyAbovePx = 72
-const bodyBelowPx = 20
-// size-16 on the ring around a player, and how far above the feet its middle sits
-const ringRadiusPx = 32
-const ringLiftPx = 14
+// the air the card leaves around the ring of a review's stop
 const ringAirPx = 4
 // where the card is tried across the stage in each of its rows, as shares of the way from left to right: the corners
 // first, then the middle, then between
 const acrossShares = [0, 1, 0.5, 0.25, 0.75, 0.125, 0.875, 0.375, 0.625]
 
-// the body grows with the stage; the ring of a review's stop is as big on every stage, so a small stage keeps its size
-function bodyRect(pose: Pose, stage: Size): Rect {
-  const scale = stage.width / measuredStageWidthPx
-  const x = pose.x * stage.width
-  const y = pose.y * stage.height
-  const halfWidth = Math.max(bodyHalfWidthPx * scale, ringRadiusPx + ringAirPx)
+// the middle of the ring around a player: the middle of their body, over the feet their pose is at
+function ringMiddle(pose: Pose, { stage, body }: CardSpace): Point {
+  return { x: pose.x * stage.width, y: pose.y * stage.height - body.ringMiddlePx }
+}
+
+// what a player takes up around their feet: the ring of a review's stop around the body, and the tag over them
+function bodyRect(pose: Pose, space: CardSpace): Rect {
+  const middle = ringMiddle(pose, space)
+  const ringReach = space.body.ringRadiusPx + ringAirPx
+  const halfWidth = Math.max(ringReach, tagWidthPx / 2)
+  const tagTop = pose.y * space.stage.height - space.body.tagTopPx
 
   return {
-    left: x - halfWidth,
-    top: y - Math.max(bodyAbovePx * scale, ringLiftPx + ringRadiusPx + ringAirPx),
-    right: x + halfWidth,
-    bottom: y + Math.max(bodyBelowPx * scale, ringRadiusPx - ringLiftPx + ringAirPx),
+    left: middle.x - halfWidth,
+    top: Math.min(middle.y - ringReach, tagTop),
+    right: middle.x + halfWidth,
+    bottom: middle.y + ringReach,
   }
 }
 
@@ -111,7 +112,7 @@ export function placeCard(poses: Pose[], space: CardSpace, stop: StopPlayers): C
   const ofStop = shown.filter((pose) => pose.slot === stop.victim || pose.slot === stop.attacker)
 
   const coverOf = (place: Point, players: Pose[]) =>
-    players.reduce((sum, pose) => sum + sharedArea(rectAt(place, space.card), bodyRect(pose, space.stage)), 0)
+    players.reduce((sum, pose) => sum + sharedArea(rectAt(place, space.card), bodyRect(pose, space)), 0)
 
   const places = placesIn(space)
   const clear = places.filter((place) => coverOf(place, ofStop) === 0)
@@ -127,7 +128,8 @@ export function placeCard(poses: Pose[], space: CardSpace, stop: StopPlayers): C
 /** The line from the card's corner that faces a player to the edge of the ring around them; none when they touch. */
 export function lineToRing(place: Point, space: CardSpace, pose: Pose): { from: Point; to: Point } | null {
   const card = rectAt(place, space.card)
-  const ring = { x: pose.x * space.stage.width, y: pose.y * space.stage.height - ringLiftPx }
+  const ring = ringMiddle(pose, space)
+  const radiusPx = space.body.ringRadiusPx
 
   const from = {
     x: ring.x > (card.left + card.right) / 2 ? card.right : card.left,
@@ -136,9 +138,9 @@ export function lineToRing(place: Point, space: CardSpace, pose: Pose): { from: 
 
   const length = Math.hypot(from.x - ring.x, from.y - ring.y)
 
-  if (length <= ringRadiusPx) return null
+  if (length <= radiusPx) return null
 
-  const reach = ringRadiusPx / length
+  const reach = radiusPx / length
 
   return { from, to: { x: ring.x + (from.x - ring.x) * reach, y: ring.y + (from.y - ring.y) * reach } }
 }

@@ -2,10 +2,11 @@ import type { MatchInsights, Moment, StageTrail } from '@brawltome/contracts'
 import { type CSSProperties, memo, type ReactNode, useMemo } from 'react'
 import { AnimatedPoses } from './AnimatedPoses'
 import { backgroundUrlOf } from './background-url'
+import { drawnBodiesOf } from './body-ring'
 import type { CameraMode } from './camera-mode'
 import { MomentRing } from './MomentRing'
 import { PlayEffects } from './PlayEffects'
-import { type Camera, inFrame, StageCameraContext } from './play-camera'
+import { type Camera, inFrame, StageViewContext } from './play-camera'
 import { type Pose, posesAt } from './pose'
 import { StageBackdrop, StagePicture, type TimeWindow } from './StagePicture'
 import { StageSpinner } from './StageSpinner'
@@ -108,9 +109,10 @@ export function StagePlay(props: StagePlayProps) {
   const backgroundUrl = backgroundUrlOf(legends.replay)
   const art = useMapArt(legends.replay, stage.art)
   const note = <LegendsNote state={legends.state} />
+  const bodies = drawnBodiesOf(stage, legends)
 
   return (
-    <StageCameraContext.Provider value={camera}>
+    <StageViewContext.Provider value={{ bodies, camera }}>
       {/* the deck lies on the picture, or under it on a phone, so it is beside the window that crops the picture */}
       <div className="relative">
         <div data-stage-window className={stageWindow}>
@@ -126,14 +128,14 @@ export function StagePlay(props: StagePlayProps) {
             />
           </div>
           <div className="absolute" style={markLayerStyle(camera)}>
-            <PlayEffects hits={stage.marks.hits} kos={stage.marks.kos} timeMs={timeMs} />
-            {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} timeMs={timeMs} />}
+            <PlayEffects hits={stage.marks.hits} kos={stage.marks.kos} bodies={bodies} timeMs={timeMs} />
+            {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} bodies={bodies} timeMs={timeMs} />}
           </div>
           <Players {...props} poses={poses} camera={camera} />
           {legends.state === 'loading' && legends.isDownloading ? <StageSpinner label="Loading legends" /> : null}
         </div>
         {props.deck ? props.deck(note) : <div className="absolute top-2 left-2">{note}</div>}
       </div>
-    </StageCameraContext.Provider>
+    </StageViewContext.Provider>
   )
 }

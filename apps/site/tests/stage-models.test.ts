@@ -3,16 +3,35 @@ import type { MatchDetailContract, StageBox } from '@brawltome/contracts'
 import type { Bubble, CameraTrack, PlayerPose, Replay, Timeline } from '@brawltome/replay-player'
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
+import {
+  bodyMiddle,
+  bodyPxOf,
+  bodyRingDiameter,
+  bodyRingStyle,
+  legendRingFloorPx,
+} from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
-import { cameraOf, inFrame, levelToCanvas, viewOf, wholeStage } from '../src/components/match/stage/play-camera'
+import {
+  cameraOf,
+  inFrame,
+  levelToCanvas,
+  unitInFrame,
+  viewOf,
+  wholeStage,
+} from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
 import { tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
-import { initialLegends, type Legends, legendsStateOf } from '../src/components/match/stage/use-legends'
+import {
+  areLegendsDrawn,
+  initialLegends,
+  type Legends,
+  legendsStateOf,
+} from '../src/components/match/stage/use-legends'
 import { frameElapsedMs } from '../src/components/match/stage/use-playback'
 import { weaponIconName } from '../src/components/match/weapon-icon'
 import { readInsights, readPlayback } from './match-fixtures'
@@ -160,6 +179,83 @@ describe('the camera', () => {
     expect(isCameraMode('game')).toBe(true)
     expect(isCameraMode('stage')).toBe(true)
     expect(isCameraMode('follow')).toBe(false)
+  })
+})
+
+describe('the ring around a player’s body', () => {
+  // the game's standing hurtbox, the same for every legend
+  const hurtbox = { width: 145, height: 160 }
+  const anyBox: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
+  const legends = { box: anyBox, areLegends: true }
+  const tokens = { box: anyBox, areLegends: false }
+
+  test('holds a legend’s whole standing hurtbox, and is no bigger than that takes', () => {
+    const diagonal = Math.hypot(hurtbox.width, hurtbox.height)
+
+    expect(bodyMiddle).toBe(hurtbox.height / 2)
+    expect(bodyRingDiameter).toBeGreaterThanOrEqual(diagonal)
+    expect(bodyRingDiameter - diagonal).toBeLessThan(1)
+  })
+
+  test('around a legend it is placed in level units: its middle the body’s, over the feet', () => {
+    const whole = { left: '50%', top: '45%', width: 'max(32px, 5%)', aspectRatio: '1' }
+
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends)).toEqual(whole)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 0.25)).toEqual({ ...whole, width: 'max(8px, 1.25%)' })
+  })
+
+  test('around a legend it never gets too small to show beside the numbers of a stop’s hits', () => {
+    // size-4 on a hit's number
+    const hitNumberPx = 16
+
+    expect(legendRingFloorPx).toBeGreaterThan(hitNumberPx)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends).width).toBe(`max(${legendRingFloorPx}px, 5%)`)
+  })
+
+  test('around a token it is as big on every stage, and smaller on a phone’s', () => {
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, tokens)).toEqual({
+      left: '50%',
+      top: 'calc(50% - 14px)',
+      width: 'min(64px, 10%)',
+      aspectRatio: '1',
+    })
+  })
+
+  test('on a stage as laid out, a legend’s ring and tag grow with the level unit and a token’s don’t', () => {
+    expect(bodyPxOf(legends, 0.5)).toEqual({ ringMiddlePx: 40, ringRadiusPx: 54, tagTopPx: 115 })
+    expect(bodyPxOf(tokens, 0.5)).toEqual(bodyPxOf(tokens, 2))
+  })
+
+  test('on a stage as laid out, a legend’s ring is as big as it is drawn where the stage is small', () => {
+    // on a 390 pixel stage this box makes the ring through the hurtbox's corners 19.5 pixels, under its smallest size
+    const unitPx = 390 / anyBox.width
+
+    expect(bodyPxOf(legends, unitPx).ringRadiusPx).toBe(legendRingFloorPx / 2)
+    expect(bodyPxOf(legends, unitPx).ringMiddlePx).toBeCloseTo(80 * unitPx)
+  })
+
+  test('on a stage as laid out, a token’s ring is as big as it is drawn: a tenth of a small stage', () => {
+    expect(bodyPxOf(tokens, 1000 / anyBox.width).ringRadiusPx).toBe(32)
+    expect(bodyPxOf(tokens, 390 / anyBox.width).ringRadiusPx).toBeCloseTo(19.5)
+  })
+
+  test('a level unit is as wide in the frame as the camera’s zoom makes it', () => {
+    expect(unitInFrame(box, wholeStage)).toBe(1 / box.width)
+    expect(unitInFrame(box, { x: 0.25, y: 0.25, zoom: 2 })).toBe(2 / box.width)
+  })
+
+  test('the players are drawn as their legends once the art and the timeline are in', () => {
+    const ready: Legends = {
+      replay: {} as Replay,
+      timeline: {} as Timeline,
+      track: null,
+      state: 'ready',
+      isDownloading: false,
+    }
+
+    expect(areLegendsDrawn(ready)).toBe(true)
+    expect(areLegendsDrawn({ ...ready, state: 'loading' })).toBe(false)
+    expect(areLegendsDrawn({ ...ready, replay: null })).toBe(false)
   })
 })
 
