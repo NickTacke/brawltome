@@ -16,6 +16,7 @@
     "@brawltome/analytics": "workspace:*",
     "@brawltome/clan": "workspace:*",
     "@brawltome/discovery": "workspace:*",
+    "@brawltome/esports": "workspace:*",
     "@brawltome/player": "workspace:*",
     "@brawltome/queue": "workspace:*",
     "@brawltome/ranking": "workspace:*",

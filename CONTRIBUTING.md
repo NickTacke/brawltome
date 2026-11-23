@@ -14,7 +14,7 @@ What to work on next is in [`docs/ROADMAP.md`](docs/ROADMAP.md). How the modules
 | `apps/discord-bot` | discord.js slash-command bot (`/player`, `/clan`, `/status`) |
 | `apps/replay-worker` | Parses uploaded replays with bh-native on the replay VM (deployed from the private `ax42-infra` repo) |
 | `apps/desktop` | Tauri Windows overlay; `detection/` is a private submodule, Windows only |
-| `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, analytics, clan, discovery, player, queue, ranking, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object; layout in [`packages/modules/README.md`](packages/modules/README.md) |
+| `packages/modules/*` | Domain modules (`@brawltome/<name>`): accounts, analytics, clan, discovery, esports, player, queue, ranking, replay-analysis, request-admission, statistics. Each owns its schema and migrations, and exposes one `index.ts` with a `<name>Module` object; layout in [`packages/modules/README.md`](packages/modules/README.md) |
 | `packages/foundation` | Shared database client, the migration and module types, and the migration runner |
 | `packages/bhapi` | Brawlhalla API client (V0 keyed, V1 keyless) |
 | `packages/contracts` | Generated OpenAPI + Rust contracts (CI checks they are up to date) |

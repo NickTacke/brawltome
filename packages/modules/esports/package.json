@@ -1,0 +1,20 @@
+{
+  "name": "@brawltome/esports",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@brawltome/foundation": "workspace:*",
+    "@brawltome/player": "workspace:*",
+    "@brawltome/queue": "workspace:*",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
