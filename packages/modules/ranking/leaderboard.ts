@@ -500,25 +500,41 @@ function identityKeyForSort(identity: PublishedLeaderboardIdentity): string {
     : String(identity.player.brawlhallaId)
 }
 
+type GlobalCandidate = { row: PublishedLeaderboardRow; isCarried: boolean }
+
+// a carried row can be hours old, so any fresh row of the same player wins; between two alike, the stronger one does
+function isBetterGlobalRow(candidate: GlobalCandidate, existing: GlobalCandidate | undefined): boolean {
+  if (!existing) return true
+
+  if (candidate.isCarried !== existing.isCarried) return existing.isCarried
+
+  return compareDuplicateRows(candidate.row, existing.row) < 0
+}
+
 // a region missing here has never published a board, so the global board goes without it until it does
 function buildGlobal(
   mode: LeaderboardMode,
   regional: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
+  staleRegions: readonly RegionalLeaderboardScope[],
 ) {
-  const strongest = new Map<string, PublishedLeaderboardRow>()
+  const strongest = new Map<string, GlobalCandidate>()
 
   for (const region of regionalLeaderboardScopes) {
+    const isCarried = staleRegions.includes(region)
+
     for (const row of regional.get(region) ?? []) {
       const key = identityKey(mode, row.identity)
-      const existing = strongest.get(key)
+      const candidate = { row, isCarried }
 
-      if (!existing || compareDuplicateRows(row, existing) < 0) strongest.set(key, row)
+      if (isBetterGlobalRow(candidate, strongest.get(key))) strongest.set(key, candidate)
     }
   }
 
   if (strongest.size === 0) throw new LeaderboardCandidateError(`${mode} candidate has no ranked rows in any region`)
 
-  return [...strongest.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  const rows = [...strongest.values()].map(({ row }) => row)
+
+  return rows.sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 function errorDetails(error: unknown): { code: string; message: string } {
@@ -667,9 +683,10 @@ async function publishRegion(run: CollectionRun, region: RegionalLeaderboardScop
 async function buildGlobalOrRecordFailure(
   run: CollectionRun,
   boards: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
+  staleRegions: readonly RegionalLeaderboardScope[],
 ) {
   try {
-    return buildGlobal(run.mode, boards)
+    return buildGlobal(run.mode, boards, staleRegions)
   } catch (error) {
     await recordFailure(run, 'all', error)
 
@@ -682,7 +699,7 @@ async function publishGlobalBoard(
   boards: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
   staleRegions: readonly RegionalLeaderboardScope[],
 ): Promise<PublicationResult> {
-  const rows = await buildGlobalOrRecordFailure(run, boards)
+  const rows = await buildGlobalOrRecordFailure(run, boards, staleRegions)
 
   const result = await run.publication.publishGeneration(run.authorization, {
     mode: run.mode,

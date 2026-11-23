@@ -731,6 +731,40 @@ describe('collectAndPublishLeaderboardGeneration', () => {
     expect(recorder.boards().get('all')?.[0]).toMatchObject({ standing: 1, rating: 2_500, region: 'US-E' })
   })
 
+  test("prefers a fresh region's row over a carried one for a player listed in both", async () => {
+    // player 3 is EU's, also listed on US-E's last board with the rating they had hours ago
+    const carriedRow = publishedRow('US-E', 3, 2_600)
+
+    const recorder = publicationRecorder(
+      new Map([['US-E', { operationKey: 'leaderboard:window:0:US-E', rows: [carriedRow] }]]),
+    )
+
+    await collectAndPublishLeaderboardGeneration({
+      mode: '1v1',
+      authorization: auth('1v1'),
+      source: {
+        async fetchPage({ region }) {
+          if (region === 'US-E') throw new LeaderboardSourceError('source_unavailable', 'V1 returned 502', true)
+
+          return {
+            rankings: [row(region, '1v1', regionalLeaderboardScopes.indexOf(region) + 1, 1, 2_000)],
+            totalPages: 1,
+          }
+        },
+      },
+      publication: recorder.publication,
+    })
+
+    const global = recorder.boards().get('all') ?? []
+
+    const playerThree = global.filter(
+      ({ identity }) => identity.type === 'one-vs-one-player' && identity.player.brawlhallaId === 3,
+    )
+
+    expect(global).toHaveLength(8)
+    expect(playerThree).toMatchObject([{ rating: 2_000, region: 'EU' }])
+  })
+
   test('a retry skips the regions its window already published', async () => {
     const calls: RegionalLeaderboardScope[] = []
 
