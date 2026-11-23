@@ -5,5 +5,6 @@
   "update": { "state": "idle" },
   "isOverlayPaused": false,
   "isMatchRunning": false,
+  "you": null,
   "recentMatches": []
 }

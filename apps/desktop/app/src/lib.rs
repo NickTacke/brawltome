@@ -2,27 +2,35 @@
 //! Tauri builder + plugin wiring + setup callback that wires the focused modules.
 
 pub mod app_status;
+pub mod autostart;
 pub mod detection_source;
 pub mod lobby_client;
 mod log_prune;
+pub mod main_window;
 pub mod overlay_view;
 pub mod overlay_window;
 pub mod post_match;
+pub mod quiet_relaunch;
 pub mod session;
 pub mod session_runner;
+pub mod settings;
 pub mod tray;
+pub mod updater;
 pub mod updater_artifact;
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use brawltome_detection::Event;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
 
+use autostart::was_autostarted;
 use lobby_client::LobbyClient;
-use overlay_window::OverlayWindow;
-use session_runner::{LinkOpener, OverlaySurface};
+use overlay_window::{OverlayPosition, OverlayWindow};
+use session_runner::{LinkOpener, OverlaySurface, SessionHandle};
+use settings::SettingsStore;
 
 const DEFAULT_API_URL: &str = "https://api.brawltome.app";
 
@@ -61,6 +69,16 @@ fn build_log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 pub fn run() {
     tauri::Builder::default()
+        // first, so a second start hands over and exits before any other plugin starts
+        .plugin(tauri_plugin_single_instance::init(
+            |app, arguments, _directory| {
+                // a login start while the app already runs is not a request to see it
+                if !was_autostarted(&arguments) {
+                    main_window::open(app);
+                }
+            },
+        ))
+        .plugin(autostart::plugin())
         .plugin(build_log_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -69,6 +87,12 @@ pub fn run() {
             overlay_window::get_overlay_view,
             overlay_window::open_player_profile,
             overlay_window::retry_lookup,
+            settings::get_settings,
+            settings::set_overlay_position,
+            autostart::set_starts_with_windows,
+            main_window::get_app_status,
+            main_window::hide_main_window,
+            main_window::set_overlay_paused,
         ])
         .setup(|app| {
             // Best-effort: keep the log dir bounded. Runs synchronously on
@@ -78,8 +102,24 @@ pub fn run() {
                 log_prune::prune_log_dir(&log_dir, 10);
             }
 
-            start_overlay(app.handle())?;
-            tray::install(app.handle())?;
+            let settings = open_settings(app.handle());
+            start_overlay(app.handle(), settings.get().overlay_position)?;
+
+            // before the window reads the setting; a failure is not worth stopping the app
+            if let Err(error) = autostart::sync_at_start(app.handle(), &settings) {
+                log::warn!("{error}");
+            }
+
+            app.manage(settings);
+            let session = app.state::<SessionHandle>().inner().clone();
+            updater::spawn(app.handle(), session.clone());
+            tray::install(app.handle(), session)?;
+
+            let launch_arguments: Vec<String> = std::env::args().collect();
+            // the marker is taken at every start, so a stale one can't close the window of a later start
+            let is_restart_after_update = is_restart_after_update(app.handle());
+            let should_open = !was_autostarted(&launch_arguments) && !is_restart_after_update;
+            start_main_window(app.handle(), should_open);
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we
@@ -91,54 +131,31 @@ pub fn run() {
                 }
             }
 
-            // Background update check on startup. Silent: download + install
-            // without UI. On Windows, Tauri exits the app to let the installer
-            // replace the running binary; on_before_exit logs the imminent quit
-            // so it isn't mysterious in beta-tester logs. Skipped in dev builds.
-            #[cfg(not(debug_assertions))]
-            {
-                use tauri_plugin_updater::UpdaterExt;
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let updater = match app_handle
-                        .updater_builder()
-                        .on_before_exit(|| {
-                            log::info!("Update downloaded; app is about to quit so the installer can replace the running binary");
-                        })
-                        .build()
-                    {
-                        Ok(u) => u,
-                        Err(e) => {
-                            log::warn!("Updater not available: {e}");
-                            return;
-                        }
-                    };
-                    match updater.check().await {
-                        Ok(Some(update)) => {
-                            log::info!(
-                                "Update available: {} -> {}. App will quit and silently install when download completes.",
-                                update.current_version,
-                                update.version
-                            );
-                            if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
-                                log::warn!("Update install failed: {e}");
-                            }
-                        }
-                        Ok(None) => log::debug!("No update available"),
-                        Err(e) => log::warn!("Update check failed: {e}"),
-                    }
-                });
-            }
-
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+fn open_settings(app: &AppHandle) -> SettingsStore {
+    let directory = app.path().app_config_dir().unwrap_or_else(|error| {
+        // the app config folder can't be named without a home folder; the temp folder always can, so the app
+        // still starts, with settings that may not outlive the session
+        let fallback = std::env::temp_dir().join(&app.config().identifier);
+        log::warn!(
+            "find the config folder for settings: {error}; using {}",
+            fallback.display()
+        );
+        fallback
+    });
+
+    SettingsStore::open(&directory)
+}
+
 /// detection feeds the session, and the session drives the overlay window
-fn start_overlay(app: &AppHandle) -> Result<(), String> {
+fn start_overlay(app: &AppHandle, position: OverlayPosition) -> Result<(), String> {
     let overlay = OverlayWindow::new(app);
+    overlay.set_position(position);
     let app_version = app.package_info().version.to_string();
     let lookup = LobbyClient::new(&api_url(), &app_version)
         .map_err(|error| format!("start the lobby client: {error}"))?;
@@ -163,6 +180,27 @@ fn start_overlay(app: &AppHandle) -> Result<(), String> {
     app.manage(session);
 
     Ok(())
+}
+
+/// the installer's restart after a background update, which keeps the window in the tray
+fn is_restart_after_update(app: &AppHandle) -> bool {
+    let Some(directory) = quiet_relaunch::directory(app) else {
+        return false;
+    };
+
+    quiet_relaunch::take(&directory, SystemTime::now())
+}
+
+/// the window follows the session's status; a start at login or after an update keeps it closed, in the tray
+fn start_main_window(app: &AppHandle, should_open: bool) {
+    let status = app.state::<SessionHandle>().status();
+
+    main_window::hide_on_close(app);
+    main_window::forward_status(app, status);
+
+    if should_open {
+        main_window::open(app);
+    }
 }
 
 fn api_url() -> String {

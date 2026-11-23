@@ -1,0 +1,6 @@
+{
+  "identifier": "main-window",
+  "description": "The main window: status, recent matches and settings",
+  "windows": ["main"],
+  "permissions": ["core:default", "log:default", "core:window:allow-start-dragging", "core:window:allow-minimize"]
+}

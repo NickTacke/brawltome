@@ -197,6 +197,14 @@ impl<L: LobbyLookup> Runner<L> {
             recent_match.started_at_ms = self.clock.to_epoch_ms(recent_match.started_at_ms);
         }
 
+        let own_results = status
+            .you
+            .iter_mut()
+            .flat_map(|you| &mut you.recent_results);
+        for own_result in own_results {
+            own_result.at_ms = self.clock.to_epoch_ms(own_result.at_ms);
+        }
+
         self.status.send_replace(status);
     }
 }

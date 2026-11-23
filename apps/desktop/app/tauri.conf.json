@@ -25,6 +25,18 @@
         "skipTaskbar": true,
         "shadow": false,
         "resizable": false
+      },
+      {
+        "label": "main",
+        "title": "BrawlTome",
+        "url": "index.html",
+        "width": 400,
+        "height": 620,
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "maximizable": false,
+        "skipTaskbar": false
       }
     ]
   },
@@ -42,7 +54,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/NickTacke/brawltome/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/NickTacke/brawltome/releases/download/desktop-latest/latest.json"],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCRTNBNDExMDIzRDFFMkEKUldRcUhqMENFYVRqMjkvVS9lVmhSbWRUeENVT2l3dUZ6TFVVc01iNmh1c002dDZBeDIwdGJuYzAK",
       "windows": {
         "installMode": "quiet"
