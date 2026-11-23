@@ -13,7 +13,7 @@ import {
   type TransitionResult,
 } from '@brawltome/queue'
 import { interactivePlayerRefreshContract, type PlayerRefreshSection } from './interactive-player-refresh-contract'
-import { inspectVisitorFit, takeOverPlayerRefresh } from './visitor-refresh-takeover'
+import { findActiveRefreshForVisitor, takeOverPlayerRefresh } from './visitor-refresh-takeover'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const
 
@@ -104,11 +104,12 @@ export function rejectExpiredInteractivePlayerRefresh(
 /** The reservation use cases bound to one database, for the API context. */
 export function createPlayerRefreshReservations(database: Database) {
   return {
-    findActiveInteractivePlayerRefresh: (dedupeKey: string, brawlhallaId?: number) =>
-      findActiveInteractivePlayerRefresh(database, dedupeKey, brawlhallaId),
-
-    inspectVisitorFit: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
-      inspectVisitorFit(database, { brawlhallaId, staleSections }),
+    // with how a visitor needing these sections deals with it, so one read answers both
+    findActiveInteractivePlayerRefresh: (
+      dedupeKey: string,
+      brawlhallaId: number,
+      staleSections: readonly PlayerRefreshSection[],
+    ) => findActiveRefreshForVisitor(database, { dedupeKey, brawlhallaId, staleSections }),
 
     takeOverPlayerRefresh: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
       takeOverPlayerRefresh(database, { brawlhallaId, staleSections }),

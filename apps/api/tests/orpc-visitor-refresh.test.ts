@@ -49,7 +49,6 @@ function reservations() {
   const reserved = { outcome: 'reserved', operationId: crypto.randomUUID(), reservationToken: crypto.randomUUID() }
 
   return {
-    inspectVisitorFit: async () => 'attach' as const,
     takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
     findActiveInteractivePlayerRefresh: async () => null,
     reserveInteractivePlayerRefresh: async () => reserved,

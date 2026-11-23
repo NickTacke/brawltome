@@ -7,7 +7,7 @@ const temporarilyUnavailable = {
   retry: { kind: 'after' as const, afterSeconds: 30 },
 }
 
-// another refresh of the player is running without one of the sections asked for; it ends in seconds
+// another refresh of the player is running, or being admitted, without one of the sections asked for
 const otherRefreshRunning = {
   outcome: 'temporarilyUnavailable' as const,
   retry: { kind: 'after' as const, afterSeconds: 2 },
@@ -61,31 +61,47 @@ async function isStillActive(request: InteractivePlayerRefreshRequest, active: A
   return false
 }
 
-// waiting on a refresh changes nothing, so it needs no verification; anything that would change it does
-async function answerWithoutChange(request: InteractivePlayerRefreshRequest): Promise<RefreshOutcomeContract | null> {
-  const active = await request.playerRefreshReservations.findActiveInteractivePlayerRefresh(
+function findActive(request: InteractivePlayerRefreshRequest) {
+  return request.playerRefreshReservations.findActiveInteractivePlayerRefresh(
     request.dedupeKey,
     request.brawlhallaId,
+    request.staleSections,
   )
+}
 
-  if (!active || !(await isStillActive(request, active))) return null
+// a refresh that covers the visitor, or one they can't change yet, is answered as it is: that needs no verification
+function answerAsItIs(active: ActivePlayerRefresh): RefreshOutcomeContract | null {
+  if (active.fit === 'attach') return poll(active.operationId)
 
-  const fit = await request.playerRefreshReservations.inspectVisitorFit(request.brawlhallaId, request.staleSections)
-
-  if (fit === 'attach') return poll(active.operationId)
-
-  if (fit === 'wait-for-running') return otherRefreshRunning
+  if (active.fit === 'ask-again') return otherRefreshRunning
 
   return null
 }
 
-// the refresh holding the player becomes this visitor's, so they're admitted as if it were their own
+async function answerWithoutChange(request: InteractivePlayerRefreshRequest): Promise<RefreshOutcomeContract | null> {
+  const active = await findActive(request)
+
+  if (!active || !(await isStillActive(request, active))) return null
+
+  return answerAsItIs(active)
+}
+
+// a queued refresh missing the visitor's sections becomes theirs, so they're admitted as if it were their own
 async function takeOver(
   request: InteractivePlayerRefreshRequest,
   actor: AdmissionActor,
-  operationId: string,
 ): Promise<RefreshOutcomeContract> {
-  const admission = await request.requestAdmission.admitActor(actor, `${request.dedupeKey}:takeover:${operationId}`)
+  const active = await findActive(request)
+
+  // it ended in between, so asking again reserves a refresh of the visitor's own
+  if (!active) return otherRefreshRunning
+
+  const unchanged = answerAsItIs(active)
+
+  if (unchanged) return unchanged
+
+  const reservationKey = `${request.dedupeKey}:takeover:${active.operationId}`
+  const admission = await request.requestAdmission.admitActor(actor, reservationKey)
 
   if (admission.outcome === 'rate-limited') return rateLimited(admission.retryAfterSeconds)
 
@@ -94,7 +110,6 @@ async function takeOver(
     request.staleSections,
   )
 
-  // none: it ended in between, so asking again reserves a refresh of the visitor's own
   if (takeover.outcome !== 'attached') return otherRefreshRunning
 
   return poll(takeover.operationId)
@@ -115,7 +130,7 @@ async function reserveOwnRefresh(
     reservationTtlSeconds: 30,
   })
 
-  if (reserved.outcome === 'already-active') return takeOver(request, actor, reserved.operationId)
+  if (reserved.outcome === 'already-active') return takeOver(request, actor)
 
   const admission = await request.requestAdmission.admitActor(actor, reserved.operationId)
 
@@ -137,9 +152,9 @@ async function reserveOwnRefresh(
 }
 
 /**
- * Asks for a refresh of the player's stale sections. A visitor waits on a refresh already holding the player only
- * when it covers their sections; one that doesn't is taken over, once they pass verification and admission, or they
- * ask again after it ends.
+ * Asks for a refresh of the player's stale sections. A visitor waits on a refresh already holding the player when it
+ * covers their sections. A queued one that doesn't is taken over once they pass verification and admission; one that
+ * is running or being admitted for someone else has them ask again shortly.
  */
 export async function requestInteractivePlayerRefresh(
   request: InteractivePlayerRefreshRequest,

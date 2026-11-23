@@ -163,7 +163,7 @@ describe('Recently viewed freshness operations', () => {
     )
   })
 
-  test('promotes a queued background refresh when a visitor takes it over', async () => {
+  test('lets a visitor wait on a queued background refresh that already covers them', async () => {
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -192,13 +192,13 @@ describe('Recently viewed freshness operations', () => {
         operationId: background.id,
       })
 
-      const [promoted] = await control<{ work_class: string }[]>`
+      // it already covers ranked, so the visitor waits on it as it is
+      const [unchanged] = await control<{ work_class: string }[]>`
         SELECT work_class FROM queue.operations WHERE id = ${background.id}
       `
 
-      expect(promoted.work_class).toBe('interactive')
-      // The promoted refresh no longer occupies a background slot.
-      expect(await activeRecentlyViewedRefreshes(database)).toBe(activeBefore)
+      expect(unchanged.work_class).toBe('primary-monitoring')
+      expect(await activeRecentlyViewedRefreshes(database)).toBe(activeBefore + 1)
     } finally {
       await control.end()
     }

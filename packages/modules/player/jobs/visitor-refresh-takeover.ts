@@ -1,10 +1,11 @@
 import type { Database } from '@brawltome/foundation'
 import {
-  type ActiveResourceOperation,
-  findActiveOnResource,
+  type ActiveOperation,
+  type ActiveOperationDetails,
+  findActiveOperationDetails,
   rankedCoverageCohort,
   recentlyViewedCohort,
-  rewriteUnstartedOperation,
+  rewritePendingOperation,
   type WorkClass,
 } from '@brawltome/queue'
 import {
@@ -16,24 +17,23 @@ import {
 const playerRefreshKind = 'interactive-player-refresh'
 const sectionOrder: readonly PlayerRefreshSection[] = ['ranked', 'stats']
 const backgroundCohorts: readonly unknown[] = [recentlyViewedCohort, rankedCoverageCohort]
-// a takeover can race a worker's claim; after this many misses the visitor is told to ask again
+// a takeover can race a worker's claim or another visitor's takeover; after this many misses they ask again
 const takeoverAttempts = 3
 
 /**
  * What a visitor does about the refresh already holding their player:
- * - attach: it covers their sections and nothing about it needs to change, so they wait on it
- * - take-over: it hasn't started and either misses a section or sits in the background queue, so it becomes theirs
- * - wait-for-running: it's running without one of their sections, so they ask again once it ends
+ * - attach: it covers their sections, so they wait on it as it is
+ * - take-over: it's queued without one of their sections, so it becomes theirs and takes those on
+ * - ask-again: it's running, or another visitor is still being admitted for it, without one of their sections
  */
 export type VisitorFit =
   | { action: 'attach' }
   | { action: 'take-over'; workClass: WorkClass; payload: InteractivePlayerRefreshPayload }
-  | { action: 'wait-for-running' }
+  | { action: 'ask-again' }
 
-export type VisitorTakeover =
-  | { outcome: 'attached'; operationId: string }
-  | { outcome: 'running' }
-  | { outcome: 'none' }
+export type ActiveRefreshForVisitor = ActiveOperation & { fit: VisitorFit['action'] }
+
+export type VisitorTakeover = { outcome: 'attached'; operationId: string } | { outcome: 'busy' } | { outcome: 'none' }
 
 function readPayload(payload: unknown): Record<string, unknown> {
   return typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {}
@@ -43,6 +43,7 @@ function readSections(payload: Record<string, unknown>): readonly string[] {
   return Array.isArray(payload.staleSections) ? payload.staleSections : []
 }
 
+// a union: a section someone else asked for is never dropped
 function joinSections(held: readonly string[], wanted: readonly PlayerRefreshSection[]): PlayerRefreshSection[] {
   return sectionOrder.filter((section) => held.includes(section) || wanted.includes(section))
 }
@@ -60,44 +61,54 @@ function takenOverPayload(
 
 /** Decides how a visitor needing these sections deals with the refresh already holding their player. */
 export function fitForVisitor(
-  active: Pick<ActiveResourceOperation, 'workClass' | 'status' | 'payload'>,
+  active: Pick<ActiveOperationDetails, 'workClass' | 'status' | 'payload'>,
   staleSections: readonly PlayerRefreshSection[],
 ): VisitorFit {
   const payload = readPayload(active.payload)
   const heldSections = readSections(payload)
-  const isCovering = staleSections.every((section) => heldSections.includes(section))
+
+  if (staleSections.every((section) => heldSections.includes(section))) return { action: 'attach' }
+
+  if (active.status !== 'pending') return { action: 'ask-again' }
+
   const isBackgroundCohort = active.workClass === 'primary-monitoring' && backgroundCohorts.includes(payload.cohort)
-
-  if (active.status === 'leased') return isCovering ? { action: 'attach' } : { action: 'wait-for-running' }
-
-  if (isCovering && !isBackgroundCohort) return { action: 'attach' }
-
-  const sections = joinSections(heldSections, staleSections)
 
   return {
     action: 'take-over',
     workClass: isBackgroundCohort ? 'interactive' : active.workClass,
-    payload: takenOverPayload(payload, isBackgroundCohort, sections),
+    payload: takenOverPayload(payload, isBackgroundCohort, joinSections(heldSections, staleSections)),
   }
 }
 
-function readActivePlayerRefresh(database: Database, brawlhallaId: number) {
-  return findActiveOnResource(database, { kind: playerRefreshKind, resourceKey: `player:${brawlhallaId}` })
+function readActivePlayerRefresh(database: Database, brawlhallaId: number, dedupeKey?: string) {
+  return findActiveOperationDetails(database, {
+    kind: playerRefreshKind,
+    resourceKey: `player:${brawlhallaId}`,
+    dedupeKey,
+  })
 }
 
-/** How a visitor would deal with the player's active refresh, without changing it; null when there is none. */
-export async function inspectVisitorFit(
+/** The refresh holding the player, by player or dedupe key, with how a visitor needing these sections deals with it. */
+export async function findActiveRefreshForVisitor(
   database: Database,
-  input: { brawlhallaId: number; staleSections: readonly PlayerRefreshSection[] },
-): Promise<VisitorFit['action'] | null> {
-  const active = await readActivePlayerRefresh(database, input.brawlhallaId)
+  input: { dedupeKey: string; brawlhallaId: number; staleSections: readonly PlayerRefreshSection[] },
+): Promise<ActiveRefreshForVisitor | null> {
+  const active = await readActivePlayerRefresh(database, input.brawlhallaId, input.dedupeKey)
 
-  return active ? fitForVisitor(active, input.staleSections).action : null
+  if (!active) return null
+
+  return {
+    operationId: active.operationId,
+    awaitingAdmission: active.awaitingAdmission,
+    reservationExpired: active.reservationExpired,
+    fit: fitForVisitor(active, input.staleSections).action,
+  }
 }
 
 /**
- * Makes the player's active refresh cover the visitor: a refresh nobody started takes on their sections, and a
- * background one becomes interactive work. Only for a visitor who passed verification and admission.
+ * Makes the player's queued refresh cover the visitor: it takes on their sections, and a background one becomes
+ * interactive work. Only for a visitor who passed verification and admission. Each write checks the payload it built
+ * on is still there, so two visitors taking over at once both get their sections.
  */
 export async function takeOverPlayerRefresh(
   database: Database,
@@ -112,11 +123,12 @@ export async function takeOverPlayerRefresh(
 
     if (fit.action === 'attach') return { outcome: 'attached', operationId: active.operationId }
 
-    if (fit.action === 'wait-for-running') return { outcome: 'running' }
+    if (fit.action === 'ask-again') return { outcome: 'busy' }
 
-    const isRewritten = await rewriteUnstartedOperation(database, {
+    const isRewritten = await rewritePendingOperation(database, {
       job: interactivePlayerRefreshContract,
       operationId: active.operationId,
+      expectedPayload: active.payload,
       workClass: fit.workClass,
       payload: fit.payload,
     })
@@ -124,5 +136,5 @@ export async function takeOverPlayerRefresh(
     if (isRewritten) return { outcome: 'attached', operationId: active.operationId }
   }
 
-  return { outcome: 'running' }
+  return { outcome: 'busy' }
 }

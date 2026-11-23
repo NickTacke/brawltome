@@ -53,37 +53,38 @@ export function findActiveOperation(
   return readActiveOperation(database.db, input)
 }
 
-export type ActiveResourceOperation = {
-  operationId: string
+export type ActiveOperationDetails = ActiveOperation & {
   workClass: WorkClass
   status: (typeof activeStatuses)[number]
   payload: unknown
 }
 
-/** The active operation of a kind holding a resource, with its class, status and payload. */
-export async function findActiveOnResource(
+/** The active operation of a kind on a resource, or under a dedupe key, with its class, status and payload too. */
+export async function findActiveOperationDetails(
   database: Database,
-  input: { kind: string; resourceKey: string },
-): Promise<ActiveResourceOperation | null> {
+  input: { kind: string; resourceKey: string; dedupeKey?: string },
+): Promise<ActiveOperationDetails | null> {
+  const sameResource = eq(operations.resourceKey, input.resourceKey)
+  const sameDedupeKey = input.dedupeKey === undefined ? undefined : eq(operations.dedupeKey, input.dedupeKey)
+
   const [active] = await database.db
     .select({
       operationId: operations.id,
       workClass: operations.workClass,
       status: operations.status,
       payload: operations.payload,
+      awaitingAdmission: sql<boolean>`${operations.status} = 'awaiting_admission'`,
+      reservationExpired: sql<boolean>`${operations.status} = 'awaiting_admission'
+        AND ${operations.reservationExpiresAt} <= clock_timestamp()`,
     })
     .from(operations)
     .where(
-      and(
-        eq(operations.kind, input.kind),
-        eq(operations.resourceKey, input.resourceKey),
-        inArray(operations.status, activeStatuses),
-      ),
+      and(eq(operations.kind, input.kind), or(sameResource, sameDedupeKey), inArray(operations.status, activeStatuses)),
     )
 
   if (!active) return null
 
-  return { ...active, status: active.status as ActiveResourceOperation['status'] }
+  return { ...active, status: active.status as ActiveOperationDetails['status'] }
 }
 
 export type ListAwaitingInput = {

@@ -62,12 +62,12 @@ export {
 } from './db/effect-lineage'
 export {
   type ActiveOperation,
-  type ActiveResourceOperation,
+  type ActiveOperationDetails,
   type CountActiveInput,
   countActive,
   type FindActiveOperationInput,
-  findActiveOnResource,
   findActiveOperation,
+  findActiveOperationDetails,
   type ListAwaitingInput,
   listAwaiting,
 } from './db/find-operations'
@@ -102,7 +102,7 @@ export {
   reserveForAdmission,
   reserveForBinding,
 } from './db/reserve-operation'
-export { type RewriteUnstartedOperationInput, rewriteUnstartedOperation } from './db/rewrite-unstarted-operation'
+export { type RewritePendingOperationInput, rewritePendingOperation } from './db/rewrite-pending-operation'
 export { allSectionsCommitted, sectionCommitted } from './db/section-checkpoints'
 export type { Transaction } from './db/transaction'
 export { validateAdmissionConfig } from './domain/admission'

@@ -3,7 +3,7 @@ import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/tes
 import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import { interactivePlayerRefreshContract, playerModule } from '../../index'
 import { enqueueRankedCoverageRefresh } from '../../jobs/ranked-coverage-refreshes'
-import { inspectVisitorFit, takeOverPlayerRefresh } from '../../jobs/visitor-refresh-takeover'
+import { findActiveRefreshForVisitor, takeOverPlayerRefresh } from '../../jobs/visitor-refresh-takeover'
 
 const admission = {
   totalConcurrency: 4,
@@ -46,7 +46,9 @@ async function readCoverage(brawlhallaId: number) {
 
 describe('visitor refresh takeover', () => {
   test('finds nothing to take over when no refresh holds the player', async () => {
-    expect(await inspectVisitorFit(database, { brawlhallaId: 500, staleSections: ['ranked'] })).toBeNull()
+    const lookup = { dedupeKey: 'player:500:visit', brawlhallaId: 500, staleSections: ['ranked'] as const }
+
+    expect(await findActiveRefreshForVisitor(database, lookup)).toBeNull()
 
     expect(await takeOverPlayerRefresh(database, { brawlhallaId: 500, staleSections: ['ranked'] })).toEqual({
       outcome: 'none',
@@ -55,7 +57,13 @@ describe('visitor refresh takeover', () => {
 
   test('makes a queued coverage refresh the visitor own, with both sections and no cohort', async () => {
     expect(await enqueueRankedCoverageRefresh(database, 501)).toBe(true)
-    expect(await inspectVisitorFit(database, { brawlhallaId: 501, staleSections: ['stats'] })).toBe('take-over')
+    const lookup = { dedupeKey: 'player:501:visit', brawlhallaId: 501, staleSections: ['stats'] as const }
+
+    expect(await findActiveRefreshForVisitor(database, lookup)).toMatchObject({
+      awaitingAdmission: false,
+      reservationExpired: false,
+      fit: 'take-over',
+    })
 
     const queued = await readCoverage(501)
     const takeover = await takeOverPlayerRefresh(database, { brawlhallaId: 501, staleSections: ['stats'] })
@@ -69,7 +77,7 @@ describe('visitor refresh takeover', () => {
     })
   })
 
-  test('leaves a running coverage refresh alone and tells the visitor it is running', async () => {
+  test('leaves a running coverage refresh alone and tells the visitor to ask again', async () => {
     expect(await enqueueRankedCoverageRefresh(database, 502)).toBe(true)
 
     const operations = createPostgresRefreshOperations({ database }, { jobs: [interactivePlayerRefreshContract] })
@@ -81,13 +89,37 @@ describe('visitor refresh takeover', () => {
     }
 
     expect(await takeOverPlayerRefresh(database, { brawlhallaId: 502, staleSections: ['ranked', 'stats'] })).toEqual({
-      outcome: 'running',
+      outcome: 'busy',
     })
 
     expect(await readCoverage(502)).toMatchObject({
       work_class: 'primary-monitoring',
       status: 'leased',
       payload: { cohort: 'ranked-coverage', staleSections: ['ranked'] },
+    })
+  })
+
+  test('gives two visitors taking over at once both their sections', async () => {
+    expect(await enqueueRankedCoverageRefresh(database, 503)).toBe(true)
+
+    const queued = await readCoverage(503)
+
+    // a stale write would drop the sections the other visitor added; the payload check makes it read again
+    const takeovers = await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        takeOverPlayerRefresh(database, {
+          brawlhallaId: 503,
+          staleSections: index % 2 === 0 ? ['stats'] : ['ranked', 'stats'],
+        }),
+      ),
+    )
+
+    expect(takeovers.every((takeover) => takeover.outcome === 'attached')).toBe(true)
+
+    expect(await readCoverage(503)).toMatchObject({
+      id: queued.id,
+      work_class: 'interactive',
+      payload: { brawlhallaId: 503, staleSections: ['ranked', 'stats'] },
     })
   })
 })

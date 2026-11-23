@@ -16,14 +16,17 @@ describe('visitor fit', () => {
     )
   })
 
-  test('takes over a queued recently viewed refresh even when it covers, so the visitor waits on interactive priority', () => {
-    const active = { workClass: 'primary-monitoring' as const, status: 'pending' as const, payload: recentlyViewed }
+  test('attaches to a queued background refresh that already covers, leaving it as it is', () => {
+    const queuedRecentlyViewed = {
+      workClass: 'primary-monitoring' as const,
+      status: 'pending' as const,
+      payload: recentlyViewed,
+    }
 
-    expect(fitForVisitor(active, ['ranked'])).toEqual({
-      action: 'take-over',
-      workClass: 'interactive',
-      payload: { brawlhallaId: 7, staleSections: ['ranked', 'stats'] },
-    })
+    const queuedCoverage = { workClass: 'primary-monitoring' as const, status: 'pending' as const, payload: coverage }
+
+    expect(fitForVisitor(queuedRecentlyViewed, ['ranked'])).toEqual({ action: 'attach' })
+    expect(fitForVisitor(queuedCoverage, ['ranked'])).toEqual({ action: 'attach' })
   })
 
   test('widens an interactive refresh that misses a section and attaches to one that covers', () => {
@@ -42,24 +45,22 @@ describe('visitor fit', () => {
     expect(fitForVisitor(rankedOnly, ['ranked'])).toEqual({ action: 'attach' })
   })
 
-  test('widens a reservation still waiting for admission like a queued refresh', () => {
+  test('never rewrites a reservation still waiting for admission, which belongs to the visitor admitting it', () => {
     const waiting = {
       workClass: 'interactive' as const,
       status: 'awaiting_admission' as const,
       payload: { brawlhallaId: 7, staleSections: ['stats'] },
     }
 
-    expect(fitForVisitor(waiting, ['ranked'])).toMatchObject({
-      action: 'take-over',
-      payload: { staleSections: ['ranked', 'stats'] },
-    })
+    expect(fitForVisitor(waiting, ['ranked'])).toEqual({ action: 'ask-again' })
+    expect(fitForVisitor(waiting, ['stats'])).toEqual({ action: 'attach' })
   })
 
-  test('attaches to a running refresh that covers and waits for one that does not', () => {
+  test('attaches to a running refresh that covers and asks again about one that does not', () => {
     const running = { workClass: 'primary-monitoring' as const, status: 'leased' as const, payload: coverage }
 
     expect(fitForVisitor(running, ['ranked'])).toEqual({ action: 'attach' })
-    expect(fitForVisitor(running, ['ranked', 'stats'])).toEqual({ action: 'wait-for-running' })
+    expect(fitForVisitor(running, ['ranked', 'stats'])).toEqual({ action: 'ask-again' })
   })
 
   test('leaves a queued Primary refresh on its schedule, since it already covers both sections', () => {

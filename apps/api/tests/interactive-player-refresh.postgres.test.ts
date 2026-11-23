@@ -53,6 +53,8 @@ type VisitorOptions = {
   staleSections?: ('ranked' | 'stats')[]
   resolveActor?: Parameters<typeof requestInteractivePlayerRefresh>[0]['resolveActor']
   admission?: ActorAdmissionResult
+  // collects the reservation keys the actor was charged under
+  charges?: string[]
   // the reservations the request sees, to stage a refresh that appears after its first look
   reservations?: ReturnType<typeof createPlayerRefreshReservations>
 }
@@ -67,7 +69,14 @@ function visitorRefresh(brawlhallaId: number, options: VisitorOptions = {}) {
     staleSections,
     provenance: { source: 'interactive-api' },
     playerRefreshReservations: options.reservations ?? createPlayerRefreshReservations(database),
-    requestAdmission: { ...admittingActors, admitActor: async () => actorAdmission },
+    requestAdmission: {
+      ...admittingActors,
+      admitActor: async (_actor, reservationKey) => {
+        options.charges?.push(reservationKey)
+
+        return actorAdmission
+      },
+    },
     resolveActor: options.resolveActor ?? (() => ({ kind: 'verified-anonymous', ip: '203.0.113.7' })),
   })
 }
@@ -150,19 +159,66 @@ describe('a visitor refresh beside a ranked coverage refresh', () => {
     })
   })
 
-  test('widens a queued ranked-only visitor refresh for a later visitor who needs stats too', async () => {
+  test('lets an overlay lookup wait on a queued coverage refresh without a charge or a change', async () => {
     const coverageId = await queueCoverage(1006)
+    const charges: string[] = []
 
-    // the overlay asks for ranked alone and takes the coverage refresh over as it is
-    expect(await visitorRefresh(1006, { staleSections: ['ranked'] })).toMatchObject({ operationId: coverageId })
+    // ranked alone is what the coverage refresh fetches, so the lookup waits on it as it is
+    expect(await visitorRefresh(1006, { staleSections: ['ranked'], charges })).toMatchObject({
+      outcome: 'alreadyRefreshing',
+      operationId: coverageId,
+    })
+
+    expect(charges).toEqual([])
+
+    expect(await readOperation(coverageId)).toMatchObject({
+      work_class: 'primary-monitoring',
+      payload: { cohort: 'ranked-coverage', staleSections: ['ranked'] },
+    })
+
+    // a visitor who also needs stats takes it over
+    expect(await visitorRefresh(1006, { charges })).toMatchObject({
+      outcome: 'alreadyRefreshing',
+      operationId: coverageId,
+    })
+
+    expect(charges).toHaveLength(1)
 
     expect(await readOperation(coverageId)).toMatchObject({
       work_class: 'interactive',
-      payload: { staleSections: ['ranked'] },
+      payload: { brawlhallaId: 1006, staleSections: ['ranked', 'stats'] },
+    })
+  })
+
+  test('lets an unverified visitor wait on a queued refresh that already covers their sections', async () => {
+    const coverageId = await queueCoverage(1008)
+
+    const outcome = await visitorRefresh(1008, { staleSections: ['ranked'], resolveActor: () => verificationRequired })
+
+    expect(outcome).toMatchObject({ outcome: 'alreadyRefreshing', operationId: coverageId })
+  })
+
+  test('asks the visitor to come back when another visitor reservation misses their sections', async () => {
+    const reservations = createPlayerRefreshReservations(database)
+
+    const held = await reservations.reserveInteractivePlayerRefresh({
+      dedupeKey: 'player:1009:other-visitor',
+      operationKey: 'player:1009:other-visitor',
+      brawlhallaId: 1009,
+      staleSections: ['stats'],
+      provenance: { source: 'interactive-api' },
+      reservationTtlSeconds: 30,
     })
 
-    expect(await visitorRefresh(1006)).toMatchObject({ outcome: 'alreadyRefreshing', operationId: coverageId })
-    expect(await readOperation(coverageId)).toMatchObject({ payload: { staleSections: ['ranked', 'stats'] } })
+    if (held.outcome !== 'reserved') throw new Error('expected the other visitor reservation')
+
+    expect(await visitorRefresh(1009)).toEqual(askAgainShortly)
+
+    // that visitor may still be rate-limited, and their reservation must then fail with their own sections
+    expect(await readOperation(held.operationId)).toMatchObject({
+      status: 'awaiting_admission',
+      payload: { brawlhallaId: 1009, staleSections: ['stats'] },
+    })
   })
 
   test('asks the visitor to come back when a running refresh misses one of their sections', async () => {

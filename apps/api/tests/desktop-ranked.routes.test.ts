@@ -37,7 +37,6 @@ describe('desktop ranked lookup route', () => {
       playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Measured Zero', aliases: [] }) },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => {
           calls.active++
@@ -127,7 +126,6 @@ describe('desktop ranked lookup route', () => {
       },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('fresh ranked data must not request refresh')
@@ -158,7 +156,6 @@ describe('desktop ranked lookup route', () => {
         },
       },
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('failed reads must not request refresh')
@@ -195,12 +192,12 @@ describe('desktop ranked lookup route', () => {
     const active = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => ({
           operationId,
           awaitingAdmission: false,
           reservationExpired: false,
+          fit: 'attach' as const,
         }),
       } as never,
       requestAdmission: {
@@ -222,7 +219,6 @@ describe('desktop ranked lookup route', () => {
     const limited = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => ({
@@ -253,7 +249,6 @@ describe('desktop ranked lookup route', () => {
     const temporary = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => {
@@ -280,7 +275,6 @@ describe('desktop ranked lookup route', () => {
       playerReferences: { byId: async () => null },
       rankedPlayers: { byId: async () => null },
       playerRefreshReservations: {
-        inspectVisitorFit: async () => 'attach' as const,
         takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async (input: unknown) => {
