@@ -213,6 +213,13 @@ describe('the controls over a stage that fills the screen', () => {
     expect(frameFor(true)).not.toContain('cursor-none')
   })
 
+  test('stay while a menu among them is open, as the camera’s', () => {
+    const hidden = shownOnStage(false).split(' ')
+
+    expect(hidden).toContain('group-has-[[aria-expanded=true]]/controls:opacity-100')
+    expect(hidden).toContain('group-has-[[aria-expanded=true]]/controls:pointer-events-auto')
+  })
+
   test('fade, or come and go at once where less motion is asked for', () => {
     const hidden = shownOnStage(false).split(' ')
 
