@@ -88,6 +88,18 @@ pub fn install(app: &AppHandle, session: SessionHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// returns once the main thread has done it; the update hides the icon itself, because its quit skips tauri's
+/// cleanup and would leave the icon in the tray until the pointer passes over it
+pub fn set_visible(app: &AppHandle, is_visible: bool) {
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        return;
+    };
+
+    if let Err(error) = tray.set_visible(is_visible) {
+        log::warn!("set the tray icon visible to {is_visible}: {error}");
+    }
+}
+
 fn open_window_on_left_click(app: &AppHandle, event: &TrayIconEvent) {
     let TrayIconEvent::Click {
         button: MouseButton::Left,

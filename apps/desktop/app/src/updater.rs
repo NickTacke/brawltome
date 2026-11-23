@@ -10,8 +10,10 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 
 use crate::app_status::{AppStatus, GameStatus, ServiceStatus, UpdateStatus};
+use crate::quiet_relaunch;
 use crate::session::Input;
 use crate::session_runner::SessionHandle;
+use crate::tray;
 
 /// tauri.conf.json's only updater endpoint; a test keeps the two equal
 pub const UPDATE_FEED_URL: &str =
@@ -77,12 +79,9 @@ pub fn spawn(app: &AppHandle, session: SessionHandle) {
         return;
     }
 
-    // on windows the install quits the app to run the installer; the log line explains the quit
     let built = app
         .updater_builder()
-        .on_before_exit(|| {
-            log::info!("update downloaded, quitting so the installer can replace the app")
-        })
+        .on_before_exit(leave_for_installer(app.clone()))
         .build();
 
     let updater = match built {
@@ -93,10 +92,35 @@ pub fn spawn(app: &AppHandle, session: SessionHandle) {
         }
     };
 
-    tauri::async_runtime::spawn(run(updater, session));
+    tauri::async_runtime::spawn(run(updater, session, app.clone()));
 }
 
-async fn run(updater: Updater, session: SessionHandle) {
+/// on windows the install quits the app to run the installer, which starts it again with this start's arguments
+fn leave_for_installer(app: AppHandle) -> impl Fn() + Send + Sync + 'static {
+    move || {
+        log::info!("update downloaded, quitting so the installer can replace the app");
+
+        // a start by hand would otherwise come back with its window open, long after the player looked at it
+        if let Some(directory) = quiet_relaunch::directory(&app) {
+            if let Err(error) = quiet_relaunch::mark(&directory) {
+                log::warn!("{error}");
+            }
+        }
+
+        tray::set_visible(&app, false);
+    }
+}
+
+/// the installer didn't start, so the app stays; safe whether or not the exit hook ran
+fn stay_after_failed_install(app: &AppHandle) {
+    if let Some(directory) = quiet_relaunch::directory(app) {
+        quiet_relaunch::clear(&directory);
+    }
+
+    tray::set_visible(app, true);
+}
+
+async fn run(updater: Updater, session: SessionHandle, app: AppHandle) {
     let mut status = session.status();
     let started_at = Instant::now();
     let mut last_check_ms = None;
@@ -117,7 +141,7 @@ async fn run(updater: Updater, session: SessionHandle) {
             UpdaterStep::WaitForGameToClose => wait_for_game_to_close(&mut status).await,
             UpdaterStep::WaitMs(wait_ms) => sleep_or_status_change(&mut status, wait_ms).await,
             UpdaterStep::CheckNow => {
-                let attempt = update_if_available(&updater, &session, &mut status).await;
+                let attempt = update_if_available(&updater, &session, &app, &mut status).await;
                 if attempt == Attempt::Counted {
                     last_check_ms = Some(elapsed_ms(started_at));
                 }
@@ -143,6 +167,7 @@ enum Attempt {
 async fn update_if_available(
     updater: &Updater,
     session: &SessionHandle,
+    app: &AppHandle,
     status: &mut watch::Receiver<AppStatus>,
 ) -> Attempt {
     let update = match find_update(updater, status).await {
@@ -167,7 +192,7 @@ async fn update_if_available(
         }
     };
 
-    install_when_game_is_closed(&update, &bytes, session, status).await;
+    install_when_game_is_closed(&update, &bytes, session, app, status).await;
 
     Attempt::Counted
 }
@@ -227,6 +252,7 @@ async fn install_when_game_is_closed(
     update: &Update,
     bytes: &[u8],
     session: &SessionHandle,
+    app: &AppHandle,
     status: &mut watch::Receiver<AppStatus>,
 ) {
     let version = update.version.clone();
@@ -247,6 +273,7 @@ async fn install_when_game_is_closed(
     // on windows this only returns on failure, a started installer quits the app
     if let Err(error) = update.install(bytes) {
         log::warn!("install update {version}: {error}");
+        stay_after_failed_install(app);
         session.send(Input::UpdateStatusChanged(UpdateStatus::Idle));
     }
 }

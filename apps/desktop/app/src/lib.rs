@@ -10,6 +10,7 @@ pub mod main_window;
 pub mod overlay_view;
 pub mod overlay_window;
 pub mod post_match;
+pub mod quiet_relaunch;
 pub mod session;
 pub mod session_runner;
 pub mod settings;
@@ -18,6 +19,7 @@ pub mod updater;
 pub mod updater_artifact;
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use brawltome_detection::Event;
 use tauri::{AppHandle, Manager};
@@ -69,7 +71,12 @@ pub fn run() {
     tauri::Builder::default()
         // first, so a second start hands over and exits before any other plugin starts
         .plugin(tauri_plugin_single_instance::init(
-            |app, _arguments, _directory| main_window::open(app),
+            |app, arguments, _directory| {
+                // a login start while the app already runs is not a request to see it
+                if !was_autostarted(&arguments) {
+                    main_window::open(app);
+                }
+            },
         ))
         .plugin(autostart::plugin())
         .plugin(build_log_plugin())
@@ -109,7 +116,10 @@ pub fn run() {
             tray::install(app.handle(), session)?;
 
             let launch_arguments: Vec<String> = std::env::args().collect();
-            start_main_window(app.handle(), !was_autostarted(&launch_arguments));
+            // the marker is taken at every start, so a stale one can't close the window of a later start
+            let is_restart_after_update = is_restart_after_update(app.handle());
+            let should_open = !was_autostarted(&launch_arguments) && !is_restart_after_update;
+            start_main_window(app.handle(), should_open);
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we
@@ -172,7 +182,16 @@ fn start_overlay(app: &AppHandle, position: OverlayPosition) -> Result<(), Strin
     Ok(())
 }
 
-/// the window follows the session's status; a start at login keeps it closed, in the tray
+/// the installer's restart after a background update, which keeps the window in the tray
+fn is_restart_after_update(app: &AppHandle) -> bool {
+    let Some(directory) = quiet_relaunch::directory(app) else {
+        return false;
+    };
+
+    quiet_relaunch::take(&directory, SystemTime::now())
+}
+
+/// the window follows the session's status; a start at login or after an update keeps it closed, in the tray
 fn start_main_window(app: &AppHandle, should_open: bool) {
     let status = app.state::<SessionHandle>().status();
 
