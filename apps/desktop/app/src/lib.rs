@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use brawltome_detection::Event;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
 
@@ -92,7 +92,7 @@ pub fn run() {
             settings::set_overlay_position,
             autostart::set_starts_with_windows,
             main_window::get_app_status,
-            main_window::hide_main_window,
+            main_window::close_main_window,
             main_window::set_overlay_paused,
         ])
         .setup(|app| {
@@ -134,8 +134,20 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(keep_running_without_windows);
+}
+
+/// the app lives in the tray, so closing its windows is no reason to quit; tray quit and the updater exit with
+/// a code, which goes through
+fn keep_running_without_windows(_app: &AppHandle, event: RunEvent) {
+    if let RunEvent::ExitRequested {
+        code: None, api, ..
+    } = event
+    {
+        api.prevent_exit();
+    }
 }
 
 fn open_settings(app: &AppHandle) -> SettingsStore {
@@ -192,11 +204,10 @@ fn is_restart_after_update(app: &AppHandle) -> bool {
     quiet_relaunch::take(&directory, SystemTime::now())
 }
 
-/// the window follows the session's status; a start at login or after an update keeps it closed, in the tray
+/// the window follows the session's status; a start at login or after an update doesn't build it at all
 fn start_main_window(app: &AppHandle, should_open: bool) {
     let status = app.state::<SessionHandle>().status();
 
-    main_window::hide_on_close(app);
     main_window::forward_status(app, status);
 
     if should_open {

@@ -28,6 +28,7 @@
       },
       {
         "label": "main",
+        "create": false,
         "title": "BrawlTome",
         "url": "index.html",
         "width": 400,

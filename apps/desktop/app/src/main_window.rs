@@ -1,6 +1,10 @@
-//! Open, hide and place the main window; its commands and the status it is sent.
+//! Open, close and place the main window; its commands and the status it is sent.
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewWindow, WindowEvent};
+use std::sync::{Mutex, PoisonError};
+
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, State, WebviewWindow, WebviewWindowBuilder,
+};
 use tokio::sync::watch;
 
 use crate::app_status::AppStatus;
@@ -14,35 +18,108 @@ const STATUS_EVENT: &str = "app://status";
 /// distance from the work area's edges, as in the mockup
 const EDGE_MARGIN_PX: i64 = 16;
 
-/// a close only hides the window: the app keeps running in the tray
-pub fn hide_on_close(app: &AppHandle) {
-    let Some(window) = main_window(app) else {
-        return;
-    };
+/// one open at a time, so two quick clicks on the tray can't both build the window
+static OPENING: Mutex<()> = Mutex::new(());
 
-    let for_events = window.clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close();
-            hide(&for_events);
-        }
-    });
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainWindowState {
+    Closed,
+    Hidden,
+    OnScreen,
 }
 
-/// place, show, focus; a window already on screen stays where the player put it
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenSteps {
+    pub should_create: bool,
+    pub should_place: bool,
+}
+
+/// a closed window is built again from its config; a window already on screen stays where the player put it
+pub fn open_steps(state: MainWindowState) -> OpenSteps {
+    match state {
+        MainWindowState::Closed => OpenSteps {
+            should_create: true,
+            should_place: true,
+        },
+        MainWindowState::Hidden => OpenSteps {
+            should_create: false,
+            should_place: true,
+        },
+        MainWindowState::OnScreen => OpenSteps {
+            should_create: false,
+            should_place: false,
+        },
+    }
+}
+
+/// build the window if it was closed, then place, show and focus it
 pub fn open(app: &AppHandle) {
-    let Some(window) = main_window(app) else {
+    let app = app.clone();
+
+    // off the main thread: on windows, building a webview from a tray or second-launch handler there deadlocks
+    tauri::async_runtime::spawn_blocking(move || open_now(&app));
+}
+
+fn open_now(app: &AppHandle) {
+    // a poisoned lock only means an earlier open panicked; opening again is still right
+    let _opening = OPENING.lock().unwrap_or_else(PoisonError::into_inner);
+
+    let existing = app.get_webview_window(MAIN_LABEL);
+    let steps = open_steps(window_state(existing.as_ref()));
+
+    let window = if steps.should_create {
+        create(app)
+    } else {
+        existing
+    };
+    let Some(window) = window else {
         return;
     };
 
-    if !window.is_visible().unwrap_or(false) {
+    if steps.should_place {
         place(&window);
     }
 
+    show(&window);
+}
+
+fn window_state(window: Option<&WebviewWindow>) -> MainWindowState {
+    let Some(window) = window else {
+        return MainWindowState::Closed;
+    };
+
+    if window.is_visible().unwrap_or(false) {
+        return MainWindowState::OnScreen;
+    }
+
+    MainWindowState::Hidden
+}
+
+/// from its entry in tauri.conf.json, which tauri skips at start
+fn create(app: &AppHandle) -> Option<WebviewWindow> {
+    let windows = &app.config().app.windows;
+    let Some(config) = windows.iter().find(|config| config.label == MAIN_LABEL) else {
+        log::error!("build the main window: tauri.conf.json has no window labelled {MAIN_LABEL}");
+        return None;
+    };
+
+    let built = WebviewWindowBuilder::from_config(app, config).and_then(|builder| builder.build());
+
+    match built {
+        Ok(window) => Some(window),
+        Err(error) => {
+            log::error!("build the main window: {error}");
+            None
+        }
+    }
+}
+
+fn show(window: &WebviewWindow) {
     let shown = window
         .show()
         .and_then(|()| window.unminimize())
         .and_then(|()| window.set_focus());
+
     if let Err(error) = shown {
         log::warn!("show the main window: {error}");
     }
@@ -66,16 +143,6 @@ pub fn forward_status(app: &AppHandle, mut status: watch::Receiver<AppStatus>) {
             }
         }
     });
-}
-
-fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
-    let window = app.get_webview_window(MAIN_LABEL);
-
-    if window.is_none() {
-        log::error!("find the main window: there is no window labelled {MAIN_LABEL}");
-    }
-
-    window
 }
 
 /// bottom right of the primary monitor's work area, clear of the taskbar
@@ -110,12 +177,6 @@ fn place(window: &WebviewWindow) {
     }
 }
 
-fn hide(window: &WebviewWindow) {
-    if let Err(error) = window.hide() {
-        log::warn!("hide the main window: {error}");
-    }
-}
-
 #[tauri::command]
 pub fn get_app_status(session: State<'_, SessionHandle>) -> AppStatus {
     let status = session.status();
@@ -124,9 +185,14 @@ pub fn get_app_status(session: State<'_, SessionHandle>) -> AppStatus {
     current
 }
 
+/// the title bar's close, the same as alt+f4: the window goes, and its webview's memory with it
+///
+/// async, so the close reaches the window through the event loop after this call, not inside it
 #[tauri::command]
-pub fn hide_main_window(window: WebviewWindow) {
-    hide(&window);
+pub async fn close_main_window(window: WebviewWindow) {
+    if let Err(error) = window.close() {
+        log::warn!("close the main window: {error}");
+    }
 }
 
 #[tauri::command]
@@ -157,6 +223,37 @@ fn offset_from_start(work_area_length_px: u32, window_length_px: u32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opening_builds_only_a_closed_window_and_places_only_a_hidden_one() {
+        let cases = [
+            (
+                MainWindowState::Closed,
+                OpenSteps {
+                    should_create: true,
+                    should_place: true,
+                },
+            ),
+            (
+                MainWindowState::Hidden,
+                OpenSteps {
+                    should_create: false,
+                    should_place: true,
+                },
+            ),
+            (
+                MainWindowState::OnScreen,
+                OpenSteps {
+                    should_create: false,
+                    should_place: false,
+                },
+            ),
+        ];
+
+        for (state, steps) in cases {
+            assert_eq!(open_steps(state), steps, "{state:?}");
+        }
+    }
 
     #[test]
     fn sits_in_the_bottom_right_of_the_work_area() {
