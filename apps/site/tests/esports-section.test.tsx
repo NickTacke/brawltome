@@ -286,6 +286,18 @@ describe('esports tiles', () => {
     expect(cardNames()).toEqual(['cup-second-new', 'cup-second-old', 'trial-fourth'])
   })
 
+  // the api adds a thousandth of the tier weight to each score, champs 2 and community 0.8, so a tie goes to the tier
+  test('a Champs 4th and 5th lead community 1sts of the same score', async () => {
+    await renderResults([
+      { ...finish('champs-fourth', 4, 100), importance: 100.002 },
+      { ...finish('champs-fifth', 5, 150), importance: 80.002 },
+      { ...finish('lan-first', 1, 10), importance: 100.0008 },
+      { ...finish('cup-first', 1, 5), importance: 80.0008 },
+    ])
+
+    expect(cardNames()).toEqual(['champs-fourth', 'lan-first', 'champs-fifth', 'cup-first'])
+  })
+
   test('older top 8s fill by date whatever their importance', async () => {
     await renderResults([
       { ...finish('recent-eighth', 8, 20), importance: 32 },
