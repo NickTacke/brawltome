@@ -14,6 +14,7 @@ import {
   type WorkClass,
 } from '@brawltome/queue'
 import { runJobOnce, testJobContract } from '@brawltome/queue/testing'
+import { createTelemetry } from '@brawltome/telemetry'
 
 const admission: AdmissionConfig = {
   totalConcurrency: 4,
@@ -141,6 +142,34 @@ describe('createJobRegistry', () => {
 })
 
 describe('runOneJob', () => {
+  test('runOneJob traces the attempt with its kind, class and provenance source', async () => {
+    const { operations } = await acceptProofOperation()
+    const spans: { name: string; attributes: unknown }[] = []
+
+    const tracer = {
+      startSpan(name: string, options: { attributes?: unknown }) {
+        spans.push({ name, attributes: options.attributes })
+
+        return { setStatus: () => undefined, recordException: () => undefined, end: () => undefined }
+      },
+    }
+
+    const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0, tracer: tracer as never })
+
+    const job = testJob({
+      run: async (lease, tools) => ((await tools.queue.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'),
+    })
+
+    await runOneJob(operations, 'worker-traced', createJobRegistry([job]), { ...runOptions(), telemetry })
+
+    expect(spans.find(({ name }) => name === 'operation.attempt')?.attributes).toMatchObject({
+      kind: 'test-job',
+      workClass: 'maintenance',
+      attemptNumber: 1,
+      source: 'test',
+    })
+  })
+
   test('runOneJob settles a thrown 503 by pausing the source and deferring', async () => {
     const { operations, operationId } = await acceptProofOperation()
     const { paused, sourceAdmission } = createSourceAdmissionSpy()

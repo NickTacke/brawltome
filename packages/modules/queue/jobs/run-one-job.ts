@@ -307,13 +307,15 @@ export async function runClaimedJob(
 
   const context = telemetry.childContext()
 
-  return telemetry.run(context, () =>
-    telemetry.trace(
-      'operation.attempt',
-      { kind: claimed.kind, workClass: claimed.workClass, attemptNumber: claimed.attemptNumber },
-      execute,
-    ),
-  )
+  // source tells apart work of one kind and class, such as a visitor's refresh and a planner's, in its source calls
+  const attributes = {
+    kind: claimed.kind,
+    workClass: claimed.workClass,
+    attemptNumber: claimed.attemptNumber,
+    source: claimed.provenance.source,
+  }
+
+  return telemetry.run(context, () => telemetry.trace('operation.attempt', attributes, execute))
 }
 
 export async function runOneJob(
