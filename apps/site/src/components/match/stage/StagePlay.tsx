@@ -1,12 +1,13 @@
-import type { MatchInsights, Moment, StageTrail } from '@brawltome/contracts'
+import type { MatchInsights, Moment, StageBox, StageTrail } from '@brawltome/contracts'
 import { type CSSProperties, memo, type ReactNode, useMemo } from 'react'
 import { AnimatedPoses } from './AnimatedPoses'
 import { backgroundUrlOf } from './background-url'
 import { drawnBodiesOf } from './body-ring'
 import type { CameraMode } from './camera-mode'
+import { KoMarkers } from './KoMarkers'
 import { MomentRing } from './MomentRing'
 import { PlayEffects } from './PlayEffects'
-import { type Camera, inFrame, StageViewContext } from './play-camera'
+import { boxInFrame, type Camera, inFrame, StageViewContext } from './play-camera'
 import { type Pose, posesAt } from './pose'
 import { StageBackdrop, StagePicture, type TimeWindow } from './StagePicture'
 import { StageSpinner } from './StageSpinner'
@@ -21,8 +22,9 @@ const StillStage = memo(StagePicture)
 const noTrails: StageTrail[] = []
 const noSlots: number[] = []
 const ignoreBuffering = () => undefined
-// the picture runs to the phone's edges, so its corners are square there
-const stageWindow = 'relative overflow-hidden rounded-lg bg-black/[0.14] phone:rounded-none'
+// the window has the shape of the game's screen on every level. the picture runs to the phone's edges, so its corners
+// are square there
+const stageWindow = 'relative aspect-video overflow-hidden rounded-lg bg-black/[0.14] phone:rounded-none'
 
 type StagePlayProps = {
   insights: MatchInsights
@@ -44,19 +46,24 @@ type StagePlayProps = {
   onBuffering?: (isBuffering: boolean) => void
 }
 
-// the stage's picture is scaled as one layer, which is cheap to move every frame
-function pictureStyle(camera: Camera): CSSProperties {
-  return { transform: `scale(${camera.zoom}) translate(${-camera.x * 100}%, ${-camera.y * 100}%)` }
+// the stage's picture is as wide as the frame and has the stage box's shape, in a layer the size of the frame. the
+// layer is moved and scaled as one to where the camera puts the box, which is cheap to do every frame
+function pictureStyle(box: StageBox, camera: Camera): CSSProperties {
+  const place = boxInFrame(box, camera)
+
+  return { transform: `translate(${place.x * 100}%, ${place.y * 100}%) scale(${place.width})` }
 }
 
-// marks on the stage are laid out on a layer the size the camera enlarges the stage to, so they land where the
-// camera puts their spot but keep their own size
-function markLayerStyle(camera: Camera): CSSProperties {
+// marks on the stage are laid out on a layer that covers the stage box where the camera puts it, so they land where
+// the camera puts their spot but keep their own size
+function markLayerStyle(box: StageBox, camera: Camera): CSSProperties {
+  const place = boxInFrame(box, camera)
+
   return {
-    left: `${-camera.x * camera.zoom * 100}%`,
-    top: `${-camera.y * camera.zoom * 100}%`,
-    width: `${camera.zoom * 100}%`,
-    height: `${camera.zoom * 100}%`,
+    left: `${place.x * 100}%`,
+    top: `${place.y * 100}%`,
+    width: `${place.width * 100}%`,
+    height: `${place.height * 100}%`,
   }
 }
 
@@ -81,7 +88,7 @@ function Players({ insights, legends, poses, camera, timeMs, selectedSlot, onBuf
   const drawn = useMemo(() => (replay && timeline ? { replay, timeline } : null), [replay, timeline])
 
   if (legends.state !== 'ready' || !drawn) {
-    const framed = poses.map((pose) => inFrame(pose, camera))
+    const framed = poses.map((pose) => inFrame(pose, insights.insights.stage.box, camera))
 
     return <TokenPoses poses={framed} players={insights.summary.players} selectedSlot={selectedSlot} />
   }
@@ -118,7 +125,7 @@ export function StagePlay(props: StagePlayProps) {
         <div data-stage-window className={stageWindow}>
           {backgroundUrl ? <StageBackdrop imageUrl={backgroundUrl} /> : null}
           {/* the level, moved by the camera over the fixed background */}
-          <div className="relative origin-top-left" style={pictureStyle(camera)}>
+          <div data-stage-picture className="absolute inset-0 origin-top-left" style={pictureStyle(stage.box, camera)}>
             <StillStage
               stage={stage}
               art={art}
@@ -127,10 +134,11 @@ export function StagePlay(props: StagePlayProps) {
               window={props.window ?? null}
             />
           </div>
-          <div className="absolute" style={markLayerStyle(camera)}>
-            <PlayEffects hits={stage.marks.hits} kos={stage.marks.kos} bodies={bodies} timeMs={timeMs} />
+          <div data-stage-marks className="absolute" style={markLayerStyle(stage.box, camera)}>
+            <PlayEffects hits={stage.marks.hits} bodies={bodies} timeMs={timeMs} />
             {props.stageOverlay ?? <MomentRing moment={props.watched ?? null} bodies={bodies} timeMs={timeMs} />}
           </div>
+          <KoMarkers kos={stage.marks.kos} box={stage.box} camera={camera} timeMs={timeMs} />
           <Players {...props} poses={poses} camera={camera} />
           {legends.state === 'loading' && legends.isDownloading ? <StageSpinner label="Loading legends" /> : null}
         </div>

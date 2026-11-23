@@ -16,8 +16,8 @@ type LegendTagsProps = {
 
 /** The weapon, damage and stocks of each player on screen, above their legend's head. */
 export function LegendTags({ poses, selectedSlot, box, camera, frame }: LegendTagsProps) {
-  const tagShare = (tagLift / box.height) * camera.zoom
-  const shown = poses.map((pose) => inFrame(pose, camera)).filter(isOnScreen)
+  const tagShare = tagLift / camera.height
+  const shown = poses.map((pose) => inFrame(pose, box, camera)).filter(isOnScreen)
   // players on the same spot get their tags one over the other
   const lifts = tagLifts(shown, frame)
 

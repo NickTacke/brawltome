@@ -30,7 +30,7 @@ type AnimatedPosesProps = {
 /** Draws each player as their animated legend on a canvas over the stage, with their weapon, damage and stocks above them. */
 export function AnimatedPoses({ match, poses, selectedSlot, box, camera, timeMs, onBuffering }: AnimatedPosesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const isBuffering = useMomentDrawing({ canvasRef, match, box, camera, timeMs })
+  const isBuffering = useMomentDrawing({ canvasRef, match, camera, timeMs })
   const isSpinnerShown = useHeldFor(isBuffering, spinnerDelayMs)
 
   useEffect(() => onBuffering(isBuffering), [isBuffering, onBuffering])

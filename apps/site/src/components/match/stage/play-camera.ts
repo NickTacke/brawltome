@@ -1,77 +1,69 @@
 import type { StageBox } from '@brawltome/contracts'
-import type { Matrix, Rect } from '@brawltome/replay-player'
+import type { Rect } from '@brawltome/replay-player'
 import { createContext, useContext } from 'react'
 import type { DrawnBodies } from './body-ring'
 
-// the part of the stage playback shows. with the legends drawn, it is the game's own camera, worked out from the
-// timeline by the replay player; without them, the whole stage. everything here is in shares of the stage box, which
-// has the frame's aspect, so a square in shares fills the frame
+// the part of the level playback shows. the frame has the shape of the game's screen on every level: a level's camera
+// bounds can be wider or taller than the screen, and the game's camera cuts them to the screen's shape and pans inside
+// them. so the camera is the rectangle of the level the frame shows, in level units, and everything on the frame is
+// placed from that rectangle and the frame's size
 
-/** The part of the stage in view: its top left corner and how many times the whole stage is enlarged. */
-export type Camera = { x: number; y: number; zoom: number }
+/** Width over height of the playback frame: the game's screen, 1920 by 1080. */
+export const frameAspect = 16 / 9
 
-export const wholeStage: Camera = { x: 0, y: 0, zoom: 1 }
+/** The rectangle of the level the frame shows, in level units. It always has the frame's shape. */
+export type Camera = Rect
 
-export function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), high)
+/**
+ * The camera that shows a rectangle of the level whole, in the middle of the frame. A rectangle of the frame's shape,
+ * as every view of the game's camera is, is shown as it is; around any other, the frame shows that much more of the
+ * level on its short side.
+ */
+export function cameraOn(rect: Rect): Camera {
+  const width = Math.max(rect.width, rect.height * frameAspect)
+  const height = width / frameAspect
+
+  return { x: rect.x - (width - rect.width) / 2, y: rect.y - (height - rect.height) / 2, width, height }
 }
 
 /**
- * The camera that shows a rectangle of the level, fitted and centred as the game fits its view to the screen. The
- * frame never shows past the stage box: the game keeps its view inside the level's camera bounds, which the box is.
+ * The fixed camera: the whole stage box, which is the level's camera bounds, in the middle of the frame. Where the
+ * bounds don't have the frame's shape, the frame shows the level a little past them on the short side. The game's
+ * first window would cut them to the frame's shape instead, and lose the bottom of a tall level or the sides of a
+ * wide one, which the fixed camera is there to keep in view.
  */
-export function cameraOf(rect: Rect, box: StageBox): Camera {
-  const width = rect.width / box.width
-  const height = rect.height / box.height
-  const zoom = Math.max(1, Math.min(1 / width, 1 / height))
-  const shown = 1 / zoom
-  const middleX = (rect.x - box.minX) / box.width + width / 2
-  const middleY = (rect.y - box.minY) / box.height + height / 2
+export function fixedCamera(box: StageBox): Camera {
+  return cameraOn({ x: box.minX, y: box.minY, width: box.width, height: box.height })
+}
 
+/** Where the stage box lies in the frame under a camera, in shares of the frame. */
+export function boxInFrame(box: StageBox, camera: Camera): Rect {
   return {
-    x: clamp(middleX - shown / 2, 0, 1 - shown),
-    y: clamp(middleY - shown / 2, 0, 1 - shown),
-    zoom,
+    x: (box.minX - camera.x) / camera.width,
+    y: (box.minY - camera.y) / camera.height,
+    width: box.width / camera.width,
+    height: box.height / camera.height,
   }
 }
 
-/** The matrix taking level units to the pixels of a canvas that covers the frame. */
-export function levelToCanvas(box: StageBox, camera: Camera, width: number, height: number): Matrix {
-  const scaleX = (width * camera.zoom) / box.width
-  const scaleY = (height * camera.zoom) / box.height
-  const offsetX = -(box.minX / box.width + camera.x) * camera.zoom * width
-  const offsetY = -(box.minY / box.height + camera.y) * camera.zoom * height
+/** Where a spot on the stage, in shares of the stage box, lands in the frame under a camera, in shares of the frame. */
+export function inFrame<Spot extends { x: number; y: number }>(spot: Spot, box: StageBox, camera: Camera): Spot {
+  const place = boxInFrame(box, camera)
 
-  return [scaleX, 0, 0, scaleY, offsetX, offsetY]
-}
-
-/** The rectangle of the level a camera shows in the frame, in level units. */
-export function viewOf(box: StageBox, camera: Camera): Rect {
-  return {
-    x: box.minX + camera.x * box.width,
-    y: box.minY + camera.y * box.height,
-    width: box.width / camera.zoom,
-    height: box.height / camera.zoom,
-  }
-}
-
-/** Where a spot on the stage lands in the frame, as shares of the frame, under a camera. */
-export function inFrame<Spot extends { x: number; y: number }>(spot: Spot, camera: Camera): Spot {
-  return { ...spot, x: (spot.x - camera.x) * camera.zoom, y: (spot.y - camera.y) * camera.zoom }
+  return { ...spot, x: place.x + spot.x * place.width, y: place.y + spot.y * place.height }
 }
 
 /** How wide a level unit is in the frame under a camera, as a share of the frame's width. */
-export function unitInFrame(box: StageBox, camera: Camera): number {
-  return camera.zoom / box.width
+export function unitInFrame(camera: Camera): number {
+  return 1 / camera.width
 }
 
 // how the frame shows the stage: how its players are drawn, in which level coordinates, and where the camera looks
 export type StageView = { bodies: DrawnBodies; camera: Camera }
 
-const noStage: StageView = {
-  bodies: { box: { minX: 0, minY: 0, width: 1, height: 1 }, areLegends: false },
-  camera: wholeStage,
-}
+const noBox: StageBox = { minX: 0, minY: 0, width: frameAspect, height: 1 }
+
+const noStage: StageView = { bodies: { box: noBox, areLegends: false }, camera: fixedCamera(noBox) }
 
 // what sits on the stage outside its picture, like the card of a review stop, reads how the stage is shown from here
 export const StageViewContext = createContext<StageView>(noStage)

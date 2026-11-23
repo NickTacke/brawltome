@@ -41,9 +41,9 @@ export function ReviewCallout({ moment, lanes, poses, count, panel, obstacles }:
   const measured = useStageBox(cardRef, `${moment.key} ${isWide}`)
   // the card sits on the frame, not the stage, so the players are placed where the camera shows them
   const { bodies, camera } = useStageView()
-  const framed = poses.map((pose) => inFrame(pose, camera))
+  const framed = poses.map((pose) => inFrame(pose, bodies.box, camera))
   // the players are as big as the camera's zoom makes a level unit on the stage as it is laid out
-  const unitPx = measured ? measured.stage.width * unitInFrame(bodies.box, camera) : 0
+  const unitPx = measured ? measured.stage.width * unitInFrame(camera) : 0
   const body = bodyPxOf(bodies, unitPx)
   const space = measured ? { card: measured.element, stage: measured.stage, body, panel, obstacles } : null
   const place = space ? placeCard(framed, space, { victim: moment.victim, attacker: moment.attacker }) : null

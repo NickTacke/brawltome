@@ -80,10 +80,12 @@ export function StagePicture({ stage, art, trails, shownSlots, window }: StagePi
   const height = stageWidth / stage.aspect
   const colourOf = (slot: number) => (shownSlots.length > 1 ? slotColour(slot) : onePlayerColour)
 
+  // the picture has the stage box's shape, and the frame can show the level past the box. the level's art isn't cut at
+  // the box, so it runs on there as it does in the game's view, and the frame cuts it instead
   return (
     <svg
       viewBox={`0 0 ${stageWidth} ${height}`}
-      className="block w-full"
+      className="block w-full overflow-visible"
       role="img"
       aria-label="The match on its stage"
     >
