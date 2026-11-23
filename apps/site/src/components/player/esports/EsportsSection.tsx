@@ -12,6 +12,8 @@ import { RunPanel } from './RunPanel'
 const highlightCount = 4
 // a highlight is a finish worth leading with; below top 8 a result only goes in the row of the rest
 const highlightCutoff = 8
+// the cards show how a player does now, so an old peak doesn't hold them for years
+const recentWindowSeconds = 365 * 24 * 60 * 60
 const restTileRem = 5.25
 const frameStrengthPercent = 60
 
@@ -91,13 +93,19 @@ function bestFirst(left: EsportsResult, right: EsportsResult): number {
   return left.placement - right.placement || right.startTime - left.startTime
 }
 
+function newestFirst(left: EsportsResult, right: EsportsResult): number {
+  return right.startTime - left.startTime || left.placement - right.placement
+}
+
 // the same pick as pickHighlights in packages/modules/esports/domain/highlights.ts, whose sets the refresh fetches
 // first for the card art; change one and change the other
-function splitHighlights(results: EsportsResult[]) {
-  const highlights = results
-    .filter((result) => result.placement <= highlightCutoff)
-    .sort(bestFirst)
-    .slice(0, highlightCount)
+function splitHighlights(results: EsportsResult[], now: Date) {
+  const recentSince = Math.floor(now.getTime() / 1000) - recentWindowSeconds
+  const topEight = results.filter((result) => result.placement <= highlightCutoff)
+
+  const recent = topEight.filter((result) => result.startTime >= recentSince).sort(bestFirst)
+  const older = topEight.filter((result) => result.startTime < recentSince).sort(newestFirst)
+  const highlights = [...recent, ...older].slice(0, highlightCount)
 
   const rest = results.filter((result) => !highlights.includes(result))
 
@@ -137,12 +145,18 @@ function Rest({ results }: { results: EsportsResult[] }) {
   )
 }
 
-/** A player's esports results: the best finishes lead as large cards with the legend played there, the rest follow small. */
-export function EsportsSection({ esports }: { esports: EsportsProfile }) {
+type EsportsSectionProps = { esports: EsportsProfile; loadedAt: string }
+
+/**
+ * A player's esports results: the best finishes of the last year lead as large cards with the legend played there,
+ * the rest follow small.
+ */
+export function EsportsSection({ esports, loadedAt }: EsportsSectionProps) {
   const [mode, setMode] = useState<ModeFilter>('all')
   const hasBothModes = new Set(esports.results.map((result) => result.mode)).size > 1
   const results = esports.results.filter((result) => mode === 'all' || result.mode === mode)
-  const { highlights, rest } = splitHighlights(results)
+  // the page's load time rather than the clock, so the server and the browser pick the same cards
+  const { highlights, rest } = splitHighlights(results, new Date(loadedAt))
 
   const headline = hasHeadline(esports) ? <EsportsHeadline esports={esports} /> : undefined
   const modeSelect = hasBothModes ? <ModeSelect mode={mode} onMode={setMode} /> : undefined
