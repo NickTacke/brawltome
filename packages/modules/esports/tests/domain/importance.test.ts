@@ -47,6 +47,12 @@ describe('event weight', () => {
     expect(eventWeight('Spring Championship - Europe 2026 - 1v1', false)).toBe(1)
   })
 
+  // a qualifier only leads to the event it names, so a future world championship qualifier stays other official
+  test('any qualifier counts as other official, whatever event it leads to', () => {
+    expect(eventWeight('Brawlhalla World Championship Expo 2027 - North America Qualifier', true)).toBe(1.5)
+    expect(eventWeight('Summer Championship Qualifier - Europe 2026', true)).toBe(1.5)
+  })
+
   test('an official event no name rule knows counts as other official', () => {
     expect(eventWeight('Some New Official Cup 2027', true)).toBe(1.5)
   })

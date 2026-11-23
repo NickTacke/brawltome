@@ -37,6 +37,7 @@ function stripRegions(text: string): string {
 
 const seasonal = /\b(Winter|Spring|Summer|Autumn|Midseason)\b(?: Doubles)? Championships?\b/i
 const lastChanceQualifier = /Last Chance Qualifier/i
+const qualifier = /\bQualifier\b/i
 // bcx since 2022, "Brawlhalla World Championship" before it
 const worldChampionship = /World Championship/i
 
@@ -63,9 +64,10 @@ function officialTitle(fullName: string): string | null {
 
 export type OfficialSeries = 'world-championship' | 'seasonal-championship' | 'other'
 
-// which of blue mammoth's series an official event belongs to; a last chance qualifier is a way into bcx, not bcx
+// which of blue mammoth's series an official event belongs to; a qualifier is a way into the event it names, not
+// that event
 export function officialSeries(fullName: string): OfficialSeries {
-  if (lastChanceQualifier.test(fullName)) return 'other'
+  if (qualifier.test(fullName)) return 'other'
 
   if (worldChampionship.test(fullName)) return 'world-championship'
 
