@@ -1,6 +1,7 @@
 //! Updates from the desktop feed: when to check, when to install.
 //! Nothing happens while the game runs, so a match never shares the network or frames with an update.
 
+use std::future::Future;
 use std::time::Duration;
 
 use tauri::AppHandle;
@@ -21,6 +22,19 @@ pub const UPDATE_CHECK_INTERVAL_MS: u64 = 21_600_000;
 
 /// when the api refuses this version
 pub const REQUIRED_UPDATE_RECHECK_MS: u64 = 600_000;
+
+/// a stalled connection (a half-open socket after sleep, a captive portal) would otherwise hold the loop for good
+pub const UPDATE_CHECK_TIMEOUT_MS: u64 = 30_000;
+
+/// the installer is a few MB, so this only ends a stalled download
+pub const UPDATE_DOWNLOAD_TIMEOUT_MS: u64 = 600_000;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RequestOutcome<T> {
+    Finished(T),
+    TimedOut,
+    GameStarted,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UpdaterStep {
@@ -103,8 +117,10 @@ async fn run(updater: Updater, session: SessionHandle) {
             UpdaterStep::WaitForGameToClose => wait_for_game_to_close(&mut status).await,
             UpdaterStep::WaitMs(wait_ms) => sleep_or_status_change(&mut status, wait_ms).await,
             UpdaterStep::CheckNow => {
-                update_if_available(&updater, &session, &mut status).await;
-                last_check_ms = Some(elapsed_ms(started_at));
+                let attempt = update_if_available(&updater, &session, &mut status).await;
+                if attempt == Attempt::Counted {
+                    last_check_ms = Some(elapsed_ms(started_at));
+                }
                 true
             }
         };
@@ -115,46 +131,98 @@ async fn run(updater: Updater, session: SessionHandle) {
     }
 }
 
-/// a failed check or download is only logged; the loop counts it as a check either way
+/// how an update attempt ended, for the loop's next step
+#[derive(Debug, PartialEq, Eq)]
+enum Attempt {
+    /// checked, or failed, or timed out: the next check waits for its interval
+    Counted,
+    /// the game started: the loop checks again once it closes
+    GaveWayToGame,
+}
+
 async fn update_if_available(
     updater: &Updater,
     session: &SessionHandle,
     status: &mut watch::Receiver<AppStatus>,
-) {
-    let update = match updater.check().await {
-        Ok(Some(update)) => update,
-        Ok(None) => return,
-        Err(error) => {
-            log::warn!("check for updates at {UPDATE_FEED_URL}: {error}");
-            return;
-        }
+) -> Attempt {
+    let update = match find_update(updater, status).await {
+        Ok(update) => update,
+        Err(attempt) => return attempt,
     };
 
-    let version = update.version.clone();
     log::info!(
-        "update {} -> {version} found, downloading",
-        update.current_version
+        "update {} -> {} found, downloading",
+        update.current_version,
+        update.version
     );
     session.send(Input::UpdateStatusChanged(UpdateStatus::Downloading {
-        version: version.clone(),
+        version: update.version.clone(),
     }));
 
-    let bytes = match update.download(|_, _| {}, || {}).await {
+    let bytes = match download_update(&update, status).await {
         Ok(bytes) => bytes,
-        Err(error) => {
-            log::warn!(
-                "download update {version} from {}: {error}",
-                update.download_url
-            );
+        Err(attempt) => {
             session.send(Input::UpdateStatusChanged(UpdateStatus::Idle));
-            return;
+            return attempt;
         }
     };
 
     install_when_game_is_closed(&update, &bytes, session, status).await;
+
+    Attempt::Counted
 }
 
-/// the game may have started during the download; the bytes wait for it to close
+/// the error is how the attempt ended without an update; failures are only logged
+async fn find_update(
+    updater: &Updater,
+    status: &mut watch::Receiver<AppStatus>,
+) -> Result<Update, Attempt> {
+    let outcome = run_while_game_is_closed(updater.check(), status, UPDATE_CHECK_TIMEOUT_MS).await;
+
+    match outcome {
+        RequestOutcome::Finished(Ok(Some(update))) => Ok(update),
+        RequestOutcome::Finished(Ok(None)) => Err(Attempt::Counted),
+        RequestOutcome::Finished(Err(error)) => {
+            log::warn!("check for updates at {UPDATE_FEED_URL}: {error}");
+            Err(Attempt::Counted)
+        }
+        RequestOutcome::TimedOut => {
+            let limit_s = UPDATE_CHECK_TIMEOUT_MS / 1_000;
+            log::warn!("check for updates at {UPDATE_FEED_URL}: timed out after {limit_s} s");
+            Err(Attempt::Counted)
+        }
+        RequestOutcome::GameStarted => Err(Attempt::GaveWayToGame),
+    }
+}
+
+/// the error is how the attempt ended without the installer; failures are only logged
+async fn download_update(
+    update: &Update,
+    status: &mut watch::Receiver<AppStatus>,
+) -> Result<Vec<u8>, Attempt> {
+    let download = update.download(|_, _| {}, || {});
+    let outcome = run_while_game_is_closed(download, status, UPDATE_DOWNLOAD_TIMEOUT_MS).await;
+    let failed_download = format!(
+        "download update {} from {}",
+        update.version, update.download_url
+    );
+
+    match outcome {
+        RequestOutcome::Finished(Ok(bytes)) => Ok(bytes),
+        RequestOutcome::Finished(Err(error)) => {
+            log::warn!("{failed_download}: {error}");
+            Err(Attempt::Counted)
+        }
+        RequestOutcome::TimedOut => {
+            let limit_s = UPDATE_DOWNLOAD_TIMEOUT_MS / 1_000;
+            log::warn!("{failed_download}: timed out after {limit_s} s");
+            Err(Attempt::Counted)
+        }
+        RequestOutcome::GameStarted => Err(Attempt::GaveWayToGame),
+    }
+}
+
+/// the game may have started since the download finished; the bytes wait for it to close
 async fn install_when_game_is_closed(
     update: &Update,
     bytes: &[u8],
@@ -195,6 +263,34 @@ async fn sleep_or_status_change(status: &mut watch::Receiver<AppStatus>, wait_ms
     tokio::select! {
         _ = tokio::time::sleep(Duration::from_millis(wait_ms)) => true,
         changed = status.changed() => changed.is_ok(),
+    }
+}
+
+/// runs a request only while the game stays closed, and never longer than its time limit
+pub async fn run_while_game_is_closed<F: Future>(
+    request: F,
+    status: &mut watch::Receiver<AppStatus>,
+    time_limit_ms: u64,
+) -> RequestOutcome<F::Output> {
+    let limited_request = tokio::time::timeout(Duration::from_millis(time_limit_ms), request);
+
+    // biased: a game that already runs wins over a request that would finish at once
+    tokio::select! {
+        biased;
+        _ = game_start(status) => RequestOutcome::GameStarted,
+        finished = limited_request => match finished {
+            Ok(output) => RequestOutcome::Finished(output),
+            Err(_) => RequestOutcome::TimedOut,
+        },
+    }
+}
+
+/// resolves when the game runs; a stopped session can't tell, so the request then runs to its time limit
+async fn game_start(status: &mut watch::Receiver<AppStatus>) {
+    let has_session = status.wait_for(is_game_running).await.is_ok();
+
+    if !has_session {
+        std::future::pending::<()>().await;
     }
 }
 
@@ -283,5 +379,71 @@ mod tests {
             "https://github.com/NickTacke/brawltome/releases/download/desktop-latest/latest.json"
         );
         assert_eq!(endpoints, &serde_json::json!([UPDATE_FEED_URL]));
+    }
+
+    fn game_running() -> AppStatus {
+        AppStatus {
+            game: GameStatus::Running { game_version: None },
+            ..AppStatus::default()
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_request_finishes_while_the_game_stays_closed() {
+        let (_sender, mut status) = watch::channel(AppStatus::default());
+
+        let outcome = run_while_game_is_closed(async { 7 }, &mut status, 30_000).await;
+
+        assert_eq!(outcome, RequestOutcome::Finished(7));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stalled_request_times_out_at_its_limit() {
+        let (_sender, mut status) = watch::channel(AppStatus::default());
+        let started_at = Instant::now();
+
+        let outcome =
+            run_while_game_is_closed(std::future::pending::<()>(), &mut status, 30_000).await;
+
+        assert_eq!(outcome, RequestOutcome::TimedOut);
+        assert_eq!(started_at.elapsed(), Duration::from_millis(30_000));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_game_start_drops_the_request() {
+        let (sender, mut status) = watch::channel(AppStatus::default());
+        let started_at = Instant::now();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(1_000)).await;
+            sender.send_replace(game_running());
+        });
+
+        let slow_request = tokio::time::sleep(Duration::from_millis(20_000));
+        let outcome = run_while_game_is_closed(slow_request, &mut status, 30_000).await;
+
+        assert_eq!(outcome, RequestOutcome::GameStarted);
+        assert_eq!(started_at.elapsed(), Duration::from_millis(1_000));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_running_game_wins_over_a_ready_request() {
+        let (_sender, mut status) = watch::channel(game_running());
+
+        let outcome = run_while_game_is_closed(async { 7 }, &mut status, 30_000).await;
+
+        assert_eq!(outcome, RequestOutcome::GameStarted);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stopped_session_keeps_the_time_limit() {
+        let (sender, mut status) = watch::channel(AppStatus::default());
+        drop(sender);
+
+        let finished = run_while_game_is_closed(async { 7 }, &mut status, 30_000).await;
+        let stalled =
+            run_while_game_is_closed(std::future::pending::<()>(), &mut status, 30_000).await;
+
+        assert_eq!(finished, RequestOutcome::Finished(7));
+        assert_eq!(stalled, RequestOutcome::TimedOut);
     }
 }
