@@ -49,6 +49,9 @@ const esportsResultSchema = z
     isOfficial: z.boolean(),
     isOnline: z.boolean(),
     legendKey: z.string().min(1).nullable(),
+    // how much the finish counts for the cards, higher first; 0 below top 8. optional so a site reading an api from
+    // before it still parses during a deploy
+    importance: z.number().nonnegative().optional(),
     // first round first
     sets: z.array(esportsSetSchema),
     // forfeits left out; null when no set was played

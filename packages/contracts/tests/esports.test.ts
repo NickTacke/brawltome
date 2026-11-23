@@ -33,6 +33,7 @@ const result = {
   isOfficial: false,
   isOnline: true,
   legendKey: 'mordex',
+  importance: 90,
   sets: [win, forfeit],
   setRecord: { wins: 1, losses: 0 },
 }
@@ -68,6 +69,25 @@ describe('player esports contract', () => {
 
     expect(() => playerEsportsSchema.parse({ profile: threes, freshness: 'fresh' })).toThrow()
     expect(() => playerEsportsSchema.parse({ profile: zeroth, freshness: 'fresh' })).toThrow()
+  })
+
+  test('accepts a result without an importance, as an api from before it sends', () => {
+    const { importance: _importance, ...unranked } = result
+    const esports = { profile: { ...profile, results: [unranked] }, freshness: 'fresh' as const }
+
+    expect(playerEsportsSchema.parse(esports)).toEqual(esports)
+  })
+
+  test('accepts an importance of zero and rejects a negative one', () => {
+    const minor: PlayerEsportsContract = {
+      profile: { ...profile, results: [{ ...result, placement: 17, importance: 0 }] },
+      freshness: 'fresh',
+    }
+
+    const negative = { ...profile, results: [{ ...result, importance: -1 }] }
+
+    expect(playerEsportsSchema.parse(minor)).toEqual(minor)
+    expect(() => playerEsportsSchema.parse({ profile: negative, freshness: 'fresh' })).toThrow()
   })
 
   test('rejects zero earnings, which the profile sends as null', () => {
