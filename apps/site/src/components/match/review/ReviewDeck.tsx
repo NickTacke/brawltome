@@ -101,11 +101,11 @@ export function ReviewDeck(props: ReviewDeckProps) {
   const [isOnLanes, setIsOnLanes] = useState(false)
   const isPhone = usePhoneLayout()
   const topLeft = useStageBox(topLeftRef, String(fullscreen.isOn))
-  const { camera } = useStageView()
+  const { bodies, camera } = useStageView()
   // at a stop the lanes keep clear of its two players; on a pause, of everyone
   const isOfStop = (pose: Pose) => pose.slot === explained?.victim || pose.slot === explained?.attacker
   const inPlay = poses.filter((pose) => pose.isInPlay)
-  const players = (explained ? inPlay.filter(isOfStop) : inPlay).map((pose) => inFrame(pose, camera))
+  const players = (explained ? inPlay.filter(isOfStop) : inPlay).map((pose) => inFrame(pose, bodies.box, camera))
   const key = explained?.key ?? (props.isPlaying ? null : 'paused')
   // folded, the bar is low enough to lie on the players' feet instead of jumping to the top
   const isBottomOnly = fullscreen.isOn || isPhone || fold.isFolded

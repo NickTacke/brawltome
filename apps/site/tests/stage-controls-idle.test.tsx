@@ -199,12 +199,7 @@ describe('the controls over a stage that fills the screen', () => {
     const stageClasses = async (isShown: boolean) => {
       await act(async () =>
         root.render(
-          <StageFrame
-            frameRef={{ current: null }}
-            fullscreen={filledScreen}
-            controls={{ ...shownControls, isShown }}
-            aspect={16 / 9}
-          >
+          <StageFrame frameRef={{ current: null }} fullscreen={filledScreen} controls={{ ...shownControls, isShown }}>
             <div data-stage-window />
           </StageFrame>,
         ),

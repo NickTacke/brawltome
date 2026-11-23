@@ -75,12 +75,7 @@ export function ReviewStage(props: ReviewStageProps) {
   )
 
   return (
-    <StageFrame
-      frameRef={props.frameRef}
-      fullscreen={fullscreen}
-      controls={controls}
-      aspect={insights.insights.stage.aspect}
-    >
+    <StageFrame frameRef={props.frameRef} fullscreen={fullscreen} controls={controls}>
       <StagePlay
         insights={insights}
         legends={legends}

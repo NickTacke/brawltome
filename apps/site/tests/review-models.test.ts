@@ -8,7 +8,14 @@ import { reviewPhaseOf } from '../src/components/match/review/review-phase'
 import { reviewChoicesOf } from '../src/components/match/review/review-stops'
 import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
 import { bodyMiddle, bodyPxOf, bodyRingDiameter } from '../src/components/match/stage/body-ring'
-import { type Camera, cameraOf, inFrame, unitInFrame, wholeStage } from '../src/components/match/stage/play-camera'
+import {
+  type Camera,
+  cameraOn,
+  fixedCamera,
+  frameAspect,
+  inFrame,
+  unitInFrame,
+} from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
 import { transportCornerPx } from '../src/components/match/stage/StageControls'
@@ -198,11 +205,14 @@ type StopCamera = { name: CameraName; at: (timeMs: number) => Camera }
 // camera that shows them
 type Layout = { stage: Size; edge: Edge; areLegends: boolean; camera: StopCamera }
 
-const onWholeStage: StopCamera = { name: 'fixed', at: () => wholeStage }
 const playbackFixtures: PlaybackFixture[] = ['duel-a', 'doubles-b']
 
 function hasPlayback(name: InsightsFixture): name is PlaybackFixture {
   return playbackFixtures.some((fixture) => fixture === name)
+}
+
+function fixedCameraOf(box: StageBox): StopCamera {
+  return { name: 'fixed', at: () => fixedCamera(box) }
 }
 
 // the game's camera, played over the fixture's timeline inside the stage box as the page plays it
@@ -216,23 +226,23 @@ function gameCameraOf(name: PlaybackFixture, box: StageBox): StopCamera {
 
     if (!view) throw new Error(`the camera has no view at ${timeMs} ms`)
 
-    return cameraOf(view, box)
+    return cameraOn(view)
   }
 
   return { name: 'game', at }
 }
 
 // the card a review stop gets, as the page picks it: upright where it has a place clear of the stop's players, wide
-// where it hasn't. the players stand where the camera shows them, as tokens or as legends as big as its zoom makes them
+// where it hasn't. the players stand where the camera shows them, as tokens or as legends as big as it makes them
 function checkStop(insights: MatchInsights, stop: ReviewStop, layout: Layout): Check {
   const { stage, edge, areLegends } = layout
   const moment = insights.insights.moments.find((entry) => entry.key === stop.momentKey)
   const { box } = insights.insights.stage
   const camera = layout.camera.at(stop.timeMs)
-  const poses = trackedPoses(insights, stop.timeMs).map((pose) => inFrame(pose, camera))
+  const poses = trackedPoses(insights, stop.timeMs).map((pose) => inFrame(pose, box, camera))
   const players = { victim: moment?.victim ?? null, attacker: moment?.attacker ?? null }
   const bandPx = insights.summary.players.length > 2 ? 130 : 74
-  const body = bodyPxOf({ box, areLegends }, stage.width * unitInFrame(box, camera))
+  const body = bodyPxOf({ box, areLegends }, stage.width * unitInFrame(camera))
   const space = (card: Size) => ({ card, stage, body, panel: { edge, bandPx }, obstacles: corners(stage) })
   const upright = placeCard(poses, space(uprightCard), players)
   const card = upright.isOnStopPlayers ? wideCard(stage) : uprightCard
@@ -252,8 +262,8 @@ function checkStop(insights: MatchInsights, stop: ReviewStop, layout: Layout): C
 
 function checkEveryStop(name: InsightsFixture): Check[] {
   const insights = readInsights(name)
-  const { box, aspect } = insights.insights.stage
-  const stageOf = (width: number) => ({ width, height: width / aspect })
+  const { box } = insights.insights.stage
+  const stageOf = (width: number) => ({ width, height: width / frameAspect })
 
   const onPage = stageWidthsPx.flatMap((width) => [
     { stage: stageOf(width), edge: 'top' as const },
@@ -264,7 +274,7 @@ function checkEveryStop(name: InsightsFixture): Check[] {
   const stages = [...onPage, ...fullscreen]
 
   const underFixed = [true, false].flatMap((areLegends) =>
-    stages.map((stage) => ({ ...stage, areLegends, camera: onWholeStage })),
+    stages.map((stage) => ({ ...stage, areLegends, camera: fixedCameraOf(box) })),
   )
 
   // the game's camera only ever shows drawn legends, and only some fixtures have the timeline it is played over
