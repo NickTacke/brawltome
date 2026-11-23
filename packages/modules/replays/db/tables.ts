@@ -80,6 +80,7 @@ export const matches = replaysSchema.table('matches', {
   failedChecks: jsonb<string[]>('failed_checks').notNull(),
   unchecked: jsonb<string[]>('unchecked').notNull(),
   timelineKey: varchar('timeline_key', { length: 200 }),
+  hasTimeline: boolean('has_timeline').notNull().default(true),
   playedAt: timestamp('played_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
