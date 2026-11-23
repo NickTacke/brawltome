@@ -108,12 +108,12 @@ describe('site visit procedure', () => {
   test("labels the new site's own pages instead of folding them into other", async () => {
     const harness = createHarness()
 
-    for (const path of ['/guild/9', '/leaderboard', '/guilds', '/terms'])
+    for (const path of ['/guild/9', '/leaderboard', '/leaderboard/guilds', '/terms'])
       await harness.send(siteHeaders, { ...visit, path })
 
     const routes = (await harness.pageviewLogs()).map((log) => log.attributes?.route)
 
-    expect(routes).toEqual(['/guild/[id]', '/leaderboard', '/guilds', '/terms'])
+    expect(routes).toEqual(['/guild/[id]', '/leaderboard', '/leaderboard/guilds', '/terms'])
   })
 
   test('the same visitor gets the same key on every page', async () => {

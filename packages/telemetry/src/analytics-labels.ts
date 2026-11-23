@@ -6,6 +6,7 @@ export const analyticsRoutes = [
   '/guild/[id]',
   '/guilds',
   '/leaderboard',
+  '/leaderboard/guilds',
   '/player/[id]',
   '/learn',
   '/matches',
