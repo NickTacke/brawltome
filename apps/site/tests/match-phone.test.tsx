@@ -17,7 +17,7 @@ import { MatchTimeline } from '../src/components/match/review/MatchTimeline'
 import { ReviewCardSlot } from '../src/components/match/review/ReviewCardSlot'
 import { ReviewTools } from '../src/components/match/review/ReviewTools'
 import { TimelineScrubber } from '../src/components/match/review/TimelineScrubber'
-import { SpeedButton, TransportColumn } from '../src/components/match/stage/ReviewControls'
+import { FoldButton, SpeedButton, TransportColumn } from '../src/components/match/stage/ReviewControls'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
 import { useStageControls } from '../src/components/match/stage/use-stage-controls'
 import { phoneQuery } from '../src/components/match/use-phone-layout'
@@ -117,6 +117,7 @@ describe('the match page on a phone', () => {
         controls={shownControls}
         fullscreen={pageScreen}
         lanes={{ edge: 'bottom' }}
+        fold={{ isFolded: false, toggle: ignore }}
         transport={<span>transport</span>}
         timeline={() => <span>lanes</span>}
         speed={null}
@@ -224,12 +225,15 @@ describe('tap targets on a phone', () => {
     for (const button of buttons) expect(classOf(button).some((name) => fingerSized.includes(name))).toBe(true)
   }
 
-  test('the transport, the speed and the stop count', () => {
+  test('the transport, the speed, the fold and the stop count', () => {
     const count = { index: 2, total: 12, onReplay: ignore }
 
-    expectFingerSized(renderToStaticMarkup(<TransportColumn playback={playback} stepping={stepping} count={null} />))
-    expectFingerSized(renderToStaticMarkup(<TransportColumn playback={playback} stepping={stepping} count={count} />))
+    const transport = { playback, stepping, isRow: false }
+
+    expectFingerSized(renderToStaticMarkup(<TransportColumn {...transport} count={null} />))
+    expectFingerSized(renderToStaticMarkup(<TransportColumn {...transport} count={count} />))
     expectFingerSized(renderToStaticMarkup(<SpeedButton playback={playback} />))
+    expectFingerSized(renderToStaticMarkup(<FoldButton fold={{ isFolded: true, toggle: ignore }} isAlongTop={false} />))
   })
 
   test('watching or reviewing', () => {

@@ -153,6 +153,7 @@ describe('the stage in fullscreen', () => {
         controls={shownControls}
         fullscreen={filledScreen}
         lanes={{ edge: 'bottom' }}
+        fold={{ isFolded: false, toggle: () => undefined }}
         transport={null}
         timeline={() => null}
         speed={null}

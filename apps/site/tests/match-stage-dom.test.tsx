@@ -372,6 +372,37 @@ describe('the review in a browser', () => {
 
     await unmount()
   })
+
+  test('T folds the lanes into a thin bar and back, and the review steps on over the bar', async () => {
+    const pressKey = (key: string) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      })
+
+    await mount(replayFor(1))
+    await press('Review')
+
+    pressKey('t')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(0)
+    expect(container.querySelector('[data-folded-timeline]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Show timeline"]')).not.toBeNull()
+
+    const clockMs = clockNow()
+
+    await pressLabelled('Next stop')
+
+    expect(clockNow()).toBeGreaterThan(clockMs)
+    expect(container.querySelector('[aria-label="Speed 1×, switch to 2×"]')).not.toBeNull()
+
+    pressKey('T')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(2)
+    expect(container.querySelector('[data-folded-timeline]')).toBeNull()
+
+    await unmount()
+    window.localStorage.clear()
+  })
 })
 
 // the text of the page's section under a heading

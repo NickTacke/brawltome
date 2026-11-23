@@ -1,7 +1,9 @@
 import { Maximize, Minimize } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
+import { FoldButton } from './ReviewControls'
 import { LanesPanel, onStage, shownOnStage, stageControlsGroup, TransportCorner, underStage } from './StageControls'
 import type { Fullscreen } from './use-fullscreen'
+import type { LanesFold } from './use-lanes-fold'
 import type { StageControlsState } from './use-stage-controls'
 
 // in the stage's top right corner, with the rest of the controls; on a phone at the end of the row under the stage
@@ -37,6 +39,8 @@ type StageDeckProps = {
   controls: StageControlsState
   fullscreen: Fullscreen
   lanes: LanesPlace
+  // folded, the lanes are a thin bar in one low row with the transport
+  fold: LanesFold
   // the three parts of the panel, in the order they lie in it; the timeline's readout opens away from the stage's edge
   transport: ReactNode
   timeline: (opensBelow: boolean) => ReactNode
@@ -76,11 +80,20 @@ function TopLeftCorner({ controls, fullscreen, tools, note, topLeftRef }: TopLef
 /**
  * What lies on the stage over the players: the transport in its corner, the lanes along an edge, the fullscreen
  * button in the top right corner, and in the top left the note on the legends under the page's tools in fullscreen.
- * At a review's stop a card lies under them. The lanes are always there, at full size. On a phone held upright the
- * stage is too small to lie on: the controls, the lanes and the card come under it, in that order.
+ * At a review's stop a card lies under them. The lanes are always there, at full size, unless the viewer folds them
+ * into a thin bar. On a phone held upright the stage is too small to lie on: the controls, the lanes and the card come
+ * under it, in that order.
  */
 export function StageDeck(props: StageDeckProps) {
-  const { controls, fullscreen, lanes } = props
+  const { controls, fullscreen, lanes, fold } = props
+  const isAlongTop = lanes.edge === 'top' && !fold.isFolded
+
+  const ends = (
+    <>
+      {props.speed}
+      <FoldButton fold={fold} isAlongTop={isAlongTop} />
+    </>
+  )
 
   return (
     <>
@@ -93,17 +106,21 @@ export function StageDeck(props: StageDeckProps) {
           topLeftRef={props.topLeftRef}
         />
         <FullscreenButton fullscreen={fullscreen} controls={controls} />
-        <TransportCorner isShown={controls.isShown} isPartOfBar={lanes.edge === 'bottom'} bar={controls.bar}>
-          {props.transport}
-        </TransportCorner>
+        {fold.isFolded ? null : (
+          <TransportCorner isShown={controls.isShown} isPartOfBar={!isAlongTop} bar={controls.bar}>
+            {props.transport}
+          </TransportCorner>
+        )}
         <LanesPanel
           panelRef={lanes.panelRef}
           isShown={controls.isShown}
           edge={lanes.edge}
+          isFolded={fold.isFolded}
           bar={controls.bar}
           onHeld={lanes.onHeld}
-          timeline={props.timeline(lanes.edge === 'top')}
-          speed={props.speed}
+          head={fold.isFolded ? props.transport : null}
+          timeline={props.timeline(isAlongTop)}
+          ends={ends}
         />
       </div>
       {props.card}

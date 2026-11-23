@@ -65,22 +65,35 @@ type LanesPanelProps = {
   isShown: boolean
   // along the top while the players of the frame stand where the panel usually lies
   edge: 'top' | 'bottom'
+  // folded down to one low row along the bottom, which the transport heads from inside instead of from its corner
+  isFolded: boolean
   bar: StageControlsState['bar']
   // told while the pointer rests on the panel
   onHeld?: (isHeld: boolean) => void
+  // the transport, while the panel is folded
+  head: ReactNode
   timeline: ReactNode
-  speed: ReactNode
+  // after the lanes: the speed and the button that folds them
+  ends: ReactNode
+}
+
+// pl-[7.75rem] leaves the head of the bar along the bottom to the transport corner
+const panelPlaces = {
+  top: 'top-2 left-2 right-12 items-start py-2 pl-2.5',
+  bottom: 'bottom-2 left-2 right-2 items-end py-2 pl-[7.75rem]',
+  folded: 'bottom-2 left-2 right-2 items-center py-1.5 pl-2',
 }
 
 /**
  * The lanes on the stage, with the speed after them. Along the bottom they are one bar with the transport, like a
  * video player's: the bar runs from edge to edge and leaves its head to the transport. Along the top they are a
- * panel of their own, which leaves the corner to the fullscreen button. On a phone the panel gives its two parts to
- * the row under the stage: the lanes take the whole width under it, the speed falls into the row's free cell.
+ * panel of their own, which leaves the corner to the fullscreen button. Folded, the lanes are a thin line in a low
+ * bar that holds the transport too. On a phone the panel gives its parts to the rows under the stage: the lanes take
+ * the whole width under them, the transport and the ends fall into the first row.
  */
-export function LanesPanel({ panelRef, isShown, edge, bar, onHeld, timeline, speed }: LanesPanelProps) {
-  const place =
-    edge === 'top' ? 'top-2 left-2 right-12 items-start pl-2.5' : 'bottom-2 left-2 right-2 items-end pl-[7.75rem]'
+export function LanesPanel(props: LanesPanelProps) {
+  const { panelRef, isShown, edge, isFolded, bar, onHeld, head } = props
+  const place = isFolded ? panelPlaces.folded : panelPlaces[edge]
 
   function hold(isHeld: boolean) {
     if (isHeld) bar.onPointerEnter()
@@ -93,12 +106,19 @@ export function LanesPanel({ panelRef, isShown, edge, bar, onHeld, timeline, spe
     <div
       ref={panelRef}
       data-stage-controls
+      data-folded={isFolded}
       onPointerEnter={() => hold(true)}
       onPointerLeave={() => hold(false)}
-      className={`absolute flex gap-3 py-2 pr-2.5 ${onStage} ${place} ${shownOnStage(isShown)} ${underStage} phone:contents`}
+      className={`absolute flex gap-3 pr-2.5 ${onStage} ${place} ${shownOnStage(isShown)} ${underStage} phone:contents`}
     >
-      <div className="min-w-0 flex-1 phone:col-span-full phone:row-start-2 phone:pt-2 phone:pb-1">{timeline}</div>
-      {speed}
+      {head ? (
+        <div data-stage-transport className="shrink-0 phone:col-start-1 phone:row-start-1">
+          {head}
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1 phone:col-span-full phone:row-start-2 phone:pt-2 phone:pb-1">{props.timeline}</div>
+      {/* one cell of the row under the stage on a phone */}
+      <div className="flex shrink-0 items-center gap-0.5">{props.ends}</div>
     </div>
   )
 }

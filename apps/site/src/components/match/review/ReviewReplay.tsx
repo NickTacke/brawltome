@@ -4,6 +4,7 @@ import { PickedLead } from '../lead/PickedLead'
 import { type CameraMode, defaultCameraMode } from '../stage/camera-mode'
 import { type Pose, posesAt } from '../stage/pose'
 import { useFullscreen } from '../stage/use-fullscreen'
+import { useLanesFold } from '../stage/use-lanes-fold'
 import type { Legends } from '../stage/use-legends'
 import { usePlayback } from '../stage/use-playback'
 import { useStageControls } from '../stage/use-stage-controls'
@@ -41,6 +42,7 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
   const controls = useStageControls(playback.isPlaying, playback.toggle, isPhone)
   const frameRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreen(frameRef)
+  const fold = useLanesFold()
   const [cameraMode, setCameraMode] = useState<CameraMode>(defaultCameraMode)
   const mode = useReviewMode(insights, selectedSlot, playback)
   const lanes = useMemo(() => lanePlayersOf(insights), [insights])
@@ -52,6 +54,7 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
     playback,
     fullscreen,
     onStep: mode.step,
+    onFoldLanes: fold.toggle,
     onUsed: controls.wake,
     onReplayStop: mode.isReview ? () => review.goTo(review.index) : undefined,
     onLeave: mode.isReview ? mode.leave : undefined,
@@ -89,6 +92,7 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
       playback={playback}
       controls={controls}
       fullscreen={fullscreen}
+      fold={fold}
       frameRef={frameRef}
       cameraMode={cameraMode}
       mode={mode}
