@@ -134,6 +134,27 @@ describe('saveRefresh', () => {
     expect(stored.placements.map(({ tournamentId }) => tournamentId)).toEqual(['fine/1v1'])
   })
 
+  test('a repeated event keeps its best placement', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'cup/1v1', placement: 9 }),
+          placement({ tournamentId: 'cup/1v1', placement: 3 }),
+          placement({ tournamentId: 'cup/1v1', placement: 5 }),
+          placement({ mode: 2, tournamentId: 'cup/1v1', placement: 6 }),
+        ],
+      }),
+    )
+
+    const { stored } = await readStoredEsports(database, brawlhallaId)
+
+    expect(stored.placements.map(({ mode, placement: finish }) => [mode, finish])).toEqual([
+      [1, 3],
+      [2, 6],
+    ])
+  })
+
   test('both modes are kept and read back whole', async () => {
     await saveRefresh(
       database,
@@ -184,12 +205,20 @@ describe('recordFailure', () => {
     expect(stored.pr1v1).not.toBeNull()
   })
 
-  test('a failure for a player never stored leaves no row', async () => {
+  test('recordFailure creates a backing-off row for a player never stored', async () => {
     await recordFailure(database, brawlhallaId, new Date('2026-11-21T00:00:00Z'))
 
-    const { row } = await readStoredEsports(database, brawlhallaId)
+    const { row, stored } = await readStoredEsports(database, brawlhallaId)
 
-    expect(row).toBeNull()
+    expect(row).toMatchObject({ link: 'none', failureCount: 1, eventLegends: [], lastSuccessAt: null })
+    expect(row?.checkedAt).toEqual(new Date('2026-11-21T00:00:00Z'))
+    expect(stored.placements).toEqual([])
+
+    await recordFailure(database, brawlhallaId, new Date('2026-11-22T00:00:00Z'))
+
+    const second = await readStoredEsports(database, brawlhallaId)
+
+    expect(second.row?.failureCount).toBe(2)
   })
 })
 

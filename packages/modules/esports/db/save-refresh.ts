@@ -15,11 +15,28 @@ export type RefreshInput = {
   checkedAt: Date
 }
 
-// the table only accepts finishes from 1 up, and one odd row from brawltools must not fail the whole refresh
+// a repeated event keeps its best finish, since the table has one row per player, mode and tournament
+function bestPerEvent(candidates: StoredPlacement[]): StoredPlacement[] {
+  const bestByEvent = new Map<string, StoredPlacement>()
+
+  for (const candidate of candidates) {
+    const eventKey = `${candidate.mode}:${candidate.tournamentId}`
+    const best = bestByEvent.get(eventKey)
+
+    if (!best || candidate.placement < best.placement) bestByEvent.set(eventKey, candidate)
+  }
+
+  return [...bestByEvent.values()]
+}
+
+// the table only accepts finishes from 1 up and one row per event, and one odd row from brawltools must not fail
+// the whole refresh
 function placementsToKeep(input: RefreshInput): StoredPlacement[] {
   if (input.link === 'none') return []
 
-  return input.placements.filter((stored) => stored.placement >= 1)
+  const validPlacements = input.placements.filter((stored) => stored.placement >= 1)
+
+  return bestPerEvent(validPlacements)
 }
 
 /**
