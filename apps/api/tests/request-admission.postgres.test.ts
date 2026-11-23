@@ -380,6 +380,34 @@ describe('PostgreSQL interactive refresh admission', () => {
     ).toMatchObject({ outcome: 'admitted' })
   })
 
+  test('admits brawltools calls against a limit of its own', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 1, brawltools: 2 },
+      sourceWindowSeconds: { brawltools: 60 },
+    })
+
+    for (let call = 0; call < 2; call++) {
+      expect(
+        await admission.admitSource({ domain: 'brawltools', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'admitted' })
+    }
+
+    expect(await admission.admitSource({ domain: 'brawltools', reservationKey: randomUUID(), units: 1 })).toMatchObject(
+      { outcome: 'rate-limited' },
+    )
+
+    expect(
+      await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+    ).toMatchObject({ outcome: 'admitted' })
+
+    expect((await admission.inspectCurrentUsage()).domains).toContainEqual({
+      domain: 'brawltools',
+      used: 2,
+      limit: 2,
+    })
+  })
+
   test('keeps source reservations inside a rolling window across an aligned boundary and restart', async () => {
     let delayed = false
 

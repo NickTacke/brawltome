@@ -1,7 +1,7 @@
 import type { OperationFailure } from '../model'
 
 // the sources the worker can pause; matches request-admission, which this module may not depend on
-export type SourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
+export type SourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1' | 'brawltools'
 
 export class SourceAdmissionLimitedError extends Error {
   constructor(readonly retryAfterSeconds: number) {

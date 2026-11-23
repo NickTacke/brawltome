@@ -22,7 +22,7 @@ export type AdmissionActor =
 
 export type ActorAdmissionResult = { outcome: 'admitted' } | { outcome: 'rate-limited'; retryAfterSeconds: number }
 
-export type SourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1'
+export type SourceDomain = 'brawlhalla-v0' | 'brawlhalla-v1' | 'brawltools'
 export type SourceCaller = 'on-demand' | 'background'
 
 export type SourceAdmissionResult =

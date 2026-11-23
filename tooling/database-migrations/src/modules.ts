@@ -2,6 +2,7 @@ import { accountsModule } from '@brawltome/accounts'
 import { analyticsModule } from '@brawltome/analytics'
 import { clanModule } from '@brawltome/clan'
 import { discoveryModule } from '@brawltome/discovery'
+import { esportsModule } from '@brawltome/esports'
 import type { BrawltomeModule } from '@brawltome/foundation'
 import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
@@ -20,6 +21,7 @@ export const migrationModules: readonly BrawltomeModule[] = [
   playerModule,
   clanModule,
   discoveryModule,
+  esportsModule,
   rankingModule,
   statisticsModule,
   replayAnalysisModule,
