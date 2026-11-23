@@ -1,4 +1,4 @@
-//! Start with Windows: what to register at start, and the setting's command.
+//! Start with Windows: what to do with the registration at start, and the setting's command.
 
 use tauri::plugin::TauriPlugin;
 use tauri::State;
@@ -11,19 +11,33 @@ use crate::settings::{Settings, SettingsStore};
 pub const AUTOSTART_ARGUMENT: &str = "--autostarted";
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum AutostartChange {
-    Enable,
-    Disable,
+pub enum StartupAction {
+    Register,
+    Unregister,
+    /// the player changed it in windows (task manager, startup apps); the setting follows
+    AdoptSystemState,
     Keep,
 }
 
-/// what to do at start so the system matches the setting
-pub fn autostart_change(wants_autostart: bool, is_registered: bool) -> AutostartChange {
-    match (wants_autostart, is_registered) {
-        (true, false) => AutostartChange::Enable,
-        (false, true) => AutostartChange::Disable,
-        _ => AutostartChange::Keep,
+/// what to do at start: the first start registers the default, later starts treat the system as the truth
+pub fn startup_action(
+    is_first_start: bool,
+    wants_autostart: bool,
+    is_registered: bool,
+) -> StartupAction {
+    if wants_autostart == is_registered {
+        return StartupAction::Keep;
     }
+
+    if !is_first_start {
+        return StartupAction::AdoptSystemState;
+    }
+
+    if wants_autostart {
+        return StartupAction::Register;
+    }
+
+    StartupAction::Unregister
 }
 
 pub fn was_autostarted(arguments: &[String]) -> bool {
@@ -39,24 +53,55 @@ pub fn plugin() -> TauriPlugin<Wry> {
         .build()
 }
 
-/// makes the system's registration match the setting; debug builds leave it alone, so a dev binary is never registered
-pub fn apply(app: &AppHandle, wants_autostart: bool) -> Result<(), String> {
+/// brings the registration and the setting together at start; debug builds leave it alone, so a dev binary is
+/// never registered
+pub fn sync_at_start(app: &AppHandle, store: &SettingsStore) -> Result<(), String> {
     if cfg!(debug_assertions) {
         return Ok(());
     }
 
     let launcher = app.autolaunch();
+    // false too when the player turned it off in task manager, which leaves the registration but disables it
     let is_registered = launcher
         .is_enabled()
-        .map_err(|error| format!("register autostart: {error}"))?;
+        .map_err(|error| format!("read autostart: {error}"))?;
+    let wants_autostart = store.get().starts_with_windows;
 
-    let result = match autostart_change(wants_autostart, is_registered) {
-        AutostartChange::Enable => launcher.enable(),
-        AutostartChange::Disable => launcher.disable(),
-        AutostartChange::Keep => Ok(()),
-    };
+    match startup_action(store.was_created_now(), wants_autostart, is_registered) {
+        StartupAction::Register => set_registration(app, true),
+        StartupAction::Unregister => set_registration(app, false),
+        StartupAction::AdoptSystemState => adopt_system_state(store, is_registered),
+        StartupAction::Keep => Ok(()),
+    }
+}
 
-    result.map_err(|error| format!("register autostart: {error}"))
+/// registers or unregisters, whatever the system has now; debug builds leave it alone
+fn set_registration(app: &AppHandle, is_enabled: bool) -> Result<(), String> {
+    if cfg!(debug_assertions) {
+        return Ok(());
+    }
+
+    let launcher = app.autolaunch();
+
+    if is_enabled {
+        return launcher
+            .enable()
+            .map_err(|error| format!("register autostart: {error}"));
+    }
+
+    launcher
+        .disable()
+        .map_err(|error| format!("unregister autostart: {error}"))
+}
+
+fn adopt_system_state(store: &SettingsStore, is_registered: bool) -> Result<(), String> {
+    log::info!(
+        "start with Windows was changed outside the app, the setting is now {is_registered}"
+    );
+
+    store.update(|settings| settings.starts_with_windows = is_registered)?;
+
+    Ok(())
 }
 
 /// saves the setting, then applies it; a refusal puts the setting back
@@ -86,7 +131,7 @@ pub fn set_starts_with_windows(
     store: State<'_, SettingsStore>,
 ) -> Result<Settings, String> {
     change_setting(&store, is_enabled, |wants_autostart| {
-        apply(&app, wants_autostart)
+        set_registration(&app, wants_autostart)
     })
 }
 
@@ -99,11 +144,40 @@ mod tests {
     }
 
     #[test]
-    fn registers_when_wanted_and_missing() {
-        assert_eq!(autostart_change(true, false), AutostartChange::Enable);
-        assert_eq!(autostart_change(false, true), AutostartChange::Disable);
-        assert_eq!(autostart_change(true, true), AutostartChange::Keep);
-        assert_eq!(autostart_change(false, false), AutostartChange::Keep);
+    fn the_first_start_makes_the_system_match_the_setting() {
+        assert_eq!(startup_action(true, true, false), StartupAction::Register);
+        assert_eq!(startup_action(true, false, true), StartupAction::Unregister);
+        assert_eq!(startup_action(true, true, true), StartupAction::Keep);
+        assert_eq!(startup_action(true, false, false), StartupAction::Keep);
+    }
+
+    #[test]
+    fn a_later_start_takes_what_the_player_set_in_windows() {
+        assert_eq!(
+            startup_action(false, true, false),
+            StartupAction::AdoptSystemState
+        );
+        assert_eq!(
+            startup_action(false, false, true),
+            StartupAction::AdoptSystemState
+        );
+        assert_eq!(startup_action(false, true, true), StartupAction::Keep);
+        assert_eq!(startup_action(false, false, false), StartupAction::Keep);
+    }
+
+    #[test]
+    fn adopting_the_system_state_saves_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = SettingsStore::open(directory.path());
+
+        adopt_system_state(&store, false).unwrap();
+
+        assert!(!store.get().starts_with_windows);
+        assert!(
+            !SettingsStore::open(directory.path())
+                .get()
+                .starts_with_windows
+        );
     }
 
     #[test]

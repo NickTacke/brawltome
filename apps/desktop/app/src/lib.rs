@@ -97,16 +97,16 @@ pub fn run() {
 
             let settings = open_settings(app.handle())?;
             start_overlay(app.handle(), settings.get().overlay_position)?;
-            let wants_autostart = settings.get().starts_with_windows;
+
+            // before the window reads the setting; a failure is not worth stopping the app
+            if let Err(error) = autostart::sync_at_start(app.handle(), &settings) {
+                log::warn!("{error}");
+            }
+
             app.manage(settings);
             let session = app.state::<SessionHandle>().inner().clone();
             updater::spawn(app.handle(), session.clone());
             tray::install(app.handle(), session)?;
-
-            // the first start registers it, because the default is on; a failure is not worth stopping the app
-            if let Err(error) = autostart::apply(app.handle(), wants_autostart) {
-                log::warn!("{error}");
-            }
 
             let launch_arguments: Vec<String> = std::env::args().collect();
             start_main_window(app.handle(), !was_autostarted(&launch_arguments));
