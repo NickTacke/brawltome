@@ -323,6 +323,16 @@ describe('observability deployment contract', () => {
     expect(severities.has('SourceQuotaNearLimit')).toBe(false)
   })
 
+  test('adds up dead letter cohorts after removing the api and worker duplicates', () => {
+    const operations = dashboard('operations')
+    const panel = operations.panels.find(({ title }) => title === 'Dead letters')
+
+    // both runtimes report the same gauge: max removes the duplicate per cohort, then sum adds the cohorts up
+    expect(panel?.targets?.map(({ expr }) => expr)).toEqual([
+      'sum by (work_class, kind, reason) (max by (work_class, kind, reason, cohort) (operation_dead_letters))',
+    ])
+  })
+
   test('provisions dashboards for every issue-219 operational view', () => {
     const operations = dashboard('operations')
     const http = dashboard('http-health')
