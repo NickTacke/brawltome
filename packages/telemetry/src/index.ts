@@ -211,6 +211,8 @@ const operationKind = [
   'statistics-lifetime-collection',
   'statistics-publication',
   'statistics-legend-meta-publication',
+  'esports-refresh',
+  'esports-sets-backfill',
 ] as const
 
 const outcome = [
@@ -918,7 +920,7 @@ export function createTelemetry(options: {
   }
 }) {
   const capacity = Math.max(1, Math.min(options.capacity ?? 1000, 10_000))
-  // operation_dead_letters keeps a series for every kind in every work class, 136 with twenty kinds and the cohorts
+  // operation_dead_letters keeps a series for every kind in every work class, 148 with twenty-two kinds and the cohorts
   const maxSeries = Math.max(1, Math.min(options.maxSeriesPerMetric ?? 256, 1024))
   const drainIntervalMs = Math.max(0, Math.min(options.drainIntervalMs ?? 1000, 60_000))
   const exportTimeoutMs = Math.max(1, Math.min(options.exportTimeoutMs ?? 250, 5_000))

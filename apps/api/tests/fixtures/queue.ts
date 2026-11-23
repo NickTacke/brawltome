@@ -34,6 +34,7 @@ import {
   type WorkerAccountsDependencies,
   type WorkerClanDependencies,
   type WorkerDiscoveryDependencies,
+  type WorkerEsportsDependencies,
   type WorkerLeaderboardDependencies,
   type WorkerPlayerDependencies,
   type WorkerStatisticsDependencies,
@@ -81,6 +82,9 @@ export const idleStatisticsDependencies: WorkerStatisticsDependencies = {
   },
   collectionPace: { waitMsForTurn: () => 0 },
 }
+
+// the esports jobs only reach the database when they run
+export const idleEsportsDependencies: WorkerEsportsDependencies = { database: {} as Database }
 
 export const idleLeaderboardDependencies: WorkerLeaderboardDependencies = {
   publication: {} as WorkerLeaderboardDependencies['publication'],
@@ -146,6 +150,7 @@ function createIdleWorkerJobs(discoveryChecks: DiscoveryEffectChecks): JobDefini
     accounts: idleAccounts,
     player: idlePlayerDependencies,
     statistics: idleStatisticsDependencies,
+    esports: idleEsportsDependencies,
   })
 }
 

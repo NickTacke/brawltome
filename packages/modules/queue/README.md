@@ -85,7 +85,7 @@ If the job saves results of its own, those tables go in the owner's migrations.
    `tooling/architecture/src/current-policy.ts`.
 4. Add the kind to `allOperationKinds` in `domain/queue-telemetry.ts`, `OperationLease` in `model.ts`, and
    `operationKind` in `packages/telemetry/src/index.ts`. A kind missing from that last list loses its metrics with no
-   error. `operation_dead_letters` is at 136 of its 256 series (20 kinds across 6 work classes, 12 admission series,
+   error. `operation_dead_letters` is at 148 of its 256 series (22 kinds across 6 work classes, 12 admission series,
    and 4 for the player refresh cohorts) and a kind adds 6. Dropped series break the dead-letter alert, so check the limit in `createTelemetry`
    first.
 5. Test it with `runJobOnce` from `@brawltome/queue/testing`.

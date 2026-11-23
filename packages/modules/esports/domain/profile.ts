@@ -30,6 +30,8 @@ export type SetRecord = { wins: number; losses: number }
 
 export type EsportsResult = {
   id: string
+  // brawltools' id of the event, which keys its stored sets
+  tournamentId: string
   mode: EsportsMode
   placement: number
   fullName: string
@@ -129,6 +131,7 @@ function toResult(stored: StoredPlacement, matches: RawMatch[], legendKeys: Read
 
   return {
     id: `${mode}-${stored.tournamentId}`,
+    tournamentId: stored.tournamentId,
     mode,
     placement: stored.placement,
     fullName: stored.tournamentName,
