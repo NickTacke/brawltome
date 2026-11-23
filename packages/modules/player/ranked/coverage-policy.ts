@@ -37,7 +37,13 @@ export type RankedCoverageCandidate = { brawlhallaId: number; rating: number; la
 
 export type RankedCoverageAttempt = { lastPlannedAt: Date | null; lastFailedAt: Date | null }
 
-export type DueCoverageRefresh = { brawlhallaId: number; band: RankedCoverageBand; lastSuccessAt: Date | null }
+// dueAt is when the profile fell outside its band's interval, null when it never refreshed
+export type DueCoverageRefresh = {
+  brawlhallaId: number
+  band: RankedCoverageBand
+  lastSuccessAt: Date | null
+  dueAt: Date | null
+}
 
 export function coverageBandOf(rating: number): RankedCoverageBandPolicy | null {
   return rankedCoveragePolicy.bands.find(({ minimumRating }) => rating >= minimumRating) ?? null
@@ -72,16 +78,23 @@ function isDue(
   return true
 }
 
-function compareStalestFirst(left: DueCoverageRefresh, right: DueCoverageRefresh): number {
-  const leftAt = left.lastSuccessAt?.getTime() ?? Number.NEGATIVE_INFINITY
-  const rightAt = right.lastSuccessAt?.getTime() ?? Number.NEGATIVE_INFINITY
+// by how long each has been due, not by age: a weekly player a day overdue waits behind a daily one two days overdue
+function compareMostOverdueFirst(left: DueCoverageRefresh, right: DueCoverageRefresh): number {
+  const leftDueAt = left.dueAt?.getTime() ?? Number.NEGATIVE_INFINITY
+  const rightDueAt = right.dueAt?.getTime() ?? Number.NEGATIVE_INFINITY
 
-  if (leftAt !== rightAt) return leftAt < rightAt ? -1 : 1
+  if (leftDueAt !== rightDueAt) return leftDueAt < rightDueAt ? -1 : 1
 
   return left.brawlhallaId - right.brawlhallaId
 }
 
-/** Players whose ranked profile is older than their band's interval, never-refreshed first, then the stalest. */
+function dueAtOf(lastSuccessAt: Date | null, band: RankedCoverageBandPolicy): Date | null {
+  if (lastSuccessAt === null) return null
+
+  return new Date(lastSuccessAt.getTime() + band.refreshIntervalMs)
+}
+
+/** Players whose ranked profile is older than their band's interval, never-refreshed first, then the most overdue. */
 export function dueCoverageRefreshes(input: {
   candidates: readonly RankedCoverageCandidate[]
   attempts: ReadonlyMap<number, RankedCoverageAttempt>
@@ -94,10 +107,15 @@ export function dueCoverageRefreshes(input: {
 
     if (!band || !isDue(candidate, band, input.attempts.get(candidate.brawlhallaId), input.now)) continue
 
-    due.push({ brawlhallaId: candidate.brawlhallaId, band: band.band, lastSuccessAt: candidate.lastSuccessAt })
+    due.push({
+      brawlhallaId: candidate.brawlhallaId,
+      band: band.band,
+      lastSuccessAt: candidate.lastSuccessAt,
+      dueAt: dueAtOf(candidate.lastSuccessAt, band),
+    })
   }
 
-  return due.sort(compareStalestFirst)
+  return due.sort(compareMostOverdueFirst)
 }
 
 export type RankedCoverageAge = 'under_1_day' | '1_to_2_days' | '2_to_7_days' | 'over_7_days' | 'missing'

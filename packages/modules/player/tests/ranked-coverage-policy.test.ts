@@ -58,16 +58,37 @@ describe('ranked coverage policy', () => {
     ])
   })
 
-  test('orders never-refreshed players first, then the stalest, whatever their band', () => {
+  test('orders never-refreshed players first, then the most overdue for their band', () => {
     const candidates = [
+      // two days old, due daily: a day overdue
       { brawlhallaId: 10, rating: 2300, lastSuccessAt: agedBy(2 * dayMs) },
+      // 30 days old, due weekly: 23 days overdue
       { brawlhallaId: 11, rating: 1850, lastSuccessAt: agedBy(30 * dayMs) },
       { brawlhallaId: 12, rating: 2050, lastSuccessAt: null },
-      { brawlhallaId: 13, rating: 2150, lastSuccessAt: agedBy(3 * dayMs) },
+      // 3.5 days old, due every two days: 1.5 days overdue
+      { brawlhallaId: 13, rating: 2150, lastSuccessAt: agedBy(3.5 * dayMs) },
       { brawlhallaId: 9, rating: 1990, lastSuccessAt: null },
     ]
 
     expect(dueIds(candidates)).toEqual([9, 12, 11, 13, 10])
+  })
+
+  test('puts a daily player long overdue ahead of an older weekly player who just became due', () => {
+    const candidates = [
+      // eight days old, due weekly: one day overdue
+      { brawlhallaId: 30, rating: 1800, lastSuccessAt: agedBy(8 * dayMs) },
+      // three days old, due daily: two days overdue
+      { brawlhallaId: 31, rating: 2250, lastSuccessAt: agedBy(3 * dayMs) },
+    ]
+
+    expect(dueIds(candidates)).toEqual([31, 30])
+
+    expect(dueCoverageRefreshes({ candidates, attempts: new Map(), now })[0]).toEqual({
+      brawlhallaId: 31,
+      band: '2200+',
+      lastSuccessAt: agedBy(3 * dayMs),
+      dueAt: agedBy(2 * dayMs),
+    })
   })
 
   test('skips players the planner tried within their interval, and for a week after a dead letter', () => {

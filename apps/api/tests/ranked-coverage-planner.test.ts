@@ -106,7 +106,7 @@ describe('ranked coverage planner config', () => {
 })
 
 describe('ranked coverage planner', () => {
-  test('requests the stalest due player first and paces one call per spacing', async () => {
+  test('requests the most overdue player first and paces one call per spacing', async () => {
     const { state, planner, advance, counter } = createFakes()
 
     expect(await planner.tick()).toBe(1)
