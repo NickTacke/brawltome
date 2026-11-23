@@ -2,15 +2,14 @@ import { tickCounts } from './queue-ticks'
 
 type Tick = { key: string; style: string }
 
+function tickRun(count: number, kind: string, style: string): Tick[] {
+  return Array.from({ length: count }, (_, index) => ({ key: `${kind}-${index}`, style }))
+}
+
 function ticksFor(wins: number, losses: number): Tick[] {
   const { winTicks, lossTicks } = tickCounts(wins, losses)
-  const winRun = Array.from({ length: winTicks }, (_, index) => ({ key: `win-${index}`, style: 'bg-record-win/85' }))
-  const lossRun = Array.from({ length: lossTicks }, (_, index) => ({
-    key: `loss-${index}`,
-    style: 'bg-record-loss/70',
-  }))
 
-  return [...winRun, ...lossRun]
+  return [...tickRun(winTicks, 'win', 'bg-record-win/85'), ...tickRun(lossTicks, 'loss', 'bg-record-loss/70')]
 }
 
 /** Wins then losses, one tick each, beside the record it draws. The record itself is the text. */
