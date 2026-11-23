@@ -6,7 +6,13 @@
 // with the last step's time; it returns at once for a time it has seen, 0x0149). Its rates are per update, not per
 // millisecond: tuned once for a 16 ms step (0.384, `_-519._-G4c`, is 24 frames a second over a 16 ms step), never
 // scaled by the frame's time. At 60 frames a second and 62.5 steps, one step in 25 shares its frame with the next and
-// gets no update of its own; `cameraTrack` updates every step, as the game does on a screen of 63 Hz or more.
+// gets no update of its own.
+//
+// A replay's speed changes how many steps a frame runs, not how often the camera updates: the replay clock moves by
+// the frame's time times the speed (`_-D5k._-763` 0x0318-0x04b4). So at 2x the camera eases once for every two steps,
+// and at 0.5x once a step but only every other frame. The half second's hold is timed by the real clock
+// (`_-D5k._-w3Q`), so it lasts twice as many steps at 2x and half as many at 0.5x. `cameraTrack` takes the frame rate
+// and the speed, and plays the camera as the game would at them.
 
 import type { Rect } from './format.ts'
 
@@ -86,9 +92,13 @@ export type CameraOptions = {
   // above where its art is drawn
   itemHeights?: Record<string, number>
   // the screen's frame rate, for a camera updated once per drawn frame as the game's is: a frame that runs two steps
-  // updates once, after the second, and the half second's hold is timed by the frame's clock. Left out, it updates
-  // every step, as on a screen of 63 Hz or more
+  // updates once, after the second, and the half second's hold is timed by the frame's clock. Left out, a frame lasts
+  // one step's 16 ms, so at 1x it updates every step, as on a screen of 63 Hz or more
   fps?: number
+  // how fast the replay plays, as the game's 0.25, 0.5, 1, 2 and 5: the steps a frame runs are its time times this.
+  // Left out, 1. Zero and less are refused: paused, the game runs no step and its camera stays where it is, and
+  // backwards it moves on from wherever a rewind found it, which no track from the match's start can hold
+  speed?: number
 }
 
 // Box is a rectangle kept as its sides, as the game's flash.geom.Rectangle sets them
@@ -176,7 +186,7 @@ function easeIn(way: number, deadZone: number): number {
   return way - move < deadZone ? way - deadZone : move
 }
 
-// GameCamera is the game's camera, updated once per step with what it frames
+// GameCamera is the game's camera, updated once per drawn frame with what it frames
 export class GameCamera {
   readonly view: Box
   private readonly bounds: Box
@@ -603,16 +613,44 @@ export function framedItems(input: CameraInput, bounds: Rect): CameraInput {
   return { players: input.players, items }
 }
 
-// frameOf is the frame a step is drawn in: its clock, in whole milliseconds as the game's, and whether the step is the
-// frame's last. Without a frame rate every step is a frame's last
-function frameOf(step: number, fps: number | undefined): { now: number; isLast: boolean } {
-  if (!fps) return { now: step * CAMERA.stepMs, isLast: true }
+// Pace is how a replay is played: how long a drawn frame lasts on the real clock, and how fast the replay clock runs
+// against it
+type Pace = { frameMs: number; speed: number }
 
-  const frameMs = 1000 / fps
-  const frame = Math.ceil(((step + 1) * CAMERA.stepMs - 1) / frameMs)
-  const now = Math.floor(frame * frameMs + 1)
+function paceOf(options: CameraOptions): Pace {
+  const speed = options.speed ?? 1
 
-  return { now, isLast: Math.floor(now / CAMERA.stepMs) - 1 === step }
+  if (!Number.isFinite(speed) || speed <= 0) throw new RangeError(`camera track: speed must be above 0, got ${speed}`)
+
+  return { frameMs: options.fps ? 1000 / options.fps : CAMERA.stepMs, speed }
+}
+
+// clockAt is the real clock at a frame, counted from 1, in whole milliseconds as the game's
+const clockAt = (frame: number, pace: Pace) => Math.floor(frame * pace.frameMs + 1)
+
+// stepsRunBy is how many steps have run once the real clock reads now: the replay clock is the real one times the
+// speed (`_-D5k._-763` 0x0318-0x04b4), and a step runs for each 16 ms of it (`_-D5k._-F4J` 0x0749)
+const stepsRunBy = (now: number, pace: Pace) => Math.floor((now * pace.speed) / CAMERA.stepMs)
+
+// clockWhenRun is the first millisecond of the real clock by which a step has run
+function clockWhenRun(step: number, pace: Pace): number {
+  const now = Math.ceil(((step + 1) * CAMERA.stepMs) / pace.speed)
+
+  // a speed like 0.7 doesn't divide evenly, and the division can land a millisecond to either side
+  if (stepsRunBy(now - 1, pace) > step) return now - 1
+
+  if (stepsRunBy(now, pace) <= step) return now + 1
+
+  return now
+}
+
+// frameOf is the frame a step is drawn in: its clock, and whether the step is the frame's last. At 2x two steps share
+// each frame; below 1x some frames run no step, and no step is drawn in those
+function frameOf(step: number, pace: Pace): { now: number; isLast: boolean } {
+  const frame = Math.ceil((clockWhenRun(step, pace) - 1) / pace.frameMs)
+  const now = clockAt(frame, pace)
+
+  return { now, isLast: stepsRunBy(now, pace) - 1 === step }
 }
 
 // rectAt is a track's rectangle at a step, between the two steps around it
@@ -629,16 +667,18 @@ function rectAt(steps: Float64Array, step: number): Rect | undefined {
   return { x: value(0), y: value(1), width: value(2), height: value(3) }
 }
 
-// cameraTrack plays the camera over a line's steps. bounds is the level's CameraBounds (LevelDesc, Dynamic.swz); see
-// CameraOptions for the rest
+// cameraTrack plays the camera over a line's steps, from the first, at one frame rate and one speed. bounds is the
+// level's CameraBounds (LevelDesc, Dynamic.swz); see CameraOptions for the rest
 export function cameraTrack(timeline: CameraTimeline, bounds: Rect, options: CameraOptions = {}): CameraTrack {
   const camera = new GameCamera(bounds, options)
   const inputAt = cameraInputs(timeline, options)
+  const pace = paceOf(options)
   const steps = new Float64Array((timeline.endStep + 1) * 4)
 
   for (let step = 0; step <= timeline.endStep; step++) {
-    const { now, isLast } = frameOf(step, options.fps)
+    const { now, isLast } = frameOf(step, pace)
 
+    // the steps before a frame's last were never drawn at this pace: they keep the view of the frame before
     if (isLast) camera.update(step * CAMERA.stepMs, framedItems(inputAt(step), bounds), now)
 
     const view = camera.view
