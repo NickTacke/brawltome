@@ -91,6 +91,8 @@ function bestFirst(left: EsportsResult, right: EsportsResult): number {
   return left.placement - right.placement || right.startTime - left.startTime
 }
 
+// the same pick as pickHighlights in packages/modules/esports/domain/highlights.ts, whose sets the refresh fetches
+// first for the card art; change one and change the other
 function splitHighlights(results: EsportsResult[]) {
   const highlights = results
     .filter((result) => result.placement <= highlightCutoff)
