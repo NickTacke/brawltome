@@ -176,6 +176,16 @@ describe('the controls over a stage that fills the screen', () => {
     expect(isShown()).toBe(false)
   })
 
+  test('are not held up by a right press, whose menu takes the release', async () => {
+    jest.useFakeTimers()
+    await mount(<ControlsProbe isPlaying isFullscreen />)
+
+    pointer('[data-stage-window]', 'pointerdown', { button: 2, buttons: 2 })
+    wait(2600)
+
+    expect(isShown()).toBe(false)
+  })
+
   test('always show on a phone held upright, where they lie under the stage', async () => {
     jest.useFakeTimers()
     await mount(<ControlsProbe isPlaying isPhone isFullscreen />)

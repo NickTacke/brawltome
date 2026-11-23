@@ -53,7 +53,8 @@ export function useStageControls(options: StageControlsOptions) {
 
   function press(event: PointerEvent) {
     wasShownOnPress.current = isShown || event.pointerType === 'mouse'
-    setIsPressed(true)
+    // only the main button scrubs; the browser's menu takes the release of the right one
+    setIsPressed(event.button === 0)
     wake()
   }
 
