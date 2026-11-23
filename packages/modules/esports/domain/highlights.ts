@@ -8,7 +8,11 @@ function bestFirst(left: EsportsResult, right: EsportsResult): number {
   return left.placement - right.placement || right.startTime - left.startTime
 }
 
-/** The results the section leads with as large cards: the four best top-8 finishes, the newer first on a tie. */
+/**
+ * The results the section leads with as large cards: the four best top-8 finishes, the newer first on a tie. The
+ * site picks them again in `apps/site/src/components/player/esports/EsportsSection.tsx`, and the two must agree, or
+ * a card shows up whose sets the refresh never fetched.
+ */
 export function pickHighlights(results: EsportsResult[]): EsportsResult[] {
   const topEight = results.filter((result) => result.placement <= highlightCutoff)
 
