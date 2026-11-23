@@ -1,0 +1,23 @@
+{
+  "format": 4,
+  "sheets": [
+    {
+      "src": "sheets/e14464415513f495.webp",
+      "w": 268,
+      "h": 312,
+      "bytes": 3200,
+      "weights": [
+        { "src": "sheets/b48fdf6fdeee21c2.webp", "bytes": 1572 },
+        { "src": "sheets/df952bc71cdd45cb.webp", "bytes": 3882 }
+      ]
+    }
+  ],
+  "pieces": [[0, 2, 2, 186, 152, -43, -76, 103, 84], [0, 2, 158, 186, 152, -43, -76, 103, 84]],
+  "bones": { "a_WeaponPistol": [0], "a_WeaponPistolRight": [1] },
+  "weapons": {},
+  "set": { "kind": "weaponSkin", "drawing": 1 },
+  "swappable": [
+    [1, 11560192, 8399104, 14474961, 12042147, 3490871],
+    [1, 11560192, 8399104, 14474961, 12042147, 3490871]
+  ]
+}

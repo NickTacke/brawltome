@@ -80,6 +80,87 @@ export type ArtGroup = {
   weapons: Record<string, Record<string, number[]>>
 }
 
+// Format 4 is the pre-drawn art's: each skin and weapon skin drawn once per patch as a set, and the player classes'
+// own art in sets of the bones each animation is the first to show, which a match's manifest names instead of drawing
+// its players' art. A reader takes formats 3 and 4, and a format 4 manifest may list format 3 groups
+export const SET_FORMAT = 4
+
+// the formats src/load.ts reads
+export const FORMATS: readonly number[] = [FORMAT, SET_FORMAT]
+
+// SetKind is what a set is drawn for: a costumeTypes.csv row, a weaponSkinTypes.csv row, or player classes' own art
+export type SetKind = 'skin' | 'weaponSkin' | 'class'
+
+// SetSheet is a format 4 group's sheet. A sheet with weights is lossless, its swappable fills drawn black, and each
+// weight sheet is the same size: a piece's colour k (0-based) is channel k % 3 of weights[floor(k / 3)], how much of
+// the pixel that colour covers times 255. A sheet holds pieces with weights or pieces without, never both
+export type SetSheet = { src: string; w: number; h: number; bytes: number; weights?: { src: string; bytes: number }[] }
+
+// ArtGroupFormat4 is art/<fingerprint>.json in format 4: a set, or a match's own group beside sets. A sprite frame
+// past the end of a bone's row shows the row's last piece
+export type ArtGroupFormat4 = {
+  format: typeof SET_FORMAT
+  sheets: SetSheet[]
+  pieces: PieceRow[]
+  bones: Record<string, number[]>
+  // {} in a set: a weapon skin's art is a set of its own
+  weapons: Record<string, Record<string, number[]>>
+  // no row's id: rows that draw the same pieces share a set
+  set?: { kind: SetKind; drawing: number }
+  // per piece: [art type, colour, colour, ...], the colours its weights are for in the order of its weights, or []
+  // when no colour rule reaches it
+  swappable?: number[][]
+}
+
+// AnyArtGroup is an art group of either format, as a reader takes them
+export type AnyArtGroup = ArtGroup | ArtGroupFormat4
+
+// ManifestLook is one look a player has in a match: the held weapon, the index into the line's playerLooks when it
+// records them, the player's art groups it's drawn from in lookup order (weapon skin set, skin set, class sets, then
+// the match's own groups), and its swaps, [from, to, art type], in the game's order
+export type ManifestLook = { weapon: string; look?: number; art: number[]; swaps: [number, number, number][] }
+
+export type ManifestPlayerFormat4 = ManifestPlayer & { looks: ManifestLook[] }
+
+// ManifestFormat4 is format 3 with each player's looks. bytes and sheetOrder cover only the match's own files: a set's
+// file gives its sheets' sizes
+export type ManifestFormat4 = Omit<Manifest, 'format' | 'players'> & {
+  format: typeof SET_FORMAT
+  players: Record<string, ManifestPlayerFormat4>
+}
+
+// AnyManifest is a manifest of either format, as a reader takes them
+export type AnyManifest = Manifest | ManifestFormat4
+
+// SetPath is where a set is stored: art/<fingerprint>.json
+export type SetPath = `art/${string}.json`
+
+// DRAW_PER_LOOK is the index's word for a row whose art no set can draw: a match draws its looks as it does without
+// sets
+export const DRAW_PER_LOOK = 'draw per look'
+
+// NOTHING_TO_DRAW is the index's word for a row or a class set whose art draws nothing, so it needs no set
+export const NOTHING_TO_DRAW = 'nothing to draw'
+
+export type SetName = SetPath | typeof DRAW_PER_LOOK | typeof NOTHING_TO_DRAW
+
+// ClassSetName is a class set in the index: the bones whose own art it holds, and its name
+export type ClassSetName = { set: SetName; bones: string[] }
+
+// SetIndex is sets/<32 hex of its SHA-256>.json: the name of every set of a patch, by CostumeID and WeaponSkinID, and
+// the class sets by class and then by the animation that's the first to show their bones. game is the SHA-256 of the
+// patch's BrawlhallaAir.swf. The replay worker reads it; a manifest names the sets themselves
+export type SetIndex = {
+  format: typeof SET_FORMAT
+  drawing: number
+  pixelsPerUnit: number
+  patch: string
+  game: string
+  skins: Record<string, SetName>
+  weaponSkins: Record<string, SetName>
+  classes: Record<string, Record<string, ClassSetName>>
+}
+
 // soft lines are the platforms a player can drop through
 export type LevelSegment = { fromX: number; fromY: number; toX: number; toY: number; isSoft: boolean }
 
