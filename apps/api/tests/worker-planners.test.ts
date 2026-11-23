@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { AcceptOperationResult } from '@brawltome/queue'
+import { createTelemetry } from '@brawltome/telemetry'
 import { createPlanners, type PlannerDependencies, runPlanners } from '../src/worker/planners'
+
+const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
 
 type Call = [string, ...unknown[]]
 
@@ -157,15 +160,15 @@ describe('worker planners', () => {
     ])
 
     // 2 activated + 7 monitoring + 5 cohort + 7 name verification + 11 freshness + 5 schedules
-    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 5)
+    expect(await runPlanners(planners, idleTelemetry)).toBe(2 + 7 + 5 + 7 + 11 + 5)
     // the schedules are already in place on the second tick
-    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11)
+    expect(await runPlanners(planners, idleTelemetry)).toBe(2 + 7 + 5 + 7 + 11)
   })
 
   test('runs the planners in a fixed order', async () => {
     const { dependencies, calls } = createFakes({ awaitingRefreshes: ['refresh-1'], reservedRefreshes: ['refresh-1'] })
 
-    await runPlanners(createPlanners(dependencies))
+    await runPlanners(createPlanners(dependencies), idleTelemetry)
 
     expect(callNames(calls)).toEqual([
       'activate',
@@ -195,11 +198,23 @@ describe('worker planners', () => {
     expect(calls).toEqual([['activate', 'refresh-2']])
   })
 
-  test('stops the tick when a planner throws', async () => {
+  test('runs the other planners when one throws, and logs and counts its failure', async () => {
     const { dependencies, calls } = createFakes({ failMonitoring: true })
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+    const errors: Array<{ event: string; fields: unknown }> = []
 
-    await expect(runPlanners(createPlanners(dependencies))).rejects.toThrow('monitoring unavailable')
-    expect(callNames(calls)).toEqual(['reconcile-primary-monitoring'])
+    telemetry.logger.error = (event, _error, fields) => {
+      errors.push({ event, fields })
+    }
+
+    // 5 cohort + 7 name verification + 11 freshness + 5 schedules, without primary monitoring
+    expect(await runPlanners(createPlanners(dependencies), telemetry)).toBe(5 + 7 + 11 + 5)
+    expect(callNames(calls)).toContain('clan-weekly-snapshot-schedule')
+    expect(errors).toEqual([{ event: 'worker.planner.failed', fields: { planner: 'primary-monitoring' } }])
+
+    const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'worker_planner_failures_total')
+
+    expect(failures?.series).toEqual([{ labels: { planner: 'primary-monitoring' }, value: 1 }])
   })
 
   describe('schedules', () => {
