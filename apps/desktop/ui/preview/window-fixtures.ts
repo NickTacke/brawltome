@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import type { AppStatus, RecentMatch } from '../window/app-status'
+import type { AppStatus, OwnResult, RecentMatch } from '../window/app-status'
 
 // the json files are the shape the app sends; the rust tests compare against the same files
 const fixtureFiles = import.meta.glob<AppStatus>('../../tests/fixtures/app-status-*.json', {
@@ -54,7 +54,24 @@ function busyEvening(): AppStatus {
     recentMatch(128, [['Sunder', 'Mordex']], 11),
   ]
 
-  return { ...requireFixture('ready'), recentMatches }
+  // every ranked 1v1 of the evening, also the two that dropped off the list; the 2v2 doesn't count
+  const recentResults = [
+    ownResult(240, 17),
+    ownResult(190, -9),
+    ownResult(128, 11),
+    ownResult(31, 21),
+    ownResult(12, -16),
+    ownResult(0.5, 18),
+  ]
+
+  const ready = requireFixture('ready')
+  const you = ready.you === null ? null : { ...ready.you, recentResults }
+
+  return { ...ready, you, recentMatches }
+}
+
+function ownResult(minutesAgo: number, ratingChange: number): OwnResult {
+  return { atMs: EVENING_MS - minutesAgo * MINUTE_MS, isWin: ratingChange > 0, ratingChange }
 }
 
 export type WindowCell = { title: string; status: AppStatus; nowMs: number }

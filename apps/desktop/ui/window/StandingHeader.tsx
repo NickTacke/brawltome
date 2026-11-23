@@ -1,13 +1,15 @@
 import { BannerSlot } from '../overlay/CardHead'
 import { signedChange } from '../overlay/post-match'
 import type { OwnStanding } from './app-status'
-import { ownRankText, ownTier, type TodayResults } from './standing-format'
+import { ownRankText, ownTier, type TodayResults, todayResults } from './standing-format'
 
-type StandingHeaderProps = { you: OwnStanding | null; today: TodayResults | null }
+type StandingHeaderProps = { you: OwnStanding | null; nowMs: number }
 
 // the player's own banner and elo, drawn like the overlay cards; the game's memory fills it in the first ranked 1v1
-export function StandingHeader({ you, today }: StandingHeaderProps) {
+export function StandingHeader({ you, nowMs }: StandingHeaderProps) {
   if (you === null) return <WaitingHeader />
+
+  const today = todayResults(you.recentResults, nowMs)
 
   return (
     <section className="standing">

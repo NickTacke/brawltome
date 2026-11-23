@@ -102,19 +102,27 @@ describe('main window header', () => {
     expect(header).toContain('src="/banners/Diamond.png"')
   })
 
-  test('leaves the day out while no match has a result', () => {
-    const header = partOf(render(withoutResults(fixture('ready'))), 'standing')
+  test('leaves the day out while no ranked 1v1 has a result', () => {
+    const ready = fixture('ready')
+    const you = ready.you === null ? null : { ...ready.you, recentResults: [] }
+    const header = partOf(render({ ...ready, you }), 'standing')
 
     expect(textOf(header)).not.toContain('Today')
+  })
+
+  test("counts the session's 1v1 results, not the recent matches", () => {
+    const ready = fixture('ready')
+    const twoVsTwoWin = { ...ready.recentMatches[1], isWin: true, ratingChange: 14 }
+    const header = partOf(render({ ...ready, recentMatches: [ready.recentMatches[0], twoVsTwoWin] }), 'standing')
+
+    expect(textOf(header)).toContain('Today·1W 0L·+18')
   })
 
   test('a player in placement has no tier yet', () => {
     const ready = fixture('ready')
 
-    const header = partOf(
-      render({ ...ready, you: { name: 'moonfall', legend: null, rating: 1186, games: 3 } }),
-      'standing',
-    )
+    const you = { name: 'moonfall', legend: null, rating: 1186, games: 3, recentResults: [] }
+    const header = partOf(render({ ...ready, you }), 'standing')
 
     expect(textOf(header)).toContain('Placement 3/10·1v1')
     expect(header).toContain('class="banner-empty"')

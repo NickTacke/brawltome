@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import type { AppStatus, RecentMatch } from '../ui/window/app-status'
+import type { AppStatus, OwnResult } from '../ui/window/app-status'
 import { todayResults } from '../ui/window/standing-format'
 import { type StatusLine, shortGameVersion, statusLines, timeAgo } from '../ui/window/status-format'
 
@@ -14,13 +14,8 @@ function fixture(name: string): AppStatus {
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 
-function recentMatch(startedAtMs: number, isWin: boolean | null, ratingChange: number | null): RecentMatch {
-  return {
-    startedAtMs,
-    opponents: [{ brawlhallaId: 91913839, name: 'Shinigami', legend: 'Hattori' }],
-    isWin,
-    ratingChange,
-  }
+function ownResult(atMs: number, ratingChange: number): OwnResult {
+  return { atMs, isWin: ratingChange > 0, ratingChange }
 }
 
 describe('status lines', () => {
@@ -124,20 +119,26 @@ describe('formats', () => {
 describe('today', () => {
   // noon, so a few hours either way stays on the same day in any time zone the tests run in
   const noonMs = new Date(2026, 10, 23, 12).getTime()
+  const midnightMs = new Date(2026, 10, 23).getTime()
 
   test('adds up the results of the day', () => {
-    const matches = [
-      recentMatch(noonMs - MINUTE_MS, true, 18),
-      recentMatch(noonMs - HOUR_MS, false, -16),
-      recentMatch(noonMs - 2 * HOUR_MS, true, 21),
+    const results = [
+      ownResult(noonMs - 2 * HOUR_MS, 21),
+      ownResult(noonMs - HOUR_MS, -16),
+      ownResult(noonMs - MINUTE_MS, 18),
     ]
 
-    expect(todayResults(matches, noonMs)).toEqual({ wins: 2, losses: 1, ratingChange: 23 })
+    expect(todayResults(results, noonMs)).toEqual({ wins: 2, losses: 1, ratingChange: 23 })
   })
 
-  test('skips matches without a result and matches of another day', () => {
-    const matches = [recentMatch(noonMs - MINUTE_MS, null, null), recentMatch(noonMs - 25 * HOUR_MS, true, 18)]
+  test('counts only results since local midnight', () => {
+    const results = [ownResult(midnightMs - MINUTE_MS, 30), ownResult(midnightMs + MINUTE_MS, 12)]
 
-    expect(todayResults(matches, noonMs)).toBeNull()
+    expect(todayResults(results, noonMs)).toEqual({ wins: 1, losses: 0, ratingChange: 12 })
+  })
+
+  test('is null without a result today', () => {
+    expect(todayResults([], noonMs)).toBeNull()
+    expect(todayResults([ownResult(noonMs - 25 * HOUR_MS, 18)], noonMs)).toBeNull()
   })
 })

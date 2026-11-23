@@ -9,7 +9,9 @@ use brawltome_desktop::lobby_client::{
 use brawltome_desktop::overlay_view::{Card, CardData, OverlayView};
 use brawltome_desktop::session::{Input, REFRESH_REASK_DELAY_MS};
 use brawltome_desktop::session_runner::{self, LinkOpener, OverlaySurface, SessionHandle};
-use brawltome_detection::{Event, MatchSnapshot, MatchType, Player};
+use brawltome_detection::{
+    Change, Event, MatchResult, MatchSnapshot, MatchType, Player, RankedStanding,
+};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 
@@ -448,6 +450,52 @@ async fn recent_matches_are_dated_by_how_long_ago_they_started() {
     assert!(
         (15_000..16_000).contains(&later_age_ms),
         "started {later_age_ms} ms ago after the match"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn own_results_are_dated_like_recent_matches() {
+    let harness = Harness::start(vec![Scripted {
+        delay_ms: 0,
+        result: Ok(answer_for(SHINIGAMI, false)),
+    }]);
+    let me = Player {
+        ranked: Some(RankedStanding {
+            rating: 1652,
+            games: 40,
+        }),
+        ..player(1, "me", 1, true)
+    };
+    let won = MatchResult {
+        rating: Change {
+            before: 1652,
+            after: 1667,
+        },
+        tier: Change {
+            before: 24,
+            after: 24,
+        },
+        team: None,
+    };
+
+    harness
+        .detect(Event::MatchStarted(MatchSnapshot {
+            match_type: MatchType::Ranked1v1,
+            players: vec![me, player(SHINIGAMI, "opponent", 2, false)],
+        }))
+        .await;
+    harness.detect(Event::MatchEnded).await;
+    harness.detect(Event::MatchResult(won)).await;
+    wait_ms(15_000).await;
+    // any later change publishes the status again, dated anew
+    harness.detect(Event::GameFound { process_id: 42 }).await;
+
+    let status = harness.handle.status().borrow().clone();
+    let you = status.you.expect("the own standing is read");
+    let age_ms = epoch_now_ms().saturating_sub(you.recent_results[0].at_ms);
+    assert!(
+        (15_000..16_000).contains(&age_ms),
+        "played {age_ms} ms ago at the next status"
     );
 }
 

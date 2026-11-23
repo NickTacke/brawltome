@@ -29,8 +29,17 @@ export type RecentMatch = {
   ratingChange: number | null
 }
 
-// the player's own 1v1 standing, from the game's memory
-export type OwnStanding = { name: string; legend: string | null; rating: number; games: number }
+// one ranked 1v1 result of this run, on the same clock as startedAtMs
+export type OwnResult = { atMs: number; isWin: boolean; ratingChange: number }
+
+// the player's own 1v1 standing, from the game's memory, with the 1v1 results of about the last day and a half
+export type OwnStanding = {
+  name: string
+  legend: string | null
+  rating: number
+  games: number
+  recentResults: OwnResult[]
+}
 
 export type AppStatus = {
   game: GameStatus

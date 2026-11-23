@@ -5,7 +5,6 @@ import { RecentMatches } from './RecentMatches'
 import { SettingsSection } from './SettingsSection'
 import { StandingHeader } from './StandingHeader'
 import { StatusSection } from './StatusSection'
-import { todayResults } from './standing-format'
 import { statusLines } from './status-format'
 import { TitleBar } from './TitleBar'
 
@@ -36,7 +35,7 @@ export function MainWindow({
   return (
     <div className="window">
       <TitleBar onMinimize={onMinimize} onClose={onClose} />
-      <StandingHeader you={status.you} today={todayResults(status.recentMatches, nowMs)} />
+      <StandingHeader you={status.you} nowMs={nowMs} />
       <StatusSection lines={statusLines(status)} onResume={onResume} />
       <RecentMatches matches={status.recentMatches} nowMs={nowMs} onOpenProfile={onOpenProfile} />
       <SettingsSection

@@ -5,7 +5,13 @@
   "update": { "state": "idle" },
   "isOverlayPaused": false,
   "isMatchRunning": false,
-  "you": { "name": "moonfall", "legend": "Bodvar", "rating": 2130, "games": 313 },
+  "you": {
+    "name": "moonfall",
+    "legend": "Bodvar",
+    "rating": 2130,
+    "games": 313,
+    "recentResults": [{ "atMs": 2001000, "isWin": true, "ratingChange": 18 }]
+  },
   "recentMatches": [
     {
       "startedAtMs": 1800000,

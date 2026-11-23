@@ -188,7 +188,7 @@ impl Session {
                 self.forget_awaited_result();
                 self.leave_match()
             }
-            Event::MatchResult(result) => self.on_match_result(&result),
+            Event::MatchResult(result) => self.on_match_result(&result, now_ms),
             Event::GameClosed => {
                 self.status.game = GameStatus::NotRunning;
                 self.status.detection = DetectionStatus::Waiting;
@@ -429,12 +429,18 @@ impl Session {
 
     /// the main window shows the player's own standing even while the overlay is paused
     fn note_own_standing(&mut self, snapshot: &MatchSnapshot) {
-        let own_standing = OwnStanding::read(snapshot);
-        self.is_own_result_due = own_standing.is_some();
+        let Some(mut own_standing) = OwnStanding::read(snapshot) else {
+            self.is_own_result_due = false;
+            return;
+        };
 
-        if own_standing.is_some() {
-            self.status.you = own_standing;
+        // each lobby reads the standing again; the results so far stay with it
+        if let Some(previous) = self.status.you.take() {
+            own_standing.recent_results = previous.recent_results;
         }
+
+        self.is_own_result_due = true;
+        self.status.you = Some(own_standing);
     }
 
     fn forget_awaited_result(&mut self) {
@@ -443,10 +449,10 @@ impl Session {
     }
 
     /// the result belongs to the match whose cards were shown; the main window gets it too
-    fn on_match_result(&mut self, result: &MatchResult) -> Vec<Effect> {
+    fn on_match_result(&mut self, result: &MatchResult, now_ms: u64) -> Vec<Effect> {
         if std::mem::take(&mut self.is_own_result_due) {
             if let Some(you) = &mut self.status.you {
-                you.apply_result(result);
+                you.apply_result(result, now_ms);
             }
         }
 
@@ -707,7 +713,9 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-    use crate::app_status::{DetectionStatus, GameStatus, ServiceStatus};
+    use crate::app_status::{
+        DetectionStatus, GameStatus, OwnResult, ServiceStatus, OWN_RESULTS_KEPT_MS,
+    };
     use crate::lobby_client::{LobbyKind, LobbyPlayer, PlayerAnswer, Standing, TeamAnswer};
     use crate::overlay_view::{
         Card, CardData, Failure, FailureReason, Known, PlayerHead, TeamData,
@@ -2137,7 +2145,41 @@ mod tests {
             legend: Some("Bodvar".to_string()),
             rating,
             games,
+            recent_results: Vec::new(),
         }
+    }
+
+    fn won_at(at_ms: u64, rating_change: i32) -> OwnResult {
+        OwnResult {
+            at_ms,
+            is_win: true,
+            rating_change,
+        }
+    }
+
+    fn with_results(standing: OwnStanding, recent_results: Vec<OwnResult>) -> OwnStanding {
+        OwnStanding {
+            recent_results,
+            ..standing
+        }
+    }
+
+    /// a ranked 1v1 started, ended and its result read, all at the given time
+    fn play_own_1v1(session: &mut Session, at_ms: u64) {
+        let lobby = with_local_player(ranked_1v1(), ranked_local_player(1652, 40));
+
+        session.handle(started(lobby), at_ms);
+        session.handle(detection(Event::MatchEnded), at_ms);
+        session.handle(won_1v1(), at_ms);
+    }
+
+    fn own_results(session: &Session) -> Vec<OwnResult> {
+        session
+            .status()
+            .you
+            .as_ref()
+            .map(|you| you.recent_results.clone())
+            .unwrap_or_default()
     }
 
     fn with_local_player(mut snapshot: MatchSnapshot, local: Player) -> MatchSnapshot {
@@ -2203,7 +2245,8 @@ mod tests {
 
         let effects = session.handle(won_1v1(), 201_000);
 
-        assert_eq!(session.status().you, Some(own_standing(1667, 41)));
+        let expected = with_results(own_standing(1667, 41), vec![won_at(201_000, 15)]);
+        assert_eq!(session.status().you, Some(expected));
         assert!(effects.contains(&Effect::StatusChanged(session.status().clone())));
     }
 
@@ -2240,7 +2283,7 @@ mod tests {
     }
 
     #[test]
-    fn a_paused_overlay_still_keeps_the_own_standing() {
+    fn a_1v1_played_while_the_overlay_is_paused_still_counts() {
         let mut session = Session::new();
         session.handle(Input::OverlayPaused(true), 0);
 
@@ -2254,6 +2297,53 @@ mod tests {
         session.handle(detection(Event::MatchEnded), 200_000);
         session.handle(won_1v1(), 201_000);
 
-        assert_eq!(session.status().you, Some(own_standing(1667, 41)));
+        let expected = with_results(own_standing(1667, 41), vec![won_at(201_000, 15)]);
+        assert_eq!(session.status().you, Some(expected));
+        assert!(session.status().recent_matches.is_empty());
+    }
+
+    #[test]
+    fn every_ranked_1v1_result_of_a_long_day_is_counted() {
+        let mut session = Session::new();
+        let played_at_ms: Vec<u64> = (0..8).map(|index| index * 600_000).collect();
+
+        for at_ms in &played_at_ms {
+            play_own_1v1(&mut session, *at_ms);
+        }
+
+        let expected: Vec<OwnResult> = played_at_ms
+            .iter()
+            .map(|at_ms| won_at(*at_ms, 15))
+            .collect();
+        assert_eq!(own_results(&session), expected);
+        assert_eq!(session.status().recent_matches.len(), MAX_RECENT_MATCHES);
+    }
+
+    #[test]
+    fn a_2v2_result_is_not_counted() {
+        let mut session = Session::new();
+        play_own_1v1(&mut session, 0);
+        let two_vs_two = with_local_player(ranked_2v2(), ranked_local_player(1652, 40));
+
+        session.handle(started(two_vs_two), 600_000);
+        session.handle(detection(Event::MatchEnded), 900_000);
+        session.handle(won_1v1(), 901_000);
+
+        assert_eq!(own_results(&session), vec![won_at(0, 15)]);
+    }
+
+    #[test]
+    fn results_older_than_a_day_and_a_half_are_dropped() {
+        let mut session = Session::new();
+        let next_day_ms = OWN_RESULTS_KEPT_MS + 1;
+        play_own_1v1(&mut session, 0);
+        play_own_1v1(&mut session, 1_000);
+
+        play_own_1v1(&mut session, next_day_ms);
+
+        assert_eq!(
+            own_results(&session),
+            vec![won_at(1_000, 15), won_at(next_day_ms, 15)]
+        );
     }
 }

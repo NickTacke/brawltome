@@ -1,5 +1,5 @@
 import { isInPlacement, knownTier, PLACEMENT_GAMES, tierLabel } from '../overlay/card-format'
-import type { OwnStanding, RecentMatch } from './app-status'
+import type { OwnResult, OwnStanding } from './app-status'
 
 export type TodayResults = { wins: number; losses: number; ratingChange: number }
 
@@ -15,21 +15,15 @@ export function ownRankText(you: OwnStanding): string {
   return tierLabel(ownTier(you) ?? 'none')
 }
 
-// the matches of this run played on the same day as now that have a result; null when there are none
-export function todayResults(matches: RecentMatch[], nowMs: number): TodayResults | null {
+// the ranked 1v1 results since local midnight; null when there are none
+export function todayResults(results: OwnResult[], nowMs: number): TodayResults | null {
   const today = new Date(nowMs).toDateString()
+  const todays = results.filter((result) => new Date(result.atMs).toDateString() === today)
 
-  const results = matches.filter(
-    (recentMatch) =>
-      recentMatch.isWin !== null &&
-      recentMatch.ratingChange !== null &&
-      new Date(recentMatch.startedAtMs).toDateString() === today,
-  )
+  if (todays.length === 0) return null
 
-  if (results.length === 0) return null
+  const wins = todays.filter((result) => result.isWin).length
+  const ratingChange = todays.reduce((sum, result) => sum + result.ratingChange, 0)
 
-  const wins = results.filter((recentMatch) => recentMatch.isWin === true).length
-  const ratingChange = results.reduce((sum, recentMatch) => sum + (recentMatch.ratingChange ?? 0), 0)
-
-  return { wins, losses: results.length - wins, ratingChange }
+  return { wins, losses: todays.length - wins, ratingChange }
 }
