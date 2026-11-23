@@ -27,12 +27,19 @@ const playbackPath = '/match/6f9a7f4e-3c1d-4b2a-9e8f-1a2b3c4d5e6f/playback/main-
 // both players of the fixture are in play here, before the first KO
 const bothInPlayMs = 20_000
 
-function renderStagePlay(art: Art): string {
+function renderStagePlay(art: Art, isPlaying = false): string {
   const insights = readInsights('duel-a')
   const legends = { ...initialLegends(art, playbackPath), timeline: readPlaybackTimeline(readPlayback('duel-a')) }
 
   return renderToStaticMarkup(
-    <StagePlay insights={insights} legends={legends} timeMs={bothInPlayMs} cameraMode="game" selectedSlot={1} />,
+    <StagePlay
+      insights={insights}
+      legends={legends}
+      timeMs={bothInPlayMs}
+      cameraMode="game"
+      selectedSlot={1}
+      isPlaying={isPlaying}
+    />,
   )
 }
 
@@ -79,6 +86,13 @@ describe('the match stage', () => {
 
   test('its window has the shape of the game’s screen, whatever the level’s', () => {
     expect(elementWith(renderStagePlay(failedArt), 'data-stage-window')).toContain('aspect-video')
+  })
+
+  test('the picture of the level has a layer of its own only while the clock runs', () => {
+    const openingTag = (markup: string) => elementWith(markup, 'data-stage-picture').split('>')[0]
+
+    expect(openingTag(renderStagePlay(failedArt, true))).toContain('will-change-transform')
+    expect(openingTag(renderStagePlay(failedArt, false))).not.toContain('will-change-transform')
   })
 
   test('the camera is the game’s or fixed, nothing else', () => {
@@ -195,7 +209,14 @@ describe('the stage box on the playback frame', () => {
     const legends = initialLegends(failedArt, playbackPath)
 
     return renderToStaticMarkup(
-      <StagePlay insights={onLevel} legends={legends} timeMs={timeMs} cameraMode="stage" selectedSlot={1} />,
+      <StagePlay
+        insights={onLevel}
+        legends={legends}
+        timeMs={timeMs}
+        cameraMode="stage"
+        selectedSlot={1}
+        isPlaying={false}
+      />,
     )
   }
 

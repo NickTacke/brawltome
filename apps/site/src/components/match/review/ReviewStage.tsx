@@ -101,6 +101,7 @@ export function ReviewStage(props: ReviewStageProps) {
           />
         )}
         onBuffering={playback.setIsBuffering}
+        isPlaying={playback.isPlaying}
       />
     </StageFrame>
   )

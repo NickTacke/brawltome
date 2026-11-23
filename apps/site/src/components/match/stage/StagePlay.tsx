@@ -44,6 +44,8 @@ type StagePlayProps = {
   window?: TimeWindow | null
   // true while the moment on screen waits for its art
   onBuffering?: (isBuffering: boolean) => void
+  // true while the clock runs, when the camera moves the picture on every frame
+  isPlaying: boolean
 }
 
 // the stage's picture is as wide as the frame and has the stage box's shape, in a layer the size of the frame. the
@@ -65,6 +67,15 @@ function markLayerStyle(box: StageBox, camera: Camera): CSSProperties {
     width: `${place.width * 100}%`,
     height: `${place.height * 100}%`,
   }
+}
+
+// while the clock runs, the picture's layer is kept apart from the page, so the browser moves and scales it without
+// drawing the level again on every frame. that copy was drawn at an earlier zoom and is a little softer, so the layer
+// is only kept apart while playing, and a paused stage is drawn at its own zoom
+function pictureClass(isPlaying: boolean): string {
+  const place = 'absolute inset-0 origin-top-left'
+
+  return isPlaying ? `${place} will-change-transform` : place
 }
 
 // why the legends aren't drawn: they are still being drawn, or they aren't coming
@@ -126,7 +137,7 @@ export function StagePlay(props: StagePlayProps) {
         <div data-stage-window className={stageWindow}>
           {backgroundUrl ? <StageBackdrop imageUrl={backgroundUrl} /> : null}
           {/* the level, moved by the camera over the fixed background */}
-          <div data-stage-picture className="absolute inset-0 origin-top-left" style={pictureStyle(stage.box, camera)}>
+          <div data-stage-picture className={pictureClass(props.isPlaying)} style={pictureStyle(stage.box, camera)}>
             <StillStage
               stage={stage}
               art={art}
