@@ -52,7 +52,7 @@ function PatchCard({ note }: { note: PatchNote }) {
 export function PatchNews({ notes }: { notes: PatchNote[] }) {
   const viewAll = (
     <a href={patchNotesUrl} target="_blank" rel="noopener noreferrer" className={viewAllStyle}>
-      View all →
+      View all
     </a>
   )
 

@@ -27,7 +27,9 @@ import {
   createPostgresPlayerFreshness,
   createPostgresPlayerNameVerifications,
   createPostgresProfileViews,
+  createPostgresRankedCoverage,
   createPostgresRankedPlayers,
+  createRankedCoverageRefreshes,
   createRecentlyViewedRefreshes,
   createSteamPlayerEvidenceResolver,
   reconcilePrimaryMonitoring,
@@ -68,6 +70,7 @@ import {
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
+  readBrawltoolsRequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
 } from './operations-worker-config'
@@ -78,6 +81,7 @@ import {
   readPlayerNameVerificationConfig,
 } from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
+import { createRankedCoveragePlanner, readRankedCoveragePlannerConfig } from './ranked-coverage-planner'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
@@ -132,6 +136,7 @@ const workerConfig = readOperationsWorkerConfig(process.env)
 // three clients by role (main, lease renewals, discovery), sized in database-pools.ts to fit the connection budget
 const databases = createWorkerDatabases(configuredConnectionString, workerConfig)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
+const brawltoolsRequestLimit = readBrawltoolsRequestLimit(process.env.BRAWLTOOLS_REQUEST_LIMIT)
 
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
@@ -249,6 +254,7 @@ const workerJobs = createWorkerJobs({
     sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
     ...createStatisticsCollection((queue) => createWorkerBhApiClient(undefined, queue)),
   },
+  esports: { database: databases.main },
 })
 
 const jobRegistry = createJobRegistry(workerJobs)
@@ -269,9 +275,11 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
   sourceLimits: {
     'brawlhalla-v0': brawlhallaV0RequestLimit,
     'brawlhalla-v1': brawlhallaV1RequestLimit,
+    brawltools: brawltoolsRequestLimit,
   },
-  sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60 },
-  sourceBackgroundHeadroom,
+  sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60, brawltools: 60 },
+  // brawltools has no on-demand callers, so its whole limit goes to the esports jobs
+  sourceBackgroundHeadroom: { 'brawlhalla-v0': sourceBackgroundHeadroom, 'brawlhalla-v1': sourceBackgroundHeadroom },
   minimumSourceSpacingMs: 150,
 })
 
@@ -435,6 +443,15 @@ const freshnessPlanner = createFreshnessPlanner({
   telemetry,
 })
 
+const rankedCoveragePlanner = createRankedCoveragePlanner({
+  config: readRankedCoveragePlannerConfig(process.env),
+  readSourceUsage: readV0SourceUsage,
+  readSourcePausedUntil: () => requestAdmission.sourcePausedUntil('brawlhalla-v0'),
+  coverage: createPostgresRankedCoverage(databases.main),
+  operations: createRankedCoverageRefreshes(databases.main),
+  telemetry,
+})
+
 const planners = createPlanners({
   operations,
   actorAdmission: requestAdmission,
@@ -454,6 +471,7 @@ const planners = createPlanners({
   statisticsCohort: { reconcile: () => reconcileStatisticsCohort(statistics, statisticsReservations, ranking.queries) },
   nameVerification: nameVerificationPlanner,
   freshness: freshnessPlanner,
+  rankedCoverage: rankedCoveragePlanner,
   schedules: {
     store: {
       leaderboard: (schedule) => reconcileLeaderboardSchedule(databases.main, schedule),
@@ -486,7 +504,7 @@ try {
       process.exitCode = 1
       requestShutdown()
     },
-    reconcile: () => runPlanners(planners),
+    reconcile: () => runPlanners(planners, telemetry),
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
     },

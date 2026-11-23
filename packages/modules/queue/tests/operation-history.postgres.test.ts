@@ -77,6 +77,29 @@ describe('countActive', () => {
     expect(await countRecentlyViewed()).toBe(before + 1)
   })
 
+  test('leaves out a reservation whose admission window has passed', async () => {
+    const countVisitors = () =>
+      countActive(database, { kind: 'interactive-player-refresh', workClass: 'interactive', payloadEquals: {} })
+
+    const before = await countVisitors()
+    const id = await insertRefresh({ brawlhallaId: 1_004, status: 'pending' })
+
+    await database.sql`
+      UPDATE queue.operations
+      SET status = 'awaiting_admission', reservation_token = gen_random_uuid(),
+          reservation_expires_at = clock_timestamp() + interval '30 seconds'
+      WHERE id = ${id}
+    `
+
+    expect(await countVisitors()).toBe(before + 1)
+
+    await database.sql`
+      UPDATE queue.operations SET reservation_expires_at = clock_timestamp() - interval '1 second' WHERE id = ${id}
+    `
+
+    expect(await countVisitors()).toBe(before)
+  })
+
   test('ignores operations whose payload does not match', async () => {
     const counted = await countActive(database, {
       kind: 'interactive-player-refresh',

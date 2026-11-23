@@ -5,6 +5,8 @@ import type { Pose } from './pose'
 // a tag with its three stock dots, and a little air around it
 export const tagHeightPx = 20
 export const tagWidthPx = 68
+// how far above the feet the tag sits, in level units: just over a standing legend's head
+export const tagLift = 190
 
 type Frame = { width: number; height: number }
 type PlacedTag = { x: number; y: number }

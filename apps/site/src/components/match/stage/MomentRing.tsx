@@ -1,23 +1,25 @@
 import type { Moment } from '@brawltome/contracts'
 import { slotColour } from '../match-styles'
+import { bodyRingStyle, type DrawnBodies } from './body-ring'
 
 // the ring stays a beat after the first hit, then the hit flashes take over
 const afterHitMs = 300
 
-/** A ring on the stage where the moment being watched is about to happen. */
-export function MomentRing({ moment, timeMs }: { moment: Moment | null; timeMs: number }) {
+type MomentRingProps = { moment: Moment | null; bodies: DrawnBodies; timeMs: number }
+
+/**
+ * A ring on the stage where the moment being watched is about to happen: around the body of whoever gets hit, as the
+ * moment's spot is where their feet are at the first hit.
+ */
+export function MomentRing({ moment, bodies, timeMs }: MomentRingProps) {
   if (!moment?.spot) return null
 
   if (timeMs > moment.timeMs + afterHitMs) return null
 
   return (
     <span
-      className="pointer-events-none absolute size-16 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border-2 border-dashed"
-      style={{
-        left: `${moment.spot.x * 100}%`,
-        top: `${moment.spot.y * 100}%`,
-        borderColor: slotColour(moment.victim),
-      }}
+      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border-2 border-dashed"
+      style={{ ...bodyRingStyle(moment.spot, bodies), borderColor: slotColour(moment.victim) }}
     />
   )
 }

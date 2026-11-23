@@ -189,13 +189,14 @@ describe('player refresh reservations', () => {
     expect((await queue.inspect(other.operationId)).operation).toMatchObject({ status: 'awaiting_admission' })
   })
 
-  test('promotes a queued recently viewed refresh when a visitor asks for the same player', async () => {
+  test('reports a queued background refresh as holding the player and leaves it to the takeover', async () => {
     const brawlhallaId = nextBrawlhallaId++
     const queued = await queueRecentlyViewed(brawlhallaId)
 
     const reservation = await reserveInteractivePlayerRefresh(database, reservationInput(undefined, brawlhallaId))
 
     expect(reservation).toEqual({ outcome: 'already-active', operationId: queued })
-    expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'interactive' })
+    // promoting it is for a visitor who passed admission, which the reservation hasn't checked yet
+    expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'primary-monitoring' })
   })
 })

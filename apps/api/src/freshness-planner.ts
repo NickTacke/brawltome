@@ -123,7 +123,7 @@ export function createFreshnessPlanner(deps: {
   operations: {
     refreshRequestDemand(input: { windowDays: number }): Promise<RefreshRequestDemand[]>
     recentFreshnessAttempts(input: { windowDays: number }): Promise<FreshnessAttempt[]>
-    activeRecentlyViewedRefreshes(): Promise<number>
+    activeBackgroundPlayerRefreshes(): Promise<number>
     enqueueRecentlyViewedRefreshes(brawlhallaIds: readonly number[]): Promise<number[]>
   }
   profileViews: {
@@ -175,8 +175,9 @@ export function createFreshnessPlanner(deps: {
     }
 
     // Few in flight at a time keeps V0 calls spread out and the monitoring queue short; a visitor arriving while one
-    // is still queued promotes it to interactive work (reserveInteractivePlayerRefresh).
-    const slots = deps.config.batch - (await deps.operations.activeRecentlyViewedRefreshes())
+    // is still queued promotes it to interactive work (reserveInteractivePlayerRefresh). Coverage and Primary
+    // refreshes count too, so background player refreshes never add up to a V0 burst.
+    const slots = deps.config.batch - (await deps.operations.activeBackgroundPlayerRefreshes())
 
     if (slots <= 0) {
       record((active) => active.metrics.add('freshness_planner_skips_total', 1, { reason: 'slots' }))

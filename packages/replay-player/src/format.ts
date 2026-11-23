@@ -84,6 +84,7 @@ export type ArtGroup = {
 export type LevelSegment = { fromX: number; fromY: number; toX: number; toY: number; isSoft: boolean }
 
 // a piece of platform art: the file under the map route, where its top left goes, its drawn size and its turn in degrees
+// about that corner. A negative width or height mirrors the image, which then reaches left of x or above y
 export type LevelArt = { file: string; x: number; y: number; width: number; height: number; rotation: number }
 
 // LevelLayout is a stage as the game lays it out, in level units: what a page needs to draw it

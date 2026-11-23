@@ -30,23 +30,16 @@ export type ReserveForAdmissionInput<Payload> = {
   reservationTtlSeconds: number
 }
 
-export type ReserveForAdmissionOptions = {
-  // runs after overdue reservations expire and before the insert, in the same transaction
-  beforeInsert?: (transaction: Transaction) => Promise<void>
-}
-
 /** Holds a place in the queue as awaiting_admission until the caller activates or rejects it with the token. */
 export async function reserveForAdmission<Payload>(
   database: Database,
   input: ReserveForAdmissionInput<Payload>,
-  options: ReserveForAdmissionOptions = {},
 ): Promise<ReserveInteractiveRefreshResult> {
   assertValidJobInput(input.job, input.workClass, input.payload)
 
   for (;;) {
     const result = await database.db.transaction(async (transaction) => {
       await expireOverdueReservations(transaction, input)
-      await options.beforeInsert?.(transaction)
 
       return insertReservation(transaction, input)
     })

@@ -42,11 +42,13 @@ async function readDeadLetterCounts(database: Database) {
     work_class: WorkClass
     kind: string
     reason: DeadLetterReason
+    cohort: string
     count: Count
   }>(sql`
     SELECT operation.work_class, operation.kind,
            CASE WHEN operation.last_error ->> 'code' IN (${rejectionCodes})
              THEN 'admission_rejected' ELSE 'execution' END AS reason,
+           coalesce(operation.payload ->> 'cohort', 'none') AS cohort,
            count(*)::bigint AS count
     FROM ${operations} AS operation
     WHERE operation.status = 'dead_letter'
@@ -55,13 +57,14 @@ async function readDeadLetterCounts(database: Database) {
         FROM ${deadLetterActions} AS action
         WHERE action.target_operation_id = operation.id
       )
-    GROUP BY 1, 2, 3
+    GROUP BY 1, 2, 3, 4
   `)
 
   return rows.map((row) => ({
     workClass: row.work_class,
     kind: row.kind,
     reason: row.reason,
+    cohort: row.cohort,
     count: Number(row.count),
   }))
 }

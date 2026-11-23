@@ -155,7 +155,7 @@ describe('freshness planner', () => {
       operations: {
         refreshRequestDemand: async () => [5, 6].map((brawlhallaId) => ({ brawlhallaId, viewDays: 1 })),
         recentFreshnessAttempts: async () => [],
-        activeRecentlyViewedRefreshes: async () => overrides.active ?? 0,
+        activeBackgroundPlayerRefreshes: async () => overrides.active ?? 0,
         enqueueRecentlyViewedRefreshes:
           overrides.enqueue ??
           (async (ids) => {
@@ -217,7 +217,7 @@ describe('freshness planner', () => {
 
           return history.filter(({ lastPlannedAt }) => now - lastPlannedAt.getTime() < windowDays * day)
         },
-        activeRecentlyViewedRefreshes: async () => 0,
+        activeBackgroundPlayerRefreshes: async () => 0,
         enqueueRecentlyViewedRefreshes: async (ids) => {
           enqueued.push([...ids])
 

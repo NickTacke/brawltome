@@ -1,18 +1,47 @@
 import { describe, expect, test } from 'bun:test'
 import type { MatchDetailContract, StageBox } from '@brawltome/contracts'
-import type { Bubble, CameraTrack, PlayerPose, Replay, Timeline } from '@brawltome/replay-player'
+import {
+  type Bubble,
+  type CameraTrack,
+  cameraAt,
+  cameraTrack,
+  type PlayerPose,
+  type Rect,
+  type Replay,
+  type Timeline,
+} from '@brawltome/replay-player'
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
+import { artBoxOf } from '../src/components/match/stage/art-box'
+import {
+  bodyMiddle,
+  bodyPxOf,
+  bodyRingDiameter,
+  bodyRingStyle,
+  legendRingFloorPx,
+} from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
-import { cameraOf, inFrame, levelToCanvas, viewOf, wholeStage } from '../src/components/match/stage/play-camera'
+import {
+  boxInFrame,
+  cameraOn,
+  fixedCamera,
+  frameAspect,
+  inFrame,
+  unitInFrame,
+} from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
 import { tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
-import { initialLegends, type Legends, legendsStateOf } from '../src/components/match/stage/use-legends'
+import {
+  areLegendsDrawn,
+  initialLegends,
+  type Legends,
+  legendsStateOf,
+} from '../src/components/match/stage/use-legends'
 import { frameElapsedMs } from '../src/components/match/stage/use-playback'
 import { weaponIconName } from '../src/components/match/weapon-icon'
 import { readInsights, readPlayback } from './match-fixtures'
@@ -94,48 +123,91 @@ describe('poses', () => {
   })
 })
 
+// the same rectangle, give or take the last bits of a float
+function expectCamera(camera: Rect, wanted: Rect) {
+  expect(camera.x).toBeCloseTo(wanted.x, 6)
+  expect(camera.y).toBeCloseTo(wanted.y, 6)
+  expect(camera.width).toBeCloseTo(wanted.width, 6)
+  expect(camera.height).toBeCloseTo(wanted.height, 6)
+}
+
+function middleOf(rect: Rect): { x: number; y: number } {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+}
+
 describe('the camera', () => {
-  test('a view of the whole box shows the whole stage', () => {
-    expect(cameraOf({ x: box.minX, y: box.minY, width: box.width, height: box.height }, box)).toEqual(wholeStage)
+  const wholeBox = { x: box.minX, y: box.minY, width: box.width, height: box.height }
+  // Shiganshina District's camera bounds are wider than the game's screen, Twilight Grove's taller
+  const wideBox: StageBox = { minX: -750, minY: -750, width: 4900, height: 2650 }
+  const tallBox: StageBox = { minX: -2371, minY: -1300, width: 4742.15, height: 3035 }
+
+  test('the frame has the shape of the game’s screen', () => {
+    expect(frameAspect).toBe(1920 / 1080)
   })
 
-  test('a view half the size in the middle doubles the stage around its middle', () => {
-    const rect = {
+  test('a view of the frame’s shape, as the game’s are, is shown as it is', () => {
+    const view = { x: 100, y: 50, width: 3200, height: 1800 }
+
+    expectCamera(cameraOn(view), view)
+  })
+
+  test('the fixed camera shows a level of the frame’s shape whole and no more', () => {
+    expectCamera(fixedCamera(box), wholeBox)
+  })
+
+  test.each([
+    ['wider', wideBox],
+    ['taller', tallBox],
+  ])('the fixed camera shows a level %s than the frame whole, in the middle of the frame', (_, level) => {
+    const camera = fixedCamera(level)
+    const bounds = { x: level.minX, y: level.minY, width: level.width, height: level.height }
+
+    expect(camera.width / camera.height).toBeCloseTo(frameAspect)
+    expect(camera.width).toBeGreaterThanOrEqual(level.width)
+    expect(camera.height).toBeGreaterThanOrEqual(level.height)
+    expect(Math.min(camera.width - level.width, camera.height - level.height)).toBeCloseTo(0)
+    expect(middleOf(camera).x).toBeCloseTo(middleOf(bounds).x)
+    expect(middleOf(camera).y).toBeCloseTo(middleOf(bounds).y)
+  })
+
+  test('the stage box lies in the frame where the camera puts it, and its spots with it', () => {
+    const middleHalf = {
       x: box.minX + box.width / 4,
       y: box.minY + box.height / 4,
       width: box.width / 2,
       height: box.height / 2,
     }
 
-    expect(cameraOf(rect, box)).toEqual({ x: 0.25, y: 0.25, zoom: 2 })
-    expect(viewOf(box, cameraOf(rect, box))).toEqual(rect)
+    expect(boxInFrame(box, middleHalf)).toEqual({ x: -0.5, y: -0.5, width: 2, height: 2 })
+    expect(inFrame({ x: 0.5, y: 0.5 }, box, middleHalf)).toEqual({ x: 0.5, y: 0.5 })
+    expect(inFrame({ x: 0.25, y: 0.75 }, box, middleHalf)).toEqual({ x: 0, y: 1 })
   })
 
-  test('a view past the box is kept inside it', () => {
-    const rect = { x: box.minX - 500, y: box.minY, width: box.width / 2, height: box.height / 2 }
+  test('on a level wider than the frame, the game’s widest view fills the frame and the box runs past its sides', () => {
+    const widest = { x: -655.5, y: -750, width: 2650 * frameAspect, height: 2650 }
+    const place = boxInFrame(wideBox, widest)
 
-    expect(cameraOf(rect, box).x).toBe(0)
+    expect(place.height).toBeCloseTo(1)
+    expect(place.width).toBeCloseTo(4900 / 4711.11, 4)
+    expect(place.x).toBeLessThan(0)
+    expect(place.x + place.width).toBeGreaterThan(1)
   })
 
-  test('the canvas matrix takes the box’s corners to the canvas’s corners on the whole stage', () => {
-    const [scaleX, , , scaleY, offsetX, offsetY] = levelToCanvas(box, wholeStage, 800, 450)
-
-    expect(box.minX * scaleX + offsetX).toBeCloseTo(0)
-    expect((box.minX + box.width) * scaleX + offsetX).toBeCloseTo(800)
-    expect(box.minY * scaleY + offsetY).toBeCloseTo(0)
-  })
-
-  test('a spot moves into the frame the camera shows', () => {
-    expect(inFrame({ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.25, zoom: 2 })).toEqual({ x: 0.5, y: 0.5 })
+  test('a level unit is as wide in the frame as the camera makes it', () => {
+    expect(unitInFrame(fixedCamera(box))).toBeCloseTo(1 / box.width)
+    expect(unitInFrame({ ...wholeBox, width: box.width / 2, height: box.height / 2 })).toBeCloseTo(2 / box.width)
   })
 
   test('a glide starts on one camera, ends on the other, and zooms by equal ratios', () => {
-    const from = wholeStage
-    const to = { x: 0.375, y: 0.375, zoom: 4 }
+    const from = fixedCamera(box)
+    const to = { x: 500, y: 300, width: box.width / 4, height: box.height / 4 }
+    const halfway = mixCameras(from, to, 0.5)
 
-    expect(mixCameras(from, to, 0)).toEqual(from)
-    expect(mixCameras(from, to, 1)).toEqual(to)
-    expect(mixCameras(from, to, 0.5).zoom).toBeCloseTo(2)
+    expectCamera(mixCameras(from, to, 0), from)
+    expectCamera(mixCameras(from, to, 1), to)
+    expect(halfway.width).toBeCloseTo(box.width / 2)
+    expect(halfway.width / halfway.height).toBeCloseTo(frameAspect)
+    expect(middleOf(halfway).x).toBeCloseTo((middleOf(from).x + middleOf(to).x) / 2)
   })
 
   test('the game camera shows the track’s view once the legends are in, and the whole stage before', () => {
@@ -146,20 +218,116 @@ describe('the camera', () => {
     const track: CameraTrack = { steps: new Float64Array(), at: () => half }
     const ready: Legends = { replay: null, timeline, track, state: 'ready', isDownloading: false }
     const loading: Legends = { ...ready, state: 'loading' }
+    const wholeStage = fixedCamera(stage.box)
 
-    expect(cameraNow({ mode: 'game', legends: ready, stage }, 1000)).toEqual({ x: 0, y: 0, zoom: 2 })
-    expect(cameraNow({ mode: 'stage', legends: ready, stage }, 1000)).toEqual(wholeStage)
-    expect(cameraNow({ mode: 'game', legends: loading, stage }, 1000)).toEqual(wholeStage)
+    expectCamera(cameraNow({ mode: 'game', legends: ready, stage }, 1000), half)
+    expectCamera(cameraNow({ mode: 'stage', legends: ready, stage }, 1000), wholeStage)
+    expectCamera(cameraNow({ mode: 'game', legends: loading, stage }, 1000), wholeStage)
 
     expect(cameraPathKey({ mode: 'game', legends: loading, stage })).not.toBe(
       cameraPathKey({ mode: 'game', legends: ready, stage }),
     )
   })
 
+  test.each([
+    ['of the frame’s shape', box],
+    ['wider than the frame', wideBox],
+    ['taller than the frame', tallBox],
+  ])('in a level %s, every view of the game’s camera has the frame’s shape and lies in the bounds', (_, level) => {
+    const timeline = readPlaybackTimeline(readPlayback('duel-a'))
+    const bounds = { x: level.minX, y: level.minY, width: level.width, height: level.height }
+    const track = cameraTrack(timeline, bounds, { fps: 60 })
+
+    for (let step = timeline.startStep; step <= timeline.endStep; step += 30) {
+      const view = cameraAt(track, step)
+
+      if (!view) throw new Error(`the camera has no view at step ${step}`)
+
+      expect(view.width / view.height).toBeCloseTo(frameAspect, 6)
+      expect(view.x).toBeGreaterThanOrEqual(bounds.x - 0.001)
+      expect(view.y).toBeGreaterThanOrEqual(bounds.y - 0.001)
+      expect(view.x + view.width).toBeLessThanOrEqual(bounds.x + bounds.width + 0.001)
+      expect(view.y + view.height).toBeLessThanOrEqual(bounds.y + bounds.height + 0.001)
+      expectCamera(cameraOn(view), view)
+    }
+  })
+
   test('only Game and Fixed are camera modes', () => {
     expect(isCameraMode('game')).toBe(true)
     expect(isCameraMode('stage')).toBe(true)
     expect(isCameraMode('follow')).toBe(false)
+  })
+})
+
+describe('the ring around a player’s body', () => {
+  // the game's standing hurtbox, the same for every legend
+  const hurtbox = { width: 145, height: 160 }
+  const anyBox: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
+  const legends = { box: anyBox, areLegends: true }
+  const tokens = { box: anyBox, areLegends: false }
+
+  test('holds a legend’s whole standing hurtbox, and is no bigger than that takes', () => {
+    const diagonal = Math.hypot(hurtbox.width, hurtbox.height)
+
+    expect(bodyMiddle).toBe(hurtbox.height / 2)
+    expect(bodyRingDiameter).toBeGreaterThanOrEqual(diagonal)
+    expect(bodyRingDiameter - diagonal).toBeLessThan(1)
+  })
+
+  test('around a legend it is placed in level units: its middle the body’s, over the feet', () => {
+    const whole = { left: '50%', top: '45%', width: 'max(32px, 5%)', aspectRatio: '1' }
+
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends)).toEqual(whole)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 0.25)).toEqual({ ...whole, width: 'max(8px, 1.25%)' })
+  })
+
+  test('around a legend it never gets too small to show beside the numbers of a stop’s hits', () => {
+    // size-4 on a hit's number
+    const hitNumberPx = 16
+
+    expect(legendRingFloorPx).toBeGreaterThan(hitNumberPx)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends).width).toBe(`max(${legendRingFloorPx}px, 5%)`)
+  })
+
+  test('around a token it is as big on every stage, and smaller on a phone’s', () => {
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, tokens)).toEqual({
+      left: '50%',
+      top: 'calc(50% - 14px)',
+      width: 'min(64px, 10%)',
+      aspectRatio: '1',
+    })
+  })
+
+  test('on a stage as laid out, a legend’s ring and tag grow with the level unit and a token’s don’t', () => {
+    expect(bodyPxOf(legends, 0.5)).toEqual({ ringMiddlePx: 40, ringRadiusPx: 54, tagTopPx: 115 })
+    expect(bodyPxOf(tokens, 0.5)).toEqual(bodyPxOf(tokens, 2))
+  })
+
+  test('on a stage as laid out, a legend’s ring is as big as it is drawn where the stage is small', () => {
+    // on a 390 pixel stage this box makes the ring through the hurtbox's corners 19.5 pixels, under its smallest size
+    const unitPx = 390 / anyBox.width
+
+    expect(bodyPxOf(legends, unitPx).ringRadiusPx).toBe(legendRingFloorPx / 2)
+    expect(bodyPxOf(legends, unitPx).ringMiddlePx).toBeCloseTo(80 * unitPx)
+  })
+
+  test('on a stage as laid out, a token’s ring is as big as it is drawn: a tenth of a small stage', () => {
+    expect(bodyPxOf(tokens, 1000 / anyBox.width).ringRadiusPx).toBe(32)
+    expect(bodyPxOf(tokens, 390 / anyBox.width).ringRadiusPx).toBeCloseTo(19.5)
+  })
+
+  test('the players are drawn as their legends once the art and the timeline are in', () => {
+    const ready: Legends = {
+      replay: {} as Replay,
+      timeline: {} as Timeline,
+      track: null,
+      state: 'ready',
+      isDownloading: false,
+    }
+
+    expect(areLegendsDrawn(ready)).toBe(true)
+    expect(areLegendsDrawn({ ...ready, state: 'loading' })).toBe(false)
+    expect(areLegendsDrawn({ ...ready, replay: null })).toBe(false)
   })
 })
 
@@ -297,5 +465,38 @@ describe('platform art', () => {
     }
 
     expect(placedArtOf([piece('Space.Platform_Space1.png')], outside)).toEqual([])
+  })
+})
+
+describe('where a platform’s image is drawn', () => {
+  const drawing = { width: 160, height: 90 }
+  const piece = { file: 'Space.Platform_Space1.png', x: 0.25, y: 0.5, width: 0.5, height: 0.2, rotation: 10 }
+
+  test('a piece lies from its corner over its size, turned about that corner', () => {
+    expect(artBoxOf(piece, drawing)).toEqual({ x: 40, y: 45, width: 80, height: 18, transform: 'rotate(10 40 45)' })
+  })
+
+  test('a negative width flips the image over its corner, so it reaches left of it', () => {
+    expect(artBoxOf({ ...piece, width: -0.5 }, drawing)).toEqual({
+      x: 40,
+      y: 45,
+      width: 80,
+      height: 18,
+      transform: 'rotate(10 40 45) translate(40 45) scale(-1 1) translate(-40 -45)',
+    })
+  })
+
+  test('a negative height flips it upwards, and both flip it both ways', () => {
+    expect(artBoxOf({ ...piece, height: -0.2 }, drawing).transform).toBe(
+      'rotate(10 40 45) translate(40 45) scale(1 -1) translate(-40 -45)',
+    )
+
+    expect(artBoxOf({ ...piece, width: -0.5, height: -0.2 }, drawing)).toEqual({
+      x: 40,
+      y: 45,
+      width: 80,
+      height: 18,
+      transform: 'rotate(10 40 45) translate(40 45) scale(-1 -1) translate(-40 -45)',
+    })
   })
 })

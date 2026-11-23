@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { MatchDetailContract, ReviewScope } from '@brawltome/contracts'
+import type { MatchDetailContract, ReviewScope, StageArt } from '@brawltome/contracts'
 import type { Replay } from '@brawltome/replay-player'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
@@ -128,6 +128,8 @@ afterAll(async () => {
 })
 
 async function mount(element: ReactNode): Promise<void> {
+  // every test starts with the lanes as a new viewer has them
+  window.localStorage.clear()
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -255,6 +257,50 @@ describe('the stage in a browser', () => {
     await unmount()
   })
 
+  // what react reports while the first match's stage draws these pieces; two children with one key is such a report
+  async function reportsWhileDrawing(art: StageArt[]): Promise<unknown[]> {
+    const match = matchNamed('first')
+    const insights = readInsights('duel-a')
+    const withArt = { ...insights, insights: { ...insights.insights, stage: { ...insights.insights.stage, art } } }
+    const reports: unknown[] = []
+    const errorBefore = console.error
+
+    console.error = (...report: unknown[]) => reports.push(report[0])
+    await mount(<ReplayWithArt insights={withArt} art={match.art} playbackPath={match.playbackPath} selectedSlot={1} />)
+    console.error = errorBefore
+
+    return reports
+  }
+
+  const twinPiece = { file: 'Space.Platform_Space1.png', x: 0.25, y: 0.5, width: 0.5, height: 0.25, rotation: 0 }
+
+  test('a platform and its twin mirrored upwards on the same corner are two images', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece, height: -0.25 }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(2)
+    expect(reports).toEqual([])
+
+    await unmount()
+  })
+
+  test('a platform and its twin mirrored sideways on the same corner are two images', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece, width: -0.5 }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(2)
+    expect(reports).toEqual([])
+
+    await unmount()
+  })
+
+  test('moving platforms that start in one place repeat a piece exactly and are each drawn', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece }, { ...twinPiece }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(3)
+    expect(reports).toEqual([])
+
+    await unmount()
+  })
+
   test('a match without a timeline downloads no art', async () => {
     loadedManifests.length = 0
 
@@ -371,6 +417,66 @@ describe('the review in a browser', () => {
     }
 
     await unmount()
+  })
+
+  test('T folds the lanes into a thin bar and back, and the review steps on over the bar', async () => {
+    const pressKey = (key: string) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      })
+
+    await mount(replayFor(1))
+    await press('Review')
+
+    pressKey('t')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(0)
+    expect(container.querySelector('[data-folded-timeline]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Show timeline"]')).not.toBeNull()
+
+    const clockMs = clockNow()
+
+    await pressLabelled('Next stop')
+
+    expect(clockNow()).toBeGreaterThan(clockMs)
+    expect(container.querySelector('[aria-label="Speed 1×, switch to 2×"]')).not.toBeNull()
+
+    pressKey('T')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(2)
+    expect(container.querySelector('[data-folded-timeline]')).toBeNull()
+
+    await unmount()
+    window.localStorage.clear()
+  })
+
+  test('T keeps keyboard focus on a control it keeps, and hands it to the fold button from a stop it takes away', async () => {
+    const pressKey = (key: string) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      })
+
+    const focus = (selector: string) =>
+      act(() => {
+        container.querySelector<HTMLElement>(selector)?.focus()
+      })
+
+    await mount(replayFor(1))
+    await press('Review')
+
+    focus('[aria-label="Next stop"]')
+    pressKey('t')
+
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Next stop')
+
+    pressKey('t')
+    focus('button[aria-label^="Stop "]')
+    pressKey('t')
+
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Show timeline')
+
+    await unmount()
+    window.localStorage.clear()
   })
 })
 

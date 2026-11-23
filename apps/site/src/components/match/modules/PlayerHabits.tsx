@@ -20,7 +20,7 @@ function ToWatch({ count }: { count: number }) {
 
   return (
     <span className="text-[0.8125rem] whitespace-nowrap text-soft tabular-nums">
-      <span className="font-black text-amber-300">{count}</span> to watch
+      <span className="font-black text-red-400">{count}</span> to watch
     </span>
   )
 }

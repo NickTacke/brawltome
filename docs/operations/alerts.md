@@ -271,13 +271,36 @@ of that schedule is still in progress; a Brawlhalla outage.
 **First steps:** on the Operations dashboard, check schedule lateness by kind and whether the previous run finished.
 Worker logs, filtered by the `kind` label, show what that schedule is doing.
 
+### WorkerPlannerFailing
+
+**Severity:** warning.
+
+**Meaning:** one of the operations worker's planners (named in the `planner` label) threw more than five times in 15
+minutes, for 15 minutes. Each planner runs on its own, so the others and the schedules keep going, but this planner's
+work is not being done: for example, `statistics-cohort` stops planning statistics collections, `freshness` stops
+refreshing due players, and `leaderboard-schedules` leaves a changed schedule configuration unapplied.
+
+**Likely causes:** a bug the planner hits on every tick, often after a change to data it reads from another module; the
+database rejecting one of its queries; a dependency it calls being down.
+
+**First steps:** find the error in the worker logs by searching for `worker.planner.failed` with that `planner` field:
+
+```sh
+docker logs --since 30m compose-program-virtual-microchip-uqxbrw-operations-worker-1 2>&1 | grep worker.planner.failed | tail -20
+```
+
+The logged error says what failed. A planner that throws on every tick retries about once a second, so fix the cause or
+roll back the release that introduced it rather than waiting for it to clear.
+
 ### NewDeadLetters
 
 **Severity:** warning. A dead letter is kept for replay, so no data is lost and nobody is blocked.
 
 **Meaning:** at least one operation of the named kind was dead-lettered in the last 30 minutes after exhausting its
 retries. Admission rejections are expected outcomes and are not counted. Statistics collection loses a few players to
-upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes.
+upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes. Ranked coverage
+refreshes (`cohort="ranked-coverage"`) are left out; [RankedCoverageDeadLettersElevated](#rankedcoveragedeadletterselevated)
+watches their rate instead. A coverage refresh a visitor took over has left the cohort, so it counts here.
 
 **Likely causes:** a bug in that operation kind (consistent failures); a payload Brawlhalla changed shape on; a long
 outage that outlasted the retry budget. A row with the code `invalid_payload` never ran: its payload doesn't parse, or
@@ -303,6 +326,22 @@ bun run operations:dead-letters replay <operation-id> --reason "fixed in #123"
 # Or, if the work is no longer wanted:
 bun run operations:dead-letters discard <operation-id> --reason "player deleted"
 ```
+
+### RankedCoverageDeadLettersElevated
+
+**Severity:** warning. A coverage refresh a visitor takes over leaves the cohort and pages through
+[NewDeadLetters](#newdeadletters), so this only counts refreshes nobody waits on. A dead letter is kept for replay.
+
+**Meaning:** more than 2% of the ranked coverage refreshes that settled in the last 6 hours were dead-lettered, with at
+least 50 settled. Player refreshes usually dead-letter about 0.1% of the time, so one dead letter among thousands is
+expected and doesn't fire this.
+
+**Likely causes:** a change in Brawlhalla's ranked response that the decoder rejects; players the boards still list but
+V0 no longer finds; a bug in the ranked refresh. Each dead-lettered player rests for 7 days before coverage tries again.
+
+**First steps:** list the dead letters with the operator CLI (see [NewDeadLetters](#newdeadletters)) and look at their
+`last_error` codes. If one code dominates, fix the cause and replay. To stop coverage meanwhile, set
+`RANKED_COVERAGE_ENABLED=false` on the operations-worker and redeploy.
 
 ### RefreshFailuresElevated
 

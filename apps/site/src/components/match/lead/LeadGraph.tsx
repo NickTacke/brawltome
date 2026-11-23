@@ -25,7 +25,7 @@ const Minutes = memo(function Minutes({ durationMs, isUpright }: AlongProps) {
   return times.map((timeMs) => (
     <span
       key={timeMs}
-      className={`pointer-events-none absolute font-mono text-[0.625rem] leading-none text-soft/80 ${line}`}
+      className={`pointer-events-none absolute font-mono text-[0.6875rem] leading-none text-soft ${line}`}
       style={{ [isUpright ? 'top' : 'left']: `${(timeMs / durationMs) * 100}%` }}
     >
       {formatClock(timeMs)}

@@ -16,7 +16,8 @@ type RequestAdmissionConfig = {
   authenticatedIpLimit: number
   sourceLimits: Record<string, number>
   sourceWindowSeconds?: Record<string, number>
-  sourceBackgroundHeadroom?: number
+  // calls of a source's limit kept for on-demand callers; a source left out keeps none, as it has no such callers
+  sourceBackgroundHeadroom?: Record<string, number>
   minimumSourceSpacingMs?: number
   actorReservationRetentionSeconds?: number
   windowSeconds?: number
@@ -52,14 +53,24 @@ function actorDimensions(actor: AdmissionActor, authenticatedIpLimit: number) {
   }
 }
 
+function requireHeadroom(headroom: number, domain: string): number {
+  if (!Number.isInteger(headroom) || headroom < 0) {
+    throw new Error(`${domain} background headroom must be a non-negative integer`)
+  }
+
+  return headroom
+}
+
 export function createPostgresRequestAdmission(database: Database, config: RequestAdmissionConfig) {
   const authenticatedIpLimit = requirePositiveInteger(config.authenticatedIpLimit, 'authenticatedIpLimit')
   const windowSeconds = requirePositiveInteger(config.windowSeconds ?? defaultWindowSeconds, 'windowSeconds')
-  const sourceBackgroundHeadroom = config.sourceBackgroundHeadroom ?? 0
 
-  if (!Number.isInteger(sourceBackgroundHeadroom) || sourceBackgroundHeadroom < 0) {
-    throw new Error('sourceBackgroundHeadroom must be a non-negative integer')
-  }
+  const sourceBackgroundHeadroom = Object.fromEntries(
+    Object.entries(config.sourceBackgroundHeadroom ?? {}).map(([domain, headroom]) => [
+      domain,
+      requireHeadroom(headroom, domain),
+    ]),
+  ) as Record<string, number>
 
   const minimumSourceSpacingMs = config.minimumSourceSpacingMs ?? 0
 
@@ -287,7 +298,9 @@ export function createPostgresRequestAdmission(database: Database, config: Reque
       const sourceWindow = sourceWindowSeconds[input.domain] ?? windowSeconds
 
       const limit =
-        input.caller === 'on-demand' ? configuredLimit : Math.max(0, configuredLimit - sourceBackgroundHeadroom)
+        input.caller === 'on-demand'
+          ? configuredLimit
+          : Math.max(0, configuredLimit - (sourceBackgroundHeadroom[input.domain] ?? 0))
 
       const units = requirePositiveInteger(input.units, 'source units')
 
@@ -401,6 +414,18 @@ export function createPostgresRequestAdmission(database: Database, config: Reque
           SET paused_until = greatest(request_admission.source_backoffs.paused_until, EXCLUDED.paused_until)
         `
       })
+    },
+
+    // when a 429 or an outage pause on the source ends, or null when it isn't paused
+    async sourcePausedUntil(domain: SourceDomain): Promise<Date | null> {
+      if (!sourceLimits[domain]) throw new Error(`Unknown source admission domain: ${domain}`)
+
+      const [state] = await client<{ paused_until: Date }[]>`
+        SELECT paused_until FROM request_admission.source_backoffs
+        WHERE domain = ${domain} AND paused_until > clock_timestamp()
+      `
+
+      return state?.paused_until ?? null
     },
 
     async inspectCurrentUsage(): Promise<SourceQuotaUsage> {

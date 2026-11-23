@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { RankingQueries } from '@brawltome/ranking'
-import { launchCohortRegions, type StatisticsReservations, type StatisticsTracer } from '@brawltome/statistics'
+import {
+  type CohortCandidateSnapshot,
+  launchCohortRegions,
+  type StatisticsReservations,
+  type StatisticsTracer,
+  selectFullLaunchCohort,
+} from '@brawltome/statistics'
 import {
   loadFullLaunchCohortCandidates,
   loadLaunchCohortCandidates,
@@ -284,6 +290,67 @@ describe('Statistics immutable Ranking adapter', () => {
       }
     })
   }
+
+  test('reconciles a launch source with one generation per region once, then only probes it', async () => {
+    const requests: { pageSize?: number }[] = []
+    let launchReconciliations = 0
+    let sourceGenerationId = generationId
+
+    const statistics = {
+      reconciliationState: async () => ({
+        legacyCohortExists: true,
+        launch: { generationId, sourceGenerationId, decisionCount: 2, cohortIds: [], isNextGenerationDue: true },
+      }),
+      reconcileLaunchCohort: async (snapshots: CohortCandidateSnapshot[]) => {
+        launchReconciliations++
+        // the real selection, so a source it cannot read fails here as it would in the worker
+        sourceGenerationId = selectFullLaunchCohort(snapshots).sourceGenerationId
+
+        return { generationId: newerGenerationId, sourceGenerationId, decisions: [], cells: [] }
+      },
+      boundCollectionOperationIds: async () => [],
+      collectionIntents: async () => [],
+      boundPublicationOperationIds: async () => [],
+      publicationIntents: async () => [],
+      boundLegendMetaPublicationOperationIds: async () => [],
+      legendMetaPublicationIntents: async () => [],
+    } as unknown as StatisticsTracer
+
+    const operations = {
+      listAwaitingStatisticsCollections: async () => [],
+      countQueuedStatisticsCollections: async () => 0,
+      listAwaitingStatisticsPublications: async () => [],
+      listAwaitingStatisticsLegendMetaPublications: async () => [],
+    } as unknown as StatisticsReservations
+
+    // each region's board is its own generation, observed a minute after the region before it
+    const ranking: LeaderboardQueries = {
+      async getLeaderboard(input) {
+        requests.push({ pageSize: input.pageSize })
+        const regionIndex = launchCohortRegions.indexOf(input.region as (typeof launchCohortRegions)[number])
+        const position = String(regionIndex + 1).padStart(2, '0')
+
+        return {
+          ...view(1, [regionIndex + 1], false),
+          generationId: `10000000-0000-4000-8000-0000000001${position}`,
+          snapshotId: `00000000-0000-4000-8000-0000000001${position}`,
+          observedAt: `2026-08-10T00:${position}:00.000Z`,
+          region: input.region as (typeof launchCohortRegions)[number],
+        }
+      },
+    }
+
+    await reconcileStatisticsCohort(statistics, operations, ranking)
+
+    expect(launchReconciliations).toBe(1)
+    expect(sourceGenerationId).not.toBe(generationId)
+
+    requests.length = 0
+    await reconcileStatisticsCohort(statistics, operations, ranking)
+
+    expect(launchReconciliations).toBe(1)
+    expect(requests).toEqual(launchCohortRegions.map(() => ({ pageSize: 1 })))
+  })
 
   test('skips the leaderboard entirely while the next generation is not due', async () => {
     let leaderboardRequests = 0

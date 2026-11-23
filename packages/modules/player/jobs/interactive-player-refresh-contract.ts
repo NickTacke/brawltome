@@ -2,6 +2,7 @@ import {
   isPositiveInteger,
   isSectionList,
   type JobContract,
+  rankedCoverageCohort,
   readPayloadObject,
   recentlyViewedCohort,
   type WorkClass,
@@ -19,7 +20,24 @@ export type InteractivePlayerRefreshPayload = {
 
 const playerRefreshSections: readonly PlayerRefreshSection[] = ['ranked', 'stats']
 
+// coverage keeps leaderboard players' ranked data fresh, so it fetches the ranked section alone: one V0 call, not two
+function assertCoveragePayload(payload: Record<string, unknown>): void {
+  const sections = payload.staleSections as string[]
+
+  if (sections.length !== 1 || sections[0] !== 'ranked') {
+    throw new Error('ranked coverage refresh must cover the ranked section only')
+  }
+
+  if (Object.hasOwn(payload, 'assignmentId')) throw new Error('ranked coverage refresh belongs to no assignment')
+}
+
 function assertMonitoringPayload(payload: Record<string, unknown>): void {
+  if (payload.cohort === rankedCoverageCohort) {
+    assertCoveragePayload(payload)
+
+    return
+  }
+
   const [firstSection, secondSection] = payload.staleSections as string[]
 
   if (firstSection !== 'ranked' || secondSection !== 'stats') {

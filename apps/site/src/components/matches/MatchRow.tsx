@@ -140,7 +140,7 @@ function Score({ first, second }: { first: number; second: number }) {
 
 function ResultLabel({ result }: { result: RowResult }) {
   if (result.kind === 'place') {
-    const colour = result.place === 1 ? 'text-emerald-400' : 'text-soft'
+    const colour = result.place === 1 ? 'text-record-win' : 'text-soft'
 
     return <span className={`${smallCaps} ${colour}`}>{ordinal(result.place)}</span>
   }
@@ -148,7 +148,7 @@ function ResultLabel({ result }: { result: RowResult }) {
   const words = { won: 'Won', lost: 'Lost', draw: 'Draw' } as const
 
   return (
-    <span className={`${smallCaps} ${result.kind === 'won' ? 'text-emerald-400' : 'text-soft'}`}>
+    <span className={`${smallCaps} ${result.kind === 'won' ? 'text-record-win' : 'text-soft'}`}>
       {words[result.kind]}
     </span>
   )

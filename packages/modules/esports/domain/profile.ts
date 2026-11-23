@@ -1,0 +1,226 @@
+import type { RawMatch, RawOpponent, RawPr } from '../source/raw-types'
+import { eventHeading, isSideModeEvent } from './event-names'
+import { importance } from './importance'
+import { type LegendLookup, resolveLegendKey } from './legend-keys'
+import { resultLabels } from './result-labels'
+import type { StoredEsports, StoredPlacement } from './stored-esports'
+
+export type EsportsMode = '1v1' | '2v2'
+
+export type PowerRanking = {
+  mode: EsportsMode
+  rank: number
+  region: string
+  gold: number
+  silver: number
+  bronze: number
+  top8: number
+}
+
+// null when brawltools has no brawlhalla account for the opponent
+export type EsportsOpponent = { brawlhallaId: number | null; name: string }
+
+export type EsportsSet = {
+  id: string
+  isWin: boolean
+  // won or lost without playing, brawltools scores the side that didn't show as -1
+  isForfeit: boolean
+  score: string
+  opponents: EsportsOpponent[]
+  legendKey: string | null
+  opponentLegendKey: string | null
+}
+
+export type SetRecord = { wins: number; losses: number }
+
+export type EsportsResult = {
+  id: string
+  // brawltools' id of the event, which keys its stored sets
+  tournamentId: string
+  mode: EsportsMode
+  placement: number
+  fullName: string
+  heading: string
+  // a short name for a tile and the line under it, no two results of one player share both
+  title: string
+  meta: string
+  // unix seconds
+  startTime: number
+  isOfficial: boolean
+  isOnline: boolean
+  legendKey: string | null
+  // how much the finish counts for the cards, see importance.ts
+  importance: number
+  // first round first
+  sets: EsportsSet[]
+  // forfeits left out; null when no set was played
+  setRecord: SetRecord | null
+}
+
+export type EsportsProfile = {
+  // null when the player has not earned anything
+  earnings: number | null
+  rankings: PowerRanking[]
+  results: EsportsResult[]
+}
+
+type UnlabelledResult = Omit<EsportsResult, 'title' | 'meta'>
+
+const dayMs = 86_400_000
+
+function toRanking(mode: EsportsMode, raw: RawPr | null): PowerRanking | null {
+  if (!raw || raw.pr.powerRanking <= 0) return null
+
+  const { powerRanking, region, gold, silver, bronze, top8 } = raw.pr
+
+  return { mode, rank: powerRanking, region, gold, silver, bronze, top8 }
+}
+
+// ties go to the legend seen first
+function mostCommon(legendKeys: (string | null)[]): string | null {
+  const counts = new Map<string, number>()
+
+  for (const key of legendKeys) {
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  const [top] = [...counts].sort((left, right) => right[1] - left[1])
+
+  return top ? top[0] : null
+}
+
+// a random pick or a name the site has no art for counts as unknown, so it never shows a placeholder
+function mostPlayed(brawltoolsNames: string[], legendLookup: LegendLookup): string | null {
+  return mostCommon(brawltoolsNames.map((name) => resolveLegendKey(name, legendLookup)))
+}
+
+// the stored opponent carries brawltools' other ids too, and the profile's contract allows none of them
+function toOpponent(raw: RawOpponent): EsportsOpponent {
+  const { brawlhallaId, name } = raw
+  const isAccountId = brawlhallaId !== null && Number.isInteger(brawlhallaId) && brawlhallaId > 0
+
+  return { brawlhallaId: isAccountId ? brawlhallaId : null, name }
+}
+
+function toSet(match: RawMatch, legendLookup: LegendLookup): EsportsSet {
+  const [own, theirs] = match.scores
+
+  const isForfeit = own < 0 || theirs < 0
+
+  return {
+    id: match.matchId,
+    isWin: own > theirs,
+    isForfeit,
+    score: isForfeit ? 'DQ' : `${own}-${theirs}`,
+    opponents: match.opponent.map(toOpponent),
+    legendKey: mostPlayed(match.legends[0] ?? [], legendLookup),
+    opponentLegendKey: mostPlayed(match.legends[1] ?? [], legendLookup),
+  }
+}
+
+// brawltools lists sets neither side played as 0-0 or as -1 against -1; a set counts once a side scored, or when
+// exactly one side didn't show
+function isPlayedOrForfeited(match: RawMatch): boolean {
+  const [own, theirs] = match.scores
+
+  const hasScore = Math.max(own, theirs) > 0
+  const isOwnNoShow = own < 0
+  const isTheirNoShow = theirs < 0
+
+  return hasScore || isOwnNoShow !== isTheirNoShow
+}
+
+// sets come latest first for most events; where every set has a start time, that time decides the order instead
+function inRunOrder(matches: RawMatch[]): RawMatch[] {
+  const isTimed = matches.every((match) => typeof match.startTime === 'number')
+
+  if (!isTimed) return [...matches].reverse()
+
+  return [...matches].sort((left, right) => (left.startTime ?? 0) - (right.startTime ?? 0))
+}
+
+// the record counts the sets that were played, a forfeit says nothing about how the player did
+function toSetRecord(sets: EsportsSet[]): SetRecord | null {
+  const played = sets.filter((set) => !set.isForfeit)
+
+  if (played.length === 0) return null
+
+  const wins = played.filter((set) => set.isWin).length
+
+  return { wins, losses: played.length - wins }
+}
+
+function toResult(stored: StoredPlacement, matches: RawMatch[], legendLookup: LegendLookup): UnlabelledResult {
+  const mode: EsportsMode = stored.mode === 1 ? '1v1' : '2v2'
+  const sets = inRunOrder(matches.filter(isPlayedOrForfeited)).map((match) => toSet(match, legendLookup))
+  const startTime = Math.floor(stored.startTime.getTime() / 1000)
+
+  const finish = {
+    placement: stored.placement,
+    fullName: stored.tournamentName,
+    isOfficial: stored.isOfficial,
+    isOnline: stored.isOnline,
+  }
+
+  return {
+    id: `${mode}-${stored.tournamentId}`,
+    tournamentId: stored.tournamentId,
+    mode,
+    placement: stored.placement,
+    fullName: stored.tournamentName,
+    heading: eventHeading(stored.tournamentName, stored.isOfficial, startTime),
+    startTime,
+    isOfficial: stored.isOfficial,
+    isOnline: stored.isOnline,
+    legendKey: mostCommon(sets.map((set) => set.legendKey)),
+    importance: importance(finish),
+    sets,
+    setRecord: toSetRecord(sets),
+  }
+}
+
+// an event split into pools comes back once per pool, same name and day; the best finish stands for it
+function withoutPoolRepeats(results: UnlabelledResult[]): UnlabelledResult[] {
+  const best = new Map<string, UnlabelledResult>()
+
+  for (const result of results) {
+    const key = `${result.mode}|${result.fullName}|${Math.floor((result.startTime * 1000) / dayMs)}`
+    const kept = best.get(key)
+
+    if (!kept || result.placement < kept.placement) best.set(key, result)
+  }
+
+  return [...best.values()]
+}
+
+function withLabels(results: UnlabelledResult[]): EsportsResult[] {
+  const labels = resultLabels(results)
+
+  return results.map((result) => {
+    const label = labels.get(result.id)
+
+    if (!label) throw new Error(`label esports result ${result.id}: no label was made for it`)
+
+    return { ...result, ...label }
+  })
+}
+
+// null when the player has no placement to show: a power ranking or earnings alone make no section
+export function shapeEsportsProfile(stored: StoredEsports, legendLookup: LegendLookup): EsportsProfile | null {
+  const results = stored.placements
+    .filter(({ tournamentName }) => !isSideModeEvent(tournamentName))
+    .map((placement) => toResult(placement, stored.setsByTournament.get(placement.tournamentId) ?? [], legendLookup))
+
+  const newestFirst = withoutPoolRepeats(results).sort((left, right) => right.startTime - left.startTime)
+
+  if (newestFirst.length === 0) return null
+
+  const rankings = [toRanking('1v1', stored.pr1v1), toRanking('2v2', stored.pr2v2)].filter(
+    (ranking): ranking is PowerRanking => ranking !== null,
+  )
+
+  // earnings are the player's total, both modes answer with the same figure
+  const earnings = Math.max(stored.pr1v1?.earnings ?? 0, stored.pr2v2?.earnings ?? 0)
+
+  return { earnings: earnings > 0 ? earnings : null, rankings, results: withLabels(newestFirst) }
+}

@@ -1,6 +1,7 @@
 import { resolveTier } from './commands/sweep-helpers'
 import {
   type LeaderboardMode,
+  LeaderboardSourceError,
   leaderboardSourcePageSize,
   type RegionalLeaderboardScope,
   regionalLeaderboardScopes,
@@ -49,7 +50,15 @@ export type LeaderboardGenerationCandidate = {
   expectedNextPublicationAt: Date
   pageDepth: number
   scopePageDepths?: Partial<Record<LeaderboardScope, number>>
+  /** Regions whose rows on the global board come from an earlier scan, because this one could not collect them. */
+  staleRegions?: readonly RegionalLeaderboardScope[]
   snapshots: ReadonlyMap<LeaderboardScope, readonly PublishedLeaderboardRow[]>
+}
+
+/** The newest board a region has published, and the publication that holds it. */
+export type PublishedRegionalBoard = {
+  operationKey: string
+  rows: readonly PublishedLeaderboardRow[]
 }
 
 export type RankingPublicationAuthorization = {
@@ -198,6 +207,15 @@ export type RankingQueries = {
 }
 
 export type RankingPublicationStore = {
+  readLatestRegionalBoards(
+    mode: LeaderboardMode,
+  ): Promise<ReadonlyMap<RegionalLeaderboardScope, PublishedRegionalBoard>>
+  /** Publishes one region's board as soon as it is collected, without closing the window. */
+  publishRegion(
+    authorization: RankingPublicationAuthorization,
+    candidate: LeaderboardGenerationCandidate,
+  ): Promise<PublicationResult>
+  /** Publishes the global board and records the window's effect, which closes the window. */
   publishGeneration(
     authorization: RankingPublicationAuthorization,
     candidate: LeaderboardGenerationCandidate,
@@ -252,6 +270,11 @@ export function leaderboardModeFromOperationKind(kind: LeaderboardOperationKind)
   if (kind === 'leaderboard-solo-2v2') return 'solo2v2'
 
   return kind.slice('leaderboard-'.length) as LeaderboardMode
+}
+
+/** The key of one region's publication within a scan, next to the scan's own key on the global board. */
+export function regionPublicationKey(operationKey: string, region: RegionalLeaderboardScope): string {
+  return `${operationKey}:${region}`
 }
 
 function validateDepth(depth: number): void {
@@ -477,28 +500,41 @@ function identityKeyForSort(identity: PublishedLeaderboardIdentity): string {
     : String(identity.player.brawlhallaId)
 }
 
+type GlobalCandidate = { row: PublishedLeaderboardRow; isCarried: boolean }
+
+// a carried row can be hours old, so any fresh row of the same player wins; between two alike, the stronger one does
+function isBetterGlobalRow(candidate: GlobalCandidate, existing: GlobalCandidate | undefined): boolean {
+  if (!existing) return true
+
+  if (candidate.isCarried !== existing.isCarried) return existing.isCarried
+
+  return compareDuplicateRows(candidate.row, existing.row) < 0
+}
+
+// a region missing here has never published a board, so the global board goes without it until it does
 function buildGlobal(
   mode: LeaderboardMode,
   regional: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
+  staleRegions: readonly RegionalLeaderboardScope[],
 ) {
-  const strongest = new Map<string, PublishedLeaderboardRow>()
+  const strongest = new Map<string, GlobalCandidate>()
 
   for (const region of regionalLeaderboardScopes) {
-    const rows = regional.get(region)
+    const isCarried = staleRegions.includes(region)
 
-    if (!rows) throw new LeaderboardCandidateError(`missing ${mode} regional candidate ${region}`)
-
-    for (const row of rows) {
+    for (const row of regional.get(region) ?? []) {
       const key = identityKey(mode, row.identity)
-      const existing = strongest.get(key)
+      const candidate = { row, isCarried }
 
-      if (!existing || compareDuplicateRows(row, existing) < 0) strongest.set(key, row)
+      if (isBetterGlobalRow(candidate, strongest.get(key))) strongest.set(key, candidate)
     }
   }
 
   if (strongest.size === 0) throw new LeaderboardCandidateError(`${mode} candidate has no ranked rows in any region`)
 
-  return [...strongest.values()].sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
+  const rows = [...strongest.values()].map(({ row }) => row)
+
+  return rows.sort(comparePublishedRows).map((row, index) => ({ ...row, standing: index + 1 }))
 }
 
 function errorDetails(error: unknown): { code: string; message: string } {
@@ -514,7 +550,7 @@ function errorDetails(error: unknown): { code: string; message: string } {
   return { code: 'leaderboard_collection_failed', message: 'Unknown collection failure' }
 }
 
-export async function collectAndPublishLeaderboardGeneration(input: {
+type CollectionInput = {
   mode: LeaderboardMode
   authorization: RankingPublicationAuthorization
   source: LeaderboardPageSource
@@ -522,7 +558,26 @@ export async function collectAndPublishLeaderboardGeneration(input: {
   pageDepth?: number
   intervalMs?: number
   clock?: () => Date
-}): Promise<PublicationResult> {
+}
+
+type CollectionRun = Pick<CollectionInput, 'mode' | 'authorization' | 'source' | 'publication'> & {
+  depth: number
+  clock: () => Date
+  startedAt: Date
+  scheduleWindowAt: Date
+  expectedNextPublicationAt: Date
+}
+
+type CollectedRegion = {
+  status: 'collected'
+  observedAt: Date
+  pageCount: number
+  rows: readonly PublishedLeaderboardRow[]
+}
+
+type RegionCollection = CollectedRegion | { status: 'failed'; error: unknown }
+
+function startCollectionRun(input: CollectionInput): CollectionRun {
   if (leaderboardModeFromOperationKind(input.authorization.operationKind) !== input.mode) {
     throw new LeaderboardCandidateError('leaderboard operation kind does not match collection mode')
   }
@@ -530,6 +585,7 @@ export async function collectAndPublishLeaderboardGeneration(input: {
   const depth = input.pageDepth ?? defaultLeaderboardPageDepth
 
   validateDepth(depth)
+
   const intervalMs = input.intervalMs ?? defaultLeaderboardIntervalMs
 
   if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
@@ -537,71 +593,169 @@ export async function collectAndPublishLeaderboardGeneration(input: {
   }
 
   const clock = input.clock ?? (() => new Date())
-  const observedAt = clock()
-  let snapshots: ReadonlyMap<LeaderboardScope, readonly PublishedLeaderboardRow[]>
-  const scopePageDepths: Partial<Record<LeaderboardScope, number>> = {}
-  let collectedDepth = 0
-  let failureScope: LeaderboardScope = 'all'
+  const startedAt = clock()
+  const windowAt = input.authorization.scheduleWindowAt
+  const scheduleWindowAt = windowAt ? new Date(windowAt) : startedAt
+
+  return {
+    mode: input.mode,
+    authorization: input.authorization,
+    source: input.source,
+    publication: input.publication,
+    depth,
+    clock,
+    startedAt,
+    scheduleWindowAt,
+    expectedNextPublicationAt: new Date(scheduleWindowAt.getTime() + intervalMs),
+  }
+}
+
+async function recordFailure(run: CollectionRun, scope: LeaderboardScope, error: unknown): Promise<void> {
+  const recorded = await run.publication.recordCollectionFailure(run.authorization, {
+    mode: run.mode,
+    scope,
+    checkedAt: run.clock(),
+    ...errorDetails(error),
+  })
+
+  if (recorded === 'lease-lost') throw new LeaderboardLeaseLostError()
+}
+
+async function fetchRegionPages(run: CollectionRun, region: RegionalLeaderboardScope) {
+  // ponytail: partial pages stay in memory; persist staging only if restart waste prevents hourly publication.
+  const pages: SourceLeaderboardPage[] = []
+
+  for (let page = 1; page <= run.depth; page += 1) {
+    pages.push(await run.source.fetchPage({ mode: run.mode, region, page }))
+
+    if (collectionCanPublish(run.mode, pages, run.depth)) break
+  }
+
+  return pages
+}
+
+function isRateLimited(error: unknown): boolean {
+  return error instanceof LeaderboardSourceError && error.code === 'source_rate_limited'
+}
+
+// a rate limit holds every region, so it stops the scan and leaves the wait to durable backoff. any other failure
+// belongs to this region alone
+async function collectRegion(run: CollectionRun, region: RegionalLeaderboardScope): Promise<RegionCollection> {
+  const observedAt = run.clock()
 
   try {
-    const regional = new Map<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>()
+    const pages = await fetchRegionPages(run, region)
+    const rows = validateRegionRows(run.mode, region, pages, run.depth)
 
-    for (const region of regionalLeaderboardScopes) {
-      failureScope = region
-      // ponytail: partial pages stay in memory; persist staging only if restart waste prevents hourly publication.
-      const pages: SourceLeaderboardPage[] = []
-
-      for (let page = 1; page <= depth; page += 1) {
-        pages.push(await input.source.fetchPage({ mode: input.mode, region, page }))
-        if (collectionCanPublish(input.mode, pages, depth)) break
-      }
-
-      scopePageDepths[region] = pages.length
-      collectedDepth = Math.max(collectedDepth, pages.length)
-      regional.set(region, validateRegionRows(input.mode, region, pages, depth))
-    }
-
-    failureScope = 'all'
-    const complete = new Map<LeaderboardScope, readonly PublishedLeaderboardRow[]>(regional)
-
-    complete.set('all', buildGlobal(input.mode, regional))
-    scopePageDepths.all = collectedDepth
-    snapshots = complete
+    return { status: 'collected', observedAt, pageCount: pages.length, rows }
   } catch (error) {
     if (error instanceof LeaderboardLeaseLostError) throw error
 
-    const details = errorDetails(error)
+    await recordFailure(run, region, error)
 
-    const recorded = await input.publication.recordCollectionFailure(input.authorization, {
-      mode: input.mode,
-      scope: failureScope,
-      checkedAt: clock(),
-      ...details,
-    })
+    if (isRateLimited(error)) throw error
 
-    if (recorded === 'lease-lost') throw new LeaderboardLeaseLostError()
-
-    throw error
+    return { status: 'failed', error }
   }
+}
 
-  const scheduleWindowAt = input.authorization.scheduleWindowAt
-    ? new Date(input.authorization.scheduleWindowAt)
-    : observedAt
-
-  const result = await input.publication.publishGeneration(input.authorization, {
-    mode: input.mode,
-    operationKey: input.authorization.operationKey,
-    observedAt,
-    scheduleWindowAt,
-    expectedNextPublicationAt: new Date(scheduleWindowAt.getTime() + intervalMs),
-    pageDepth: collectedDepth,
-    scopePageDepths,
-    snapshots,
-  })
-
+function throwUnlessPublished(result: PublicationResult): void {
   if (result === 'lease-lost') throw new LeaderboardLeaseLostError()
 
   if (result === 'effect-conflict') throw new LeaderboardEffectConflictError()
+}
+
+async function publishRegion(run: CollectionRun, region: RegionalLeaderboardScope, collected: CollectedRegion) {
+  const result = await run.publication.publishRegion(run.authorization, {
+    mode: run.mode,
+    operationKey: regionPublicationKey(run.authorization.operationKey, region),
+    observedAt: collected.observedAt,
+    scheduleWindowAt: run.scheduleWindowAt,
+    expectedNextPublicationAt: run.expectedNextPublicationAt,
+    pageDepth: run.depth,
+    scopePageDepths: { [region]: collected.pageCount },
+    snapshots: new Map([[region, collected.rows]]),
+  })
+
+  throwUnlessPublished(result)
+}
+
+async function buildGlobalOrRecordFailure(
+  run: CollectionRun,
+  boards: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
+  staleRegions: readonly RegionalLeaderboardScope[],
+) {
+  try {
+    return buildGlobal(run.mode, boards, staleRegions)
+  } catch (error) {
+    await recordFailure(run, 'all', error)
+
+    throw error
+  }
+}
+
+async function publishGlobalBoard(
+  run: CollectionRun,
+  boards: ReadonlyMap<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>,
+  staleRegions: readonly RegionalLeaderboardScope[],
+): Promise<PublicationResult> {
+  const rows = await buildGlobalOrRecordFailure(run, boards, staleRegions)
+
+  const result = await run.publication.publishGeneration(run.authorization, {
+    mode: run.mode,
+    operationKey: run.authorization.operationKey,
+    observedAt: run.startedAt,
+    scheduleWindowAt: run.scheduleWindowAt,
+    expectedNextPublicationAt: run.expectedNextPublicationAt,
+    pageDepth: run.depth,
+    staleRegions,
+    snapshots: new Map([['all', rows]]),
+  })
+
+  throwUnlessPublished(result)
 
   return result
+}
+
+/**
+ * Scans every region of one mode. Each region's board publishes as soon as it is collected, so a region the source
+ * keeps failing holds back no other region. A failed region keeps its last published board, and the global board
+ * carries those rows and names the region stale. Publishing the global board closes the window.
+ *
+ * Only a lost lease, a rate limit or a window where no region could be collected fails the scan. Its retry skips the
+ * regions this window already published.
+ */
+export async function collectAndPublishLeaderboardGeneration(input: CollectionInput): Promise<PublicationResult> {
+  const run = startCollectionRun(input)
+  const earlierBoards = await run.publication.readLatestRegionalBoards(run.mode)
+  const boards = new Map<RegionalLeaderboardScope, readonly PublishedLeaderboardRow[]>()
+  const staleRegions: RegionalLeaderboardScope[] = []
+  const failures: unknown[] = []
+
+  for (const region of regionalLeaderboardScopes) {
+    const earlier = earlierBoards.get(region)
+
+    // a retry keeps what an earlier attempt of this window published
+    if (earlier?.operationKey === regionPublicationKey(run.authorization.operationKey, region)) {
+      boards.set(region, earlier.rows)
+      continue
+    }
+
+    const collection = await collectRegion(run, region)
+
+    if (collection.status === 'collected') {
+      await publishRegion(run, region, collection)
+      boards.set(region, collection.rows)
+      continue
+    }
+
+    staleRegions.push(region)
+    failures.push(collection.error)
+
+    if (earlier) boards.set(region, earlier.rows)
+  }
+
+  if (staleRegions.length === regionalLeaderboardScopes.length) throw failures[0]
+
+  return publishGlobalBoard(run, boards, staleRegions)
 }

@@ -1,8 +1,10 @@
 import {
   type DeadLetterReason,
   leaderboardOperationKinds,
+  type OperationCohort,
   type OperationLease,
   type OperationsTelemetrySnapshot,
+  operationCohorts,
   statisticsCollectionKinds,
   type WorkClass,
   workClasses,
@@ -13,7 +15,7 @@ type OperationKind = OperationLease['kind']
 export type TelemetryReadings = {
   observedAt: Date
   oldestPending: { workClass: WorkClass; ageMs: number }[]
-  deadLetters: { workClass: WorkClass; kind: string; reason: DeadLetterReason; count: number }[]
+  deadLetters: { workClass: WorkClass; kind: string; reason: DeadLetterReason; cohort: string; count: number }[]
   scheduleLateness: { kind: string; latenessMs: number }[]
 }
 
@@ -34,6 +36,8 @@ const allOperationKinds: OperationKind[] = [
   ...statisticsCollectionKinds,
   'statistics-publication',
   'statistics-legend-meta-publication',
+  'esports-refresh',
+  'esports-sets-backfill',
 ]
 
 const scheduledKinds: OperationKind[] = [
@@ -45,31 +49,68 @@ const scheduledKinds: OperationKind[] = [
   'clan-weekly-snapshot',
 ]
 
+// only player refreshes run in cohorts, and only in these classes: a promoted background refresh turns interactive
+const cohortKind: OperationKind = 'interactive-player-refresh'
+const cohortWorkClasses: readonly WorkClass[] = ['interactive', 'primary-monitoring']
+
+/** The cohort a payload names, or none when it names no cohort telemetry knows. */
+export function cohortOf(payload: unknown): OperationCohort {
+  if (typeof payload !== 'object' || payload === null || !('cohort' in payload)) return 'none'
+
+  const cohort = operationCohorts.find((known) => known === payload.cohort)
+
+  return cohort ?? 'none'
+}
+
+function cohortsOf(workClass: WorkClass, kind: OperationKind): readonly OperationCohort[] {
+  if (kind !== cohortKind || !cohortWorkClasses.includes(workClass)) return ['none']
+
+  return operationCohorts
+}
+
 function isAdmissionSeriesKept(kind: OperationKind, hasAdmissionRejections: boolean): boolean {
   return hasAdmissionRejections || kind === 'interactive-player-refresh' || kind === 'clan-refresh'
 }
 
+function seriesKey(workClass: WorkClass | string, kind: string, reason: DeadLetterReason, cohort: string): string {
+  return `${workClass}:${kind}:${reason}:${cohortOf({ cohort })}`
+}
+
+function countsBySeries(readings: TelemetryReadings): Map<string, number> {
+  const counts = new Map<string, number>()
+
+  for (const row of readings.deadLetters) {
+    const key = seriesKey(row.workClass, row.kind, row.reason, row.cohort)
+
+    counts.set(key, (counts.get(key) ?? 0) + row.count)
+  }
+
+  return counts
+}
+
 function deadLetterSeries(readings: TelemetryReadings): OperationsTelemetrySnapshot['deadLetters'] {
-  const countsBySeries = new Map(
-    readings.deadLetters.map((row) => [`${row.workClass}:${row.kind}:${row.reason}`, row.count]),
-  )
+  const counts = countsBySeries(readings)
 
   // execution series are always present so rate-based alerts see a zero baseline; admission series stay sparse
-  // outside the interactive kinds to keep the gauge under the per-metric series bound
+  // outside the interactive kinds to keep the gauge under the per-metric series bound, and only visitors, outside
+  // any cohort, are ever rejected at admission
   return workClasses.flatMap((workClass) =>
     allOperationKinds.flatMap((kind) => {
-      const admissionRejected = countsBySeries.get(`${workClass}:${kind}:admission_rejected`)
-
-      const execution = {
+      const executions = cohortsOf(workClass, kind).map((cohort) => ({
         workClass,
         kind,
         reason: 'execution' as const,
-        count: countsBySeries.get(`${workClass}:${kind}:execution`) ?? 0,
-      }
+        cohort,
+        count: counts.get(seriesKey(workClass, kind, 'execution', cohort)) ?? 0,
+      }))
 
-      if (!isAdmissionSeriesKept(kind, admissionRejected !== undefined)) return [execution]
+      const admissionRejected = counts.get(seriesKey(workClass, kind, 'admission_rejected', 'none'))
 
-      return [execution, { workClass, kind, reason: 'admission_rejected' as const, count: admissionRejected ?? 0 }]
+      if (!isAdmissionSeriesKept(kind, admissionRejected !== undefined)) return executions
+
+      const admission = { workClass, kind, reason: 'admission_rejected' as const, cohort: 'none' as const }
+
+      return [...executions, { ...admission, count: admissionRejected ?? 0 }]
     }),
   )
 }

@@ -1,5 +1,8 @@
-import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelBottomClose, PanelBottomOpen, Pause, Play } from 'lucide-react'
+import type { RefObject } from 'react'
+import { IconTooltip, iconTooltipParent } from '../../IconTooltip'
 import { formatClock } from '../match-format'
+import type { LanesFold } from './use-lanes-fold'
 import { type Playback, playbackSpeeds } from './use-playback'
 
 // a finger's size on a phone, where the buttons lie under the stage
@@ -105,6 +108,37 @@ export function SpeedButton({ playback }: { playback: Playback }) {
   )
 }
 
+type FoldButtonProps = {
+  fold: LanesFold
+  // the name opens away from the stage's edge the lanes lie along
+  isAlongTop: boolean
+  buttonRef?: RefObject<HTMLButtonElement | null>
+}
+
+/** After the speed: folds the lanes down to a thin bar, for more of the stage, and back. */
+export function FoldButton({ fold, isAlongTop, buttonRef }: FoldButtonProps) {
+  const label = fold.isFolded ? 'Show timeline' : 'Hide timeline'
+  const Icon = fold.isFolded ? PanelBottomOpen : PanelBottomClose
+  const name = `${label} (T)`
+
+  // along the bottom the button sits in the screen's corner, so its name opens above it and in towards the stage
+  const tooltip = isAlongTop ? <IconTooltip label={name} /> : <IconTooltip label={name} align="end" side="above" />
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-label={label}
+      aria-keyshortcuts="T"
+      onClick={fold.toggle}
+      className={`${iconTooltipParent} ${barButton}`}
+    >
+      <Icon className="size-4 phone:size-5" aria-hidden="true" />
+      {tooltip}
+    </button>
+  )
+}
+
 // pressing the count plays the stop it names once more
 function StopCountButton({ count }: { count: StopCount }) {
   return (
@@ -125,6 +159,8 @@ function StopCountButton({ count }: { count: StopCount }) {
 type TransportColumnProps = TransportButtonsProps & {
   // a review's place among its stops; none while watching
   count: StopCount | null
+  // in the low bar of folded lanes the clock follows the steps, as it does on a phone
+  isRow: boolean
 }
 
 /**
@@ -132,9 +168,11 @@ type TransportColumnProps = TransportButtonsProps & {
  * the match up for which stop it is on, so the corner is as wide in both and the lanes never move. On a phone the
  * clock follows the steps in the row under the stage.
  */
-export function TransportColumn({ playback, stepping, count }: TransportColumnProps) {
+export function TransportColumn({ playback, stepping, count, isRow }: TransportColumnProps) {
+  const direction = isRow ? 'flex-row gap-2' : 'flex-col gap-1 phone:flex-row phone:gap-2'
+
   return (
-    <div className="flex flex-col items-center gap-1 phone:flex-row phone:gap-2">
+    <div className={`flex items-center ${direction}`}>
       <TransportButtons playback={playback} stepping={stepping} />
       <div className="flex h-5 items-center gap-1.5 phone:h-11 phone:gap-2">
         <ReplayClock playback={playback} hasLength={count === null} />

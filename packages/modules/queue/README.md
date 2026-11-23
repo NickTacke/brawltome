@@ -51,9 +51,9 @@ Everything other packages may import is exported from `index.ts`:
   happens when a job fails
 - `readPayloadObject`, `isPositiveInteger` and the other payload helpers: for a job's `parsePayload`
 - `acceptOperation`, `reserveForAdmission`, `reserveForBinding`, and `activateReserved`, `activateAdmitted`,
-  `activateBound`, `rejectReserved`, `rejectExpired`: for writing work
-- `findActiveOperation`, `listAwaiting`, `countActive`, `readAttemptHistory`, `readEffectLineage`, `operationMatches`:
-  for reading it
+  `activateBound`, `rejectReserved`, `rejectExpired`, `rewritePendingOperation`: for writing work
+- `findActiveOperation`, `findActiveOperationDetails`, `listAwaiting`, `countActive`, `readAttemptHistory`,
+  `readEffectLineage`, `operationMatches`: for reading it
 - `reconcileFixedSchedule`, `reconcileResourceSchedules`, `disableFixedSchedule`: for the planners
 - the fences from `lease-fences.ts`
 - `model.ts`, re-exported whole
@@ -85,8 +85,8 @@ If the job saves results of its own, those tables go in the owner's migrations.
    `tooling/architecture/src/current-policy.ts`.
 4. Add the kind to `allOperationKinds` in `domain/queue-telemetry.ts`, `OperationLease` in `model.ts`, and
    `operationKind` in `packages/telemetry/src/index.ts`. A kind missing from that last list loses its metrics with no
-   error. `operation_dead_letters` is at 132 of its 256 series (20 kinds across 6 work classes, plus 12 admission
-   series) and a kind adds 6. Dropped series break the dead-letter alert, so check the limit in `createTelemetry`
+   error. `operation_dead_letters` is at 148 of its 256 series (22 kinds across 6 work classes, 12 admission series,
+   and 4 for the player refresh cohorts) and a kind adds 6. Dropped series break the dead-letter alert, so check the limit in `createTelemetry`
    first.
 5. Test it with `runJobOnce` from `@brawltome/queue/testing`.
 6. Ship that. A new kind's job has to ship one release before anything writes that kind. During a deploy the old worker

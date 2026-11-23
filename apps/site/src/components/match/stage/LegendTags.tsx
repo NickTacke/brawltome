@@ -3,10 +3,7 @@ import { slotColour } from '../match-styles'
 import { type Camera, inFrame } from './play-camera'
 import type { Pose } from './pose'
 import { isOnScreen, PoseTag } from './TokenPoses'
-import { tagHeightPx, tagLifts } from './tag-stack'
-
-// how far above the feet the tag sits, in level units: just over a standing legend's head
-const tagHeight = 190
+import { tagHeightPx, tagLift, tagLifts } from './tag-stack'
 
 type LegendTagsProps = {
   poses: Pose[]
@@ -19,8 +16,8 @@ type LegendTagsProps = {
 
 /** The weapon, damage and stocks of each player on screen, above their legend's head. */
 export function LegendTags({ poses, selectedSlot, box, camera, frame }: LegendTagsProps) {
-  const tagShare = (tagHeight / box.height) * camera.zoom
-  const shown = poses.map((pose) => inFrame(pose, camera)).filter(isOnScreen)
+  const tagShare = tagLift / camera.height
+  const shown = poses.map((pose) => inFrame(pose, box, camera)).filter(isOnScreen)
   // players on the same spot get their tags one over the other
   const lifts = tagLifts(shown, frame)
 

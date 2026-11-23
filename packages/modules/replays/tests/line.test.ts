@@ -66,6 +66,11 @@ describe('reading a bh-native line', () => {
     const line = played(makeLine({ custom: true }))
 
     expect(line.match.isCustom).toBe(true)
+    expect(line.hasTimeline).toBe(false)
+  })
+
+  test('marks a line that has a timeline', () => {
+    expect(played(makeLine()).hasTimeline).toBe(true)
   })
 
   test('reads an error line as just its exit code', () => {

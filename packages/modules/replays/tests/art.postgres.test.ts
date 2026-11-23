@@ -61,7 +61,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
   })
 
   // an operator's upload, parsed by the worker into a stored match
-  async function parsedMatch(workerReport: WorkerReport = report): Promise<string> {
+  async function parsedMatch(workerReport: WorkerReport = report, line = makeLine()): Promise<string> {
     const accountId = randomUUID()
 
     await database.sql`INSERT INTO accounts.users (id) VALUES (${accountId})`
@@ -73,7 +73,7 @@ describe.skipIf(!connectionString)('art jobs', () => {
     const outcome = await completeJob(deps, {
       jobId: claimed?.jobId as string,
       leaseToken: claimed?.leaseToken as string,
-      line: makeLine(),
+      line,
     })
 
     expect(outcome).toBe('completed')
@@ -150,6 +150,22 @@ describe.skipIf(!connectionString)('art jobs', () => {
     deps = { ...deps, artStore: null as unknown as MemoryStore }
 
     const matchId = await parsedMatch()
+
+    expect(await artJobs()).toEqual([])
+    expect((await artOf(matchId))?.state).toBe('none')
+  })
+
+  test('a parse of a line without a timeline queues no art job and leaves its art none', async () => {
+    const matchId = await parsedMatch(report, makeLine({ custom: true }))
+
+    expect(await artJobs()).toEqual([])
+    expect((await artOf(matchId))?.state).toBe('none')
+  })
+
+  test('queueing art for a match without a timeline does nothing', async () => {
+    const matchId = await parsedMatch(report, makeLine({ custom: true }))
+
+    await queueArtJob(deps, matchId)
 
     expect(await artJobs()).toEqual([])
     expect((await artOf(matchId))?.state).toBe('none')
@@ -877,6 +893,20 @@ describe.skipIf(!connectionString)('art jobs', () => {
 
     expect(pending.sort()).toEqual([outdated, never].sort())
     expect((await artOf(outdated))?.state).toBe('queued')
+  })
+
+  test('a report with a new art format queues no art for a match without a timeline', async () => {
+    const withTimeline = await parsedMatch()
+    const withoutTimeline = await parsedMatch(report, makeLine({ custom: true }))
+
+    await database.sql`UPDATE replays.art_jobs SET status = 'completed'`
+
+    await noteWorkerReport(deps, { ...report, artFormat: 3 })
+
+    const pending = (await artJobs()).filter((job) => job.status === 'pending').map((job) => job.matchId)
+
+    expect(pending).toEqual([withTimeline])
+    expect((await artOf(withoutTimeline))?.state).toBe('none')
   })
 
   test('a new art format is only recorded once its matches are queued', async () => {

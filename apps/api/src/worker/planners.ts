@@ -17,6 +17,7 @@ import type {
   RefreshOperationWorker,
 } from '@brawltome/queue'
 import type { ActorAdmission } from '@brawltome/request-admission'
+import type { Telemetry } from '@brawltome/telemetry'
 import type { createDiscoveryReconciliationBackoff } from '../discovery-reconciliation-backoff'
 import { reconcileInteractiveAdmissions } from './interactive-admissions'
 
@@ -62,6 +63,7 @@ export type PlannerDependencies = {
   statisticsCohort: { reconcile(): Promise<number> }
   nameVerification: Pick<Planner, 'tick'>
   freshness: Pick<Planner, 'tick'>
+  rankedCoverage: Pick<Planner, 'tick'>
   schedules: {
     store: ScheduleStore
     leaderboard: readonly CreateLeaderboardSchedule[]
@@ -250,15 +252,31 @@ export function createPlanners(dependencies: PlannerDependencies): readonly Plan
     { name: 'statistics-cohort', tick: () => dependencies.statisticsCohort.reconcile() },
     { name: 'player-name-verification', tick: () => dependencies.nameVerification.tick() },
     { name: 'freshness', tick: () => dependencies.freshness.tick() },
+    // after freshness: a recently viewed player takes the shared background slot before a coverage refresh does
+    { name: 'ranked-coverage', tick: () => dependencies.rankedCoverage.tick() },
     createScheduleReconciliationPlanner(dependencies),
   ]
 }
 
-// one after another, in list order: a planner that throws ends the tick before the later ones run
-export async function runPlanners(planners: readonly Planner[]): Promise<number> {
+type PlannerTelemetry = Pick<Telemetry, 'logger' | 'metrics'>
+
+// a planner that throws skips only its own tick, so one failing concern can't stop the others or the schedules
+async function tickIsolated(planner: Planner, telemetry: PlannerTelemetry): Promise<number> {
+  try {
+    return await planner.tick()
+  } catch (error) {
+    telemetry.metrics.add('worker_planner_failures_total', 1, { planner: planner.name })
+    telemetry.logger.error('worker.planner.failed', error, { planner: planner.name })
+
+    return 0
+  }
+}
+
+// one after another, in list order
+export async function runPlanners(planners: readonly Planner[], telemetry: PlannerTelemetry): Promise<number> {
   let changed = 0
 
-  for (const planner of planners) changed += await planner.tick()
+  for (const planner of planners) changed += await tickIsolated(planner, telemetry)
 
   return changed
 }

@@ -11,6 +11,7 @@ import {
   recentFreshnessAttempts,
   refreshRequestDemand,
 } from '../../jobs/recently-viewed-refreshes'
+import { takeOverPlayerRefresh } from '../../jobs/visitor-refresh-takeover'
 
 let database: TestDatabase
 let connectionString = ''
@@ -162,7 +163,7 @@ describe('Recently viewed freshness operations', () => {
     )
   })
 
-  test('promotes a queued background refresh when a visitor asks for the same player', async () => {
+  test('lets a visitor wait on a queued background refresh that already covers them', async () => {
     const control = postgres(connectionString, { max: 1 })
 
     try {
@@ -179,15 +180,25 @@ describe('Recently viewed freshness operations', () => {
         reservationTtlSeconds: 30,
       })
 
-      const [background] = await control<{ id: string; work_class: string }[]>`
-        SELECT id, work_class FROM queue.operations
+      const [background] = await control<{ id: string }[]>`
+        SELECT id FROM queue.operations
         WHERE provenance->>'source' = 'freshness-planner' AND payload->>'brawlhallaId' = '50'
       `
 
       expect(reservation).toEqual({ outcome: 'already-active', operationId: background.id })
-      expect(background.work_class).toBe('interactive')
-      // The promoted refresh no longer occupies a background slot.
-      expect(await activeRecentlyViewedRefreshes(database)).toBe(activeBefore)
+
+      expect(await takeOverPlayerRefresh(database, { brawlhallaId: 50, staleSections: ['ranked'] })).toEqual({
+        outcome: 'attached',
+        operationId: background.id,
+      })
+
+      // it already covers ranked, so the visitor waits on it as it is
+      const [unchanged] = await control<{ work_class: string }[]>`
+        SELECT work_class FROM queue.operations WHERE id = ${background.id}
+      `
+
+      expect(unchanged.work_class).toBe('primary-monitoring')
+      expect(await activeRecentlyViewedRefreshes(database)).toBe(activeBefore + 1)
     } finally {
       await control.end()
     }

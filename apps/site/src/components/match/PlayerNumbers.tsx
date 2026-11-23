@@ -57,6 +57,7 @@ function NumbersRow({ row, players, selectedSlot, isLast }: RowProps) {
   return (
     <div className="col-span-full grid grid-cols-subgrid items-stretch">
       <span
+        title={row.label}
         className={`flex items-center truncate border-t border-line/30 text-soft phone:py-1 phone:leading-tight phone:whitespace-normal ${rowHeight}`}
       >
         {row.label}

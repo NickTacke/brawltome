@@ -75,14 +75,17 @@ export function usePanelPlace(panelRef: RefObject<HTMLElement | null>, study: Pa
     if (study.key === null && !isHeld) setPlaced(null)
   }, [study.key, isHeld])
 
+  // not while the bottom is the only edge: unfolding the lanes or leaving fullscreen at a stop decides it then. the
+  // band is measured now, as it may have just grown from a thin bar back to the lanes before the box heard of it
   // biome-ignore lint/correctness/useExhaustiveDependencies: decided once per frame, when it is first measured
   useLayoutEffect(() => {
-    if (study.key === null || !box || placed?.key === study.key) return
+    if (study.key === null || study.isBottomOnly || !box || placed?.key === study.key) return
 
-    const edge = edgeFor({ study, stage: box.stage, bandPx, heldEdge: placed?.edge ?? null, isHeld })
+    const bandNowPx = (panelRef.current?.offsetHeight ?? 0) + panelGapPx
+    const edge = edgeFor({ study, stage: box.stage, bandPx: bandNowPx, heldEdge: placed?.edge ?? null, isHeld })
 
     setPlaced({ key: study.key, edge })
-  }, [study.key, box !== null])
+  }, [study.key, study.isBottomOnly, box !== null])
 
   const edge: Edge = study.isBottomOnly ? 'bottom' : (placed?.edge ?? 'bottom')
 

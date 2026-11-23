@@ -16,10 +16,19 @@ export type TriggerDeployOptions = {
   timeoutMs?: number
   pollIntervalMs?: number
   requestTimeoutMs?: number
+  // the commit this run built; with readBranchHead, a run whose commit is no longer the head skips its deploy
+  releaseSha?: string
+  readBranchHead?: () => Promise<string>
 }
 
-/** Starts a Dokploy compose deployment and waits until it is done, failed, or out of time. */
-export async function triggerDeploy(options: TriggerDeployOptions): Promise<'done'> {
+/**
+ * Starts a Dokploy compose deployment and waits until it is done, failed, or out of time. Skips it when a newer
+ * commit is already on the branch: Dokploy deploys the branch head, whose images that commit's own run has not
+ * promoted yet, and that run deploys it next.
+ */
+export async function triggerDeploy(options: TriggerDeployOptions): Promise<'done' | 'superseded'> {
+  if (await isSuperseded(options)) return 'superseded'
+
   const fetchFromNetwork = options.fetch ?? fetch
   const now = options.now ?? Date.now
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
@@ -101,6 +110,42 @@ function readOutcome(newDeployments: Deployment[]): Deployment | undefined {
   )
 }
 
+async function isSuperseded(options: TriggerDeployOptions): Promise<boolean> {
+  if (!options.releaseSha || !options.readBranchHead) return false
+
+  const branchHead = await options.readBranchHead()
+
+  return branchHead !== options.releaseSha
+}
+
+type CommandResult = { exitCode: number; stdout: string }
+type RunCommand = (command: string[]) => Promise<CommandResult>
+
+const lsRemoteTimeoutMs = 30_000
+
+async function runCommand(command: string[]): Promise<CommandResult> {
+  const child = Bun.spawn(command, { timeout: lsRemoteTimeoutMs })
+  const stdout = await new Response(child.stdout).text()
+
+  return { exitCode: await child.exited, stdout }
+}
+
+/** Reads a branch's head commit from the remote, not the checkout, which is pinned to the commit this run built. */
+export function readRemoteBranchHead(repository: string, branch: string, run: RunCommand = runCommand) {
+  return async (): Promise<string> => {
+    const result = await run(['git', 'ls-remote', `https://github.com/${repository}.git`, `refs/heads/${branch}`])
+
+    if (result.exitCode !== 0)
+      throw new Error(`read the head of ${repository} ${branch}: git ls-remote exited ${result.exitCode}`)
+
+    const sha = result.stdout.split(/\s/)[0]
+
+    if (!sha) throw new Error(`read the head of ${repository} ${branch}: no such branch`)
+
+    return sha
+  }
+}
+
 function requireEnvironment(name: string): string {
   const value = process.env[name]
 
@@ -111,13 +156,19 @@ function requireEnvironment(name: string): string {
 
 if (import.meta.main) {
   try {
-    await triggerDeploy({
+    const outcome = await triggerDeploy({
       dokployUrl: requireEnvironment('DOKPLOY_URL'),
       token: requireEnvironment('DOKPLOY_TOKEN'),
       composeId: requireEnvironment('DOKPLOY_COMPOSE_ID'),
+      releaseSha: requireEnvironment('GITHUB_SHA'),
+      readBranchHead: readRemoteBranchHead(
+        requireEnvironment('GITHUB_REPOSITORY'),
+        requireEnvironment('GITHUB_REF_NAME'),
+      ),
     })
 
-    console.log('Dokploy deployment finished.')
+    if (outcome === 'superseded') console.log('A newer commit is on the branch; its own run deploys it.')
+    else console.log('Dokploy deployment finished.')
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)

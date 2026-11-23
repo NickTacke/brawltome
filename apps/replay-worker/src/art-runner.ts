@@ -274,8 +274,23 @@ export class ArtRunner {
       return failure('export-failed', `export ${command} exited with ${run.exitCode}: ${run.stderr.trim().slice(-400)}`)
     }
 
+    for (const warning of warningsIn(run.stderr)) {
+      console.warn(`export ${command} for job ${attempt.job.jobId}: ${warning}`)
+    }
+
     return { kind: 'done', stdout: run.stdout }
   }
+}
+
+// what a step that ended well still warns of. the export writes its progress to stderr too (a line a legend, a line
+// of totals), and its readme says which lines a caller should log: the ones that start with `warning: `
+const warningPrefix = 'warning: '
+
+function warningsIn(stderr: string): string[] {
+  const lines = stderr.split('\n').map((line) => line.trim())
+  const warnings = lines.filter((line) => line.startsWith(warningPrefix))
+
+  return warnings.map((warning) => warning.slice(warningPrefix.length, warningPrefix.length + 500))
 }
 
 // another attempt may own the job now, so this one stops before it sends anything more

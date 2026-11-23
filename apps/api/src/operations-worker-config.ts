@@ -39,6 +39,16 @@ export function readBrawlhallaV1RequestLimit(value: string | undefined): number 
   })
 }
 
+// brawltools publishes no limit, so one call a second is the starting point and the ceiling
+export function readBrawltoolsRequestLimit(value: string | undefined): number {
+  return parseBoundedInteger(value, {
+    name: 'BRAWLTOOLS_REQUEST_LIMIT',
+    fallback: 60,
+    minimum: 1,
+    maximum: 60,
+  })
+}
+
 export function readSourceBackgroundHeadroom(value: string | undefined, minimumSourceLimit: number): number {
   return parseBoundedInteger(value, {
     name: 'SOURCE_BACKGROUND_HEADROOM',

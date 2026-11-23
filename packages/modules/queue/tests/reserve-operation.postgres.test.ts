@@ -7,7 +7,6 @@ import {
   activateReserved,
   findActiveOperation,
   listAwaiting,
-  promotePendingWorkClass,
   queueModule,
   rejectReserved,
   reserveForAdmission,
@@ -202,39 +201,6 @@ describe('reserveForAdmission', () => {
     const second = await reserveForAdmission(database, { ...admissionInput(), resourceKey })
 
     expect(second).toEqual({ outcome: 'already-active', operationId: first.operationId })
-  })
-
-  test('runs beforeInsert in the reserving transaction', async () => {
-    const resourceKey = `proof-resource:${randomUUID()}`
-
-    const queued = await acceptOperation(database, {
-      job: testJobContract,
-      dedupeKey: `queued:${randomUUID()}`,
-      operationKey: `effect:${randomUUID()}`,
-      resourceKey,
-      workClass: 'maintenance',
-      payload: { value: 'queued' },
-      provenance,
-    })
-
-    await reserveForAdmission(
-      database,
-      { ...admissionInput(), resourceKey },
-      {
-        beforeInsert: (transaction) =>
-          promotePendingWorkClass(transaction, {
-            kind: 'test-job',
-            resourceKey,
-            from: 'maintenance',
-            to: 'interactive',
-            payloadEquals: { value: 'queued' },
-          }),
-      },
-    )
-
-    const row = await readRow(queued.operationId)
-
-    expect(row.work_class).toBe('interactive')
   })
 
   test('rejects a reservation with its token and records the reason', async () => {

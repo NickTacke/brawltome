@@ -4,10 +4,12 @@ import {
   nullablePlayerReferenceSchema,
   nullablePlayerValhallanEvidenceSchema,
   type PlayerCareerProfileContract,
+  type PlayerEsportsContract,
   type PlayerRankedProfileContract,
   type PlayerReferenceContract,
   playerBoardRanksSchema,
   playerClanMembershipSchema,
+  playerEsportsSchema,
   type SeasonStartContract,
   seasonStartsSchema,
 } from '@brawltome/contracts'
@@ -19,6 +21,8 @@ import { failureText, optionalRead, readOptional } from './optional-read'
 
 type PlayerClanMembership = z.infer<typeof playerClanMembershipSchema>
 
+export type EsportsProfile = NonNullable<PlayerEsportsContract['profile']>
+
 export type PlayerData = {
   brawlhallaId: number
   name: string
@@ -27,6 +31,8 @@ export type PlayerData = {
   bestLegendNameKey: string | null
   currentSeason: PlayerRankedProfileContract | null
   career: PlayerCareerProfileContract | null
+  // null for nearly everyone: only players with trusted esports results have one
+  esports: EsportsProfile | null
 }
 
 export type PlayerPage = {
@@ -97,16 +103,25 @@ function readValhallanEvidence(playerId: number) {
   return readOptional(() => readApi(path, nullablePlayerValhallanEvidenceSchema, description, optionalRead), null)
 }
 
+async function readEsports(playerId: number): Promise<EsportsProfile | null> {
+  const description = `load esports for player ${playerId}`
+  const read = () => readApi(`/players/${playerId}/esports`, playerEsportsSchema, description, optionalRead)
+  const esports = await readOptional(read, null)
+
+  return esports?.profile ?? null
+}
+
 function readSeasonStarts() {
   return readOptional(() => readApi('/seasons', seasonStartsSchema, 'load season starts', optionalRead), [])
 }
 
 export async function loadPlayer(playerId: number): Promise<PlayerPage | null> {
-  const [[reference, ranked, career], clan, evidence, seasonStarts] = await Promise.all([
+  const [[reference, ranked, career], clan, evidence, seasonStarts, esports] = await Promise.all([
     readRequiredParts(playerId),
     readClan(playerId),
     readValhallanEvidence(playerId),
     readSeasonStarts(),
+    readEsports(playerId),
   ])
 
   if (!reference) return null
@@ -119,6 +134,7 @@ export async function loadPlayer(playerId: number): Promise<PlayerPage | null> {
     bestLegendNameKey: reference.bestLegendNameKey ?? null,
     currentSeason: withOfficialValhallanTier(ranked, evidence),
     career,
+    esports,
   }
 
   return { player, seasonStarts, loadedAt: new Date().toISOString() }

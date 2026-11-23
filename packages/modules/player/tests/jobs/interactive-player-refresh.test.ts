@@ -187,6 +187,65 @@ describe('interactive player refresh job', () => {
     expect(completions()).toBe(1)
   })
 
+  test('runs a ranked coverage refresh as one background V0 call', async () => {
+    const lease = refreshLease('primary-monitoring', {
+      cohort: 'ranked-coverage',
+      brawlhallaId: 42,
+      staleSections: ['ranked'],
+    })
+
+    const { queue, committed, completions } = createQueueSpy(lease)
+    const { dependencies, record } = createDependencies()
+
+    await runJobOnce(queue, createInteractivePlayerRefreshJob(dependencies), {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      sourceAdmission: admittingSourcePort(),
+    })
+
+    expect(record.sections).toEqual(['ranked'])
+    expect(record.callers).toEqual(['background'])
+    expect(record.domains).toEqual(['brawlhalla-v0'])
+    expect(committed).toEqual(['ranked'])
+    expect(completions()).toBe(1)
+  })
+
+  test('pauses V0 and defers a ranked coverage refresh when Brawlhalla answers 503', async () => {
+    const lease = refreshLease(
+      'primary-monitoring',
+      { cohort: 'ranked-coverage', brawlhallaId: 42, staleSections: ['ranked'] },
+      3,
+    )
+
+    const spy = createQueueSpy(lease)
+    const paused: Array<[string, number]> = []
+    const maintenance = Object.assign(new Error('Brawlhalla API error: 503'), { status: 503, domain: 'brawlhalla-v0' })
+
+    const { dependencies } = createDependencies({
+      createAdmittedSource: () => ({
+        getRanked: async () => {
+          throw maintenance
+        },
+        getStats: async () => careerSnapshot,
+      }),
+    })
+
+    await runJobOnce(spy.queue, createInteractivePlayerRefreshJob(dependencies), {
+      leaseMs: 1_000,
+      retryDelayMs: 10,
+      sourceUnavailableRetryMs: 60_000,
+      sourceAdmission: admittingSourcePort(paused),
+    })
+
+    // the last attempt waits too: a paused source is not the player's fault, so it never dead-letters
+    expect(spy.deferred.map(({ failure, retryDelayMs }) => [failure.code, retryDelayMs])).toEqual([
+      ['source_unavailable', 60_000],
+    ])
+
+    expect(spy.failed).toEqual([])
+    expect(paused).toEqual([['brawlhalla-v0', 60]])
+  })
+
   test('runs full Primary monitoring through background source admission and skips revoked assignments', async () => {
     const assignmentId = crypto.randomUUID()
 

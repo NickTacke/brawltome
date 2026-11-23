@@ -56,7 +56,8 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
 - `poseAt(timeline, slot, step, frameCount?)` is a player's animation frame, position, facing, weapon and tint at a
   step; `objectsAt(timeline, step, frameCount?)` lists the objects drawn then. Draw the `behind` ones first.
 - `cameraTrack(timeline, bounds, options)` plays the game's camera over the match; `cameraAt(track, step)` is its
-  rectangle at a step and `viewToCanvas(rect, width, height)` the matrix that shows it on a canvas.
+  rectangle at a step and `viewToCanvas(rect, width, height)` the matrix that shows it on a canvas. A track is for
+  one frame rate and one playback speed: pass `fps` and `speed` as [The camera](#the-camera) says.
   `backgroundToCanvas(image, width, height)` places the level's background, which the camera never moves.
 - `mapArtUrl(replay, mapFile, file)` is where a platform art piece's image is, by the `file` of a `layout.art` piece
   and the map file's `artAssets`; it's null for a file the export left out, so skip that piece.
@@ -119,6 +120,29 @@ The game's camera updates once per drawn frame and eases by a fixed fraction per
 
 Against the camera recorded from the game over whole matches, the view's middle is off by a median 0.3 to 0.4 % of
 its width, and its width by a median 0 to 0.2 %.
+
+### Frame rate and speed
+
+Those rates are per update, and the game updates once per drawn frame, after the steps the frame ran. A replay's
+speed changes how many steps a frame runs: its clock moves by the frame's time times the speed. So the camera moves
+differently at each speed. At 2x it eases once for every two steps; at 0.5x it eases at every step, but the half
+second's hold, which is timed by the real clock, lasts half as many steps. A frame that runs no step leaves the camera
+alone.
+
+A caller that plays a match at more than one speed passes `cameraTrack` both of these, and keeps a track per speed:
+
+| Option | What to pass | Left out |
+| --- | --- | --- |
+| `fps` | the frame rate the match is drawn at (a 60 Hz screen: 60) | a frame lasts one step's 16 ms |
+| `speed` | how fast the playback clock runs: the speed picked, times any slow-down the page adds | 1 |
+
+- A track plays the match from its first step at one speed. The game carries its camera on across a change of speed
+  or a seek; a page that changes speed reads the other track from there on, and has to cover the jump itself.
+- The game's own speeds are 0.25, 0.5, 1, 2 and 5; any speed above 0 works here.
+- A speed of 0 or less throws a `RangeError`. At 0 the game is paused: no step runs, so its camera stays where it is,
+  and a page shows the view it last had. Backwards (the game's -0.25 to -5) it steps the match back every frame and
+  eases the camera on from wherever it was, towards where the players were, so its path depends on where the rewind
+  began and a track from the match's start can't hold it.
 
 ## Off screen
 

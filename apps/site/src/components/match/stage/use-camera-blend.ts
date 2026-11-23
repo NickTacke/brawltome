@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { type Camera, clamp } from './play-camera'
+import type { Camera } from './play-camera'
 
 // changing the camera swaps the path it follows, and the two paths can be far apart at that moment. instead of
 // cutting, the view glides from where it was onto the new path. a seek still cuts, as the picture changes there anyway
@@ -13,18 +13,22 @@ function easeInOut(progress: number): number {
   return progress * progress * (3 - 2 * progress)
 }
 
-function middleOf(camera: Camera, corner: number): number {
-  return corner + 0.5 / camera.zoom
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), high)
 }
 
-/** A camera part of the way to another: the middle of the view moves evenly and the zoom by equal ratios. */
-export function mixCameras(from: Camera, to: Camera, progress: number): Camera {
-  const zoom = Math.exp(Math.log(from.zoom) + (Math.log(to.zoom) - Math.log(from.zoom)) * progress)
-  const middleX = middleOf(from, from.x) + (middleOf(to, to.x) - middleOf(from, from.x)) * progress
-  const middleY = middleOf(from, from.y) + (middleOf(to, to.y) - middleOf(from, from.y)) * progress
-  const shown = 1 / zoom
+function between(from: number, to: number, progress: number): number {
+  return from + (to - from) * progress
+}
 
-  return { x: clamp(middleX - shown / 2, 0, 1 - shown), y: clamp(middleY - shown / 2, 0, 1 - shown), zoom }
+/** A camera part of the way to another: the middle of the view moves evenly and its size by equal ratios. */
+export function mixCameras(from: Camera, to: Camera, progress: number): Camera {
+  const width = from.width * (to.width / from.width) ** progress
+  const height = from.height * (to.height / from.height) ** progress
+  const middleX = between(from.x + from.width / 2, to.x + to.width / 2, progress)
+  const middleY = between(from.y + from.height / 2, to.y + to.height / 2, progress)
+
+  return { x: middleX - width / 2, y: middleY - height / 2, width, height }
 }
 
 /** The camera to show: the one given, except for a short glide onto it whenever `source` changes. */

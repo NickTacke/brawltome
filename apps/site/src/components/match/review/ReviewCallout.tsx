@@ -1,7 +1,8 @@
 import type { Moment } from '@brawltome/contracts'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { slotColour } from '../match-styles'
-import { inFrame, useStageCamera } from '../stage/play-camera'
+import { bodyPxOf } from '../stage/body-ring'
+import { inFrame, unitInFrame, useStageView } from '../stage/play-camera'
 import type { Pose } from '../stage/pose'
 import type { StopCount } from '../stage/ReviewControls'
 import { useStageBox } from '../stage/use-stage-box'
@@ -39,9 +40,12 @@ export function ReviewCallout({ moment, lanes, poses, count, panel, obstacles }:
   // measured again when the stop changes, as its hits decide how tall the card is
   const measured = useStageBox(cardRef, `${moment.key} ${isWide}`)
   // the card sits on the frame, not the stage, so the players are placed where the camera shows them
-  const camera = useStageCamera()
-  const framed = poses.map((pose) => inFrame(pose, camera))
-  const space = measured ? { card: measured.element, stage: measured.stage, panel, obstacles } : null
+  const { bodies, camera } = useStageView()
+  const framed = poses.map((pose) => inFrame(pose, bodies.box, camera))
+  // the players are as big as the camera's zoom makes a level unit on the stage as it is laid out
+  const unitPx = measured ? measured.stage.width * unitInFrame(camera) : 0
+  const body = bodyPxOf(bodies, unitPx)
+  const space = measured ? { card: measured.element, stage: measured.stage, body, panel, obstacles } : null
   const place = space ? placeCard(framed, space, { victim: moment.victim, attacker: moment.attacker }) : null
   const hasNoPlace = place?.isOnStopPlayers ?? false
 

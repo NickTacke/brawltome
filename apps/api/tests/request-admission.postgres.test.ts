@@ -286,7 +286,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 1 },
-      sourceBackgroundHeadroom: 1,
+      sourceBackgroundHeadroom: { 'brawlhalla-v0': 1, 'brawlhalla-v1': 1 },
     })
 
     for (let call = 0; call < 2; call++) {
@@ -337,6 +337,35 @@ describe('PostgreSQL interactive refresh admission', () => {
     ).toMatchObject({ outcome: 'admitted' })
   })
 
+  test('keeps no headroom for a source left out of it', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 3, brawltools: 2 },
+      sourceWindowSeconds: { brawltools: 60 },
+      sourceBackgroundHeadroom: { 'brawlhalla-v0': 3 },
+    })
+
+    const backgroundCall = (domain: 'brawlhalla-v0' | 'brawltools') =>
+      admission.admitSource({ domain, reservationKey: randomUUID(), units: 1, caller: 'background' })
+
+    // a headroom as large as the limit leaves background work nothing, but only on the source it was set for
+    expect(await backgroundCall('brawlhalla-v0')).toMatchObject({ outcome: 'rate-limited' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'admitted' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'admitted' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'rate-limited' })
+  })
+
+  test('rejects a negative headroom', () => {
+    const create = () =>
+      createPostgresRequestAdmission(database, {
+        authenticatedIpLimit: 120,
+        sourceLimits: { brawltools: 2 },
+        sourceBackgroundHeadroom: { brawltools: -1 },
+      })
+
+    expect(create).toThrow('brawltools background headroom must be a non-negative integer')
+  })
+
   test('paces source calls globally across admission instances', async () => {
     const options = {
       authenticatedIpLimit: 120,
@@ -378,6 +407,34 @@ describe('PostgreSQL interactive refresh admission', () => {
     expect(
       await admission.admitSource({ domain: 'brawlhalla-v1', reservationKey: randomUUID(), units: 1 }),
     ).toMatchObject({ outcome: 'admitted' })
+  })
+
+  test('admits brawltools calls against a limit of its own', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 1, brawltools: 2 },
+      sourceWindowSeconds: { brawltools: 60 },
+    })
+
+    for (let call = 0; call < 2; call++) {
+      expect(
+        await admission.admitSource({ domain: 'brawltools', reservationKey: randomUUID(), units: 1 }),
+      ).toMatchObject({ outcome: 'admitted' })
+    }
+
+    expect(await admission.admitSource({ domain: 'brawltools', reservationKey: randomUUID(), units: 1 })).toMatchObject(
+      { outcome: 'rate-limited' },
+    )
+
+    expect(
+      await admission.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 }),
+    ).toMatchObject({ outcome: 'admitted' })
+
+    expect((await admission.inspectCurrentUsage()).domains).toContainEqual({
+      domain: 'brawltools',
+      used: 2,
+      limit: 2,
+    })
   })
 
   test('keeps source reservations inside a rolling window across an aligned boundary and restart', async () => {
@@ -435,6 +492,28 @@ describe('PostgreSQL interactive refresh admission', () => {
     expect(await second.admitSource({ domain: 'brawlhalla-v0', reservationKey: randomUUID(), units: 1 })).toMatchObject(
       { outcome: 'rate-limited', retryAfterSeconds: expect.any(Number) },
     )
+  })
+
+  test('reports when a source pause ends, and nothing once it has passed', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 1800 },
+    })
+
+    expect(await admission.sourcePausedUntil('brawlhalla-v0')).toBeNull()
+
+    await admission.pauseSource('brawlhalla-v0', 60)
+
+    const pausedUntil = await admission.sourcePausedUntil('brawlhalla-v0')
+
+    expect(pausedUntil?.getTime()).toBeGreaterThan(Date.now() + 50_000)
+    expect(await admission.sourcePausedUntil('brawlhalla-v1')).toBeNull()
+
+    await database.sql`
+      UPDATE request_admission.source_backoffs SET paused_until = clock_timestamp() - interval '1 second'
+    `
+
+    expect(await admission.sourcePausedUntil('brawlhalla-v0')).toBeNull()
   })
 
   test('uses one database timestamp when a transaction crosses a window boundary', async () => {
@@ -626,6 +705,12 @@ describe('PostgreSQL interactive refresh admission', () => {
             },
           },
           publication: {
+            async readLatestRegionalBoards() {
+              return new Map()
+            },
+            async publishRegion() {
+              return 'published' as const
+            },
             async publishGeneration() {
               return 'published' as const
             },

@@ -6,9 +6,11 @@ import { SpeedButton, TransportColumn } from '../stage/ReviewControls'
 import { StageFrame } from '../stage/StageFrame'
 import { StagePlay } from '../stage/StagePlay'
 import type { Fullscreen } from '../stage/use-fullscreen'
+import type { LanesFold } from '../stage/use-lanes-fold'
 import type { Legends } from '../stage/use-legends'
 import type { Playback } from '../stage/use-playback'
 import type { StageControlsState } from '../stage/use-stage-controls'
+import { FoldedTimeline } from './FoldedTimeline'
 import type { LanePlayer } from './lane-players'
 import { MatchTimeline } from './MatchTimeline'
 import { ReviewDeck } from './ReviewDeck'
@@ -21,6 +23,7 @@ type ReviewStageProps = {
   playback: Playback
   controls: StageControlsState
   fullscreen: Fullscreen
+  fold: LanesFold
   frameRef: RefObject<HTMLDivElement | null>
   cameraMode: CameraMode
   mode: ReviewMode
@@ -47,9 +50,10 @@ function markersOf({ insights, mode, poses }: ReviewStageProps): ReactNode {
 
 /** The stage of the replay, with the lanes and controls on it, and a review's markers and card at its stops. */
 export function ReviewStage(props: ReviewStageProps) {
-  const { insights, legends, playback, controls, fullscreen, mode } = props
+  const { insights, legends, playback, controls, fullscreen, fold, mode } = props
+  const { durationMs } = insights.insights.stage
 
-  const timeline = (opensBelow: boolean) => (
+  const lanes = (opensBelow: boolean) => (
     <MatchTimeline
       insights={insights}
       timeline={legends.timeline}
@@ -63,13 +67,15 @@ export function ReviewStage(props: ReviewStageProps) {
     />
   )
 
+  const folded = <FoldedTimeline timeMs={playback.timeMs} durationMs={durationMs} onSeek={mode.seekByHand} />
+  const timeline = (opensBelow: boolean) => (fold.isFolded ? folded : lanes(opensBelow))
+
+  const transport = (
+    <TransportColumn playback={playback} stepping={mode.stepping} count={mode.count} isRow={fold.isFolded} />
+  )
+
   return (
-    <StageFrame
-      frameRef={props.frameRef}
-      fullscreen={fullscreen}
-      controls={controls}
-      aspect={insights.insights.stage.aspect}
-    >
+    <StageFrame frameRef={props.frameRef} fullscreen={fullscreen} controls={controls}>
       <StagePlay
         insights={insights}
         legends={legends}
@@ -86,7 +92,8 @@ export function ReviewStage(props: ReviewStageProps) {
             lanes={props.lanes}
             controls={controls}
             fullscreen={fullscreen}
-            transport={<TransportColumn playback={playback} stepping={mode.stepping} count={mode.count} />}
+            fold={fold}
+            transport={transport}
             timeline={timeline}
             speed={<SpeedButton playback={playback} />}
             tools={props.tools}

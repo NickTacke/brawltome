@@ -13,6 +13,7 @@ import {
 } from '../src/worker/job-list'
 import {
   idleClanWeeklySnapshotDependencies,
+  idleEsportsDependencies,
   idleLeaderboardDependencies,
   idleStatisticsDependencies,
 } from './fixtures/queue'
@@ -46,6 +47,7 @@ function createRecordingJobs(
   clan: WorkerClanDependencies = idleClanDependencies,
   accounts: WorkerAccountsDependencies = idleAccountsDependencies,
   player: WorkerPlayerDependencies = idlePlayerDependencies,
+  telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 }),
 ) {
   const calls: unknown[][] = []
 
@@ -61,7 +63,7 @@ function createRecordingJobs(
     ranking: { expireGenerations: async () => ({ outcome: 'lease-lost' }) },
     leaderboards: idleLeaderboardDependencies,
     isRankingRetentionEnabled: true,
-    telemetry: createTelemetry({ service: 'worker', drainIntervalMs: 0 }),
+    telemetry,
     discovery: {
       work: {
         deliverPendingPlayers: record('deliverPendingPlayers'),
@@ -89,6 +91,7 @@ function createRecordingJobs(
     accounts,
     player,
     statistics: idleStatisticsDependencies,
+    esports: idleEsportsDependencies,
   })
 
   return { calls, jobs }
@@ -171,6 +174,8 @@ describe('worker job list', () => {
       'statistics-lifetime-collection',
       'statistics-publication',
       'statistics-legend-meta-publication',
+      'esports-refresh',
+      'esports-sets-backfill',
     ]
 
     const jobKinds = createRecordingJobs().jobs.map((job) => job.kind)
@@ -370,6 +375,43 @@ describe('worker job list', () => {
     expect(await jobOfKind(jobs, 'ranked-player-pulse').run(lease, tools as never)).toBe('succeeded')
     expect(calls).toEqual(['ranked_1v1', 'teams'])
     expect(admittedSections).toEqual(['ranked-pulse'])
+  })
+
+  test('the esports refresh counts its brawltools calls as source calls', async () => {
+    const telemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
+
+    const { jobs } = createRecordingJobs(
+      idleClanDependencies,
+      idleAccountsDependencies,
+      idlePlayerDependencies,
+      telemetry,
+    )
+
+    const realFetch = globalThis.fetch
+    const admittedDomains: string[] = []
+
+    // a 429 ends the run before it reaches the database
+    globalThis.fetch = (async () => new Response('slow down', { status: 429 })) as unknown as typeof fetch
+
+    const tools = {
+      signal: new AbortController().signal,
+      createSourceAdmitter: () => async (domain: string) => {
+        admittedDomains.push(domain)
+      },
+    }
+
+    const lease = leaseWithPayload('esports-refresh', { brawlhallaId: 42 })
+
+    try {
+      await expect(jobOfKind(jobs, 'esports-refresh').run(lease, tools as never)).rejects.toThrow('rate limited')
+    } finally {
+      globalThis.fetch = realFetch
+    }
+
+    const sourceMetrics = telemetry.metrics.snapshot().find(({ name }) => name === 'source_calls_total')
+
+    expect(admittedDomains).toEqual(['brawltools'])
+    expect(sourceMetrics?.series.map((series) => series.labels)).toEqual([{ domain: 'brawltools', outcome: 'failed' }])
   })
 
   test('a plain proof commits its effect without verifying a primary player', async () => {

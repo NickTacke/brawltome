@@ -21,6 +21,9 @@ type TileGridProps<Item> = {
   renderTile: (item: Item, isSelected: boolean) => ReactNode
   renderCard: (item: Item) => ReactNode
   renderDetail: (item: Item, close: () => void) => ReactNode
+  // a tile with nothing more to show only has its hover card
+  canOpen?: (item: Item) => boolean
+  isCardHintShown?: boolean
 }
 
 type OpenCard<Item> = { item: Item; left: number; top: number; isBelow: boolean }
@@ -125,7 +128,10 @@ function rowEndIndex(index: number, columns: number, itemCount: number): number 
   return Math.min(Math.ceil((index + 1) / columns) * columns - 1, itemCount - 1)
 }
 
-type TileRowsProps<Item> = Pick<TileGridProps<Item>, 'items' | 'keyOf' | 'labelOf' | 'renderTile' | 'renderDetail'> & {
+type TileRowsProps<Item> = Pick<
+  TileGridProps<Item>,
+  'items' | 'keyOf' | 'labelOf' | 'renderTile' | 'renderDetail' | 'canOpen'
+> & {
   columns: number
   minimumTileRem: number
   columnsClass?: string | undefined
@@ -156,7 +162,7 @@ function gridStyles(columnsClass: string | undefined, minimumTileRem: number, it
 }
 
 function TileRows<Item>(props: TileRowsProps<Item>) {
-  const { items, keyOf, labelOf, renderTile, renderDetail, columns, minimumTileRem, columnsClass } = props
+  const { items, keyOf, labelOf, renderTile, renderDetail, canOpen, columns, minimumTileRem, columnsClass } = props
   const { selectedKey, closingKey, gridRef, clampRows, className = '', onToggle, onHover, onLeave, onClose } = props
   const selectedIndex = items.findIndex((item) => keyOf(item) === selectedKey)
   const closingIndex = items.findIndex((item) => keyOf(item) === closingKey)
@@ -194,20 +200,26 @@ function TileRows<Item>(props: TileRowsProps<Item>) {
       {items.map((item, index) => {
         const key = keyOf(item)
         const isSelected = key === selectedKey
+        const isOpenable = canOpen?.(item) ?? true
+
+        // an open tile's details are already on screen, its hover card would only cover them
+        function showCard(tile: HTMLElement) {
+          if (!isSelected) onHover(item, tile)
+        }
 
         return [
           <button
             key={key}
             type="button"
             data-tile
-            aria-expanded={isSelected}
+            aria-expanded={isOpenable ? isSelected : undefined}
             aria-label={labelOf(item)}
-            onClick={() => onToggle(item)}
-            onMouseEnter={(event) => onHover(item, event.currentTarget)}
+            onClick={isOpenable ? () => onToggle(item) : undefined}
+            onMouseEnter={(event) => showCard(event.currentTarget)}
             onMouseLeave={onLeave}
-            onFocus={(event) => onHover(item, event.currentTarget)}
+            onFocus={(event) => showCard(event.currentTarget)}
             onBlur={onLeave}
-            className="group block min-w-0 cursor-pointer pb-2.5 text-left"
+            className={`group block min-w-0 pb-2.5 text-left ${isOpenable ? 'cursor-pointer' : 'cursor-default'}`}
           >
             {renderTile(item, isSelected)}
           </button>,
@@ -238,7 +250,9 @@ function ShowMoreButton({ isExpanded, onToggle }: { isExpanded: boolean; onToggl
   )
 }
 
-function HoverCard<Item>({ card, renderCard }: { card: OpenCard<Item>; renderCard: (item: Item) => ReactNode }) {
+type HoverCardProps<Item> = { card: OpenCard<Item>; renderCard: (item: Item) => ReactNode; isHintShown: boolean }
+
+function HoverCard<Item>({ card, renderCard, isHintShown }: HoverCardProps<Item>) {
   return (
     <div
       data-tile-card
@@ -246,9 +260,11 @@ function HoverCard<Item>({ card, renderCard }: { card: OpenCard<Item>; renderCar
       style={{ left: card.left, top: card.top, transform: card.isBelow ? undefined : 'translateY(-100%)' }}
     >
       {renderCard(card.item)}
-      <div className="mt-2.5 border-t border-line/50 pt-2 text-center text-xs text-soft/60">
-        Click for extended stats
-      </div>
+      {isHintShown && (
+        <div className="mt-2.5 border-t border-line/50 pt-2 text-center text-xs text-soft/60">
+          Click for extended stats
+        </div>
+      )}
     </div>
   )
 }
@@ -264,6 +280,8 @@ export function TileGrid<Item>({
   renderTile,
   renderCard,
   renderDetail,
+  canOpen,
+  isCardHintShown = true,
 }: TileGridProps<Item>) {
   const { gridRef, columns } = useColumnCount()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -295,6 +313,7 @@ export function TileGrid<Item>({
     labelOf,
     renderTile,
     renderDetail,
+    canOpen,
     columns: columns ?? 1,
     minimumTileRem,
     columnsClass,
@@ -328,7 +347,7 @@ export function TileGrid<Item>({
         </div>
       )}
       {hasMore && <ShowMoreButton isExpanded={isExpanded} onToggle={toggleExpanded} />}
-      {hoverCard.card && <HoverCard card={hoverCard.card} renderCard={renderCard} />}
+      {hoverCard.card && <HoverCard card={hoverCard.card} renderCard={renderCard} isHintShown={isCardHintShown} />}
     </div>
   )
 }

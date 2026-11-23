@@ -10,7 +10,7 @@ export function SaveReplay({ match }: { match: MatchDetailContract }) {
       download={match.replay.fileName}
       className="mt-3 inline-block text-sm font-semibold text-soft transition-colors hover:text-strong hover:underline"
     >
-      Save replay
+      Download replay
     </a>
   )
 }
