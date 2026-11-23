@@ -2,7 +2,8 @@ import type { Sql, TransactionSql } from '@brawltome/foundation'
 import type { ReplaysDeps } from './model'
 
 // art jobs wait here until the worker claims them. a match or patch has at most one waiting or running job, so
-// queueing again while one is active does nothing; the active job reads the match's line when it is claimed
+// queueing again while one is active does nothing; the active job reads the match's line when it is claimed. a
+// match whose line has no timeline is never queued: there is nothing to draw, so its art stays none
 
 /** Queues an art export for a stored match and marks its art queued. */
 export async function queueArtJob(deps: Pick<ReplaysDeps, 'database' | 'artStore'>, matchId: string): Promise<void> {
@@ -22,7 +23,7 @@ export async function queueMatchArt(sql: Sql | TransactionSql, matchId: string):
   await sql`
     WITH queued AS (
       INSERT INTO replays.art_jobs (kind, match_id, patch)
-      SELECT 'match', id, patch FROM replays.matches WHERE id = ${matchId}
+      SELECT 'match', id, patch FROM replays.matches WHERE id = ${matchId} AND has_timeline
       ON CONFLICT (kind, (coalesce(match_id::text, patch))) WHERE status IN ('pending', 'processing') DO NOTHING
       RETURNING match_id
     )
@@ -53,7 +54,7 @@ export async function queueArtForFormat(transaction: TransactionSql, format: num
   // could leave each waiting on the other
   await transaction`
     SELECT id FROM replays.matches
-    WHERE art_format IS DISTINCT FROM ${format} AND timeline_key IS NOT NULL AND merged_into IS NULL
+    WHERE art_format IS DISTINCT FROM ${format} AND timeline_key IS NOT NULL AND has_timeline AND merged_into IS NULL
     ORDER BY id
     FOR UPDATE
   `
@@ -62,7 +63,7 @@ export async function queueArtForFormat(transaction: TransactionSql, format: num
     WITH queued AS (
       INSERT INTO replays.art_jobs (kind, match_id, patch)
       SELECT 'match', id, patch FROM replays.matches
-      WHERE art_format IS DISTINCT FROM ${format} AND timeline_key IS NOT NULL AND merged_into IS NULL
+      WHERE art_format IS DISTINCT FROM ${format} AND timeline_key IS NOT NULL AND has_timeline AND merged_into IS NULL
       ON CONFLICT (kind, (coalesce(match_id::text, patch))) WHERE status IN ('pending', 'processing') DO NOTHING
       RETURNING match_id
     )
