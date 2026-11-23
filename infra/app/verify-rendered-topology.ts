@@ -92,7 +92,7 @@ const expectedServiceSecrets: Record<string, string[]> = {
 // .png ones from the same directory. the silhouette and one renamed portrait only exist on site. `compose config` keeps the $$ escape, the container label gets a single $
 const siteRouterRule =
   'Host(`brawltome.app`) && (PathPrefix(`/player/`) || PathPrefix(`/guild/`) || PathPrefix(`/clan/`) || PathPrefix(`/match/`) || ' +
-  'Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
+  'Path(`/`) || Path(`/matches`) || Path(`/leaderboard`) || Path(`/leaderboard/guilds`) || Path(`/guilds`) || Path(`/queue`) || Path(`/account`) || Path(`/privacy`) || Path(`/terms`) || PathPrefix(`/assets/`) || PathPrefix(`/_serverFn/`) || ' +
   'Path(`/stats`) || Path(`/learn`) || Path(`/tournaments`) || Path(`/images/legends/random.svg`) || ' +
   'Path(`/images/legends/avatars/qinghua-and-baobao.png`) || Path(`/images/legends/avatars/morgwyn.png`) || PathPrefix(`/images/flags/`) || PathPrefix(`/images/banners/`) || PathPrefix(`/patch-images/`) || PathRegexp(`^/images/weapons/[^/]+\\.svg$$`))'
 
