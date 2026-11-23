@@ -35,7 +35,7 @@ export function Scoreboard({ players, selectedSlot, stocks, onSelect }: Scoreboa
       <div className={`space-y-2 ${sectionBody}`}>
         {sidesOf(players).map((side) => (
           <div key={side.key}>
-            <div className={`mb-0.5 ${smallCaps} ${side.isWinner ? 'text-emerald-400' : 'text-soft'}`}>
+            <div className={`mb-0.5 ${smallCaps} ${side.isWinner ? 'text-record-win' : 'text-soft'}`}>
               {side.isWinner ? 'Won' : 'Lost'}
             </div>
             {side.players.map((matchPlayer) => (

@@ -271,6 +271,27 @@ of that schedule is still in progress; a Brawlhalla outage.
 **First steps:** on the Operations dashboard, check schedule lateness by kind and whether the previous run finished.
 Worker logs, filtered by the `kind` label, show what that schedule is doing.
 
+### WorkerPlannerFailing
+
+**Severity:** warning.
+
+**Meaning:** one of the operations worker's planners (named in the `planner` label) threw more than five times in 15
+minutes, for 15 minutes. Each planner runs on its own, so the others and the schedules keep going, but this planner's
+work is not being done: for example, `statistics-cohort` stops planning statistics collections, `freshness` stops
+refreshing due players, and `leaderboard-schedules` leaves a changed schedule configuration unapplied.
+
+**Likely causes:** a bug the planner hits on every tick, often after a change to data it reads from another module; the
+database rejecting one of its queries; a dependency it calls being down.
+
+**First steps:** find the error in the worker logs by searching for `worker.planner.failed` with that `planner` field:
+
+```sh
+docker logs --since 30m compose-program-virtual-microchip-uqxbrw-operations-worker-1 2>&1 | grep worker.planner.failed | tail -20
+```
+
+The logged error says what failed. A planner that throws on every tick retries about once a second, so fix the cause or
+roll back the release that introduced it rather than waiting for it to clear.
+
 ### NewDeadLetters
 
 **Severity:** warning. A dead letter is kept for replay, so no data is lost and nobody is blocked.

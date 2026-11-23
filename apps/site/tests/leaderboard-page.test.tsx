@@ -36,6 +36,20 @@ describe('leaderboard page', () => {
     expect(html).toContain('31–60 of 200')
   })
 
+  test("a player's legend avatar names the legend, and an unknown one stays decorative", () => {
+    const page = boardPage(1, 2, 2)
+    const [withLegend] = page.entries
+
+    if (withLegend.identity.type !== 'one-vs-one-player') throw new Error('expected a 1v1 entry')
+
+    withLegend.identity.player.bestLegendNameKey = 'lin fei'
+
+    const html = renderBoard(page)
+
+    expect(html).toContain('alt="Lin Fei"')
+    expect(html).toContain('alt=""')
+  })
+
   test('a failed read says so, without a pager', () => {
     const html = renderBoard(null)
 

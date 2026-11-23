@@ -499,7 +499,7 @@ try {
       process.exitCode = 1
       requestShutdown()
     },
-    reconcile: () => runPlanners(planners),
+    reconcile: () => runPlanners(planners, telemetry),
     ensureListener: async (onWakeup) => {
       listener ??= await operations.listen(onWakeup)
     },

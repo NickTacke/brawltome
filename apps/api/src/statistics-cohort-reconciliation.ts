@@ -3,6 +3,7 @@ import {
   type CohortCandidateSnapshot,
   type LaunchCohortRegion,
   launchCohortRegions,
+  launchSourceGenerationId,
   type StatisticsReservations,
   type StatisticsTracer,
 } from '@brawltome/statistics'
@@ -78,19 +79,26 @@ export async function loadFullLaunchCohortCandidates(
 }
 
 // A full candidate load pages through every launch region's 1v1 leaderboard (~900 queries). Reconciliation runs on
-// every worker tick, so read one row per region first and only reload when a new generation could change the cohort.
+// every worker tick, so read one row per region first and only reload when a region published a new generation.
 async function launchSourceMayHaveChanged(
   ranking: Pick<RankingQueries, 'getLeaderboard'>,
   sourceGenerationId: string | undefined,
 ): Promise<boolean> {
   const heads = await Promise.all(
-    launchCohortRegions.map((region) => ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 1 })),
+    launchCohortRegions.map(async (region) => ({
+      region,
+      head: await ranking.getLeaderboard({ mode: '1v1', region, page: 1, pageSize: 1 }),
+    })),
   )
 
   // Matches the full load: an unavailable region leaves nothing to reconcile.
-  if (heads.some((head) => head.status === 'unavailable')) return false
+  if (heads.some(({ head }) => head.status === 'unavailable')) return false
 
-  return heads.some((head) => head.status !== 'unavailable' && head.generationId !== sourceGenerationId)
+  const regions = heads.flatMap(({ region, head }) =>
+    head.status === 'unavailable' ? [] : [{ region, generationId: head.generationId }],
+  )
+
+  return launchSourceGenerationId(regions) !== sourceGenerationId
 }
 
 export async function reconcileStatisticsCohort(
@@ -122,13 +130,10 @@ export async function reconcileStatisticsCohort(
       ? (candidates as CohortCandidateSnapshot[])
       : null
 
-    const sourceGenerations = new Set(completeCandidates?.map(({ generationId }) => generationId))
+    const isNewSource =
+      completeCandidates !== null && launchSourceGenerationId(completeCandidates) !== launchState?.sourceGenerationId
 
-    if (
-      needsLaunchSnapshot &&
-      completeCandidates &&
-      (sourceGenerations.size !== 1 || completeCandidates[0].generationId !== launchState?.sourceGenerationId)
-    ) {
+    if (needsLaunchSnapshot && completeCandidates && isNewSource) {
       const launch = await statistics.reconcileLaunchCohort(completeCandidates)
 
       launchState = {

@@ -15,6 +15,7 @@ const requiredAlerts = [
   'OldestRunnableJobDelayed',
   'ReplayQueueStuck',
   'ScheduleMaterializationLate',
+  'WorkerPlannerFailing',
   'NewDeadLetters',
   'RankedCoverageDeadLettersElevated',
   'RefreshFailuresElevated',

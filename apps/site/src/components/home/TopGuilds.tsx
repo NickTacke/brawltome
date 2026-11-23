@@ -18,7 +18,7 @@ function TableBody({ guilds }: { guilds: TopGuild[] | null }) {
 export function TopGuilds({ guilds }: { guilds: TopGuild[] | null }) {
   const viewAll = (
     <Link to="/guilds" className={viewAllStyle}>
-      View all →
+      View all
     </Link>
   )
 

@@ -14,6 +14,7 @@ import { retentionDeleteWithoutSeqScan } from './migrations/0011-retention-delet
 import { statementLevelRowImmutability } from './migrations/0012-statement-level-row-immutability'
 import { moveEffectTables } from './migrations/0013-move-effect-tables'
 import { dropEffectTableCompatibility } from './migrations/0014-drop-effect-table-compatibility'
+import { publishRegionsApart } from './migrations/0015-publish-regions-apart'
 
 export { enrichLeaderboardEntries } from './api/enrich-leaderboard-entries'
 export { readNamedLeaderboard } from './api/read-named-leaderboard'
@@ -58,6 +59,7 @@ export {
   type PlayerValhallanEvidence,
   type PlayerValhallanQueries,
   type PublishedLeaderboardRow,
+  type PublishedRegionalBoard,
   type RankingPublicationAuthorization,
   type RankingPublicationStore,
   type RankingQueries,
@@ -65,6 +67,7 @@ export {
   type RecentActivityView,
   type RecentMoversQueries,
   type RecentMoversView,
+  regionPublicationKey,
 } from './leaderboard'
 export { createPostgresRanking, type PostgresRanking } from './postgres'
 export {
@@ -100,6 +103,7 @@ const migrations = [
   statementLevelRowImmutability,
   moveEffectTables,
   dropEffectTableCompatibility,
+  publishRegionsApart,
 ] as const
 
 export const rankingModule = {

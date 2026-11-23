@@ -49,7 +49,7 @@ function SeasonTile({ season, isSelected, onSelect }: { season: Season; isSelect
       <img
         src={rankBanner(totals.tier)}
         alt=""
-        className="h-[3.25rem] w-[2.375rem] shrink-0 object-contain transition-transform duration-150 group-hover:scale-110"
+        className="h-[3.25rem] w-[2.375rem] shrink-0 object-contain transition-transform duration-150 group-hover:scale-110 motion-reduce:group-hover:scale-100"
       />
       <span className="relative min-w-0">
         <span
