@@ -16,6 +16,13 @@ export function isBrawltoolsUnavailable(error: unknown): boolean {
   return error instanceof BrawltoolsHttpError && error.status >= 500
 }
 
+/** Brawltools turned the request down (a 4xx other than 429), so asking again would get the same answer. */
+export function isBrawltoolsRejected(error: unknown): boolean {
+  if (error instanceof BrawltoolsRateLimitError) return false
+
+  return error instanceof BrawltoolsHttpError && error.status >= 400 && error.status < 500
+}
+
 /**
  * A 429 pauses the brawltools source, so the other esports jobs wait too, and puts this job back without spending
  * an attempt. Every other failure is left to the queue.

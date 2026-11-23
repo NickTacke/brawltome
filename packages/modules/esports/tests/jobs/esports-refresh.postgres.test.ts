@@ -380,6 +380,34 @@ describe('esports refresh job', () => {
     expect(backfills).toEqual([brawlhallaId])
   })
 
+  test('a highlight event brawltools rejects is skipped, and the refresh still succeeds', async () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+    const rejected = new BrawltoolsHttpError('brawltools answered 400 for /player/match', 400, '/player/match')
+
+    const stub = answers({
+      player,
+      placements: { 1: [rawPlacement('broken', 1, daysAgo(3)), rawPlacement('fine', 2, daysAgo(4))], 2: [] },
+      matches: new Map([['fine', [match({ matchId: 'won' })]]]),
+      failures: new Map([['matches broken', rejected]]),
+    })
+
+    try {
+      const { outcome, backfills } = await runRefresh(stub)
+      const { row, stored } = await readStoredEsports(database, brawlhallaId)
+
+      // asking again would get the same 400, so the event waits for the backfill instead of failing the refresh
+      expect(outcome).toBe('succeeded')
+      expect((await readOperation(database, 'esports-refresh')).status).toBe('succeeded')
+      expect(row).toMatchObject({ link: 'linked', failureCount: 0 })
+      expect(stored.setsByTournament.get('fine')?.map((set) => set.matchId)).toEqual(['won'])
+      expect(stored.setsByTournament.has('broken')).toBe(false)
+      expect(backfills).toEqual([brawlhallaId])
+      expect(String(errors.mock.calls[0]?.[0])).toContain(`event broken for player ${brawlhallaId}`)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
   test('a timeout records a failure like a 503', async () => {
     const timeout = new BrawltoolsNetworkError(
       'brawltools request timed out after 10000 ms: /player/bhId/:id',
