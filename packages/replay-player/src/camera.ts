@@ -419,8 +419,15 @@ export const cameraOptions = (manifest: {
   ...(manifest.itemHeights ? { itemHeights: manifest.itemHeights } : {}),
 })
 
-// CameraTrack is the camera's rectangle at every step of a match
-export type CameraTrack = { steps: Float64Array; at(step: number): Rect | undefined }
+// CameraTrack is the camera over a match. steps is the view the game shows at each step, four numbers a step.
+// frameTimes is when each frame that updates the camera is drawn, in steps, and frameViews its view, four numbers a
+// frame. at is the view at a step, fractional between steps, eased in time between the frames around it
+export type CameraTrack = {
+  steps: Float64Array
+  frameTimes: Float64Array
+  frameViews: Float64Array
+  at(step: number): Rect | undefined
+}
 
 type Key = [number, number, number, number, number, number, number]
 
@@ -653,16 +660,51 @@ function frameOf(step: number, pace: Pace): { now: number; isLast: boolean } {
   return { now, isLast: stepsRunBy(now, pace) - 1 === step }
 }
 
-// rectAt is a track's rectangle at a step, between the two steps around it
-function rectAt(steps: Float64Array, step: number): Rect | undefined {
-  if (steps.length === 0) return undefined
+// frameTimeOf is when a frame is drawn, on the track's scale of steps: the replay clock at the frame, in steps, less
+// one, as a step shows once the replay clock has passed its end. It lies between the frame's last step and the next
+const frameTimeOf = (now: number, pace: Pace) => (now * pace.speed) / CAMERA.stepMs - 1
 
-  const lastStep = steps.length / 4 - 1
-  const at = Math.max(0, Math.min(lastStep, step))
-  const i = Math.floor(at)
-  const j = Math.min(lastStep, i + 1)
-  const t = at - i
-  const value = (k: number) => steps[i * 4 + k] + (steps[j * 4 + k] - steps[i * 4 + k]) * t
+// centredOnLastSteps moves every frame's time back by how far, on average, a frame is drawn after its last step. The
+// game shows a frame's view with the players at its last step, and a viewer draws the players at the step it shows,
+// so left at their drawing times the views would trail the players by about half a step at 60 fps. Moved back by the
+// same amount each, the frames keep their even spacing
+function centredOnLastSteps(frameTimes: number[]): Float64Array {
+  if (frameTimes.length === 0) return new Float64Array()
+
+  const pastLastStep = frameTimes.reduce((sum, time) => sum + (time - Math.floor(time)), 0) / frameTimes.length
+
+  return Float64Array.from(frameTimes, (time) => time - pastLastStep)
+}
+
+// lastFrameAtOrBefore is the last of a track's frames drawn at or before a time, by a binary search of their times;
+// the first frame for a time before it
+function lastFrameAtOrBefore(frameTimes: Float64Array, time: number): number {
+  let low = 0
+  let high = frameTimes.length - 1
+
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+
+    if (frameTimes[middle] <= time) low = middle
+    else high = middle - 1
+  }
+
+  return low
+}
+
+// viewBetweenFrames is a track's view at a time in steps, eased in time between the frames drawn around it. The
+// game draws a frame about every 1.07 steps at 60 Hz, so a view kept per step stands still for a step about every 25
+// steps and then jumps two steps' worth; kept at its frame's time, the camera moves as evenly as the game drew it
+function viewBetweenFrames(frameTimes: Float64Array, frameViews: Float64Array, time: number): Rect | undefined {
+  if (frameTimes.length === 0) return undefined
+
+  const before = lastFrameAtOrBefore(frameTimes, time)
+  const after = Math.min(frameTimes.length - 1, before + 1)
+  const span = frameTimes[after] - frameTimes[before]
+  const share = span > 0 ? Math.max(0, Math.min(1, (time - frameTimes[before]) / span)) : 0
+
+  const value = (k: number) =>
+    frameViews[before * 4 + k] + (frameViews[after * 4 + k] - frameViews[before * 4 + k]) * share
 
   return { x: value(0), y: value(1), width: value(2), height: value(3) }
 }
@@ -674,6 +716,8 @@ export function cameraTrack(timeline: CameraTimeline, bounds: Rect, options: Cam
   const inputAt = cameraInputs(timeline, options)
   const pace = paceOf(options)
   const steps = new Float64Array((timeline.endStep + 1) * 4)
+  const frameTimes: number[] = []
+  const frameViews: number[] = []
 
   for (let step = 0; step <= timeline.endStep; step++) {
     const { now, isLast } = frameOf(step, pace)
@@ -681,12 +725,26 @@ export function cameraTrack(timeline: CameraTimeline, bounds: Rect, options: Cam
     // the steps before a frame's last were never drawn at this pace: they keep the view of the frame before
     if (isLast) camera.update(step * CAMERA.stepMs, framedItems(inputAt(step), bounds), now)
 
-    const view = camera.view
+    const view = [camera.view.left, camera.view.top, camera.view.width, camera.view.height]
 
-    steps.set([view.left, view.top, view.width, view.height], step * 4)
+    steps.set(view, step * 4)
+
+    if (!isLast) continue
+
+    frameTimes.push(frameTimeOf(now, pace))
+    frameViews.push(...view)
   }
 
-  return { steps, at: (step) => rectAt(steps, step) }
+  // a match too short for a whole frame keeps the view it starts with, as the steps do
+  if (frameTimes.length === 0 && timeline.endStep >= 0) {
+    frameTimes.push(0)
+    frameViews.push(...steps.subarray(0, 4))
+  }
+
+  const times = centredOnLastSteps(frameTimes)
+  const views = Float64Array.from(frameViews)
+
+  return { steps, frameTimes: times, frameViews: views, at: (step) => viewBetweenFrames(times, views, step) }
 }
 
 // cameraAt is the camera's rectangle at a step (steps may be fractional), or undefined for an empty track
