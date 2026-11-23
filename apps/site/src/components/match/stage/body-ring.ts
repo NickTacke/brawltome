@@ -1,6 +1,7 @@
 import type { Stage, StageBox } from '@brawltome/contracts'
 import { OFFSCREEN } from '@brawltome/replay-player'
 import type { CSSProperties } from 'react'
+import { tagHeightPx, tagLift } from './tag-stack'
 import { areLegendsDrawn, type Legends } from './use-legends'
 
 // a ring around a player's body. a drawn legend follows the camera's zoom, so its ring is measured in level units;
@@ -24,6 +25,8 @@ export const legendRingFloorPx = 32
 // the ring around a token: the portrait is 36 pixels and stands on the feet. a phone's small stage gets a smaller
 // ring, no wider than this share of the stage
 const tokenRing = { middlePx: 14, diameterPx: 64, widestShare: 0.1 }
+// how far over the feet a token's tag reaches, with the portrait under it
+const tokenTagTopPx = 72
 
 // how the players are drawn on the stage: as their legends, measured in the level units of the stage box, or as tokens
 export type DrawnBodies = { box: StageBox; areLegends: boolean }
@@ -67,4 +70,38 @@ function tokenRingStyle(feet: Feet, share: number): CSSProperties {
  */
 export function bodyRingStyle(feet: Feet, bodies: DrawnBodies, share = 1): CSSProperties {
   return bodies.areLegends ? legendRingStyle(feet, bodies.box, share) : tokenRingStyle(feet, share)
+}
+
+// what a player takes up on a stage as it is laid out, in pixels from their feet: the ring around the body, and how
+// far up the tag over them reaches
+export type BodyPx = { ringMiddlePx: number; ringRadiusPx: number; tagTopPx: number }
+
+// the ring's sizes below are the ones its style above lays out, worked out in pixels
+
+function legendRingDiameterPx(unitPx: number): number {
+  return Math.max(bodyRingDiameter * unitPx, legendRingFloorPx)
+}
+
+// the mark layer covers the stage box, so it is as wide as the box's level units are on the stage
+function tokenRingDiameterPx(box: StageBox, unitPx: number): number {
+  const markLayerWidthPx = box.width * unitPx
+
+  return Math.min(tokenRing.diameterPx, markLayerWidthPx * tokenRing.widestShare)
+}
+
+/** A player's ring and tag in the pixels of a stage on which a level unit is `unitPx` wide. */
+export function bodyPxOf(bodies: DrawnBodies, unitPx: number): BodyPx {
+  if (!bodies.areLegends) {
+    return {
+      ringMiddlePx: tokenRing.middlePx,
+      ringRadiusPx: tokenRingDiameterPx(bodies.box, unitPx) / 2,
+      tagTopPx: tokenTagTopPx,
+    }
+  }
+
+  return {
+    ringMiddlePx: bodyMiddle * unitPx,
+    ringRadiusPx: legendRingDiameterPx(unitPx) / 2,
+    tagTopPx: tagLift * unitPx + tagHeightPx,
+  }
 }

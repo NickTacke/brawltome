@@ -60,6 +60,11 @@ export function inFrame<Spot extends { x: number; y: number }>(spot: Spot, camer
   return { ...spot, x: (spot.x - camera.x) * camera.zoom, y: (spot.y - camera.y) * camera.zoom }
 }
 
+/** How wide a level unit is in the frame under a camera, as a share of the frame's width. */
+export function unitInFrame(box: StageBox, camera: Camera): number {
+  return camera.zoom / box.width
+}
+
 // how the frame shows the stage: how its players are drawn, in which level coordinates, and where the camera looks
 export type StageView = { bodies: DrawnBodies; camera: Camera }
 

@@ -1,17 +1,20 @@
 import { describe, expect, test } from 'bun:test'
-import type { MatchInsights, ReviewStop } from '@brawltome/contracts'
+import type { MatchInsights, ReviewStop, StageBox } from '@brawltome/contracts'
 import { LEAD_DODGE_MS, LEAD_LANDING_MS, LEAD_TRADE_MS } from '@brawltome/contracts/match-insights-rules'
-import { placeCard } from '../src/components/match/review/callout-place'
+import { cameraAt, cameraTrack } from '@brawltome/replay-player'
+import { lineToRing, placeCard } from '../src/components/match/review/callout-place'
 import { classRules } from '../src/components/match/review/moment-class'
 import { reviewPhaseOf } from '../src/components/match/review/review-phase'
 import { reviewChoicesOf } from '../src/components/match/review/review-stops'
 import { damageText, pointerTimeMs } from '../src/components/match/review/timeline-readout'
-import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
+import { bodyMiddle, bodyPxOf, bodyRingDiameter } from '../src/components/match/stage/body-ring'
+import { type Camera, cameraOf, inFrame, unitInFrame, wholeStage } from '../src/components/match/stage/play-camera'
+import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt } from '../src/components/match/stage/pose'
 import { transportCornerPx } from '../src/components/match/stage/StageControls'
 import { tagHeightPx, tagLifts, tagWidthPx } from '../src/components/match/stage/tag-stack'
 import { advanceClockMs } from '../src/components/match/stage/use-playback'
-import { type InsightsFixture, readInsights, readPlayback } from './match-fixtures'
+import { type InsightsFixture, type PlaybackFixture, readInsights, readPlayback } from './match-fixtures'
 
 // a player standing at a spot of the frame, in shares
 function poseAt(slot: number, x: number, y: number): Pose {
@@ -177,16 +180,60 @@ function isInside(place: { x: number; y: number }, card: Size, stage: Size): boo
 }
 
 type Edge = 'top' | 'bottom'
-type Check = { key: string; width: number; edge: Edge; isInside: boolean; isOffLanes: boolean; isClear: boolean }
+type CameraName = 'fixed' | 'game'
+
+type Check = {
+  key: string
+  width: number
+  edge: Edge
+  camera: CameraName
+  isInside: boolean
+  isOffLanes: boolean
+  isClear: boolean
+}
+
+// the camera a stop is seen through: where it looks at a time of the match
+type StopCamera = { name: CameraName; at: (timeMs: number) => Camera }
+// a stage as laid out, the edge its lanes lie along, whether the players on it are drawn as their legends, and the
+// camera that shows them
+type Layout = { stage: Size; edge: Edge; areLegends: boolean; camera: StopCamera }
+
+const onWholeStage: StopCamera = { name: 'fixed', at: () => wholeStage }
+const playbackFixtures: PlaybackFixture[] = ['duel-a', 'doubles-b']
+
+function hasPlayback(name: InsightsFixture): name is PlaybackFixture {
+  return playbackFixtures.some((fixture) => fixture === name)
+}
+
+// the game's camera, played over the fixture's timeline inside the stage box as the page plays it
+function gameCameraOf(name: PlaybackFixture, box: StageBox): StopCamera {
+  const timeline = readPlaybackTimeline(readPlayback(name))
+  const bounds = { x: box.minX, y: box.minY, width: box.width, height: box.height }
+  const track = cameraTrack(timeline, bounds, { fps: 60 })
+
+  const at = (timeMs: number) => {
+    const view = cameraAt(track, stepAt(timeline, timeMs))
+
+    if (!view) throw new Error(`the camera has no view at ${timeMs} ms`)
+
+    return cameraOf(view, box)
+  }
+
+  return { name: 'game', at }
+}
 
 // the card a review stop gets, as the page picks it: upright where it has a place clear of the stop's players, wide
-// where it hasn't
-function checkStop(insights: MatchInsights, stop: ReviewStop, stage: Size, edge: Edge): Check {
+// where it hasn't. the players stand where the camera shows them, as tokens or as legends as big as its zoom makes them
+function checkStop(insights: MatchInsights, stop: ReviewStop, layout: Layout): Check {
+  const { stage, edge, areLegends } = layout
   const moment = insights.insights.moments.find((entry) => entry.key === stop.momentKey)
-  const poses = trackedPoses(insights, stop.timeMs)
+  const { box } = insights.insights.stage
+  const camera = layout.camera.at(stop.timeMs)
+  const poses = trackedPoses(insights, stop.timeMs).map((pose) => inFrame(pose, camera))
   const players = { victim: moment?.victim ?? null, attacker: moment?.attacker ?? null }
   const bandPx = insights.summary.players.length > 2 ? 130 : 74
-  const space = (card: Size) => ({ card, stage, panel: { edge, bandPx }, obstacles: corners(stage) })
+  const body = bodyPxOf({ box, areLegends }, stage.width * unitInFrame(box, camera))
+  const space = (card: Size) => ({ card, stage, body, panel: { edge, bandPx }, obstacles: corners(stage) })
   const upright = placeCard(poses, space(uprightCard), players)
   const card = upright.isOnStopPlayers ? wideCard(stage) : uprightCard
   const place = upright.isOnStopPlayers ? placeCard(poses, space(card), players) : upright
@@ -196,6 +243,7 @@ function checkStop(insights: MatchInsights, stop: ReviewStop, stage: Size, edge:
     key: stop.momentKey,
     width: stage.width,
     edge,
+    camera: layout.camera.name,
     isInside: isInside(place, card, stage),
     isOffLanes,
     isClear: !place.isOnStopPlayers,
@@ -204,7 +252,8 @@ function checkStop(insights: MatchInsights, stop: ReviewStop, stage: Size, edge:
 
 function checkEveryStop(name: InsightsFixture): Check[] {
   const insights = readInsights(name)
-  const stageOf = (width: number) => ({ width, height: width / insights.insights.stage.aspect })
+  const { box, aspect } = insights.insights.stage
+  const stageOf = (width: number) => ({ width, height: width / aspect })
 
   const onPage = stageWidthsPx.flatMap((width) => [
     { stage: stageOf(width), edge: 'top' as const },
@@ -212,11 +261,18 @@ function checkEveryStop(name: InsightsFixture): Check[] {
   ])
 
   const fullscreen = fullscreenWidthsPx.map((width) => ({ stage: stageOf(width), edge: 'bottom' as const }))
-  const layouts = [...onPage, ...fullscreen]
+  const stages = [...onPage, ...fullscreen]
 
-  return insights.reviewStops.flatMap((stop) =>
-    layouts.map(({ stage, edge }) => checkStop(insights, stop, stage, edge)),
+  const underFixed = [true, false].flatMap((areLegends) =>
+    stages.map((stage) => ({ ...stage, areLegends, camera: onWholeStage })),
   )
+
+  // the game's camera only ever shows drawn legends, and only some fixtures have the timeline it is played over
+  const gameCameras = hasPlayback(name) ? [gameCameraOf(name, box)] : []
+  const underGame = gameCameras.flatMap((camera) => stages.map((stage) => ({ ...stage, areLegends: true, camera })))
+  const layouts: Layout[] = [...underFixed, ...underGame]
+
+  return insights.reviewStops.flatMap((stop) => layouts.map((layout) => checkStop(insights, stop, layout)))
 }
 
 describe('the card at a review stop', () => {
@@ -233,6 +289,45 @@ describe('the card at a review stop', () => {
     const covering = checkEveryStop(name).filter((check) => check.width >= 780 && !check.isClear)
 
     expect(covering).toEqual([])
+  })
+})
+
+describe('the line from the card to the player who got hit', () => {
+  const stage = { width: 1000, height: 560 }
+  const card = { width: 200, height: 100 }
+  const box = { minX: 0, minY: 0, width: 4000, height: 2240 }
+  const victim = poseAt(1, 0.8, 0.8)
+
+  const spaceWith = (areLegends: boolean, unitPx: number) => ({
+    card,
+    stage,
+    body: bodyPxOf({ box, areLegends }, unitPx),
+    panel: { edge: 'bottom' as const, bandPx: 0 },
+    obstacles: [],
+  })
+
+  test.each([0.2, 0.4, 0.8])('ends on the ring around a legend’s body with a level unit %f pixels wide', (unitPx) => {
+    const line = lineToRing({ x: 8, y: 8 }, spaceWith(true, unitPx), victim)
+    const middle = { x: 800, y: 448 - bodyMiddle * unitPx }
+
+    expect(line?.from).toEqual({ x: 208, y: 108 })
+
+    expect(Math.hypot((line?.to.x ?? 0) - middle.x, (line?.to.y ?? 0) - middle.y)).toBeCloseTo(
+      (bodyRingDiameter / 2) * unitPx,
+    )
+  })
+
+  test('ends on a token’s ring, which is as big at every zoom', () => {
+    const line = lineToRing({ x: 8, y: 8 }, spaceWith(false, 0.8), victim)
+
+    expect(Math.hypot((line?.to.x ?? 0) - 800, (line?.to.y ?? 0) - (448 - 14))).toBeCloseTo(32)
+  })
+
+  test('is left out when the card’s corner is inside the ring', () => {
+    const middle = { x: 800, y: 448 - bodyMiddle * 0.8 }
+    const place = { x: middle.x - card.width, y: middle.y - card.height }
+
+    expect(lineToRing(place, spaceWith(true, 0.8), victim)).toBe(null)
   })
 })
 

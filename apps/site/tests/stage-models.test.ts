@@ -3,11 +3,24 @@ import type { MatchDetailContract, StageBox } from '@brawltome/contracts'
 import type { Bubble, CameraTrack, PlayerPose, Replay, Timeline } from '@brawltome/replay-player'
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
-import { bodyMiddle, bodyRingDiameter, bodyRingStyle, legendRingFloorPx } from '../src/components/match/stage/body-ring'
+import {
+  bodyMiddle,
+  bodyPxOf,
+  bodyRingDiameter,
+  bodyRingStyle,
+  legendRingFloorPx,
+} from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
-import { cameraOf, inFrame, levelToCanvas, viewOf, wholeStage } from '../src/components/match/stage/play-camera'
+import {
+  cameraOf,
+  inFrame,
+  levelToCanvas,
+  unitInFrame,
+  viewOf,
+  wholeStage,
+} from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
@@ -206,6 +219,29 @@ describe('the ring around a player’s body', () => {
       width: 'min(64px, 10%)',
       aspectRatio: '1',
     })
+  })
+
+  test('on a stage as laid out, a legend’s ring and tag grow with the level unit and a token’s don’t', () => {
+    expect(bodyPxOf(legends, 0.5)).toEqual({ ringMiddlePx: 40, ringRadiusPx: 54, tagTopPx: 115 })
+    expect(bodyPxOf(tokens, 0.5)).toEqual(bodyPxOf(tokens, 2))
+  })
+
+  test('on a stage as laid out, a legend’s ring is as big as it is drawn where the stage is small', () => {
+    // on a 390 pixel stage this box makes the ring through the hurtbox's corners 19.5 pixels, under its smallest size
+    const unitPx = 390 / anyBox.width
+
+    expect(bodyPxOf(legends, unitPx).ringRadiusPx).toBe(legendRingFloorPx / 2)
+    expect(bodyPxOf(legends, unitPx).ringMiddlePx).toBeCloseTo(80 * unitPx)
+  })
+
+  test('on a stage as laid out, a token’s ring is as big as it is drawn: a tenth of a small stage', () => {
+    expect(bodyPxOf(tokens, 1000 / anyBox.width).ringRadiusPx).toBe(32)
+    expect(bodyPxOf(tokens, 390 / anyBox.width).ringRadiusPx).toBeCloseTo(19.5)
+  })
+
+  test('a level unit is as wide in the frame as the camera’s zoom makes it', () => {
+    expect(unitInFrame(box, wholeStage)).toBe(1 / box.width)
+    expect(unitInFrame(box, { x: 0.25, y: 0.25, zoom: 2 })).toBe(2 / box.width)
   })
 
   test('the players are drawn as their legends once the art and the timeline are in', () => {
