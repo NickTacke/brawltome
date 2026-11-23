@@ -70,6 +70,7 @@ import {
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
+  readBrawltoolsRequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
 } from './operations-worker-config'
@@ -135,6 +136,7 @@ const workerConfig = readOperationsWorkerConfig(process.env)
 // three clients by role (main, lease renewals, discovery), sized in database-pools.ts to fit the connection budget
 const databases = createWorkerDatabases(configuredConnectionString, workerConfig)
 const brawlhallaV1RequestLimit = readBrawlhallaV1RequestLimit(process.env.BRAWLHALLA_V1_REQUEST_LIMIT)
+const brawltoolsRequestLimit = readBrawltoolsRequestLimit(process.env.BRAWLTOOLS_REQUEST_LIMIT)
 
 const sourceBackgroundHeadroom = readSourceBackgroundHeadroom(
   process.env.SOURCE_BACKGROUND_HEADROOM,
@@ -272,8 +274,9 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
   sourceLimits: {
     'brawlhalla-v0': brawlhallaV0RequestLimit,
     'brawlhalla-v1': brawlhallaV1RequestLimit,
+    brawltools: brawltoolsRequestLimit,
   },
-  sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60 },
+  sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60, brawltools: 60 },
   sourceBackgroundHeadroom,
   minimumSourceSpacingMs: 150,
 })

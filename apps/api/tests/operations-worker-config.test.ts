@@ -5,6 +5,7 @@ import {
   leaderboardScheduleDefinitions,
   rankingRetentionScheduleDefinition,
   readBrawlhallaV1RequestLimit,
+  readBrawltoolsRequestLimit,
   readOperationsWorkerConfig,
   readSourceBackgroundHeadroom,
   workerDatabaseUrl,
@@ -227,6 +228,13 @@ describe('operations worker configuration', () => {
     expect(() => readOperationsWorkerConfig({ OPERATIONS_STALL_TIMEOUT_MS: '59999' })).toThrow(
       'OPERATIONS_STALL_TIMEOUT_MS',
     )
+  })
+
+  test('keeps the brawltools limit at or below one call a second', () => {
+    expect(readBrawltoolsRequestLimit(undefined)).toBe(60)
+    expect(readBrawltoolsRequestLimit('30')).toBe(30)
+    expect(() => readBrawltoolsRequestLimit('61')).toThrow('BRAWLTOOLS_REQUEST_LIMIT')
+    expect(() => readBrawltoolsRequestLimit('0')).toThrow('BRAWLTOOLS_REQUEST_LIMIT')
   })
 
   test('validates the source ceiling and explicit background headroom', () => {

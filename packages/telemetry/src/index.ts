@@ -227,7 +227,7 @@ const outcome = [
 
 const claimOutcome = ['claimed', 'empty'] as const
 
-const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'discord', 'steam', 'turnstile', 'api'] as const
+const sourceDomain = ['brawlhalla-v0', 'brawlhalla-v1', 'brawltools', 'discord', 'steam', 'turnstile', 'api'] as const
 const interactionKind = ['command', 'select', 'button'] as const
 const command = ['player', 'clan', 'status', 'component', 'unknown'] as const
 
@@ -1441,7 +1441,7 @@ export type TelemetryFetch = (input: RequestInfo | URL, init?: RequestInit) => P
 
 export async function telemetryFetch(
   telemetry: Telemetry,
-  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1',
+  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1' | 'brawltools',
   fetcher: TelemetryFetch,
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -1475,7 +1475,7 @@ export async function telemetryFetch(
 
 export async function observeSourceCall<T>(
   telemetry: Telemetry,
-  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1',
+  domain: 'api' | 'discord' | 'steam' | 'turnstile' | 'brawlhalla-v0' | 'brawlhalla-v1' | 'brawltools',
   work: () => Promise<T>,
 ): Promise<T> {
   const started = performance.now()
