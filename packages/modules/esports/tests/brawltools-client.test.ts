@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { BrawltoolsHttpError, BrawltoolsRateLimitError, createBrawltoolsClient } from '../source/brawltools-client'
+import {
+  BrawltoolsHttpError,
+  BrawltoolsNetworkError,
+  BrawltoolsRateLimitError,
+  createBrawltoolsClient,
+} from '../source/brawltools-client'
 import type { RawMatch } from '../source/raw-types'
 
 type FetchCall = { url: URL; init: RequestInit | undefined }
@@ -207,6 +212,29 @@ describe('brawltools client', () => {
 
     const client = createBrawltoolsClient({ fetch: hangingFetch, admit: admitNothing, timeoutMs: 20 })
 
-    await expect(client.eventLegends(7)).rejects.toThrow('timed out after 20 ms')
+    const error = await client.eventLegends(7).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(BrawltoolsNetworkError)
+    expect((error as BrawltoolsNetworkError).message).toContain('timed out after 20 ms')
+  })
+
+  test('keeps the player id out of a network failure', async () => {
+    const url = 'https://api.brawltools.com/v2/player/bhId/95906862'
+
+    // bun puts the full url in error.path when a request never gets an answer
+    const failingFetch = (async () => {
+      throw Object.assign(new Error(`Unable to connect to ${url}`), { code: 'ConnectionRefused', path: url })
+    }) as unknown as typeof fetch
+
+    const client = createBrawltoolsClient({ fetch: failingFetch, admit: admitNothing })
+
+    const error = await client.playerByBrawlhallaId(95906862).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(BrawltoolsNetworkError)
+    expect((error as BrawltoolsNetworkError).path).toBe('/player/bhId/:id')
+    expect((error as BrawltoolsNetworkError).message).toContain('/player/bhId/:id')
+    expect((error as BrawltoolsNetworkError).cause).toBeUndefined()
+    expect(JSON.stringify(error)).not.toContain('95906862')
+    expect(String(error)).not.toContain('95906862')
   })
 })

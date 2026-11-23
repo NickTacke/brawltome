@@ -30,6 +30,19 @@ export class BrawltoolsRateLimitError extends BrawltoolsHttpError {
   }
 }
 
+// brawltools never answered: the request failed on the network or timed out
+export class BrawltoolsNetworkError extends Error {
+  constructor(
+    message: string,
+    // a template such as /player/match, never with ids
+    public readonly path: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options)
+    this.name = 'BrawltoolsNetworkError'
+  }
+}
+
 export type BrawltoolsClientOptions = {
   // spends one call of the brawltools source budget, or throws when there is none left
   admit: () => Promise<void>
@@ -68,8 +81,10 @@ export function createBrawltoolsClient(options: BrawltoolsClientOptions): Brawlt
   const timeoutMs = options.timeoutMs ?? defaultTimeoutMs
   const send = options.fetch ?? fetch
 
-  function timeoutError(template: string, cause: unknown): Error {
-    return new Error(`brawltools request timed out after ${timeoutMs} ms: ${template}`, { cause })
+  function timeoutError(template: string, cause: unknown): BrawltoolsNetworkError {
+    return new BrawltoolsNetworkError(`brawltools request timed out after ${timeoutMs} ms: ${template}`, template, {
+      cause,
+    })
   }
 
   async function sendRequest(template: string, pathAndQuery: string): Promise<Response> {
@@ -78,7 +93,8 @@ export function createBrawltoolsClient(options: BrawltoolsClientOptions): Brawlt
     } catch (error) {
       if (isTimeout(error)) throw timeoutError(template, error)
 
-      throw error
+      // bun puts the full url, ids and all, in the error's path, so the original error is not kept as the cause
+      throw new BrawltoolsNetworkError(`brawltools request failed: ${template}`, template)
     }
   }
 
