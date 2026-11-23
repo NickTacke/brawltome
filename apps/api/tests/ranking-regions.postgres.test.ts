@@ -235,6 +235,38 @@ describe('leaderboard regions publish apart', () => {
     })
   })
 
+  test('leaves a carried region out of the global Queue, so its recovery adds no backlog of games', async () => {
+    const ranking = createPostgresRanking(database)
+    const start = new Date('2000-03-01T00:00:00.000Z')
+    const usEastFails = minutesAfter(start, 60)
+    const usEastRecovers = minutesAfter(start, 120)
+
+    // every player wins 2 games a scan; US-E's 4 since the start land in one scan when it recovers
+    await scanWindow(start, 30)
+    await scanWindow(usEastFails, 32, ['US-E'])
+    await scanWindow(usEastRecovers, 34)
+
+    const global = await ranking.queries.getRecentActivity({
+      mode: '1v1',
+      region: 'all',
+      page: 1,
+      now: minutesAfter(usEastRecovers, 1),
+    })
+
+    expect(global).toMatchObject({
+      previousObservedAt: usEastFails.toISOString(),
+      currentObservedAt: usEastRecovers.toISOString(),
+      totalRows: 8,
+    })
+
+    expect(global.status !== 'unavailable' && global.entries.map(({ region }) => region)).not.toContain('US-E')
+    expect(global.status !== 'unavailable' && global.entries.every(({ gamesDelta }) => gamesDelta === 2)).toBe(true)
+
+    const movers = await ranking.queries.getRecentMovers({ mode: '1v1', region: 'all' })
+
+    expect(movers.status !== 'unavailable' && movers.mostGames.map(({ region }) => region)).not.toContain('US-E')
+  })
+
   test('keeps the regions a superseded window already published', async () => {
     const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)

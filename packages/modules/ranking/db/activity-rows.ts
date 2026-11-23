@@ -14,8 +14,12 @@ export type ActivityRow = StoredIdentityRow & {
   games_delta: number
 }
 
-/** The two snapshots of one board an hour apart. */
-export type ComparedSnapshots = { currentSnapshotId: string; previousSnapshotId: string }
+/** The two snapshots of one board an hour apart, and the regions either one carried from an earlier scan. */
+export type ComparedSnapshots = {
+  currentSnapshotId: string
+  previousSnapshotId: string
+  carriedRegions: readonly string[]
+}
 
 /** The columns of an ActivityRow, read from `current` and `previous` rows joined by playedRows. */
 export function activityColumns(sql: Sql) {
@@ -30,8 +34,9 @@ export function activityColumns(sql: Sql) {
   `
 }
 
-// a row whose counters went down was reset, and one with only a rating change played no game we can count
-export function playedRows(sql: Sql, { currentSnapshotId, previousSnapshotId }: ComparedSnapshots) {
+// a row whose counters went down was reset, and one with only a rating change played no game we can count. a player
+// whose region was carried is left out, judged by the region the row names, which is the player's own
+export function playedRows(sql: Sql, { currentSnapshotId, previousSnapshotId, carriedRegions }: ComparedSnapshots) {
   return sql`
     FROM (${rowsByRating(sql, currentSnapshotId)}) current
     JOIN rankings.snapshot_rows previous
@@ -40,6 +45,7 @@ export function playedRows(sql: Sql, { currentSnapshotId, previousSnapshotId }: 
     WHERE current.wins >= previous.wins
       AND current.losses >= previous.losses
       AND current.wins + current.losses > previous.wins + previous.losses
+      AND current.region <> ALL(${[...carriedRegions]}::text[])
   `
 }
 

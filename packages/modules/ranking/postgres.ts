@@ -83,6 +83,7 @@ type ActivityIntervalRow = Extract<SnapshotRow, { source: 'brawlhalla-v1-ranked-
   schedule_window_at: Date
   previous_snapshot_id: string
   previous_observed_at: Date
+  previous_provenance: Record<string, unknown> | null
 }
 
 type ActivityIntervalLookupRow = Omit<ActivityIntervalRow, 'previous_snapshot_id' | 'previous_observed_at'> & {
@@ -211,6 +212,7 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
     SELECT current_endpoint.*,
            previous_scan.snapshot_id AS previous_snapshot_id,
            previous_scan.observed_at AS previous_observed_at,
+           previous_scan.provenance AS previous_provenance,
            EXISTS (
              SELECT 1
              FROM board_scans earlier_scan
@@ -219,7 +221,7 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
            ) AS has_earlier_scans
     FROM current_endpoint
     LEFT JOIN LATERAL (
-      SELECT scan.snapshot_id, scan.observed_at
+      SELECT scan.snapshot_id, scan.observed_at, scan.provenance
       FROM board_scans scan
       WHERE scan.schedule_window_at <= current_endpoint.schedule_window_at - ${shortestComparedSpan}::interval
         AND scan.schedule_window_at >= current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
@@ -241,8 +243,25 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
   return { status: 'found', interval }
 }
 
+function staleRegionsOf(provenance: Record<string, unknown> | null): string[] {
+  const staleRegions = provenance?.staleRegions
+
+  return Array.isArray(staleRegions) ? staleRegions.filter((region) => typeof region === 'string') : []
+}
+
+// a global board carries a failed region's rows from an earlier scan, so comparing either end of the interval with
+// them would show no games during the outage and all of them in the scan where the region comes back
 function comparedSnapshots(interval: ActivityIntervalRow): ComparedSnapshots {
-  return { currentSnapshotId: interval.snapshot_id, previousSnapshotId: interval.previous_snapshot_id }
+  const carriedRegions = new Set([
+    ...staleRegionsOf(interval.provenance),
+    ...staleRegionsOf(interval.previous_provenance),
+  ])
+
+  return {
+    currentSnapshotId: interval.snapshot_id,
+    previousSnapshotId: interval.previous_snapshot_id,
+    carriedRegions: [...carriedRegions],
+  }
 }
 
 export function createPostgresRanking(
