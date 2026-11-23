@@ -86,6 +86,34 @@ function PageInput({ label, page, pages, onPage }: PageInputProps) {
   )
 }
 
+type PageControlsProps = {
+  label: string
+  // a second set of controls on the page needs a landmark name of its own
+  navLabel?: string
+  page: number
+  pages: number
+  onPage: (page: number) => void
+}
+
+/** The arrows and the page box, on their own for the top of a board. */
+export function PageControls({ label, navLabel = `${label} pages`, page, pages, onPage }: PageControlsProps) {
+  return (
+    <nav aria-label={navLabel} className="flex items-center gap-2">
+      <PagerArrow label="Previous page" isDisabled={page <= 1} onPress={() => onPage(previousPage(page, pages))}>
+        <ChevronLeft className="size-4" aria-hidden="true" />
+      </PagerArrow>
+      <span className="flex items-center gap-2 text-sm text-soft">
+        Page
+        <PageInput label={label} page={page} pages={pages} onPage={onPage} />
+        of <span className="font-mono">{formatWhole(Math.max(pages, 1))}</span>
+      </span>
+      <PagerArrow label="Next page" isDisabled={page >= pages} onPress={() => onPage(page + 1)}>
+        <ChevronRight className="size-4" aria-hidden="true" />
+      </PagerArrow>
+    </nav>
+  )
+}
+
 type PagerProps = {
   label: string
   page: number
@@ -103,19 +131,7 @@ export function Pager({ label, page, pages, pageSize = defaultPageSize, total, o
       <span className="font-mono text-sm text-soft">
         {formatWhole(first)}–{formatWhole(last)} of {formatWhole(total)}
       </span>
-      <nav aria-label={`${label} pages`} className="flex items-center gap-2">
-        <PagerArrow label="Previous page" isDisabled={page <= 1} onPress={() => onPage(previousPage(page, pages))}>
-          <ChevronLeft className="size-4" aria-hidden="true" />
-        </PagerArrow>
-        <span className="flex items-center gap-2 text-sm text-soft">
-          Page
-          <PageInput label={label} page={page} pages={pages} onPage={onPage} />
-          of <span className="font-mono">{formatWhole(Math.max(pages, 1))}</span>
-        </span>
-        <PagerArrow label="Next page" isDisabled={page >= pages} onPress={() => onPage(page + 1)}>
-          <ChevronRight className="size-4" aria-hidden="true" />
-        </PagerArrow>
-      </nav>
+      <PageControls label={label} page={page} pages={pages} onPage={onPage} />
     </div>
   )
 }
