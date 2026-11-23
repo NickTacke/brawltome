@@ -5,17 +5,23 @@ import { eventSets, placements } from './tables'
 // sets of an event that started longer ago than this are final
 const finalAfterDays = 7
 
+export type MissingEvent = { tournamentId: string; tournamentName: string }
+
 /**
- * The player's tournament ids whose sets are worth fetching: events never fetched, and events fetched while they
+ * The player's events whose sets are worth fetching: events never fetched, and events fetched while they
  * were under 7 days old that are final now, since their sets may have been incomplete.
  */
-export async function listEventsMissingSets(database: Database, brawlhallaId: number, now: Date): Promise<string[]> {
+export async function listEventsMissingSets(
+  database: Database,
+  brawlhallaId: number,
+  now: Date,
+): Promise<MissingEvent[]> {
   const finalAt = sql`${placements.startTime} + make_interval(days => ${finalAfterDays})`
   const isFinalNow: SQL = sql`${finalAt} < ${now.toISOString()}::timestamptz`
   const wasFetchedBeforeFinal: SQL = sql`${eventSets.fetchedAt} < ${finalAt}`
 
   const rows = await database.db
-    .selectDistinct({ tournamentId: placements.tournamentId })
+    .selectDistinct({ tournamentId: placements.tournamentId, tournamentName: placements.tournamentName })
     .from(placements)
     .leftJoin(
       eventSets,
@@ -29,5 +35,5 @@ export async function listEventsMissingSets(database: Database, brawlhallaId: nu
     )
     .orderBy(placements.tournamentId)
 
-  return rows.map((row) => row.tournamentId)
+  return rows
 }

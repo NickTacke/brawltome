@@ -286,7 +286,7 @@ describe('PostgreSQL interactive refresh admission', () => {
     const admission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 3, 'brawlhalla-v1': 1 },
-      sourceBackgroundHeadroom: 1,
+      sourceBackgroundHeadroom: { 'brawlhalla-v0': 1, 'brawlhalla-v1': 1 },
     })
 
     for (let call = 0; call < 2; call++) {
@@ -335,6 +335,35 @@ describe('PostgreSQL interactive refresh admission', () => {
         caller: 'on-demand',
       }),
     ).toMatchObject({ outcome: 'admitted' })
+  })
+
+  test('keeps no headroom for a source left out of it', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 3, brawltools: 2 },
+      sourceWindowSeconds: { brawltools: 60 },
+      sourceBackgroundHeadroom: { 'brawlhalla-v0': 3 },
+    })
+
+    const backgroundCall = (domain: 'brawlhalla-v0' | 'brawltools') =>
+      admission.admitSource({ domain, reservationKey: randomUUID(), units: 1, caller: 'background' })
+
+    // a headroom as large as the limit leaves background work nothing, but only on the source it was set for
+    expect(await backgroundCall('brawlhalla-v0')).toMatchObject({ outcome: 'rate-limited' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'admitted' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'admitted' })
+    expect(await backgroundCall('brawltools')).toMatchObject({ outcome: 'rate-limited' })
+  })
+
+  test('rejects a negative headroom', () => {
+    const create = () =>
+      createPostgresRequestAdmission(database, {
+        authenticatedIpLimit: 120,
+        sourceLimits: { brawltools: 2 },
+        sourceBackgroundHeadroom: { brawltools: -1 },
+      })
+
+    expect(create).toThrow('brawltools background headroom must be a non-negative integer')
   })
 
   test('paces source calls globally across admission instances', async () => {

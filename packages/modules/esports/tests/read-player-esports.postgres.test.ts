@@ -229,6 +229,28 @@ describe('readPlayerEsports', () => {
     expect((await readPlayerEsports(database, brawlhallaId, now)).profile).toBeNull()
   })
 
+  test('trusts a Lin Fei main by region and legends, though brawltools writes the names with an underscore', async () => {
+    const brawlhallaId = newPlayerId()
+
+    await storeLinked(brawlhallaId, {
+      player: { playerId: 79, name: 'Zephyrine', brawlhallaId },
+      eventLegends: [
+        { name: 'LIN_FEI', count: 9 },
+        { name: 'QUEEN_NAI', count: 4 },
+        { name: 'MORDEX', count: 1 },
+      ],
+    })
+
+    await storeRankedAccount(brawlhallaId, 'Quartz', 'EU')
+
+    await storeCareerLegends(brawlhallaId, 'Quartz', [
+      { key: 'lin fei', games: 900 },
+      { key: 'queen nai', games: 800 },
+    ])
+
+    expect((await readPlayerEsports(database, brawlhallaId, now)).profile).not.toBeNull()
+  })
+
   test('answers within the contract when stored sets hold the whole opponent brawltools sends', async () => {
     const brawlhallaId = newPlayerId()
     const opponent = { playerId: 31, sggPlayerId: 4_101, cmPlayerId: null, brawlhallaId: 7_788, name: 'Sandstorm' }

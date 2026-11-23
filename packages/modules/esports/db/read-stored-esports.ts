@@ -7,12 +7,14 @@ import type { Transaction } from './transaction'
 
 export type PlayerRow = typeof players.$inferSelect
 
+type StoredRead = { row: PlayerRow | null; stored: StoredEsports }
+
 // every read in the transaction sees the same snapshot, so a refresh that commits meanwhile shows up whole or not
 // at all; it takes no locks, so it never waits on a writer
 const readOnlySnapshot = { isolationLevel: 'repeatable read', accessMode: 'read only' } as const
 
-async function readPlayerRow(transaction: Transaction, brawlhallaId: number): Promise<PlayerRow | null> {
-  const [row] = await transaction.select().from(players).where(eq(players.brawlhallaId, brawlhallaId))
+async function readPlayerRow(reader: Database['db'] | Transaction, brawlhallaId: number): Promise<PlayerRow | null> {
+  const [row] = await reader.select().from(players).where(eq(players.brawlhallaId, brawlhallaId))
 
   return row ?? null
 }
@@ -45,11 +47,8 @@ async function readSetsByTournament(transaction: Transaction, brawlhallaId: numb
   return new Map(rows.map((row) => [row.tournamentId, row.sets]))
 }
 
-/** The player's row and everything stored for them, as the domain shapes it. A player never stored reads as empty. */
-export async function readStoredEsports(
-  database: Database,
-  brawlhallaId: number,
-): Promise<{ row: PlayerRow | null; stored: StoredEsports }> {
+// the row is read again inside the snapshot, so it always matches the placements and sets read with it
+function readLinkedSnapshot(database: Database, brawlhallaId: number): Promise<StoredRead> {
   return database.db.transaction(async (transaction) => {
     const row = await readPlayerRow(transaction, brawlhallaId)
     const storedPlacements = await readPlacements(transaction, brawlhallaId)
@@ -64,4 +63,24 @@ export async function readStoredEsports(
 
     return { row, stored }
   }, readOnlySnapshot)
+}
+
+/** The player's row alone, for a caller that only needs the link. */
+export function readEsportsPlayer(database: Database, brawlhallaId: number): Promise<PlayerRow | null> {
+  return readPlayerRow(database.db, brawlhallaId)
+}
+
+/**
+ * The player's row and everything stored for them, as the domain shapes it. A player never stored, or one
+ * Brawltools does not know, reads as empty.
+ */
+export async function readStoredEsports(database: Database, brawlhallaId: number): Promise<StoredRead> {
+  // nearly every player page is of a player without a linked row, and one query answers for them
+  const row = await readEsportsPlayer(database, brawlhallaId)
+
+  if (row?.link !== 'linked') {
+    return { row, stored: { pr1v1: null, pr2v2: null, placements: [], setsByTournament: new Map() } }
+  }
+
+  return readLinkedSnapshot(database, brawlhallaId)
 }

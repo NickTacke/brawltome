@@ -2,17 +2,18 @@ import type { PlayerEsportsContract } from '@brawltome/contracts'
 import type { Database } from '@brawltome/foundation'
 import { type PlayerRow, readStoredEsports } from '../db/read-stored-esports'
 import {
-  buildKnownLegendKeys,
+  buildLegendLookup,
   type EsportsProfile,
   esportsFreshness,
   isTrustedLink,
   type LinkEvidence,
+  resolveLegendKey,
   type StoredEsports,
   shapeEsportsProfile,
 } from '../domain'
 import { type AccountSignals, readAccountSignals } from './account-signals'
 
-const knownLegendKeys = buildKnownLegendKeys()
+const legendLookup = buildLegendLookup()
 
 // a mode without a power ranking comes back with an empty region
 function rankingRegion(region: string | undefined): string | null {
@@ -26,8 +27,9 @@ function linkEvidence(row: PlayerRow, account: AccountSignals): LinkEvidence {
 
   return {
     esportsName: row.brawltoolsName ?? '',
-    // stored most played first, and the trust rule reads the first three
-    eventLegends: row.eventLegends.map(({ name }) => name.toLowerCase()),
+    // stored most played first, and the trust rule reads the first three; a legend the site has no key for keeps its
+    // place under its brawltools name, which matches nothing
+    eventLegends: row.eventLegends.map(({ name }) => resolveLegendKey(name, legendLookup) ?? name),
     esportsRegion,
     accountNames: account.names,
     accountTopLegends: account.topLegends,
@@ -45,7 +47,7 @@ async function readTrustedProfile(
 
   if (!isTrustedLink(linkEvidence(row, account))) return null
 
-  return shapeEsportsProfile(stored, knownLegendKeys)
+  return shapeEsportsProfile(stored, legendLookup)
 }
 
 /**

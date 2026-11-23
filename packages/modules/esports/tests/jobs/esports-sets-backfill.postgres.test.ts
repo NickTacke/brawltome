@@ -143,6 +143,74 @@ describe('esports sets backfill job', () => {
     expect(stored.setsByTournament.get('a-first')?.map((set) => set.matchId)).toEqual(['saved'])
   })
 
+  test('an event that answers with an error is skipped, the rest are fetched, and one failure is recorded', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'a-broken', startTime: daysAgo(30) }),
+          placement({ tournamentId: 'b-after', startTime: daysAgo(40) }),
+          placement({ tournamentId: 'c-after', startTime: daysAgo(50) }),
+        ],
+      }),
+    )
+
+    const broken = new BrawltoolsHttpError('brawltools answered 500 for /player/match', 500, '/player/match')
+
+    const stub = answers({
+      matches: new Map([
+        ['b-after', [match({ matchId: 'b' })]],
+        ['c-after', [match({ matchId: 'c' })]],
+      ]),
+      failures: new Map([['matches a-broken', broken]]),
+    })
+
+    const { outcome, calls } = await runBackfill(stub)
+    const { row, stored } = await readStoredEsports(database, brawlhallaId)
+
+    expect(outcome).toBe('succeeded')
+    expect(calls).toEqual(['matches a-broken', 'matches b-after', 'matches c-after'])
+    expect(row?.failureCount).toBe(1)
+    expect(stored.setsByTournament.has('a-broken')).toBe(false)
+    expect(stored.setsByTournament.get('c-after')?.map((set) => set.matchId)).toEqual(['c'])
+  })
+
+  test('backfill stops once three events in a row fail, as brawltools is down then', async () => {
+    const tournamentIds = ['a', 'b', 'c', 'd', 'e']
+
+    await saveRefresh(
+      database,
+      linkedRefresh({ placements: tournamentIds.map((tournamentId) => placement({ tournamentId })) }),
+    )
+
+    const unavailable = new BrawltoolsHttpError('brawltools answered 503 for /player/match', 503, '/player/match')
+    const failures = new Map(tournamentIds.map((tournamentId) => [`matches ${tournamentId}`, unavailable]))
+
+    const { outcome, calls } = await runBackfill(answers({ failures }))
+    const { row } = await readStoredEsports(database, brawlhallaId)
+
+    expect(outcome).toBe('succeeded')
+    expect(calls).toEqual(['matches a', 'matches b', 'matches c'])
+    expect(row?.failureCount).toBe(1)
+  })
+
+  test('backfill leaves side mode events out', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'crew', tournamentName: 'Winter Crew Battle' }),
+          placement({ tournamentId: 'solo', tournamentName: 'Frostbyte #19' }),
+        ],
+      }),
+    )
+
+    const { outcome, calls } = await runBackfill(answers())
+
+    expect(outcome).toBe('succeeded')
+    expect(calls).toEqual(['matches solo'])
+  })
+
   test('backfill stops between events once the lease is lost', async () => {
     await saveRefresh(
       database,

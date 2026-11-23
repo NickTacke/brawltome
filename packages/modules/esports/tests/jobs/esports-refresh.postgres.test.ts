@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
-import { queueModule } from '@brawltome/queue'
+import { queueModule, SourceAdmissionLimitedError } from '@brawltome/queue'
 import { runJobOnce } from '@brawltome/queue/testing'
 import { readStoredEsports } from '../../db/read-stored-esports'
 import { saveEventSets } from '../../db/save-event-sets'
@@ -221,7 +221,7 @@ describe('esports refresh job', () => {
     expect(row?.failureCount).toBe(1)
   })
 
-  test('a 503 while fetching highlight sets keeps the saved profile and records a failure', async () => {
+  test('a 503 while fetching highlight sets keeps the saved profile, records a failure and asks for a backfill', async () => {
     const unavailable = new BrawltoolsHttpError('brawltools answered 503 for /player/match', 503, '/player/match')
 
     const stub = answers({
@@ -237,7 +237,8 @@ describe('esports refresh job', () => {
     expect(stored.placements.map((saved) => saved.tournamentId)).toEqual(['solo'])
     expect(row).toMatchObject({ link: 'linked', failureCount: 1 })
     expect(row?.checkedAt.getTime()).toBeGreaterThan(row?.lastSuccessAt?.getTime() ?? Number.POSITIVE_INFINITY)
-    expect(backfills).toEqual([])
+    // the backfill goes on to the other events, so one broken event can't hold back the rest
+    expect(backfills).toEqual([brawlhallaId])
   })
 
   test('a timeout records a failure like a 503', async () => {
@@ -252,6 +253,30 @@ describe('esports refresh job', () => {
 
     expect(outcome).toBe('succeeded')
     expect(row?.failureCount).toBe(1)
+  })
+
+  test('a malformed brawltools body records a failure', async () => {
+    const malformed = new Error('brawltools sent invalid json: /player/placement/:id')
+    const { outcome } = await runRefresh(answers({ player, failures: new Map([['placements 1', malformed]]) }))
+
+    const operation = await readOperation(database, 'esports-refresh')
+    const { row } = await readStoredEsports(database, brawlhallaId)
+
+    // the job still fails, so the error reaches the dead letters, but the read now backs off a day
+    expect(outcome).toBe('retry')
+    expect(operation.errorCode).toBe('esports_refresh_failed')
+    expect(row).toMatchObject({ link: 'none', failureCount: 1 })
+  })
+
+  test('a spent brawltools budget defers without counting a failure', async () => {
+    const budgetSpent = new SourceAdmissionLimitedError(20)
+    const { outcome } = await runRefresh(answers({ player, failures: new Map([['pr 1', budgetSpent]]) }))
+
+    const { row } = await readStoredEsports(database, brawlhallaId)
+
+    expect(outcome).toBe('retry')
+    expect((await readOperation(database, 'esports-refresh')).attemptCount).toBe(0)
+    expect(row).toBeNull()
   })
 
   test('a 429 pauses the brawltools source and defers', async () => {

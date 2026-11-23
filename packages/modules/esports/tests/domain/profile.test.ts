@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { buildKnownLegendKeys } from '../../domain/legend-keys'
+import { buildLegendLookup, legendLookupFrom } from '../../domain/legend-keys'
 import { shapeEsportsProfile } from '../../domain/profile'
 import { fixtureIds, match, placement, powerRanking, stored, storedFromFixture } from './builders'
 
-const legendKeys = new Set(['mordex', 'teros', 'ulgrim'])
+const legendLookup = legendLookupFrom(['mordex', 'teros', 'ulgrim'])
 
 function shapeOne(overrides: Parameters<typeof stored>[0]) {
-  return shapeEsportsProfile(stored(overrides), legendKeys)
+  return shapeEsportsProfile(stored(overrides), legendLookup)
 }
 
 describe('shapeEsportsProfile', () => {
@@ -84,6 +84,24 @@ describe('shapeEsportsProfile', () => {
     expect(profile?.results[0]?.sets.map((set) => set.id)).toEqual(['b'])
   })
 
+  test('drops a 0-0 set', () => {
+    const sets = [
+      match({ matchId: 'unplayed', scores: [0, 0] }),
+      match({ matchId: 'won', scores: [2, 0] }),
+      match({ matchId: 'no-show', scores: [0, -1] }),
+    ]
+
+    const profile = shapeOne({
+      placements: [placement()],
+      setsByTournament: new Map([[placement().tournamentId, sets]]),
+    })
+
+    const [result] = profile?.results ?? []
+
+    expect(result?.sets.map((set) => set.id).toSorted()).toEqual(['no-show', 'won'])
+    expect(result?.setRecord).toEqual({ wins: 1, losses: 0 })
+  })
+
   test('treats a Random pick and an unknown legend as no legend', () => {
     const sets = [
       match({ matchId: 'a', legends: [['RANDOM'], ['NOT A LEGEND']] }),
@@ -139,6 +157,21 @@ describe('shapeEsportsProfile', () => {
     })
 
     expect(profile?.results[0]?.legendKey).toBe('ulgrim')
+  })
+
+  test('reads a two word legend the way brawltools writes it', () => {
+    const sets = [match({ legends: [['LIN_FEI', 'LIN_FEI', 'BODVAR'], ['RED_RAPTOR']] })]
+
+    const profile = shapeEsportsProfile(
+      stored({ placements: [placement()], setsByTournament: new Map([[placement().tournamentId, sets]]) }),
+      buildLegendLookup(),
+    )
+
+    const [result] = profile?.results ?? []
+
+    expect(result?.sets[0]?.legendKey).toBe('lin fei')
+    expect(result?.sets[0]?.opponentLegendKey).toBe('redraptor')
+    expect(result?.legendKey).toBe('lin fei')
   })
 
   test('gives a result with no sets setRecord null and sets []', () => {
@@ -254,11 +287,9 @@ describe('shapeEsportsProfile', () => {
 })
 
 describe('shapeEsportsProfile over saved Brawltools responses', () => {
-  const knownLegendKeys = buildKnownLegendKeys()
-
   const profiles = fixtureIds.map((brawlhallaId) => ({
     brawlhallaId,
-    profile: shapeEsportsProfile(storedFromFixture(brawlhallaId), knownLegendKeys),
+    profile: shapeEsportsProfile(storedFromFixture(brawlhallaId), buildLegendLookup()),
   }))
 
   test('shapes every response', () => {
@@ -293,5 +324,22 @@ describe('shapeEsportsProfile over saved Brawltools responses', () => {
       expect(result.title.length).toBeGreaterThan(0)
       expect(result.meta.length).toBeGreaterThan(0)
     }
+  })
+
+  test("Marckiem00's 4th at Apocalypse reads 5-2, the 0-0 set left out", () => {
+    const profile = profiles.find(({ brawlhallaId }) => brawlhallaId === 110282750)?.profile
+    const apocalypse = profile?.results.find((result) => result.fullName.startsWith('APOCALYPSE'))
+
+    expect(apocalypse?.placement).toBe(4)
+    expect(apocalypse?.setRecord).toEqual({ wins: 5, losses: 2 })
+    expect(apocalypse?.sets.some((set) => set.score === '0-0')).toBe(false)
+  })
+
+  test('finds art for the legends brawltools writes with an underscore', () => {
+    const sets = profiles.flatMap(({ profile }) => (profile?.results ?? []).flatMap((result) => result.sets))
+    const legendKeys = new Set(sets.flatMap((set) => [set.legendKey, set.opponentLegendKey]))
+
+    expect(legendKeys.has('queen nai')).toBe(true)
+    expect(legendKeys.has('redraptor')).toBe(true)
   })
 })

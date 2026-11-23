@@ -27,12 +27,14 @@ The `esports` schema, described in `db/tables.ts`:
 - `domain/`: pure code, no I/O. `profile.ts` shapes the stored rows into the profile the player page shows,
   `event-names.ts` and `result-labels.ts` give each result a short title and meta line, `highlights.ts` picks the
   finishes the section leads with, `trust.ts` decides whether a Brawltools player really is the account it links to,
-  `legend-keys.ts` lists the legends the site has art for, `refresh-timing.ts` holds how long stored data stays
-  fresh, and `freshness.ts` decides from a player's row whether it is due a refresh
+  `legend-keys.ts` turns a Brawltools legend name into the key of the site's art for it, `refresh-timing.ts`
+  holds how long stored data stays fresh, and `freshness.ts` decides from a player's row whether it is due a refresh
 - `jobs/`: the two queue jobs. `esports-refresh` asks Brawltools for one player's power rankings, placements and
   event legends, and the sets of the events the highlight cards show. `esports-sets-backfill` fetches the sets of
-  the player's other events. A 429 pauses the `brawltools` source and defers the job; a 5xx or a request that never
-  got an answer counts a failed refresh, so the read backs off for a day, and completes the job
+  the player's other events, skipping side modes and going on past an event that fails. A 429 pauses the
+  `brawltools` source and defers the job. Every other error counts a failed refresh, so the read backs off for a
+  day. A 5xx or a request that never got an answer then completes the job; anything else still fails it, so it
+  shows up in the dead letters
 - `migrations/`: creates the schema and the tables
 - `source/`: the Brawltools client and the raw response types
 - `tests/`: the table check, the client, the domain code, the jobs and the read, with a few saved public Brawltools
