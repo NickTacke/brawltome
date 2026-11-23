@@ -218,17 +218,32 @@ function readRegionalSnapshots(snapshots: readonly CohortCandidateSnapshot[]): R
     throw new Error('full launch cohort requires exactly one snapshot per launch region')
   }
 
-  const [first] = snapshots
+  // utc timestamps in one format sort by time, so the smallest is the oldest region's
+  const [oldestObservedAt] = snapshots.map(({ observedAt }) => observedAt).sort()
 
-  if (!first || snapshots.some((snapshot) => snapshot.generationId !== first.generationId)) {
-    throw new Error('full launch cohort must use one immutable Ranking generation')
-  }
+  return { byRegion, generationId: launchSourceGenerationId(snapshots), observedAt: oldestObservedAt }
+}
 
-  if (snapshots.some((snapshot) => snapshot.observedAt !== first.observedAt)) {
-    throw new Error('full launch cohort snapshots must share one observation timestamp')
-  }
+type RegionalGeneration = { region: LaunchCohortRegion; generationId: string }
 
-  return { byRegion, generationId: first.generationId, observedAt: first.observedAt }
+/**
+ * Names the launch source by the Ranking generations of all nine regions. Ranking publishes each region as its own
+ * generation, so the source is a new one as soon as any region publishes. Boards that share one generation keep that
+ * generation's id, so sources recorded before regions published apart still match.
+ */
+export function launchSourceGenerationId(regions: readonly RegionalGeneration[]): string {
+  const generationIds = new Set(regions.map(({ generationId }) => generationId))
+  const [onlyGenerationId] = generationIds
+
+  if (generationIds.size === 1 && onlyGenerationId) return onlyGenerationId
+
+  const generationIdsByRegion = new Map(regions.map(({ region, generationId }) => [region, generationId]))
+  const key = launchCohortRegions.map((region) => `${region}=${generationIdsByRegion.get(region) ?? ''}`).join('\n')
+  const hex = createHash('sha256').update(key).digest('hex')
+  // the version 5 and variant bits keep it a valid uuid for the column and the API contract
+  const variant = ((Number.parseInt(hex[16] ?? '0', 16) & 0x3) | 0x8).toString(16)
+
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }
 
 // the cell stays on record with its eligible count, but no members are kept for a cell that will not be collected

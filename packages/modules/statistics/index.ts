@@ -74,6 +74,7 @@ export {
   type LaunchCohortRegion,
   launchCohortBrackets,
   launchCohortRegions,
+  launchSourceGenerationId,
   type SelectedCohortMember,
   type SelectedFullLaunchCohort,
   type SelectedLaunchCohort,

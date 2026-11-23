@@ -5,6 +5,7 @@ import {
   LAUNCH_COHORT_MINIMUM_COVERED_CELLS,
   launchCohortBrackets,
   launchCohortRegions,
+  launchSourceGenerationId,
   selectFullLaunchCohort,
   selectLaunchCohort,
 } from '../cohort'
@@ -208,7 +209,37 @@ describe('full launch cohort selection', () => {
     expect(selected.capacityEnvelope.plannedRequests).toBe(0)
   })
 
-  test('rejects missing, duplicate, or cross-generation regional snapshots before selection', () => {
+  test('keys a source of one generation per region on all nine, observed when its oldest region was', () => {
+    const regionalGenerations = launchCohortRegions.map((region, index) => ({
+      ...regionSnapshot(region),
+      generationId: `10000000-0000-4000-8000-0000000001${String(index).padStart(2, '0')}`,
+      observedAt: `2026-08-10T00:${String(10 + index).padStart(2, '0')}:00.000Z`,
+    }))
+
+    const selected = selectFullLaunchCohort(regionalGenerations)
+
+    expect(selected.sourceGenerationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(selected.sourceObservedAt).toBe('2026-08-10T00:10:00.000Z')
+    expect(selected.cells).toHaveLength(launchCohortRegions.length * launchCohortBrackets.length)
+
+    // the same nine boards in another order are the same source, and a newer board of one region is a new one
+    expect(launchSourceGenerationId([...regionalGenerations].reverse())).toBe(selected.sourceGenerationId)
+
+    const newerEurope = regionalGenerations.map((snapshot) =>
+      snapshot.region === 'EU' ? { ...snapshot, generationId: '10000000-0000-4000-8000-000000000999' } : snapshot,
+    )
+
+    expect(launchSourceGenerationId(newerEurope)).not.toBe(selected.sourceGenerationId)
+  })
+
+  test('keeps the shared generation as the source of boards published together', () => {
+    const snapshots = launchCohortRegions.map((region) => regionSnapshot(region))
+
+    expect(launchSourceGenerationId(snapshots)).toBe('10000000-0000-4000-8000-000000000001')
+    expect(selectFullLaunchCohort(snapshots).sourceGenerationId).toBe('10000000-0000-4000-8000-000000000001')
+  })
+
+  test('rejects missing or duplicate regional snapshots before selection', () => {
     const snapshots = launchCohortRegions.map((region) => regionSnapshot(region))
 
     expect(() => selectFullLaunchCohort(snapshots.slice(1))).toThrow('exactly nine regional snapshots')
@@ -216,13 +247,6 @@ describe('full launch cohort selection', () => {
     expect(() => selectFullLaunchCohort([...snapshots.slice(0, -1), regionSnapshot('EU')])).toThrow(
       'exactly one snapshot per launch region',
     )
-
-    expect(() =>
-      selectFullLaunchCohort([
-        { ...snapshots[0], generationId: '10000000-0000-4000-8000-000000000002' },
-        ...snapshots.slice(1),
-      ]),
-    ).toThrow('one immutable Ranking generation')
 
     expect(() =>
       selectFullLaunchCohort([
