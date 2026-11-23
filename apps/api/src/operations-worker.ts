@@ -278,7 +278,8 @@ const requestAdmission = createPostgresRequestAdmission(databases.main, {
     brawltools: brawltoolsRequestLimit,
   },
   sourceWindowSeconds: { 'brawlhalla-v1': 5 * 60, brawltools: 60 },
-  sourceBackgroundHeadroom,
+  // brawltools has no on-demand callers, so its whole limit goes to the esports jobs
+  sourceBackgroundHeadroom: { 'brawlhalla-v0': sourceBackgroundHeadroom, 'brawlhalla-v1': sourceBackgroundHeadroom },
   minimumSourceSpacingMs: 150,
 })
 

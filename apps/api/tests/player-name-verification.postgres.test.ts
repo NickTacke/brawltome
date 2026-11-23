@@ -125,7 +125,7 @@ describe('Player name verification through durable operations', () => {
     const sourceAdmission = createPostgresRequestAdmission(database, {
       authenticatedIpLimit: 120,
       sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 180 },
-      sourceBackgroundHeadroom: 30,
+      sourceBackgroundHeadroom: { 'brawlhalla-v0': 30, 'brawlhalla-v1': 30 },
     })
 
     const readSourceUsage = async () => {
