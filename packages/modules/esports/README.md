@@ -21,8 +21,12 @@ The `esports` schema, described in `db/tables.ts`:
 ## Layout
 
 - `db/`: `tables.ts`
+- `domain/`: pure code, no I/O. `profile.ts` shapes the stored rows into the profile the player page shows,
+  `event-names.ts` and `result-labels.ts` give each result a short title and meta line, `trust.ts` decides whether a
+  Brawltools player really is the account it links to, and `legend-keys.ts` lists the legends the site has art for
 - `migrations/`: creates the schema and the tables
-- `tests/`: the table check
+- `source/`: the Brawltools client and the raw response types
+- `tests/`: the table check, the client and the domain code, with a few saved public Brawltools responses
 
 ## Public surface
 

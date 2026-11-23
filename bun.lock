@@ -257,6 +257,7 @@
       "name": "@brawltome/esports",
       "dependencies": {
         "@brawltome/foundation": "workspace:*",
+        "@brawltome/game-data": "workspace:*",
         "@brawltome/player": "workspace:*",
         "@brawltome/queue": "workspace:*",
         "drizzle-orm": "0.45.4",

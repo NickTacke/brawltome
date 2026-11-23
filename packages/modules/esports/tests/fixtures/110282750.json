@@ -1,0 +1,2723 @@
+{
+  "player": { "name": "Marckiem00" },
+  "pr1v1": {
+    "earnings": 69425,
+    "pr": { "top8": 20, "top32": 25, "gold": 9, "silver": 6, "bronze": 2, "powerRanking": 2, "region": "NA" }
+  },
+  "pr2v2": {
+    "earnings": 69425,
+    "pr": { "top8": 13, "top32": 18, "gold": 0, "silver": 0, "bronze": 1, "powerRanking": 5, "region": "NA" }
+  },
+  "placements1v1": [
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "1387cdba-8a88-475c-7286-08dec44a907c",
+        "tournamentName": "Brawlhalla World Championship Expo 2026 - 1v1",
+        "isOfficial": true,
+        "isOnline": false,
+        "startTime": 1794622872
+      }
+    },
+    {
+      "placement": 13,
+      "tournament": {
+        "id": "dde997af-1eba-4a1e-70f4-08defae46784",
+        "tournamentName": "DARK HARVEST - 1v1 ($2000)",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1792861277
+      }
+    },
+    {
+      "placement": 9,
+      "tournament": {
+        "id": "fcb7a286-3f0c-4f68-f9a5-08ded4cb1c05",
+        "tournamentName": "Autumn Championship - North America 2026 - 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1789920988
+      }
+    },
+    {
+      "placement": 2,
+      "tournament": {
+        "id": "d883b17c-e3b4-428b-6372-08debb341c9c",
+        "tournamentName": "Eternal Sports Crew Battle Championship 2026 - North America",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1788106501
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "43cff78e-ee82-452f-ba60-08deba39a012",
+        "tournamentName": "ASCENDED - 1v1 ($2000)",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1787418190
+      }
+    },
+    {
+      "placement": 9,
+      "tournament": {
+        "id": "2a4486e4-cfe5-4d25-6d16-08dea8b61f65",
+        "tournamentName": "Summer Championship - North America 2026 - 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1784477874
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "78f25d7c-6426-4ccd-6b77-08dea8b61f65",
+        "tournamentName": "Galaxy Cup: Ignite - NA 1v1",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1783882994
+      }
+    },
+    {
+      "placement": 2,
+      "tournament": {
+        "id": "b0245d28-3355-4b87-ffac-08de8b2c5870",
+        "tournamentName": "Midseason Championship 2026 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1781305890
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "7b2447ec-d668-4624-f97f-08de98a5b86b",
+        "tournamentName": "UNLEASHED - 1v1",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1780765302
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "aad17c99-0f27-40df-d80a-08de6a223b1e",
+        "tournamentName": "Spring Championship - North America 2026 - 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1777220264
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "d5e726e9-8b5a-4475-9e43-08de63f68bee",
+        "tournamentName": "Double Down - 1v1",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1776531697
+      }
+    },
+    {
+      "placement": 2,
+      "tournament": {
+        "id": "99fc2d8d-bcbf-40e7-6692-08de5834b346",
+        "tournamentName": "Eternal Sports Triples Championship 2026 - North America",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1774800934
+      }
+    },
+    {
+      "placement": 65,
+      "tournament": {
+        "id": "519301b3-9d04-4f85-6c6f-08de55f484ee",
+        "tournamentName": "FROSTBYTE #19 | NA 1v1",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1774206257
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "32e440e9-a328-4dea-6d15-08de30f37986",
+        "tournamentName": "Winter Championship - North America 2026 - 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1771780662
+      }
+    },
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "9aa0067d-b88d-4091-6f24-08de30f37986",
+        "tournamentName": "Uprising - 1v1",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1770483778
+      }
+    },
+    {
+      "placement": 4,
+      "tournament": {
+        "id": "fac48503-60f5-4d31-608e-08de24e0020e",
+        "tournamentName": "MW: Encore Clash 1s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1764529572
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "c979b223-7428-4534-97f9-08dd8e232c2e",
+        "tournamentName": "Brawlhalla World Championship Expo 2025 - 1v1",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1763781032
+      }
+    },
+    {
+      "placement": 9,
+      "tournament": {
+        "id": "51050603-af85-4c27-039e-08de14904573",
+        "tournamentName": "MW: Champion's Path 1v1s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1763320155
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "fa65bc7e-8df2-4e83-0cf9-08dde9f48256",
+        "tournamentName": "MW: Duskfall Rebellion 1v1s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1761501913
+      }
+    },
+    {
+      "placement": 2,
+      "tournament": {
+        "id": "4094a2c5-f457-4328-06c3-08de04da3a3e",
+        "tournamentName": "Brawlhalla - Autumn Royale 2025",
+        "isOfficial": true,
+        "isOnline": false,
+        "startTime": 1760278953
+      }
+    }
+  ],
+  "placements2v2": [
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "feb6a33a-1e15-442e-7287-08dec44a907c",
+        "tournamentName": "Brawlhalla World Championship Expo 2026 - 2v2",
+        "isOfficial": true,
+        "isOnline": false,
+        "startTime": 1794585907
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "c77ce436-2fec-494e-ba99-08dee988bd2e",
+        "tournamentName": "Galaxy Cup: Aurora - NA 2v2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1792955425
+      }
+    },
+    {
+      "placement": 4,
+      "tournament": {
+        "id": "774eaef2-3f11-4c7b-f9ab-08ded4cb1c05",
+        "tournamentName": "Autumn Championship - North America 2026 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1790525905
+      }
+    },
+    {
+      "placement": 4,
+      "tournament": {
+        "id": "73bd3994-82e9-4ee0-e84a-08dedfe49566",
+        "tournamentName": "APOCALYPSE - 2v2 ($2000)",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1789232566
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "632dcc5d-5697-4b12-6d1b-08dea8b61f65",
+        "tournamentName": "Summer Championship - North America 2026 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1785082612
+      }
+    },
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "021dfcfe-1a2c-4014-6b76-08dea8b61f65",
+        "tournamentName": "RESISTANCE - 2v2 ($2000)",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1783789304
+      }
+    },
+    {
+      "placement": 4,
+      "tournament": {
+        "id": "658feb16-e07e-403f-c375-08de8b2c6a40",
+        "tournamentName": "Midseason Championship 2026 – 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1781278644
+      }
+    },
+    {
+      "placement": 2,
+      "tournament": {
+        "id": "1a8c59b4-60a9-4f41-03f2-08de98495ef6",
+        "tournamentName": "FROSTBYTE #22 | NA 2v2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1780855460
+      }
+    },
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "47b84942-d9ab-49d4-e0c6-08de82077ea6",
+        "tournamentName": "SHOWTIME - 2V2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1778950905
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "cdaf1179-2adf-4c32-d80d-08de6a223b1e",
+        "tournamentName": "Spring Championship - North America 2026 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1777824903
+      }
+    },
+    {
+      "placement": 4,
+      "tournament": {
+        "id": "5a08b1b1-34c0-4b87-fc13-08de57608d81",
+        "tournamentName": "Vanguard - 2v2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1773507730
+      }
+    },
+    {
+      "placement": 13,
+      "tournament": {
+        "id": "213d2229-ac9f-4432-6d19-08de30f37986",
+        "tournamentName": "Winter Championship - North America 2026 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1772385350
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "c6f474b8-399f-4f7a-6d8e-08de30f37986",
+        "tournamentName": "FROSTBYTE #18: NA 2v2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1770581556
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "f100559f-8b06-41c8-6440-08de1bded654",
+        "tournamentName": "First Strike - 2v2",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1769274224
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "264b6be6-50fc-4503-608a-08de24e0020e",
+        "tournamentName": "MW: Encore Clash 2s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1764443063
+      }
+    },
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "26ecdc35-9d03-4bb6-97fa-08dd8e232c2e",
+        "tournamentName": "Brawlhalla World Championship Expo 2025 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1763742203
+      }
+    },
+    {
+      "placement": 1,
+      "tournament": {
+        "id": "e29e85b2-21aa-41d2-37b4-08de21115a66",
+        "tournamentName": "MW: Champion's Path 2v2s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1763233627
+      }
+    },
+    {
+      "placement": 3,
+      "tournament": {
+        "id": "c2a01f43-ffb1-42d0-0cfa-08dde9f48256",
+        "tournamentName": "MW: Duskfall Rebellion 2v2s",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1761417554
+      }
+    },
+    {
+      "placement": 7,
+      "tournament": {
+        "id": "400340f9-1426-468a-09c8-08dd66f60e0c",
+        "tournamentName": "Autumn Championship - North America 2025 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1758471366
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "85a6fb92-3aa2-4ee6-43d8-08dd69fad61e",
+        "tournamentName": "Summer Championship - North America 2025 - 2v2",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1753632927
+      }
+    }
+  ],
+  "matches": {
+    "1387cdba-8a88-475c-7286-08dec44a907c": [
+      {
+        "matchId": "c7588450-d731-4620-bc1a-08df3e4bce92",
+        "scores": [1, 3],
+        "legends": [["ZARIEL", "DIANA", "ZARIEL", "ZARIEL"], ["PETRA", "PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }],
+        "startTime": 1794777047
+      },
+      {
+        "matchId": "4c759efa-de8b-4146-0c3e-08df42653305",
+        "scores": [3, 0],
+        "legends": [["ZARIEL", "ZARIEL", "ZARIEL"], ["TEZCA", "PETRA", "PRIYA"]],
+        "opponent": [{ "brawlhallaId": 32113409, "name": "Jakeyy" }],
+        "startTime": 1794702031
+      },
+      {
+        "matchId": "197c4189-5ba2-478d-0c08-08df42653305",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 78140092, "name": "V3M_T4NQUIL0" }],
+        "startTime": 1794700413
+      },
+      {
+        "matchId": "eb0bd08b-7011-44f5-a76d-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 6347429, "name": "LGN | Hybrid" }],
+        "startTime": 1794698412
+      },
+      {
+        "matchId": "b21d3485-36c0-48ee-0bc6-08df42653305",
+        "scores": [2, 3],
+        "legends": [["MORDEX", "MIRAGE", "MIRAGE", "MIRAGE", "MIRAGE"], ["ADA", "ADA", "ADA", "ADA", "ADA"]],
+        "opponent": [{ "brawlhallaId": 8851646, "name": "whoiskyna" }],
+        "startTime": 1794697185
+      },
+      {
+        "matchId": "9dc64716-73b7-4a67-a44d-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 1766641, "name": "Blaze" }],
+        "startTime": 1794682792
+      },
+      {
+        "matchId": "910e7270-9116-4e85-a163-08df3e4bce92",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "VS MATR1X" }],
+        "startTime": 1794677845
+      },
+      {
+        "matchId": "e4b26e45-7073-43ab-a01c-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "KonchBh" }],
+        "startTime": 1794670939
+      },
+      {
+        "matchId": "262014da-1480-4422-9fda-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "zetaii" }],
+        "startTime": 1794670271
+      }
+    ],
+    "dde997af-1eba-4a1e-70f4-08defae46784": [
+      {
+        "matchId": "74bc0872-f5d9-4553-dd96-08df31e4accc",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 110378722, "name": "Raid-_-" }],
+        "startTime": 1792868232
+      },
+      {
+        "matchId": "12e4e131-4caf-4c6e-4d01-08df2868d48c",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "bop_._" }],
+        "startTime": 1792867440
+      },
+      {
+        "matchId": "bc0ebc31-0aeb-49f8-dbc4-08df31e4accc",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "MrClench" }],
+        "startTime": 1792864271
+      },
+      {
+        "matchId": "30f7ecc5-4780-4098-4b72-08df2868d48c",
+        "scores": [0, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": ".schlungus" }],
+        "startTime": 1792863964
+      },
+      {
+        "matchId": "d7f99710-e9b9-4d43-dae2-08df31e4accc",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Genji_tokens" }],
+        "startTime": 1792863066
+      },
+      {
+        "matchId": "e6dc5bd3-5e60-462e-4a6f-08df2868d48c",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 9198510, "name": "animefan1266" }],
+        "startTime": 1792862177
+      }
+    ],
+    "fcb7a286-3f0c-4f68-f9a5-08ded4cb1c05": [
+      {
+        "matchId": "e32e8ef3-7c82-400b-0965-08df1591daff",
+        "scores": [2, 3],
+        "legends": [["DIANA", "KOJI", "DIANA", "DIANA", "DIANA"], ["SIDRA", "SIDRA", "SIDRA", "SIDRA", "SIDRA"]],
+        "opponent": [{ "brawlhallaId": 74699177, "name": "Dragon!" }],
+        "startTime": null
+      },
+      {
+        "matchId": "a39ff3e2-9003-47ff-03dc-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 29540515, "name": "clemster" }],
+        "startTime": null
+      },
+      {
+        "matchId": "9560e3f9-3ed9-4900-0895-08df1591daff",
+        "scores": [1, 3],
+        "legends": [["MIRAGE", "MORDEX", "MORDEX", "MORDEX"], ["PETRA", "PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 33710511, "name": "IRIS | Shade" }],
+        "startTime": null
+      },
+      {
+        "matchId": "6caa730e-4854-4f11-0082-08df1591daff",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "fr4n." }],
+        "startTime": null
+      },
+      {
+        "matchId": "21a87857-c63a-49f6-00f0-08df1591daff",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Credentials" }],
+        "startTime": null
+      },
+      {
+        "matchId": "20b295ec-9b19-43c9-014a-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "FL3EZ" }],
+        "startTime": null
+      },
+      {
+        "matchId": "07edabb7-48a5-49fa-0326-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7928381, "name": "futurebubbles366" }],
+        "startTime": null
+      }
+    ],
+    "d883b17c-e3b4-428b-6372-08debb341c9c": [],
+    "43cff78e-ee82-452f-ba60-08deba39a012": [
+      {
+        "matchId": "38e7fb2c-3ec6-4dc0-8a70-08defb6540d8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1787439274
+      },
+      {
+        "matchId": "00ac542f-2bfb-4e69-7128-08df00680037",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "IRIS | fi0h" }],
+        "startTime": 1787436374
+      },
+      {
+        "matchId": "25c152fd-a397-42e8-86aa-08defb6540d8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1787429727
+      },
+      {
+        "matchId": "64dea111-1e82-4068-830b-08defb6540d8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1787422436
+      },
+      {
+        "matchId": "83944683-270d-4be8-828a-08defb6540d8",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 6347429, "name": "LGN | Hybrid" }],
+        "startTime": 1787421638
+      },
+      {
+        "matchId": "fe49ba89-8a48-4cbb-6a2a-08df00680037",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Pillow!" }],
+        "startTime": 1787421193
+      },
+      {
+        "matchId": "a9df54ca-d70c-455c-6970-08df00680037",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "NIT | Duggs" }],
+        "startTime": 1787420181
+      },
+      {
+        "matchId": "3e0b17a6-aab5-47f7-8114-08defb6540d8",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "plasmic" }],
+        "startTime": 1787419398
+      }
+    ],
+    "2a4486e4-cfe5-4d25-6d16-08dea8b61f65": [
+      {
+        "matchId": "e2cb94b1-9e0a-4d4f-1437-08dee564b696",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 74699177, "name": "Dragon!" }],
+        "startTime": 1784498447
+      },
+      {
+        "matchId": "2dd28afc-c890-43f8-1369-08dee564b696",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }],
+        "startTime": 1784489881
+      },
+      {
+        "matchId": "3f0842d8-01a9-4aa0-1324-08dee564b696",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 2571884, "name": "wubz" }],
+        "startTime": 1784488420
+      },
+      {
+        "matchId": "b058e415-0d67-46d9-11f3-08dee564b696",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "IRIS | fi0h" }],
+        "startTime": 1784482781
+      },
+      {
+        "matchId": "54cafec8-af04-41e4-1175-08dee564b696",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 105379605, "name": "LGN | HaLo" }],
+        "startTime": 1784481340
+      },
+      {
+        "matchId": "03292d28-e61c-45de-1069-08dee564b696",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "JaeBlade" }],
+        "startTime": 1784479461
+      },
+      {
+        "matchId": "07b9b8ea-f75c-4874-1004-08dee564b696",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "SiB_" }],
+        "startTime": 1784478958
+      },
+      {
+        "matchId": "bb2028e4-4038-4579-0fb3-08dee564b696",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "wJayden" }],
+        "startTime": 1784478563
+      }
+    ],
+    "78f25d7c-6426-4ccd-6b77-08dea8b61f65": [
+      {
+        "matchId": "f800f632-d859-4d0b-fdfa-08dedfe47bf8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1783908164
+      },
+      {
+        "matchId": "052623cc-0665-463c-fdb1-08dedfe47bf8",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 42428674, "name": "IRIS | Guichabou" }],
+        "startTime": 1783904375
+      },
+      {
+        "matchId": "6b3a69ce-67c0-4575-fce7-08dedfe47bf8",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1783894231
+      },
+      {
+        "matchId": "c2f22dac-e779-4afa-fc52-08dedfe47bf8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }],
+        "startTime": 1783889037
+      },
+      {
+        "matchId": "17fe54c5-27da-4f23-fbdd-08dedfe47bf8",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 105379605, "name": "LGN | HaLo" }],
+        "startTime": 1783886495
+      },
+      {
+        "matchId": "8f3e1396-770d-48b6-fbb2-08dedfe47bf8",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Nyixian." }],
+        "startTime": 1783885924
+      },
+      {
+        "matchId": "7dd3bfbe-9593-4da1-fb79-08dedfe47bf8",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": ".schlungus" }],
+        "startTime": 1783885223
+      },
+      {
+        "matchId": "350dcceb-7cae-4e26-faa7-08dedfe47bf8",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "al0ap3x" }],
+        "startTime": 1783883546
+      }
+    ],
+    "b0245d28-3355-4b87-ffac-08de8b2c5870": [
+      {
+        "matchId": "eae63248-76a2-47d8-1457-08dec962fdcf",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 66872070, "name": "Anon Alex" }],
+        "startTime": null
+      },
+      {
+        "matchId": "e9c9f938-3456-4080-b6f0-08dec9ca93c6",
+        "scores": [3, 2],
+        "legends": [
+          ["MUNIN", "ZARIEL", "ZARIEL", "ZARIEL", "ZARIEL"],
+          ["CASSIDY", "CASSIDY", "CASSIDY", "TEROS", "TEZCA"]
+        ],
+        "opponent": [{ "brawlhallaId": 31675679, "name": "Mounir" }],
+        "startTime": null
+      },
+      {
+        "matchId": "9e8db819-5d93-460e-1520-08dec962fdcf",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["CASSIDY", "CASSIDY", "CASSIDY", "CASSIDY"]],
+        "opponent": [{ "brawlhallaId": 2277541, "name": "SiB | Wess" }],
+        "startTime": null
+      },
+      {
+        "matchId": "9cb58195-b3aa-401a-b7b2-08dec9ca93c6",
+        "scores": [3, 0],
+        "legends": [["ZARIEL", "ZARIEL", "ZARIEL"], ["CASPIAN", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }],
+        "startTime": null
+      },
+      {
+        "matchId": "9bebd8cc-33b1-44bb-5bc3-08dec44a925f",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      },
+      {
+        "matchId": "8fed83f3-e820-4362-b793-08dec9ca93c6",
+        "scores": [3, 1],
+        "legends": [["ZARIEL", "ZARIEL", "ZARIEL", "ZARIEL"], ["ADA", "ADA", "ADA", "ADA"]],
+        "opponent": [{ "brawlhallaId": 9144432, "name": "loreszz" }],
+        "startTime": null
+      },
+      {
+        "matchId": "70c72557-b168-4673-5b39-08dec44a925f",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Xenu_" }],
+        "startTime": null
+      },
+      {
+        "matchId": "6fbba7f2-d14c-4783-b7d1-08dec9ca93c6",
+        "scores": [1, 3],
+        "legends": [["MORDEX", "MIRAGE", "MORDEX", "MORDEX"], ["DIANA", "DIANA", "DIANA", "DIANA"]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": null
+      },
+      {
+        "matchId": "61a28391-73ba-4369-b5b4-08dec9ca93c6",
+        "scores": [1, 3],
+        "legends": [["MORDEX", "MIRAGE", "MORDEX", "MORDEX"], ["PETRA", "PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }],
+        "startTime": null
+      }
+    ],
+    "7b2447ec-d668-4624-f97f-08de98a5b86b": [
+      {
+        "matchId": "fe52f124-04d6-4d4e-f60e-08dec3e18ec0",
+        "scores": [1, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "sg | Inspiration" }],
+        "startTime": 1780775653
+      },
+      {
+        "matchId": "fac79959-4a18-457a-0e59-08dec3e2c8f3",
+        "scores": [0, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 66872070, "name": "Anon Alex" }],
+        "startTime": 1780773781
+      },
+      {
+        "matchId": "4d2a66b1-db5e-44d6-0c8c-08dec3e2c8f3",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1780770308
+      },
+      {
+        "matchId": "309aca85-bb5e-4975-0a94-08dec3e2c8f3",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7928381, "name": "futurebubbles366" }],
+        "startTime": 1780767926
+      },
+      {
+        "matchId": "9c22fc69-c260-4c91-f0d7-08dec3e18ec0",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Cent!" }],
+        "startTime": 1780767013
+      },
+      {
+        "matchId": "1fe1e56b-d1bd-4452-f024-08dec3e18ec0",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "ihearteveryone" }],
+        "startTime": 1780765689
+      }
+    ],
+    "aad17c99-0f27-40df-d80a-08de6a223b1e": [
+      {
+        "matchId": "191b21d7-a7a9-45d0-23e1-08dea3496e90",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["VIVI", "VIVI", "ZARIEL"]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1777251932
+      },
+      {
+        "matchId": "3e675b52-b2e6-4492-2303-08dea3496e90",
+        "scores": [3, 2],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MIRAGE", "MORDEX"], ["VIVI", "VIVI", "VIVI", "VIVI", "VIVI"]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1777246779
+      },
+      {
+        "matchId": "60036b45-3575-47b6-2173-08dea3496e90",
+        "scores": [3, 2],
+        "legends": [
+          ["MORDEX", "MORDEX", "MORDEX", "MORDEX", "MORDEX"],
+          ["YUMIKO", "YUMIKO", "YUMIKO", "YUMIKO", "YUMIKO"]
+        ],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1777238184
+      },
+      {
+        "matchId": "4936b769-e3a9-45d1-1ffc-08dea3496e90",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["JAEYUN", "JAEYUN", "JAEYUN", "JAEYUN"]],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1777233470
+      },
+      {
+        "matchId": "60e7183e-e608-4521-1b66-08dea3496e90",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["ASURI", "TEROS", "TEROS"]],
+        "opponent": [{ "brawlhallaId": 96730977, "name": "SweatyMeat" }],
+        "startTime": 1777230467
+      },
+      {
+        "matchId": "45e67e5f-091c-434b-0fea-08dea3496e90",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7928381, "name": "futurebubbles366" }],
+        "startTime": 1777223307
+      },
+      {
+        "matchId": "efc3c5dc-5e2f-4d04-0e7e-08dea3496e90",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "vsins" }],
+        "startTime": 1777222670
+      },
+      {
+        "matchId": "2be3f1a6-ae0c-4b6c-0d0d-08dea3496e90",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Hades.exe!" }],
+        "startTime": 1777221928
+      },
+      {
+        "matchId": "632b9110-5cc2-4fa3-0b38-08dea3496e90",
+        "scores": [2, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "zuxedd" }],
+        "startTime": 1777220998
+      }
+    ],
+    "d5e726e9-8b5a-4475-9e43-08de63f68bee": [
+      {
+        "matchId": "8bc1b026-6fa8-45ff-4819-08de9d60801e",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1776552939
+      },
+      {
+        "matchId": "bbf4c370-a179-4875-47b7-08de9d60801e",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1776549819
+      },
+      {
+        "matchId": "1558a1b0-aa2e-4a05-e7d0-08de9d61bfe2",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1776542662
+      },
+      {
+        "matchId": "038e07c1-dc9a-44f7-4558-08de9d60801e",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1776536952
+      },
+      {
+        "matchId": "0e5b08b6-82c3-40a4-e56d-08de9d61bfe2",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "NIT | Dragø" }],
+        "startTime": 1776535934
+      },
+      {
+        "matchId": "6bdcad03-c829-419b-4460-08de9d60801e",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "resuscitate" }],
+        "startTime": 1776535350
+      },
+      {
+        "matchId": "b0669524-cdf6-479a-e3c0-08de9d61bfe2",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "AfrikanskaBuisnessMannen" }],
+        "startTime": 1776533891
+      },
+      {
+        "matchId": "f7f4771c-e600-43c9-41e6-08de9d60801e",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "hygaoo08" }],
+        "startTime": 1776533166
+      }
+    ],
+    "99fc2d8d-bcbf-40e7-6692-08de5834b346": [
+      {
+        "matchId": "163c4281-1209-44cf-0cdf-08de8d48ec11",
+        "scores": [3, 2],
+        "legends": [
+          ["ONYX", "ONYX", "ONYX", "ONYX", "ONYX"],
+          ["QUEEN_NAI", "QUEEN_NAI", "QUEEN_NAI", "QUEEN_NAI", "QUEEN_NAI"]
+        ],
+        "opponent": [{ "brawlhallaId": 42428674, "name": "IRIS | Guichabou" }],
+        "startTime": 1774815825
+      },
+      {
+        "matchId": "04c61f7f-d5d7-41b1-4519-08de8d7aa242",
+        "scores": [1, 3],
+        "legends": [["ONYX", "ONYX", "XULL", "ONYX"], ["GNASH", "GNASH", "GNASH", "GNASH"]],
+        "opponent": [{ "brawlhallaId": 4690119, "name": "experiencedoa" }],
+        "startTime": 1774810577
+      },
+      {
+        "matchId": "ff47c5af-c696-4b25-44d5-08de8d7aa242",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Asesino." }],
+        "startTime": 1774807188
+      },
+      {
+        "matchId": "9cd3165f-497a-400d-44b1-08de8d7aa242",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "SiB | Snipes" }],
+        "startTime": 1774805092
+      }
+    ],
+    "519301b3-9d04-4f85-6c6f-08de55f484ee": [
+      {
+        "matchId": "95c884e0-aa0f-4b62-ece5-08de88447603",
+        "scores": [0, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "exevist" }],
+        "startTime": 1774210075
+      },
+      {
+        "matchId": "72c746cc-47a5-4a63-1989-08de88446955",
+        "scores": [1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "yymir-" }],
+        "startTime": 1774209541
+      },
+      {
+        "matchId": "21d11c4d-5b52-4cc0-ecc9-08de88447603",
+        "scores": [1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Weed_nose" }],
+        "startTime": 1774208969
+      },
+      {
+        "matchId": "9ac2beaf-7bfb-4b92-eb8e-08de88447603",
+        "scores": [0, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "ِ" }],
+        "startTime": 1774207550
+      },
+      {
+        "matchId": "b25d057d-daab-45b4-eb82-08de88447603",
+        "scores": [1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "MonsterDesk" }],
+        "startTime": 1774207020
+      }
+    ],
+    "32e440e9-a328-4dea-6d15-08de30f37986": [
+      {
+        "matchId": "ba22aed2-c2a2-464c-03ca-08de6e04e6ff",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["YUMIKO", "YUMIKO", "YUMIKO", "YUMIKO"]],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1771809665
+      },
+      {
+        "matchId": "21b39145-d9e1-4fca-03b8-08de6e04e6ff",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["VIVI", "VIVI", "VIVI", "VIVI"]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1771805381
+      },
+      {
+        "matchId": "b12eae38-9cb4-443b-039a-08de6e04e6ff",
+        "scores": [3, 2],
+        "legends": [
+          ["MORDEX", "MORDEX", "MORDEX", "MORDEX", "MORDEX"],
+          ["YUMIKO", "YUMIKO", "YUMIKO", "YUMIKO", "YUMIKO"]
+        ],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1771798278
+      },
+      {
+        "matchId": "c6263718-0a1b-4f63-0363-08de6e04e6ff",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["RAYMAN", "RAYMAN", "RAYMAN", "RAYMAN"]],
+        "opponent": [{ "brawlhallaId": 24116692, "name": "Bunny meow" }],
+        "startTime": 1771792756
+      },
+      {
+        "matchId": "72944506-c27f-40e0-01c5-08de6e04e6ff",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 96730977, "name": "SweatyMeat" }],
+        "startTime": 1771785068
+      },
+      {
+        "matchId": "e7fb0388-bd3e-4bf9-016b-08de6e04e6ff",
+        "scores": [3, 0],
+        "legends": [["", ""], ["TEROS", "DUSK"]],
+        "opponent": [{ "brawlhallaId": null, "name": "jeff..." }],
+        "startTime": 1771784145
+      },
+      {
+        "matchId": "0a232d58-7096-48aa-00ce-08de6e04e6ff",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "MrClench" }],
+        "startTime": 1771783525
+      },
+      {
+        "matchId": "b8f12d0a-eae6-4c19-fff2-08de6e04e6fe",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "CUTE | akarisgoodboy:)" }],
+        "startTime": 1771782639
+      },
+      {
+        "matchId": "4986efdf-1a13-4737-ff76-08de6e04e6fe",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "m0staz_" }],
+        "startTime": 1771782297
+      }
+    ],
+    "9aa0067d-b88d-4091-6f24-08de30f37986": [
+      {
+        "matchId": "d5cb3832-1cda-4b73-4717-08de659626a7",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33710511, "name": "IRIS | Shade" }],
+        "startTime": 1770493662
+      },
+      {
+        "matchId": "9e3e4cc1-33bc-45d1-46ca-08de659626a7",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 9198510, "name": "animefan1266" }],
+        "startTime": 1770492447
+      },
+      {
+        "matchId": "fc20da27-9adf-4b32-4577-08de659626a7",
+        "scores": [1, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 24116692, "name": "Bunny meow" }],
+        "startTime": 1770487645
+      },
+      {
+        "matchId": "a4403ad5-ba0a-48bb-4477-08de659626a7",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "kamaal~" }],
+        "startTime": 1770485706
+      },
+      {
+        "matchId": "38f4f70d-b7b9-4359-43f4-08de659626a7",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "NIT | Fadezexclusive" }],
+        "startTime": 1770484871
+      },
+      {
+        "matchId": "89441c57-252f-4d8d-43bf-08de659626a7",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "beauhalla" }],
+        "startTime": 1770484461
+      }
+    ],
+    "fac48503-60f5-4d31-608e-08de24e0020e": [
+      {
+        "matchId": "058a8888-83c4-4be7-b92a-08de2d85d274",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1764553384
+      },
+      {
+        "matchId": "38258169-7fd1-4238-b8a2-08de2d85d274",
+        "scores": [1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1764548671
+      },
+      {
+        "matchId": "30c1ee06-5f0f-459e-b885-08de2d85d274",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 42428674, "name": "IRIS | Guichabou" }],
+        "startTime": 1764547893
+      },
+      {
+        "matchId": "89fcf51a-6e06-4c3d-b78f-08de2d85d274",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "JaeBlade" }],
+        "startTime": 1764540249
+      },
+      {
+        "matchId": "0209a8c4-dc7e-4922-b753-08de2d85d274",
+        "scores": [1, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 74699177, "name": "Dragon!" }],
+        "startTime": 1764538652
+      },
+      {
+        "matchId": "fab7d9dd-4683-49c8-b626-08de2d85d274",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "swagathon5138" }],
+        "startTime": 1764532985
+      },
+      {
+        "matchId": "092f1f16-fc12-4c53-b5dd-08de2d85d274",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Poisonta" }],
+        "startTime": 1764532204
+      },
+      {
+        "matchId": "03e7aaec-7900-4611-b579-08de2d85d274",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "_holographic." }],
+        "startTime": 1764531364
+      },
+      {
+        "matchId": "e712d540-fe05-40d2-b4d4-08de2d85d274",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "davidespi.19_68404" }],
+        "startTime": 1764530040
+      }
+    ],
+    "c979b223-7428-4534-97f9-08dd8e232c2e": [
+      {
+        "matchId": "d979e567-501f-429b-a8bc-08de2772bb2e",
+        "scores": [3, 2],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX", "MIRAGE"], ["VIVI", "VIVI", "VIVI", "VIVI", "VIVI"]],
+        "opponent": [{ "brawlhallaId": 95906862, "name": "BBBalloonBoy" }],
+        "startTime": 1763942593
+      },
+      {
+        "matchId": "9709a3ee-005d-4445-a88a-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR"]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": 1763938468
+      },
+      {
+        "matchId": "d2259dd9-59fb-45bf-a831-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 78140092, "name": "V3M_T4NQUIL0" }],
+        "startTime": 1763931833
+      },
+      {
+        "matchId": "f16902d5-f5c3-4308-a205-08de2772bb2e",
+        "scores": [3, 1],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["PRIYA", "PRIYA", "PRIYA", "PRIYA"]],
+        "opponent": [{ "brawlhallaId": 5989758, "name": "yüz" }],
+        "startTime": 1763859390
+      },
+      {
+        "matchId": "3208af4e-f99c-4572-a1e6-08de2772bb2e",
+        "scores": [3, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 8851646, "name": "whoiskyna" }],
+        "startTime": 1763857153
+      },
+      {
+        "matchId": "3c6bd6dc-7aa1-4238-9e75-08de2772bb2e",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 738230, "name": "gdsandstorm" }],
+        "startTime": 1763836452
+      },
+      {
+        "matchId": "d8df19c8-8b93-4f2b-9c83-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "LGN | Athena" }],
+        "startTime": 1763833918
+      },
+      {
+        "matchId": "483a1ec3-7271-487f-9ab9-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "_Kyaris" }],
+        "startTime": 1763827835
+      },
+      {
+        "matchId": "2b66f90c-0a35-4336-99d1-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "kiizzyyx" }],
+        "startTime": 1763826049
+      }
+    ],
+    "51050603-af85-4c27-039e-08de14904573": [
+      {
+        "matchId": "dd17a18e-51a3-4f14-7e74-08de24e04294",
+        "scores": [1, 3],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "DUSK"], ["RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR"]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": 1763334159
+      },
+      {
+        "matchId": "006fe77b-1ee8-4ed6-7e51-08de24e04294",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }],
+        "startTime": 1763330257
+      },
+      {
+        "matchId": "204ed312-5627-4f8d-7e4d-08de24e04294",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Hades.exe!" }],
+        "startTime": 1763329471
+      },
+      {
+        "matchId": "021ef066-8af9-412d-7e33-08de24e04294",
+        "scores": [2, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 5832489, "name": "bestjava" }],
+        "startTime": 1763327509
+      },
+      {
+        "matchId": "fdb8ff6a-9089-4263-7d5e-08de24e04294",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7249123, "name": "mogul_" }],
+        "startTime": 1763322168
+      },
+      {
+        "matchId": "887a941a-20d5-4c3a-7d25-08de24e04294",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "chishiya." }],
+        "startTime": 1763321583
+      },
+      {
+        "matchId": "1c8852ac-cf77-456a-7cdc-08de24e04294",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "hollywoodbh" }],
+        "startTime": 1763321122
+      }
+    ],
+    "fa65bc7e-8df2-4e83-0cf9-08dde9f48256": [
+      {
+        "matchId": "568ce78a-235d-4a2b-5a14-08de203e55dd",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1761527626
+      },
+      {
+        "matchId": "fbc54b7c-c291-4620-9615-08de149031b6",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1761524781
+      },
+      {
+        "matchId": "6bc6d0f7-24ef-403d-95f9-08de149031b6",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1761517385
+      },
+      {
+        "matchId": "87118b97-5ff5-430d-95b2-08de149031b6",
+        "scores": [3, 1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 24116692, "name": "Bunny meow" }],
+        "startTime": 1761510593
+      },
+      {
+        "matchId": "29ef7648-e9cd-4e35-9535-08de149031b6",
+        "scores": [3, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 9081441, "name": "NIT | Seikuz" }],
+        "startTime": 1761506410
+      },
+      {
+        "matchId": "9f7cb1fd-96fa-4ae9-94ea-08de149031b6",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7249123, "name": "mogul_" }],
+        "startTime": 1761505176
+      },
+      {
+        "matchId": "695b3da6-e4ce-4d74-949c-08de149031b6",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "wrongcashew" }],
+        "startTime": 1761504317
+      },
+      {
+        "matchId": "11c1686b-75ca-41e8-93e7-08de149031b6",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Pink x Yukki" }],
+        "startTime": 1761502712
+      }
+    ],
+    "4094a2c5-f457-4328-06c3-08de04da3a3e": [
+      {
+        "matchId": "cc87a278-8e42-4ed1-2fba-08de066a9e7a",
+        "scores": [1, 3],
+        "legends": [["MIRAGE", "MORDEX", "MORDEX", "MORDEX"], ["PETRA", "PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }],
+        "startTime": null
+      },
+      {
+        "matchId": "c3762a4b-caa9-4d7f-2f7d-08de066a9e7a",
+        "scores": [3, 2],
+        "legends": [["MORDEX", "MORDEX", "MORDEX", "MORDEX", "MORDEX"], ["PRIYA", "PRIYA", "PRIYA", "PRIYA", "PRIYA"]],
+        "opponent": [{ "brawlhallaId": 5989758, "name": "yüz" }],
+        "startTime": null
+      },
+      {
+        "matchId": "7ab2cde9-0b2c-4505-34e4-08de066a9e7a",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["PRIYA", "PRIYA", "PRIYA"]],
+        "opponent": [{ "brawlhallaId": 5989758, "name": "yüz" }],
+        "startTime": null
+      },
+      {
+        "matchId": "699d3450-4344-4840-33f2-08de066a9e7a",
+        "scores": [1, 3],
+        "legends": [["MIRAGE", "MIRAGE", "MUNIN", "MIRAGE"], ["RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR"]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      },
+      {
+        "matchId": "3cd3d912-a22a-489a-309a-08de066a9e7a",
+        "scores": [3, 2],
+        "legends": [["MIRAGE", "MORDEX", "MIRAGE", "MIRAGE", "MIRAGE"], ["TEZCA", "TEZCA", "TEZCA", "TEZCA", "TEZCA"]],
+        "opponent": [{ "brawlhallaId": 2277541, "name": "SiB | Wess" }],
+        "startTime": null
+      },
+      {
+        "matchId": "06a2b6d5-e82a-4ed9-356f-08de066a9e7a",
+        "scores": [1, 3],
+        "legends": [["ZARIEL", "MORDEX", "MORDEX", "MORDEX"], ["PETRA", "PETRA", "PETRA", "PETRA"]],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }],
+        "startTime": null
+      },
+      {
+        "matchId": "047e58ce-fa8a-49cf-3526-08de066a9e7a",
+        "scores": [3, 0],
+        "legends": [["MORDEX", "MORDEX", "MORDEX"], ["RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR"]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      },
+      {
+        "matchId": "02bcb398-6f31-4957-2f2f-08de066a9e7a",
+        "scores": [3, 2],
+        "legends": [["MORDEX", "MIRAGE", "MIRAGE", "MIRAGE", "MORDEX"], ["DUSK", "MORDEX", "DUSK", "DUSK", "DUSK"]],
+        "opponent": [{ "brawlhallaId": 5156845, "name": "Zivai" }],
+        "startTime": null
+      },
+      {
+        "matchId": "0160f2e7-cf04-4e09-2f69-08de066a9e7a",
+        "scores": [0, 3],
+        "legends": [["MIRAGE", "MUNIN", "MORDEX"], ["RED_RAPTOR", "RED_RAPTOR", "RED_RAPTOR"]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      }
+    ],
+    "feb6a33a-1e15-442e-7287-08dec44a907c": [
+      {
+        "matchId": "6c997a38-d4af-4a0f-9463-08df3e4bce92",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 73962727, "name": "MAKbh" }, { "brawlhallaId": 75425365, "name": "M4nji" }],
+        "startTime": 1794619013
+      },
+      {
+        "matchId": "b258f6d2-e26f-40aa-937f-08df3e4bce92",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }, { "brawlhallaId": null, "name": "IRIS | Shira" }],
+        "startTime": 1794612393
+      },
+      {
+        "matchId": "3bd0449c-3aeb-461a-934e-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99290097, "name": "hideawaybh" }, { "brawlhallaId": 5827766, "name": "Zen |" }],
+        "startTime": 1794611186
+      },
+      {
+        "matchId": "634c8833-7b77-4195-92c5-08df3e4bce92",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 1766641, "name": "Blaze" }, { "brawlhallaId": 2768493, "name": "acno?" }],
+        "startTime": 1794607821
+      },
+      {
+        "matchId": "0ef8439d-04b2-464c-8f83-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "ACID | Jenga199" },
+          { "brawlhallaId": 42606327, "name": "WheezePlease" }
+        ],
+        "startTime": 1794593613
+      },
+      {
+        "matchId": "7c492691-bc54-46d7-8e7b-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 53055138, "name": "Diadrawz" },
+          { "brawlhallaId": null, "name": "SillyBilly69" }
+        ],
+        "startTime": 1794590195
+      },
+      {
+        "matchId": "528fc64e-e44d-4d0c-8e36-08df3e4bce92",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "kryto" }, { "brawlhallaId": null, "name": "kuvy_bh" }],
+        "startTime": 1794589459
+      }
+    ],
+    "c77ce436-2fec-494e-ba99-08dee988bd2e": [
+      {
+        "matchId": "70bb96d5-727b-4594-65db-08df2868d48c",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 104002853, "name": "Moni-" },
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" }
+        ],
+        "startTime": 1792973472
+      },
+      {
+        "matchId": "33527565-4590-4119-656e-08df2868d48c",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95502500, "name": "IRIS | J44L" },
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" }
+        ],
+        "startTime": 1792970629
+      },
+      {
+        "matchId": "d177c77f-8408-4896-647c-08df2868d48c",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" },
+          { "brawlhallaId": 59129149, "name": "seabass24" }
+        ],
+        "startTime": 1792964379
+      },
+      {
+        "matchId": "80fff45b-0a65-47f3-6453-08df2868d48c",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 74699177, "name": "Dragon!" }, { "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1792963517
+      },
+      {
+        "matchId": "dcd214d9-ed61-4270-637a-08df2868d48c",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "dyldyl6694" },
+          { "brawlhallaId": null, "name": "LightScythe420" }
+        ],
+        "startTime": 1792959253
+      },
+      {
+        "matchId": "5645709c-5179-4189-630a-08df2868d48c",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Legion | Spider" }, { "brawlhallaId": null, "name": "siepfh" }],
+        "startTime": 1792957794
+      },
+      {
+        "matchId": "0c0a66f7-a43c-4e67-6284-08df2868d48c",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "nikopana." }, { "brawlhallaId": null, "name": "sapt016" }],
+        "startTime": 1792956450
+      },
+      {
+        "matchId": "94c24b1a-e882-4f90-6218-08df2868d48c",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "leo0131" }, { "brawlhallaId": null, "name": "akho_singer" }],
+        "startTime": 1792955444
+      }
+    ],
+    "774eaef2-3f11-4c7b-f9ab-08ded4cb1c05": [
+      {
+        "matchId": "d3b7a503-976e-4b19-6525-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Greedy11z" }, { "brawlhallaId": 34439792, "name": "fakey7" }],
+        "startTime": null
+      },
+      {
+        "matchId": "c3336cea-4a41-4c9b-65f4-08df1591daff",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": null
+      },
+      {
+        "matchId": "b6556adf-aa03-4443-63ab-08df1591daff",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 4690119, "name": "experiencedoa" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "a73a8a64-4e0b-43b3-6105-08df1591daff",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42606327, "name": "WheezePlease" },
+          { "brawlhallaId": 58356393, "name": "woolala" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "71231211-ca89-4298-5eb2-08df1591daff",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "zipflo" }, { "brawlhallaId": null, "name": "PRML | Xenia" }],
+        "startTime": null
+      },
+      {
+        "matchId": "426730f6-0be0-423c-5f7a-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 65807517, "name": "Access." }, { "brawlhallaId": null, "name": "BerserkerBH" }],
+        "startTime": null
+      },
+      {
+        "matchId": "4090fda9-ae38-4a80-5ef6-08df1591daff",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "applearmada" },
+          { "brawlhallaId": null, "name": "HaNe.gg Hayden" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "3fc6452c-0f20-42a6-6327-08df1591daff",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": null
+      },
+      {
+        "matchId": "3f5f9a8a-3f9c-4e71-658d-08df1591daff",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 24116692, "name": "Bunny meow" },
+          { "brawlhallaId": null, "name": "SiB Royalty" }
+        ],
+        "startTime": null
+      }
+    ],
+    "73bd3994-82e9-4ee0-e84a-08dedfe49566": [
+      {
+        "matchId": "58095580-4d02-450a-5e69-08df1014f387",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 4690119, "name": "experiencedoa" }
+        ],
+        "startTime": 1789248845
+      },
+      {
+        "matchId": "e859cd67-615c-4935-9442-08df10e3db11",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": 9198510, "name": "animefan1266" }],
+        "startTime": 1789246181
+      },
+      {
+        "matchId": "b1daf360-bb16-4b26-5d9d-08df1014f387",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 110378722, "name": "Raid-_-" }, { "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1789241373
+      },
+      {
+        "matchId": "f2150268-82c9-457d-5d2c-08df1014f387",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "Greedy11z" },
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" }
+        ],
+        "startTime": 1789239937
+      },
+      {
+        "matchId": "11df1d70-00a3-4b95-91bb-08df10e3db11",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }, { "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": 1789236993
+      },
+      {
+        "matchId": "8d631ef2-1bfd-4aa2-90ef-08df10e3db11",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 58356393, "name": "woolala" },
+          { "brawlhallaId": 42606327, "name": "WheezePlease" }
+        ],
+        "startTime": 1789235384
+      },
+      {
+        "matchId": "c451c672-095c-421a-904e-08df10e3db11",
+        "scores": [0, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "stab_" }, { "brawlhallaId": null, "name": "demonicbh" }],
+        "startTime": 1789234740
+      },
+      {
+        "matchId": "deb20a5b-bb1f-410e-8f79-08df10e3db11",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Kurdez" }, { "brawlhallaId": null, "name": "Anahita_q" }],
+        "startTime": 1789233205
+      }
+    ],
+    "632dcc5d-5697-4b12-6d1b-08dea8b61f65": [
+      {
+        "matchId": "e893dbad-d67f-4fc1-b845-08deeae4d18b",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 99561300, "name": "lolryze" }
+        ],
+        "startTime": 1785106111
+      },
+      {
+        "matchId": "76e1c3ed-2d64-4051-b80e-08deeae4d18b",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 60025258, "name": ".kira" },
+          { "brawlhallaId": 6347429, "name": "LGN | Hybrid" }
+        ],
+        "startTime": 1785103651
+      },
+      {
+        "matchId": "91cf8463-3685-45e0-b72d-08deeae4d18b",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 29540515, "name": "clemster" }, { "brawlhallaId": 4077949, "name": "volst" }],
+        "startTime": 1785094518
+      },
+      {
+        "matchId": "a155f189-f9a7-4c9a-b6f7-08deeae4d18b",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" },
+          { "brawlhallaId": null, "name": "Greedy11z" }
+        ],
+        "startTime": 1785093023
+      },
+      {
+        "matchId": "c34c4018-8604-4a88-b6d1-08deeae4d18b",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Pillow!" }, { "brawlhallaId": null, "name": "futureslol" }],
+        "startTime": 1785091627
+      },
+      {
+        "matchId": "e47c0697-9b03-4c68-b5b5-08deeae4d18b",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1785086410
+      },
+      {
+        "matchId": "da98ab13-1831-4324-b55b-08deeae4d18b",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "LightScythe420" }, { "brawlhallaId": null, "name": "NateyJJ" }],
+        "startTime": 1785085268
+      },
+      {
+        "matchId": "4a7c3b08-5c72-4218-b4dc-08deeae4d18b",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "NIT | Dragø" },
+          { "brawlhallaId": 9081441, "name": "NIT | Seikuz" }
+        ],
+        "startTime": 1785084326
+      },
+      {
+        "matchId": "eecb70aa-ac81-43a5-b459-08deeae4d18b",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Flip Floops" }, { "brawlhallaId": null, "name": "Rep_11" }],
+        "startTime": 1785083547
+      }
+    ],
+    "021dfcfe-1a2c-4014-6b76-08dea8b61f65": [
+      {
+        "matchId": "357a4af1-c4a1-4754-3f2c-08dedf626563",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1783798471
+      },
+      {
+        "matchId": "d1ca6968-497f-4846-6fd2-08dedf639ef6",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" },
+          { "brawlhallaId": null, "name": "BerserkerBH" }
+        ],
+        "startTime": 1783797316
+      },
+      {
+        "matchId": "17b23998-cf5e-47c4-3ed2-08dedf626563",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 4077949, "name": "volst" }, { "brawlhallaId": 29540515, "name": "clemster" }],
+        "startTime": 1783796198
+      },
+      {
+        "matchId": "abc255ac-7465-426d-6f55-08dedf639ef6",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42606327, "name": "WheezePlease" },
+          { "brawlhallaId": null, "name": "Pringles." }
+        ],
+        "startTime": 1783795038
+      },
+      {
+        "matchId": "d9f4660b-5759-451e-3d73-08dedf626563",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 88008517, "name": "sole." }, { "brawlhallaId": 104002853, "name": "Moni-" }],
+        "startTime": 1783791698
+      },
+      {
+        "matchId": "8c2e2749-fbe1-4e25-6db7-08dedf639ef6",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 3935531, "name": "TheFaith.-" },
+          { "brawlhallaId": 3138661, "name": "antireplay" }
+        ],
+        "startTime": 1783790862
+      },
+      {
+        "matchId": "732a149a-8bdd-4475-6d74-08dedf639ef6",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Fr0stiev" }, { "brawlhallaId": null, "name": "pandden" }],
+        "startTime": 1783790224
+      }
+    ],
+    "658feb16-e07e-403f-c375-08de8b2c6a40": [
+      {
+        "matchId": "d562b407-9ea0-46d3-b312-08dec9ca93c6",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }, { "brawlhallaId": 5156845, "name": "Zivai" }],
+        "startTime": null
+      },
+      {
+        "matchId": "cd3f0a06-486b-475c-4657-08dec44a925f",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Sleepii" }, { "brawlhallaId": null, "name": "Weiss.exe" }],
+        "startTime": null
+      },
+      {
+        "matchId": "c15836c8-7be5-4483-4c1b-08dec44a925f",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }, { "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      },
+      {
+        "matchId": "9c0b45af-f557-4f19-49dd-08dec44a925f",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 119319655, "name": "Ahmet_" }, { "brawlhallaId": 5156845, "name": "Zivai" }],
+        "startTime": null
+      },
+      {
+        "matchId": "6cdd79ed-e2bd-41c1-48e8-08dec44a925f",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 29540515, "name": "clemster" }, { "brawlhallaId": 4077949, "name": "volst" }],
+        "startTime": null
+      },
+      {
+        "matchId": "1ba68dde-fcd7-48c2-4a7c-08dec44a925f",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 9144432, "name": "loreszz" }, { "brawlhallaId": 8851646, "name": "whoiskyna" }],
+        "startTime": null
+      }
+    ],
+    "1a8c59b4-60a9-4f41-03f2-08de98495ef6": [
+      {
+        "matchId": "a17b2ad6-83dd-4c73-f77a-08dec44a925e",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 5827766, "name": "Zen |" }, { "brawlhallaId": 99290097, "name": "hideawaybh" }],
+        "startTime": 1780875798
+      },
+      {
+        "matchId": "e6eebd82-cb08-456f-f763-08dec44a925e",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 5827766, "name": "Zen |" }, { "brawlhallaId": 99290097, "name": "hideawaybh" }],
+        "startTime": 1780874679
+      },
+      {
+        "matchId": "26091851-093a-42a0-f6f6-08dec44a925e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 5827766, "name": "Zen |" }, { "brawlhallaId": 99290097, "name": "hideawaybh" }],
+        "startTime": 1780871082
+      },
+      {
+        "matchId": "809a4366-dacd-43fc-f649-08dec44a925e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 74699177, "name": "Dragon!" }, { "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1780865076
+      },
+      {
+        "matchId": "58b31f38-fecb-425a-f551-08dec44a925e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 110378722, "name": "Raid-_-" },
+          { "brawlhallaId": null, "name": "Endearing Iceberg 000369" }
+        ],
+        "startTime": 1780858482
+      },
+      {
+        "matchId": "dfe3865d-86ee-4f80-f4fa-08dec44a925e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Lunar..." }, { "brawlhallaId": null, "name": "hollowmg" }],
+        "startTime": 1780857443
+      },
+      {
+        "matchId": "89ec1d59-d179-414a-f4a9-08dec44a925e",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Hotdoggy" }, { "brawlhallaId": null, "name": "Slowmonki" }],
+        "startTime": 1780856713
+      }
+    ],
+    "47b84942-d9ab-49d4-e0c6-08de82077ea6": [
+      {
+        "matchId": "30469094-6117-41c5-ce34-08deb00e7d8d",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" }
+        ],
+        "startTime": 1778959847
+      },
+      {
+        "matchId": "709e8509-d3b9-472e-cdb4-08deb00e7d8d",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }, { "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": 1778957745
+      },
+      {
+        "matchId": "0b8d796c-8ebc-41ba-9ba6-08deb1b2ca08",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 99561300, "name": "lolryze" },
+          { "brawlhallaId": 4690119, "name": "experiencedoa" }
+        ],
+        "startTime": 1778956852
+      },
+      {
+        "matchId": "5a901ce2-cc14-469e-cce3-08deb00e7d8d",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "zipflo" }, { "brawlhallaId": null, "name": "cobweb" }],
+        "startTime": 1778956056
+      },
+      {
+        "matchId": "f6836de5-5e44-4fc4-ca6d-08deb00e7d8d",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "xerofr" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1778952569
+      },
+      {
+        "matchId": "6ed1a438-be60-4f66-987e-08deb1b2ca08",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacob Slade" }, { "brawlhallaId": null, "name": "Cameron Lee" }],
+        "startTime": 1778951779
+      },
+      {
+        "matchId": "845c0284-5ee1-46e6-9861-08deb1b2ca08",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "lankzzyih" }, { "brawlhallaId": null, "name": "Lukozade" }],
+        "startTime": 1778950936
+      }
+    ],
+    "cdaf1179-2adf-4c32-d80d-08de6a223b1e": [
+      {
+        "matchId": "5fab2e09-018f-4877-8ce6-08dea8b5cc3a",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1777848457
+      },
+      {
+        "matchId": "38bbb699-b382-409b-8c82-08dea8b5cc3a",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" },
+          { "brawlhallaId": 6347429, "name": "LGN | Hybrid" }
+        ],
+        "startTime": 1777845942
+      },
+      {
+        "matchId": "9b1495b8-19b8-4719-8be8-08dea8b5cc3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "astrxlol" }, { "brawlhallaId": 74699177, "name": "Dragon!" }],
+        "startTime": 1777841672
+      },
+      {
+        "matchId": "2facce22-a449-4f36-8b87-08dea8b5cc3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 105379605, "name": "LGN | HaLo" },
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" }
+        ],
+        "startTime": 1777839243
+      },
+      {
+        "matchId": "84167f50-a600-4891-8b57-08dea8b5cc3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 1546291, "name": "cosolix" }, { "brawlhallaId": 4077949, "name": "volst" }],
+        "startTime": 1777838289
+      },
+      {
+        "matchId": "3c844117-84dd-455d-8ada-08dea8b5cc3a",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 33116656, "name": "megD" }, { "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": 1777835577
+      },
+      {
+        "matchId": "cf47b08a-85c7-4ab5-88fc-08dea8b5cc3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 2571884, "name": "wubz" }, { "brawlhallaId": null, "name": "notkyzer" }],
+        "startTime": 1777828133
+      },
+      {
+        "matchId": "4d0aac5f-87a5-4228-8807-08dea8b5cc3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "KingdomOfMagic" }, { "brawlhallaId": null, "name": "McSlammy" }],
+        "startTime": 1777826333
+      },
+      {
+        "matchId": "f3c4a724-65a2-445f-87bf-08dea8b5cc3a",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Marty Jay" }, { "brawlhallaId": null, "name": "pluukie" }],
+        "startTime": 1777825960
+      }
+    ],
+    "5a08b1b1-34c0-4b87-fc13-08de57608d81": [
+      {
+        "matchId": "329856ae-b4aa-4908-83ca-08de8208e5d9",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1773523422
+      },
+      {
+        "matchId": "17fecf9f-5805-4f2d-4b2e-08de7f8167d6",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" },
+          { "brawlhallaId": 34439792, "name": "fakey7" }
+        ],
+        "startTime": 1773519426
+      },
+      {
+        "matchId": "75df330d-f305-4d0b-49ac-08de7f8167d6",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99290097, "name": "hideawaybh" }, { "brawlhallaId": 5827766, "name": "Zen |" }],
+        "startTime": 1773516892
+      },
+      {
+        "matchId": "a938740f-4bf3-4ac1-4328-08de7f8167d6",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42606327, "name": "WheezePlease" },
+          { "brawlhallaId": null, "name": "Pringles." }
+        ],
+        "startTime": 1773511825
+      },
+      {
+        "matchId": "d13f47c8-ecfc-4e87-3ec1-08de7f8167d6",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 9198510, "name": "animefan1266" }, { "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1773509964
+      },
+      {
+        "matchId": "91b12d26-ba48-42d4-3e77-08de7f8167d6",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "nash!" }, { "brawlhallaId": null, "name": "yeezy." }],
+        "startTime": 1773509314
+      },
+      {
+        "matchId": "db86ca47-74f8-4878-3e46-08de7f8167d6",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "bigtamos" }, { "brawlhallaId": null, "name": "im_kydd" }],
+        "startTime": 1773508801
+      }
+    ],
+    "213d2229-ac9f-4432-6d19-08de30f37986": [
+      {
+        "matchId": "8f1b2e43-f6c2-4496-6c9b-08de77094e5e",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "astrxlol" }, { "brawlhallaId": 74699177, "name": "Dragon!" }],
+        "startTime": 1772399773
+      },
+      {
+        "matchId": "2d020aa2-ca80-4d10-6c20-08de77094e5e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Pillow!" }, { "brawlhallaId": null, "name": "futureslol" }],
+        "startTime": 1772394233
+      },
+      {
+        "matchId": "e9167739-f81b-46a1-6b7d-08de77094e5e",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 63414288, "name": "TruckStopBurrito" },
+          { "brawlhallaId": null, "name": "ACID | Jsuzi" }
+        ],
+        "startTime": 1772390787
+      },
+      {
+        "matchId": "235e326a-6127-471a-6b03-08de77094e5e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "vsins" }, { "brawlhallaId": null, "name": "MrClench" }],
+        "startTime": 1772388965
+      },
+      {
+        "matchId": "31d5270b-b7a2-4787-69e1-08de77094e5e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "trejo." }, { "brawlhallaId": null, "name": "zeusandjason" }],
+        "startTime": 1772387242
+      },
+      {
+        "matchId": "2a2a8e11-fe2d-4132-696e-08de77094e5e",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "PINK | Køde" }, { "brawlhallaId": null, "name": "dabbzking08" }],
+        "startTime": 1772386629
+      },
+      {
+        "matchId": "7f00870d-c8c8-4d98-6916-08de77094e5e",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "tywithachop" }, { "brawlhallaId": null, "name": "JerryGG" }],
+        "startTime": 1772386180
+      }
+    ],
+    "c6f474b8-399f-4f7a-6d8e-08de30f37986": [
+      {
+        "matchId": "86d83b86-8a00-4b3e-5c20-08de659626a7",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 104002853, "name": "Moni-" }
+        ],
+        "startTime": 1770604718
+      },
+      {
+        "matchId": "cc574b7c-bc03-4adf-5be6-08de659626a7",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 104002853, "name": "Moni-" }
+        ],
+        "startTime": 1770603094
+      },
+      {
+        "matchId": "88633745-453b-4c6f-5be3-08de659626a7",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1770603060
+      },
+      {
+        "matchId": "26655f35-9e28-4bde-5b7b-08de659626a7",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95906862, "name": "BBBalloonBoy" },
+          { "brawlhallaId": 104002853, "name": "Moni-" }
+        ],
+        "startTime": 1770600114
+      },
+      {
+        "matchId": "bf8a6a83-5348-4a9b-5a59-08de659626a7",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1770591253
+      },
+      {
+        "matchId": "1648af51-eb4d-49a3-592d-08de659626a7",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1770585322
+      },
+      {
+        "matchId": "d970c74c-11dc-4641-58d6-08de659626a7",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "LT | Samuray" }, { "brawlhallaId": null, "name": "HVN | Cell" }],
+        "startTime": 1770584083
+      },
+      {
+        "matchId": "c3fffdbf-d06a-4682-58a1-08de659626a7",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "ACD | RemixPowers" },
+          { "brawlhallaId": null, "name": "HVN | Astro" }
+        ],
+        "startTime": 1770583293
+      },
+      {
+        "matchId": "4faafede-7ef0-465a-5855-08de659626a7",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "sir_solace1" },
+          { "brawlhallaId": null, "name": "Elongated Potato" }
+        ],
+        "startTime": 1770582422
+      }
+    ],
+    "f100559f-8b06-41c8-6440-08de1bded654": [
+      {
+        "matchId": "2842eb66-48ed-4bf2-e1a3-08de5760407c",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1769286574
+      },
+      {
+        "matchId": "2210a3d8-ed09-47bc-dfcf-08de5760407c",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 5827766, "name": "Zen |" },
+          { "brawlhallaId": 4690119, "name": "experiencedoa" }
+        ],
+        "startTime": 1769279009
+      },
+      {
+        "matchId": "e7ce4663-627e-45ef-df4a-08de5760407c",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 102460877, "name": "PRML | Darkü" },
+          { "brawlhallaId": null, "name": "BerserkerBH" }
+        ],
+        "startTime": 1769277953
+      },
+      {
+        "matchId": "29fa1095-e22f-4485-de20-08de5760407c",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "SiB | Snipes" }, { "brawlhallaId": null, "name": "Mowgli." }],
+        "startTime": 1769276178
+      },
+      {
+        "matchId": "c6b1fd83-c454-48fc-dd45-08de5760407c",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "xoGoobs" },
+          { "brawlhallaId": null, "name": "DemarkoTheHashira" }
+        ],
+        "startTime": 1769275017
+      },
+      {
+        "matchId": "95c7889d-2fe7-4981-dce0-08de5760407c",
+        "scores": [0, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "ftblankeyy" }, { "brawlhallaId": null, "name": "Luv.Relay" }],
+        "startTime": 1769274555
+      }
+    ],
+    "264b6be6-50fc-4503-608a-08de24e0020e": [
+      {
+        "matchId": "0ee86092-e8cc-4d72-ac24-08de2d85d274",
+        "scores": [0, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1764464842
+      },
+      {
+        "matchId": "eea81ed7-7c73-4db9-ab40-08de2d85d274",
+        "scores": [0, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 5827766, "name": "Zen |" }, { "brawlhallaId": 99290097, "name": "hideawaybh" }],
+        "startTime": 1764459066
+      },
+      {
+        "matchId": "2ee67fce-7fbc-4aa6-aa93-08de2d85d274",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 24116692, "name": "Bunny meow" }, { "brawlhallaId": null, "name": "flowerVS" }],
+        "startTime": 1764453826
+      },
+      {
+        "matchId": "4358939b-9192-488b-a97c-08de2d85d274",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "chishiya." }, { "brawlhallaId": null, "name": "unskillful" }],
+        "startTime": 1764447432
+      },
+      {
+        "matchId": "6a19a64c-a7a4-4580-a95c-08de2d85d274",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 77990630, "name": "(AJ)" }, { "brawlhallaId": null, "name": "itseggy" }],
+        "startTime": 1764446822
+      },
+      {
+        "matchId": "c8ac6910-0eda-4767-a84f-08de2d85d274",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "D.A.F.K_" }, { "brawlhallaId": null, "name": "dragocube11" }],
+        "startTime": 1764443830
+      }
+    ],
+    "26ecdc35-9d03-4bb6-97fa-08dd8e232c2e": [
+      {
+        "matchId": "09f461c7-e49b-47ad-9415-08de2772bb2e",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 5156845, "name": "Zivai" }],
+        "startTime": 1763772085
+      },
+      {
+        "matchId": "490892ad-111d-4bd8-93cf-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" },
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" }
+        ],
+        "startTime": 1763768890
+      },
+      {
+        "matchId": "1af715f1-ff9f-4db2-93a0-08de2772bb2e",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 24116692, "name": "Bunny meow" },
+          { "brawlhallaId": 110378722, "name": "Raid-_-" }
+        ],
+        "startTime": 1763767078
+      },
+      {
+        "matchId": "ffc40e7b-3a3b-4b74-9393-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1763766359
+      },
+      {
+        "matchId": "8166a9bf-2a91-4b19-9352-08de2772bb2e",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 31675679, "name": "Mounir" }, { "brawlhallaId": 2768493, "name": "acno?" }],
+        "startTime": 1763764431
+      },
+      {
+        "matchId": "135286ba-91bc-4bf4-92c4-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1763759915
+      },
+      {
+        "matchId": "befcecd0-a64a-4404-9264-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "NIT | jjaingo" },
+          { "brawlhallaId": null, "name": "FoxxNoodles" }
+        ],
+        "startTime": 1763757501
+      },
+      {
+        "matchId": "2495dd92-ee5c-4e88-9226-08de2772bb2e",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "JCool" }, { "brawlhallaId": null, "name": "NME_PICKLES" }],
+        "startTime": 1763755898
+      },
+      {
+        "matchId": "3abd2381-31a0-41d8-91b7-08de2772bb2e",
+        "scores": [1, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Rayan_57z" }, { "brawlhallaId": null, "name": "HodisM" }],
+        "startTime": 1763753612
+      }
+    ],
+    "e29e85b2-21aa-41d2-37b4-08de21115a66": [
+      {
+        "matchId": "366e8fdd-5960-4361-d0a8-08de24655b32",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" },
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" }
+        ],
+        "startTime": 1763258554
+      },
+      {
+        "matchId": "85010f38-9555-4060-cec5-08de24655b32",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1763254973
+      },
+      {
+        "matchId": "6ff7c5b3-e6da-4d57-cc6d-08de24655b32",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 52695844, "name": "PRML | Jays" }, { "brawlhallaId": 3001049, "name": "S!mba" }],
+        "startTime": 1763247982
+      },
+      {
+        "matchId": "5e428946-2e81-4c74-cc50-08de24655b32",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" },
+          { "brawlhallaId": null, "name": "Greedy11z" }
+        ],
+        "startTime": 1763245204
+      },
+      {
+        "matchId": "7e43b1bb-6d30-4641-cb0b-08de24655b32",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 2752696, "name": "LCA_Glue" }, { "brawlhallaId": null, "name": "Sprite-" }],
+        "startTime": 1763235160
+      },
+      {
+        "matchId": "3ac05c82-205f-4121-ca97-08de24655b32",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "stab_" }, { "brawlhallaId": null, "name": "demonicbh" }],
+        "startTime": 1763234414
+      },
+      {
+        "matchId": "addb8b29-6df2-4806-6c31-08de246512bf",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "iCeaZy_" }, { "brawlhallaId": null, "name": "stormjae" }],
+        "startTime": 1763233627
+      }
+    ],
+    "c2a01f43-ffb1-42d0-0cfa-08dde9f48256": [
+      {
+        "matchId": "28fac633-b591-4b8d-50fd-08de13e1f135",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" },
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" }
+        ],
+        "startTime": 1761439847
+      },
+      {
+        "matchId": "daa3b57c-2b0f-4270-4fa4-08de13e1f135",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 104002853, "name": "Moni-" }, { "brawlhallaId": 33116656, "name": "megD" }],
+        "startTime": 1761438342
+      },
+      {
+        "matchId": "755f87b7-7db4-4e17-4de0-08de13e1f135",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1761436041
+      },
+      {
+        "matchId": "d0d2477c-b33a-4b54-4dcf-08de13e1f135",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 33710511, "name": "IRIS | Shade" },
+          { "brawlhallaId": null, "name": "Greedy11z" }
+        ],
+        "startTime": 1761433603
+      },
+      {
+        "matchId": "e50ff3d9-e3a9-44ca-4d9c-08de13e1f135",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1761427481
+      },
+      {
+        "matchId": "f98dc285-5543-46c2-4d94-08de13e1f135",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" },
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" }
+        ],
+        "startTime": 1761426449
+      },
+      {
+        "matchId": "8298ef3a-09ff-4124-4cd3-08de13e1f135",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "ImmaculateRat" },
+          { "brawlhallaId": 42606327, "name": "WheezePlease" }
+        ],
+        "startTime": 1761419934
+      },
+      {
+        "matchId": "78ff11b6-dc3f-4820-ebb2-08de13e03fc0",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "mvshirogane" }, { "brawlhallaId": null, "name": "snappo" }],
+        "startTime": 1761419282
+      },
+      {
+        "matchId": "75ddf2ee-ccd0-46e5-4c44-08de13e1f135",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "Gem Missin'" },
+          { "brawlhallaId": null, "name": "PlagueDoctor56" }
+        ],
+        "startTime": 1761418587
+      }
+    ],
+    "400340f9-1426-468a-09c8-08dd66f60e0c": [
+      {
+        "matchId": "dba1b11c-012d-49cf-b0ed-08ddf9273d3a",
+        "scores": [2, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "flowerVS" }, { "brawlhallaId": 59129149, "name": "seabass24" }],
+        "startTime": 1758492860
+      },
+      {
+        "matchId": "da01acca-2378-4217-af84-08ddf9273d3a",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Jacobe:)" }, { "brawlhallaId": null, "name": "irqqzz" }],
+        "startTime": 1758489136
+      },
+      {
+        "matchId": "1e3501d6-78c4-43b8-ad26-08ddf9273d3a",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 4690119, "name": "experiencedoa" },
+          { "brawlhallaId": 34439792, "name": "fakey7" }
+        ],
+        "startTime": 1758483422
+      },
+      {
+        "matchId": "a5d4a2c3-5256-404b-a628-08ddf9273d3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "BerserkerBH" }, { "brawlhallaId": null, "name": "Creed-." }],
+        "startTime": 1758476957
+      },
+      {
+        "matchId": "4aedd227-5c25-46b7-a341-08ddf9273d3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Pillow!" }, { "brawlhallaId": null, "name": "futureslol" }],
+        "startTime": 1758474681
+      },
+      {
+        "matchId": "0031b24c-157f-454b-9faa-08ddf9273d3a",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Dovah." }, { "brawlhallaId": null, "name": "NIT | jjaingo" }],
+        "startTime": 1758473937
+      },
+      {
+        "matchId": "783bd060-5db0-4d28-9f73-08ddf9273d3a",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Aura Clash" }, { "brawlhallaId": null, "name": "faisal._." }],
+        "startTime": 1758473300
+      }
+    ],
+    "85a6fb92-3aa2-4ee6-43d8-08dd69fad61e": [
+      {
+        "matchId": "99cdbf26-0fd8-4a9d-f3eb-08ddc9f66aef",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99561300, "name": "lolryze" }, { "brawlhallaId": 88008517, "name": "sole." }],
+        "startTime": 1753655238
+      },
+      {
+        "matchId": "1be7c7f9-717d-49c1-f350-08ddc9f66aef",
+        "scores": [1, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 5827766, "name": "Zen |" }, { "brawlhallaId": 99290097, "name": "hideawaybh" }],
+        "startTime": 1753649957
+      },
+      {
+        "matchId": "a943421e-56bf-4f5b-f2f4-08ddc9f66aef",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 95397606, "name": "IRIS | Hexo" },
+          { "brawlhallaId": 42428674, "name": "IRIS | Guichabou" }
+        ],
+        "startTime": 1753645759
+      },
+      {
+        "matchId": "6a92d222-4bf1-455b-f17e-08ddc9f66aef",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 86571991, "name": "ACD | ravenndoa" },
+          { "brawlhallaId": 110378722, "name": "Raid-_-" }
+        ],
+        "startTime": 1753637941
+      },
+      {
+        "matchId": "5ac96d51-df5e-4632-f0dd-08ddc9f66aef",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "JaeBlade" },
+          { "brawlhallaId": null, "name": "sg | Inspiration" }
+        ],
+        "startTime": 1753636104
+      },
+      {
+        "matchId": "63ed5608-cd54-4b61-f039-08ddc9f66aef",
+        "scores": [3, 1],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "bleed." }, { "brawlhallaId": null, "name": "Jynxxx" }],
+        "startTime": 1753634478
+      },
+      {
+        "matchId": "38e751c3-ce0d-4eed-efb3-08ddc9f66aef",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "luhxen" }, { "brawlhallaId": null, "name": "auvi4k" }],
+        "startTime": 1753633725
+      }
+    ]
+  }
+}

@@ -30,6 +30,8 @@ describe('PostgreSQL-only runtime topology', () => {
         ':(exclude)bun.lock',
         // match insights written out for the site's tests: thousands of numbers, some of which contain the port's digits
         ':(exclude)apps/site/tests/fixtures/*.insights.json',
+        // public brawltools responses with thousands of ids, some of which contain the port's digits
+        ':(exclude)packages/modules/esports/tests/fixtures/*.json',
       ],
       cwd: root,
       stdout: 'pipe',
