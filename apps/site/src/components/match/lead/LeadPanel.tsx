@@ -37,7 +37,7 @@ function SideNames({ isUpright }: Side) {
   if (isUpright) {
     return (
       <div className={`mt-3 ${iconTooltipParent}`}>
-        <div className={`flex justify-between px-1 pb-1.5 ${sideName}`}>
+        <div className={`flex justify-between pb-1.5 ${sideName}`}>
           <span>Behind</span>
           <span>Ahead</span>
         </div>
