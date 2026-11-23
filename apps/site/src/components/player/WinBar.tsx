@@ -3,8 +3,8 @@ export function WinBar({ wins, games }: { wins: number; games: number }) {
 
   return (
     <div data-winbar className="flex h-2 w-full gap-0.5" role="img" aria-label={`Won ${wins} of ${games}`}>
-      <div className="rounded-l-full bg-emerald-400/85" style={{ width: `${percent}%` }} />
-      <div className="flex-1 rounded-r-full bg-red-400/70" />
+      <div className="rounded-l-full bg-record-win/85" style={{ width: `${percent}%` }} />
+      <div className="flex-1 rounded-r-full bg-record-loss/70" />
     </div>
   )
 }
