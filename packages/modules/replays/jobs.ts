@@ -193,7 +193,7 @@ async function storeMatch(
     await writeMatch(transaction, { matchId, timelineKey: key }, job, line)
     await settleUploads(transaction, uploads, owners, matchId)
 
-    if (deps.artStore) await queueMatchArt(transaction, matchId)
+    if (deps.artStore && line.hasTimeline) await queueMatchArt(transaction, matchId)
 
     await transaction`UPDATE replays.replay_files SET patch = ${line.patch} WHERE digest = ${job.digest}`
 
@@ -239,18 +239,19 @@ async function writeMatch(
   await transaction`
     INSERT INTO replays.matches (id, digest, candidate_key, patch, format, build, map_id, map_name, mode_name, queue,
       is_ranked, is_custom, has_teams, has_team_damage, stocks, duration_ms, is_reliable, failed_checks, unchecked,
-      timeline_key)
+      timeline_key, has_timeline)
     VALUES (${matchId}, ${job.digest}, ${candidateKey(line)}, ${line.patch}, ${line.format}, ${job.build},
       ${match.mapId}, ${match.mapName}, ${match.modeName}, ${match.queue}, ${match.isRanked}, ${match.isCustom},
       ${match.hasTeams}, ${match.hasTeamDamage}, ${match.stocks}, ${match.durationMs}, ${reliability.isReliable},
-      ${JSON.stringify(reliability.failedChecks)}::text::jsonb, ${JSON.stringify(reliability.unchecked)}::text::jsonb, ${key})
+      ${JSON.stringify(reliability.failedChecks)}::text::jsonb, ${JSON.stringify(reliability.unchecked)}::text::jsonb,
+      ${key}, ${line.hasTimeline})
     ON CONFLICT (digest) DO UPDATE SET candidate_key = excluded.candidate_key, patch = excluded.patch,
       format = excluded.format, build = excluded.build, map_id = excluded.map_id, map_name = excluded.map_name,
       mode_name = excluded.mode_name, queue = excluded.queue, is_ranked = excluded.is_ranked,
       is_custom = excluded.is_custom, has_teams = excluded.has_teams, has_team_damage = excluded.has_team_damage,
       stocks = excluded.stocks, duration_ms = excluded.duration_ms, is_reliable = excluded.is_reliable,
       failed_checks = excluded.failed_checks, unchecked = excluded.unchecked, timeline_key = excluded.timeline_key,
-      parsed_at = clock_timestamp()
+      has_timeline = excluded.has_timeline, parsed_at = clock_timestamp()
   `
 
   await transaction`DELETE FROM replays.match_players WHERE match_id = ${matchId}`

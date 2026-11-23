@@ -129,6 +129,8 @@ export type PlayedLine = {
   format: 1
   match: LineMatch
   players: LinePlayer[]
+  // bh-native records no timeline for a custom room, so such a match has stats but nothing to draw
+  hasTimeline: boolean
   reliability: { isReliable: boolean; failedChecks: string[]; unchecked: string[] }
 }
 
@@ -154,6 +156,7 @@ export function parseReplayLine(json: string): ParsedLine {
     format: SUPPORTED_FORMAT,
     match: toMatch(line),
     players: line.match.players.map((player) => toPlayer(player, line.stats[`Player${player.slot}`])),
+    hasTimeline: line.timeline !== undefined,
     reliability: {
       isReliable: line.reliability.isReliable,
       failedChecks: line.reliability.checks.filter((check) => !check.passed).map((check) => check.name),
