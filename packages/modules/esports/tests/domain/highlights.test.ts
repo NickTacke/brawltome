@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { highlightTournamentIds, pickHighlights } from '../../domain/highlights'
-import { buildKnownLegendKeys } from '../../domain/legend-keys'
+import { buildLegendLookup } from '../../domain/legend-keys'
 import { shapeEsportsProfile } from '../../domain/profile'
 import { placement, stored } from './builders'
 
-const legendKeys = buildKnownLegendKeys()
+const legendLookup = buildLegendLookup()
 
 function profileOf(placements: ReturnType<typeof placement>[]) {
-  const profile = shapeEsportsProfile(stored({ placements }), legendKeys)
+  const profile = shapeEsportsProfile(stored({ placements }), legendLookup)
 
   if (!profile) throw new Error('shape a profile for the highlight tests: none was made')
 

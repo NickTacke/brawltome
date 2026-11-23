@@ -1,5 +1,6 @@
 import type { RawMatch, RawOpponent, RawPr } from '../source/raw-types'
 import { eventHeading, isSideModeEvent } from './event-names'
+import { type LegendLookup, resolveLegendKey } from './legend-keys'
 import { resultLabels } from './result-labels'
 import type { StoredEsports, StoredPlacement } from './stored-esports'
 
@@ -72,20 +73,22 @@ function toRanking(mode: EsportsMode, raw: RawPr | null): PowerRanking | null {
   return { mode, rank: powerRanking, region, gold, silver, bronze, top8 }
 }
 
-// brawltools sends legend names in capitals, the site's art is keyed by the lowercase name; a random pick or a name
-// the site has no art for counts as unknown, so it never shows a placeholder
-function mostPlayed(legends: string[], legendKeys: ReadonlySet<string>): string | null {
+// ties go to the legend seen first
+function mostCommon(legendKeys: (string | null)[]): string | null {
   const counts = new Map<string, number>()
 
-  for (const legend of legends) {
-    const key = legend.toLowerCase()
-
-    if (legendKeys.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1)
+  for (const key of legendKeys) {
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1)
   }
 
   const [top] = [...counts].sort((left, right) => right[1] - left[1])
 
   return top ? top[0] : null
+}
+
+// a random pick or a name the site has no art for counts as unknown, so it never shows a placeholder
+function mostPlayed(brawltoolsNames: string[], legendLookup: LegendLookup): string | null {
+  return mostCommon(brawltoolsNames.map((name) => resolveLegendKey(name, legendLookup)))
 }
 
 // the stored opponent carries brawltools' other ids too, and the profile's contract allows none of them
@@ -96,7 +99,7 @@ function toOpponent(raw: RawOpponent): EsportsOpponent {
   return { brawlhallaId: isAccountId ? brawlhallaId : null, name }
 }
 
-function toSet(match: RawMatch, legendKeys: ReadonlySet<string>): EsportsSet {
+function toSet(match: RawMatch, legendLookup: LegendLookup): EsportsSet {
   const [own, theirs] = match.scores
 
   const isForfeit = own < 0 || theirs < 0
@@ -107,8 +110,8 @@ function toSet(match: RawMatch, legendKeys: ReadonlySet<string>): EsportsSet {
     isForfeit,
     score: isForfeit ? 'DQ' : `${own}-${theirs}`,
     opponents: match.opponent.map(toOpponent),
-    legendKey: mostPlayed(match.legends[0] ?? [], legendKeys),
-    opponentLegendKey: mostPlayed(match.legends[1] ?? [], legendKeys),
+    legendKey: mostPlayed(match.legends[0] ?? [], legendLookup),
+    opponentLegendKey: mostPlayed(match.legends[1] ?? [], legendLookup),
   }
 }
 
@@ -135,9 +138,9 @@ function toSetRecord(sets: EsportsSet[]): SetRecord | null {
   return { wins, losses: played.length - wins }
 }
 
-function toResult(stored: StoredPlacement, matches: RawMatch[], legendKeys: ReadonlySet<string>): UnlabelledResult {
+function toResult(stored: StoredPlacement, matches: RawMatch[], legendLookup: LegendLookup): UnlabelledResult {
   const mode: EsportsMode = stored.mode === 1 ? '1v1' : '2v2'
-  const sets = inRunOrder(matches.filter(isPlayedOrForfeited)).map((match) => toSet(match, legendKeys))
+  const sets = inRunOrder(matches.filter(isPlayedOrForfeited)).map((match) => toSet(match, legendLookup))
   const startTime = Math.floor(stored.startTime.getTime() / 1000)
 
   return {
@@ -150,10 +153,7 @@ function toResult(stored: StoredPlacement, matches: RawMatch[], legendKeys: Read
     startTime,
     isOfficial: stored.isOfficial,
     isOnline: stored.isOnline,
-    legendKey: mostPlayed(
-      sets.map((set) => set.legendKey ?? ''),
-      legendKeys,
-    ),
+    legendKey: mostCommon(sets.map((set) => set.legendKey)),
     sets,
     setRecord: toSetRecord(sets),
   }
@@ -186,10 +186,10 @@ function withLabels(results: UnlabelledResult[]): EsportsResult[] {
 }
 
 // null when the player has no placement to show: a power ranking or earnings alone make no section
-export function shapeEsportsProfile(stored: StoredEsports, legendKeys: ReadonlySet<string>): EsportsProfile | null {
+export function shapeEsportsProfile(stored: StoredEsports, legendLookup: LegendLookup): EsportsProfile | null {
   const results = stored.placements
     .filter(({ tournamentName }) => !isSideModeEvent(tournamentName))
-    .map((placement) => toResult(placement, stored.setsByTournament.get(placement.tournamentId) ?? [], legendKeys))
+    .map((placement) => toResult(placement, stored.setsByTournament.get(placement.tournamentId) ?? [], legendLookup))
 
   const newestFirst = withoutPoolRepeats(results).sort((left, right) => right.startTime - left.startTime)
 

@@ -2,7 +2,13 @@ import { defineJob, type JobDefinition } from '@brawltome/queue'
 import { listEventsMissingSets } from '../db/list-events-missing-sets'
 import { saveEventSets } from '../db/save-event-sets'
 import { type RefreshInput, saveRefresh } from '../db/save-refresh'
-import { buildKnownLegendKeys, highlightTournamentIds, type StoredPlacement, shapeEsportsProfile } from '../domain'
+import {
+  buildLegendLookup,
+  highlightTournamentIds,
+  type LegendLookup,
+  type StoredPlacement,
+  shapeEsportsProfile,
+} from '../domain'
 import type { BrawltoolsClient, GameMode } from '../source/brawltools-client'
 import type { RawMatch, RawPlacement, RawPlayer } from '../source/raw-types'
 import { decideBrawltoolsFailure } from './brawltools-failures'
@@ -72,11 +78,11 @@ async function fetchHighlightSets(
   dependencies: EsportsRefreshJobDependencies,
   client: BrawltoolsClient,
   refresh: LinkedRefresh,
-  legendKeys: ReadonlySet<string>,
+  legendLookup: LegendLookup,
 ): Promise<void> {
   const { brawlhallaId, pr1v1, pr2v2, placements } = refresh
   const stored = { pr1v1, pr2v2, placements, setsByTournament: new Map<string, RawMatch[]>() }
-  const profile = shapeEsportsProfile(stored, legendKeys)
+  const profile = shapeEsportsProfile(stored, legendLookup)
 
   if (!profile) return
 
@@ -94,7 +100,7 @@ async function refreshPlayer(
   dependencies: EsportsRefreshJobDependencies,
   client: BrawltoolsClient,
   brawlhallaId: number,
-  legendKeys: ReadonlySet<string>,
+  legendLookup: LegendLookup,
 ): Promise<void> {
   const refresh = await fetchRefresh(client, brawlhallaId)
 
@@ -102,7 +108,7 @@ async function refreshPlayer(
 
   if (!isLinked(refresh)) return
 
-  await fetchHighlightSets(dependencies, client, refresh, legendKeys)
+  await fetchHighlightSets(dependencies, client, refresh, legendLookup)
   await dependencies.enqueueBackfill(brawlhallaId)
 }
 
@@ -113,7 +119,7 @@ async function refreshPlayer(
 export function createEsportsRefreshJob(
   dependencies: EsportsRefreshJobDependencies,
 ): JobDefinition<EsportsRefreshPayload> {
-  const legendKeys = buildKnownLegendKeys()
+  const legendLookup = buildLegendLookup()
 
   return defineJob<EsportsRefreshPayload>({
     ...esportsRefreshContract,
@@ -122,7 +128,7 @@ export function createEsportsRefreshJob(
     // player as its resource key, which keeps one active per player
     run: (lease, tools) =>
       runEsportsJob(dependencies, lease, tools, (client) =>
-        refreshPlayer(dependencies, client, lease.payload.brawlhallaId, legendKeys),
+        refreshPlayer(dependencies, client, lease.payload.brawlhallaId, legendLookup),
       ),
     decideFailure: decideBrawltoolsFailure,
   })
