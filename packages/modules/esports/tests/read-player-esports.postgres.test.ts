@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { playerEsportsSchema } from '@brawltome/contracts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
@@ -228,6 +229,21 @@ describe('readPlayerEsports', () => {
     expect((await readPlayerEsports(database, brawlhallaId, now)).profile).toBeNull()
   })
 
+  test('answers within the contract when stored sets hold the whole opponent brawltools sends', async () => {
+    const brawlhallaId = newPlayerId()
+    const opponent = { playerId: 31, sggPlayerId: 4_101, cmPlayerId: null, brawlhallaId: 7_788, name: 'Sandstorm' }
+    const set = match({ scores: [3, 1], opponent: [opponent] })
+
+    await storeLinked(brawlhallaId)
+    await saveEventSets(database, brawlhallaId, frostbyte.tournamentId, [set], ago(dayMs))
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
+
+    const esports = await readPlayerEsports(database, brawlhallaId, now)
+
+    expect(playerEsportsSchema.parse(esports)).toEqual(esports)
+    expect(esports.profile?.results[0]?.sets[0]?.opponents).toEqual([{ brawlhallaId: 7_788, name: 'Sandstorm' }])
+  })
+
   test('a trusted link with no placement to show → profile null', async () => {
     const brawlhallaId = newPlayerId()
 
@@ -305,6 +321,7 @@ describe('esports.byPlayerId', () => {
 
     expect(esports.freshness).toBe('fresh')
     expect(esports.profile?.results.map((result) => result.fullName)).toEqual(['Frostbyte #19'])
+    expect(esports.profile?.results[0]?.sets[0]?.opponents).toEqual([{ brawlhallaId: null, name: 'Opponent' }])
   })
 
   test('rejects callers from outside', async () => {

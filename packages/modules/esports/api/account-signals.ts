@@ -18,13 +18,21 @@ function mostPlayed(legends: CareerLegend[]): string[] {
   return byGames.slice(0, topLegendCount).map((legend) => legend.legendNameKey)
 }
 
-/** What the player module knows of an account, for checking that an esports record belongs to it. */
-export async function readAccountSignals(database: Database, brawlhallaId: number): Promise<AccountSignals> {
-  const [reference, career, ranked] = await Promise.all([
+function readAccount(database: Database, brawlhallaId: number) {
+  return Promise.all([
     createPostgresPlayerReferences(database).byId(brawlhallaId),
     createPostgresCareerPlayers(database).byId(brawlhallaId),
     createPostgresRankedPlayers(database).byId(brawlhallaId),
   ])
+}
+
+/** What the player module knows of an account, for checking that an esports record belongs to it. */
+export async function readAccountSignals(database: Database, brawlhallaId: number): Promise<AccountSignals> {
+  const [reference, career, ranked] = await readAccount(database, brawlhallaId).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+
+    throw new Error(`read account signals for player ${brawlhallaId}: ${message}`, { cause: error })
+  })
 
   const names = reference ? [reference.name, ...reference.aliases] : []
   const topLegends = mostPlayed(career?.snapshot?.legends ?? [])

@@ -107,6 +107,25 @@ describe('shapeEsportsProfile', () => {
     expect(result?.legendKey).toBe('mordex')
   })
 
+  test('keeps only the brawlhalla id and name of each opponent, and only a real id', () => {
+    const opponents = [
+      { playerId: 31, sggPlayerId: 4_101, cmPlayerId: null, brawlhallaId: 7_788, name: 'Sandstorm' },
+      { playerId: 32, sggPlayerId: null, cmPlayerId: 12, brawlhallaId: 0, name: 'No Account' },
+      { playerId: 33, sggPlayerId: null, cmPlayerId: null, brawlhallaId: null, name: 'Unlinked' },
+    ]
+
+    const profile = shapeOne({
+      placements: [placement()],
+      setsByTournament: new Map([[placement().tournamentId, [match({ opponent: opponents })]]]),
+    })
+
+    expect(profile?.results[0]?.sets[0]?.opponents).toEqual([
+      { brawlhallaId: 7_788, name: 'Sandstorm' },
+      { brawlhallaId: null, name: 'No Account' },
+      { brawlhallaId: null, name: 'Unlinked' },
+    ])
+  })
+
   test('picks the legend played most across the sets', () => {
     const sets = [
       match({ matchId: 'a', legends: [['ULGRIM'], ['TEROS']] }),

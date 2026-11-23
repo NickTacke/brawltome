@@ -31,7 +31,8 @@ export function match(overrides: Partial<RawMatch> = {}): RawMatch {
     matchId: '1',
     scores: [2, 0],
     legends: [['MORDEX'], ['TEROS']],
-    opponent: [{ brawlhallaId: null, name: 'Opponent' }],
+    // the whole opponent as brawltools sends it, not only the fields the profile keeps
+    opponent: [{ playerId: 1, sggPlayerId: null, cmPlayerId: null, brawlhallaId: null, name: 'Opponent' }],
     startTime: null,
     ...overrides,
   }

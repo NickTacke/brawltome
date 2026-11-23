@@ -15,13 +15,16 @@ export type PowerRanking = {
   top8: number
 }
 
+// null when brawltools has no brawlhalla account for the opponent
+export type EsportsOpponent = { brawlhallaId: number | null; name: string }
+
 export type EsportsSet = {
   id: string
   isWin: boolean
   // won or lost without playing, brawltools scores the side that didn't show as -1
   isForfeit: boolean
   score: string
-  opponents: RawOpponent[]
+  opponents: EsportsOpponent[]
   legendKey: string | null
   opponentLegendKey: string | null
 }
@@ -85,6 +88,14 @@ function mostPlayed(legends: string[], legendKeys: ReadonlySet<string>): string 
   return top ? top[0] : null
 }
 
+// the stored opponent carries brawltools' other ids too, and the profile's contract allows none of them
+function toOpponent(raw: RawOpponent): EsportsOpponent {
+  const { brawlhallaId, name } = raw
+  const isAccountId = brawlhallaId !== null && Number.isInteger(brawlhallaId) && brawlhallaId > 0
+
+  return { brawlhallaId: isAccountId ? brawlhallaId : null, name }
+}
+
 function toSet(match: RawMatch, legendKeys: ReadonlySet<string>): EsportsSet {
   const [own, theirs] = match.scores
 
@@ -95,7 +106,7 @@ function toSet(match: RawMatch, legendKeys: ReadonlySet<string>): EsportsSet {
     isWin: own > theirs,
     isForfeit,
     score: isForfeit ? 'DQ' : `${own}-${theirs}`,
-    opponents: match.opponent,
+    opponents: match.opponent.map(toOpponent),
     legendKey: mostPlayed(match.legends[0] ?? [], legendKeys),
     opponentLegendKey: mostPlayed(match.legends[1] ?? [], legendKeys),
   }

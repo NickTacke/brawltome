@@ -3,6 +3,7 @@ export { highlightTournamentIds, pickHighlights } from './highlights'
 export { buildKnownLegendKeys } from './legend-keys'
 export type {
   EsportsMode,
+  EsportsOpponent,
   EsportsProfile,
   EsportsResult,
   EsportsSet,
