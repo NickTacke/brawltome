@@ -30,9 +30,7 @@ function LeadNow({ lead, finalLead, isUpright }: { lead: number; finalLead: numb
 
 /** Which way along the graph is ahead, named at its two ends. */
 function SideNames({ isUpright }: Side) {
-  const meaning = isUpright
-    ? 'Right of the line, the picked player is ahead'
-    : 'Above the line, the picked player is ahead'
+  const meaning = isUpright ? 'Right of the line, the picked side is ahead' : 'Above the line, the picked side is ahead'
 
   if (isUpright) {
     return (
