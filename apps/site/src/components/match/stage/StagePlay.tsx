@@ -113,7 +113,8 @@ export function StagePlay(props: StagePlayProps) {
   const source = { mode: props.cameraMode, legends, stage }
   const camera = useCameraBlend(cameraNow(source, timeMs), cameraPathKey(source))
   const poses = legends.timeline ? posesAt(legends.timeline, stage.box, timeMs) : []
-  const backgroundUrl = backgroundUrlOf(legends.replay)
+  // working out the address builds a URL, so it is done once per replay, not on every frame
+  const backgroundUrl = useMemo(() => backgroundUrlOf(legends.replay), [legends.replay])
   const art = useMapArt(legends.replay, stage.art)
   const note = <LegendsNote state={legends.state} />
   const bodies = drawnBodiesOf(stage, legends)
