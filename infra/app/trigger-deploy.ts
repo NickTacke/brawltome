@@ -118,15 +118,27 @@ async function isSuperseded(options: TriggerDeployOptions): Promise<boolean> {
   return branchHead !== options.releaseSha
 }
 
-// asks the remote, not the checkout, because the checkout is pinned to the commit this run built
-function readRemoteBranchHead(repository: string, branch: string): () => Promise<string> {
-  return async () => {
-    const lsRemote = Bun.spawn(['git', 'ls-remote', `https://github.com/${repository}.git`, `refs/heads/${branch}`])
-    const output = await new Response(lsRemote.stdout).text()
+type CommandResult = { exitCode: number; stdout: string }
+type RunCommand = (command: string[]) => Promise<CommandResult>
 
-    if ((await lsRemote.exited) !== 0) throw new Error(`read the head of ${repository} ${branch}: git ls-remote failed`)
+const lsRemoteTimeoutMs = 30_000
 
-    const sha = output.split(/\s/)[0]
+async function runCommand(command: string[]): Promise<CommandResult> {
+  const child = Bun.spawn(command, { timeout: lsRemoteTimeoutMs })
+  const stdout = await new Response(child.stdout).text()
+
+  return { exitCode: await child.exited, stdout }
+}
+
+/** Reads a branch's head commit from the remote, not the checkout, which is pinned to the commit this run built. */
+export function readRemoteBranchHead(repository: string, branch: string, run: RunCommand = runCommand) {
+  return async (): Promise<string> => {
+    const result = await run(['git', 'ls-remote', `https://github.com/${repository}.git`, `refs/heads/${branch}`])
+
+    if (result.exitCode !== 0)
+      throw new Error(`read the head of ${repository} ${branch}: git ls-remote exited ${result.exitCode}`)
+
+    const sha = result.stdout.split(/\s/)[0]
 
     if (!sha) throw new Error(`read the head of ${repository} ${branch}: no such branch`)
 

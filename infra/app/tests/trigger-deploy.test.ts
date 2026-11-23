@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { triggerDeploy } from '../trigger-deploy'
+import { readRemoteBranchHead, triggerDeploy } from '../trigger-deploy'
 
 type Deployment = { deploymentId: string; status: string; createdAt: string }
 type Call = { url: string; init?: RequestInit }
@@ -149,7 +149,7 @@ describe('triggerDeploy', () => {
     const overrides = { releaseSha: 'aaa111', readBranchHead: async () => 'bbb222' }
 
     expect(await triggerDeploy(deployOptions(fake, overrides))).toBe('superseded')
-    expect(fake.calls.some((call) => call.url.includes('compose.deploy'))).toBe(false)
+    expect(fake.calls).toEqual([])
   })
 
   test('deploys when its own commit is still the head of the branch', async () => {
@@ -170,5 +170,50 @@ describe('triggerDeploy', () => {
       expect(new Headers(call.init?.headers).get('x-api-key')).toBe('secret-token')
       expect(call.url).not.toContain('secret-token')
     }
+  })
+})
+
+describe('readRemoteBranchHead', () => {
+  test('returns the commit git ls-remote prints for the branch', async () => {
+    const commands: string[][] = []
+
+    const run = async (command: string[]) => {
+      commands.push(command)
+
+      return { exitCode: 0, stdout: 'a1ec2031702a2fa4374e46562c33dc989537b883\trefs/heads/master\n' }
+    }
+
+    expect(await readRemoteBranchHead('NickTacke/brawltome', 'master', run)()).toBe(
+      'a1ec2031702a2fa4374e46562c33dc989537b883',
+    )
+
+    expect(commands).toEqual([['git', 'ls-remote', 'https://github.com/NickTacke/brawltome.git', 'refs/heads/master']])
+  })
+
+  test('throws when the branch does not exist', async () => {
+    const run = async () => ({ exitCode: 0, stdout: '' })
+
+    await expect(readRemoteBranchHead('NickTacke/brawltome', 'gone', run)()).rejects.toThrow('no such branch')
+  })
+
+  test('throws when git ls-remote fails', async () => {
+    const run = async () => ({ exitCode: 128, stdout: '' })
+
+    await expect(readRemoteBranchHead('NickTacke/brawltome', 'master', run)()).rejects.toThrow('exited 128')
+  })
+
+  test('makes triggerDeploy fail rather than deploy when the head cannot be read', async () => {
+    const fake = createFakeDokploy({ composeResults: [[], [deployment('new', 'done')]] })
+
+    const readBranchHead = readRemoteBranchHead('NickTacke/brawltome', 'master', async () => ({
+      exitCode: 128,
+      stdout: '',
+    }))
+
+    await expect(triggerDeploy(deployOptions(fake, { releaseSha: 'aaa111', readBranchHead }))).rejects.toThrow(
+      'exited 128',
+    )
+
+    expect(fake.calls).toEqual([])
   })
 })
