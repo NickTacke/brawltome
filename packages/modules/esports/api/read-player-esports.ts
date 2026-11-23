@@ -11,7 +11,8 @@ import {
   type StoredEsports,
   shapeEsportsProfile,
 } from '../domain'
-import { type AccountSignals, readAccountSignals } from './account-signals'
+import { enqueueEsportsRefresh } from '../jobs/enqueue-esports-jobs'
+import { type AccountSignals, isKnownAccount, readAccountSignals } from './account-signals'
 
 const legendLookup = buildLegendLookup()
 
@@ -50,9 +51,22 @@ async function readTrustedProfile(
   return shapeEsportsProfile(stored, legendLookup)
 }
 
+// the trust rule checks a record against the account's names, region and legends, so for an id the player module
+// doesn't know a refresh could never show anything; asking anyway would let a crawler walking ids fill the queue.
+// a refresh that can't be queued must not cost the visitor the page; the next view asks again
+async function requestRefresh(database: Database, brawlhallaId: number): Promise<void> {
+  try {
+    if (!(await isKnownAccount(database, brawlhallaId))) return
+
+    await enqueueEsportsRefresh(database, brawlhallaId)
+  } catch (error) {
+    console.error(`queue an esports refresh for player ${brawlhallaId}:`, error)
+  }
+}
+
 /**
- * A player's esports profile and whether the stored data is due a refresh. The profile shows only when Brawltools
- * links the account and the record can be trusted to be theirs.
+ * A player's esports profile and whether the stored data is due a refresh, which the read then asks for. The profile
+ * shows only when Brawltools links the account and the record can be trusted to be theirs.
  */
 export async function readPlayerEsports(
   database: Database,
@@ -61,6 +75,8 @@ export async function readPlayerEsports(
 ): Promise<PlayerEsportsContract> {
   const { row, stored } = await readStoredEsports(database, brawlhallaId)
   const freshness = esportsFreshness(row, now)
+
+  if (freshness !== 'fresh') await requestRefresh(database, brawlhallaId)
 
   if (row?.link !== 'linked') return { profile: null, freshness }
 

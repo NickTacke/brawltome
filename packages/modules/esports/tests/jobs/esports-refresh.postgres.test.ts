@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import { queueModule, SourceAdmissionLimitedError } from '@brawltome/queue'
@@ -6,7 +6,7 @@ import { runJobOnce } from '@brawltome/queue/testing'
 import { readStoredEsports } from '../../db/read-stored-esports'
 import { saveEventSets } from '../../db/save-event-sets'
 import { saveRefresh } from '../../db/save-refresh'
-import { esportsModule } from '../../index'
+import { enqueueEsportsSetsBackfill, esportsModule } from '../../index'
 import { esportsRefreshContract } from '../../jobs/esports-refresh-contract'
 import { createEsportsRefreshJob } from '../../jobs/esports-refresh-job'
 import { BrawltoolsHttpError, BrawltoolsNetworkError, BrawltoolsRateLimitError } from '../../source/brawltools-client'
@@ -45,6 +45,25 @@ beforeEach(async () => {
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * dayMs)
 }
+
+type QueuedBackfill = { status: string; dedupeKey: string; resourceKey: string | null; workClass: string }
+
+async function readBackfills(): Promise<QueuedBackfill[]> {
+  return database.sql<QueuedBackfill[]>`
+    SELECT status, dedupe_key AS "dedupeKey", resource_key AS "resourceKey", work_class AS "workClass"
+    FROM queue.operations WHERE kind = 'esports-sets-backfill'
+  `
+}
+
+async function readLastError(kind: string): Promise<string | undefined> {
+  const [operation] = await database.sql<{ message: string }[]>`
+    SELECT last_error->>'message' AS message FROM queue.operations WHERE kind = ${kind}
+  `
+
+  return operation?.message
+}
+
+const linkedStub = () => answers({ player, placements: { 1: [rawPlacement('solo', 1, daysAgo(3))], 2: [] } })
 
 async function runRefresh(stub: BrawltoolsAnswers) {
   const calls: string[] = []
@@ -183,6 +202,126 @@ describe('esports refresh job', () => {
     await runJobOnce(createQueue(database, job), job, { sourceAdmission })
 
     expect(backfillsSeen).toEqual([`${brawlhallaId} linked 1 placements`])
+  })
+
+  test('refresh queues one backfill', async () => {
+    const { sourceAdmission } = createSourceAdmission()
+
+    const job = createEsportsRefreshJob({
+      database,
+      createClient: stubClient(linkedStub(), []),
+      enqueueBackfill: (id) => enqueueEsportsSetsBackfill(database, id),
+    })
+
+    // the second refresh finds the first one's backfill still pending
+    for (let run = 0; run < 2; run += 1) {
+      await enqueue(database, esportsRefreshContract, brawlhallaId)
+
+      expect(await runJobOnce(createQueue(database, job), job, { sourceAdmission })).toBe('succeeded')
+    }
+
+    expect(await readBackfills()).toEqual([
+      {
+        status: 'pending',
+        dedupeKey: `esports-sets-backfill:${brawlhallaId}`,
+        resourceKey: `esports-sets-backfill:${brawlhallaId}`,
+        workClass: 'maintenance',
+      },
+    ])
+  })
+
+  test('a 429 while fetching highlight sets asks for no backfill', async () => {
+    const rateLimited = new BrawltoolsRateLimitError('/player/match', 30)
+    const stub = linkedStub()
+
+    stub.failures.set('matches solo', rateLimited)
+
+    const { outcome, backfills } = await runRefresh(stub)
+
+    // the refresh runs again once the pause is over, and asks then
+    expect(outcome).toBe('retry')
+    expect(backfills).toEqual([])
+  })
+
+  test('a lease lost while fetching highlight sets asks for no backfill', async () => {
+    const backfills: number[] = []
+    const calls: string[] = []
+    const leaseLost = new AbortController()
+    const createClient = stubClient(linkedStub(), calls)
+
+    // the lease is lost once the refresh is saved, while the highlight event is being fetched
+    const job = createEsportsRefreshJob({
+      database,
+      createClient: (admit) =>
+        createClient(async () => {
+          await admit()
+
+          if (calls.includes('legends')) leaseLost.abort()
+        }),
+      enqueueBackfill: async (id) => {
+        backfills.push(id)
+      },
+    })
+
+    const tools = {
+      signal: leaseLost.signal,
+      createSourceAdmitter: () => async () => {},
+      queue: { complete: async () => 'lease-lost' },
+    }
+
+    const lease = { payload: { brawlhallaId } }
+
+    expect(await job.run(lease as never, tools as never)).toBe('lease_lost')
+    expect(calls).toContain('matches solo')
+    expect(backfills).toEqual([])
+  })
+
+  test('a backfill that cannot be queued is logged, and the refresh keeps its own failure', async () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+    const { sourceAdmission } = createSourceAdmission()
+    const stub = linkedStub()
+
+    stub.failures.set('matches solo', new Error('brawltools sent invalid json: /player/match'))
+
+    const job = createEsportsRefreshJob({
+      database,
+      createClient: stubClient(stub, []),
+      enqueueBackfill: async () => {
+        throw new Error('queue is down')
+      },
+    })
+
+    await enqueue(database, esportsRefreshContract, brawlhallaId)
+
+    try {
+      expect(await runJobOnce(createQueue(database, job), job, { sourceAdmission })).toBe('retry')
+      expect(await readLastError('esports-refresh')).toBe('brawltools sent invalid json: /player/match')
+      expect(String(errors.mock.calls[0]?.[0])).toContain(`esports sets backfill for player ${brawlhallaId}`)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  test('a backfill that cannot be queued after a good refresh is logged, and the refresh succeeds', async () => {
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+    const { sourceAdmission } = createSourceAdmission()
+
+    const job = createEsportsRefreshJob({
+      database,
+      createClient: stubClient(linkedStub(), []),
+      enqueueBackfill: async () => {
+        throw new Error('queue is down')
+      },
+    })
+
+    await enqueue(database, esportsRefreshContract, brawlhallaId)
+
+    try {
+      expect(await runJobOnce(createQueue(database, job), job, { sourceAdmission })).toBe('succeeded')
+      expect(errors).toHaveBeenCalledTimes(1)
+    } finally {
+      errors.mockRestore()
+    }
   })
 
   test('a 503 records a failure and keeps the stored data', async () => {

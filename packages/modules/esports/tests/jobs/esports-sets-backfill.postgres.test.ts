@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
@@ -192,6 +192,67 @@ describe('esports sets backfill job', () => {
     expect(outcome).toBe('succeeded')
     expect(calls).toEqual(['matches a', 'matches b', 'matches c'])
     expect(row?.failureCount).toBe(1)
+  })
+
+  test('broken events at the start do not stop the rest, since brawltools answered for them', async () => {
+    const broken = ['a', 'b', 'c']
+
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [...broken, 'd'].map((tournamentId) => placement({ tournamentId })),
+      }),
+    )
+
+    const malformed = new Error('brawltools sent invalid json: /player/match')
+    const failures = new Map(broken.map((tournamentId) => [`matches ${tournamentId}`, malformed]))
+    const stub = answers({ matches: new Map([['d', [match({ matchId: 'd' })]]]), failures })
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const { calls } = await runBackfill(stub)
+      const { stored } = await readStoredEsports(database, brawlhallaId)
+
+      expect(calls).toEqual(['matches a', 'matches b', 'matches c', 'matches d'])
+      expect(stored.setsByTournament.get('d')?.map((set) => set.matchId)).toEqual(['d'])
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  test('a broken event is logged and skipped, without a recorded failure or a dead letter', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'a-broken', startTime: daysAgo(30) }),
+          placement({ tournamentId: 'b-after', startTime: daysAgo(40) }),
+        ],
+      }),
+    )
+
+    const malformed = new Error('brawltools sent invalid json: /player/match')
+
+    const stub = answers({
+      matches: new Map([['b-after', [match({ matchId: 'b' })]]]),
+      failures: new Map([['matches a-broken', malformed]]),
+    })
+
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const { outcome } = await runBackfill(stub)
+      const { row, stored } = await readStoredEsports(database, brawlhallaId)
+
+      // the linked player keeps the 7 days, so one event that never fetches doesn't bring a refresh every day
+      expect(outcome).toBe('succeeded')
+      expect((await readOperation(database, 'esports-sets-backfill')).status).toBe('succeeded')
+      expect(row?.failureCount).toBe(0)
+      expect(stored.setsByTournament.get('b-after')?.map((set) => set.matchId)).toEqual(['b'])
+      expect(String(errors.mock.calls[0]?.[0])).toContain(`event a-broken for player ${brawlhallaId}`)
+    } finally {
+      errors.mockRestore()
+    }
   })
 
   test('backfill leaves side mode events out', async () => {

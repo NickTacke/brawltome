@@ -19,7 +19,12 @@ import {
   type PlayerProjectionSource,
   type PostgresDiscovery,
 } from '@brawltome/discovery'
-import { createBrawltoolsClient, createEsportsRefreshJob, createEsportsSetsBackfillJob } from '@brawltome/esports'
+import {
+  createBrawltoolsClient,
+  createEsportsRefreshJob,
+  createEsportsSetsBackfillJob,
+  enqueueEsportsSetsBackfill,
+} from '@brawltome/esports'
 import type { Database } from '@brawltome/foundation'
 import {
   type CareerLegendResolver,
@@ -236,8 +241,8 @@ function createEsportsJobs(esports: WorkerEsportsDependencies, telemetry: Teleme
   const countedFetch = (input: string, init: RequestInit) => telemetryFetch(telemetry, 'brawltools', fetch, input, init)
   const createClient = (admit: () => Promise<void>) => createBrawltoolsClient({ admit, fetch: countedFetch })
 
-  // nothing writes a backfill yet: a new kind ships one release before anything enqueues it
-  const refresh = createEsportsRefreshJob({ database, createClient, enqueueBackfill: async () => {} })
+  const enqueueBackfill = (brawlhallaId: number) => enqueueEsportsSetsBackfill(database, brawlhallaId)
+  const refresh = createEsportsRefreshJob({ database, createClient, enqueueBackfill })
   const backfill = createEsportsSetsBackfillJob({ database, createClient })
 
   return [refresh, backfill]

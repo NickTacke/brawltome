@@ -26,6 +26,13 @@ function readAccount(database: Database, brawlhallaId: number) {
   ])
 }
 
+/** Whether the player module knows the account at all, by any name. */
+export async function isKnownAccount(database: Database, brawlhallaId: number): Promise<boolean> {
+  const reference = await createPostgresPlayerReferences(database).byId(brawlhallaId)
+
+  return reference !== null
+}
+
 /** What the player module knows of an account, for checking that an esports record belongs to it. */
 export async function readAccountSignals(database: Database, brawlhallaId: number): Promise<AccountSignals> {
   const [reference, career, ranked] = await readAccount(database, brawlhallaId).catch((error: unknown) => {
