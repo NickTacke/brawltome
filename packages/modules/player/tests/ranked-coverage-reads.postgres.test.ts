@@ -38,7 +38,7 @@ async function insertRankedProfile(brawlhallaId: number, lastSuccessAt: string |
 }
 
 describe('ranked coverage reads', () => {
-  test('lists players at or above the rating seen on the boards since the cutoff, with their last V0 success', async () => {
+  test('lists players at or above the rating who played ranked since the cutoff, with their last V0 success', async () => {
     await observe(1, 2300, '2026-11-22T12:00:00Z')
     await observe(2, 1800, '2026-11-22T12:00:00Z')
     await observe(3, 1799, '2026-11-22T12:00:00Z')
@@ -52,7 +52,7 @@ describe('ranked coverage reads', () => {
 
     const candidates = await coverage.candidates({
       minimumRating: 1800,
-      observedSince: new Date('2026-11-16T12:00:00Z'),
+      playedRankedSince: new Date('2026-11-16T12:00:00Z'),
     })
 
     expect(candidates.sort((left, right) => left.brawlhallaId - right.brawlhallaId)).toEqual([

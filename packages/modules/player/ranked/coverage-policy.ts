@@ -15,13 +15,14 @@ export const rankedCoveragePolicy = {
     { band: '2000-2199', minimumRating: 2000, refreshIntervalMs: 2 * dayMs },
     { band: '1800-1999', minimumRating: 1800, refreshIntervalMs: 7 * dayMs },
   ],
-  // a player missing from the 1v1 boards this long has stopped playing ranked, so their profile stops moving
-  boardObservedWithinMs: 7 * dayMs,
+  // a board observation only moves when the player's standing changes, so this means 1v1 ranked played within the
+  // window; a player who stopped playing has a profile that stops moving
+  playedRankedWithinMs: 7 * dayMs,
   // a dead-lettered refresh rests this long, so a profile that keeps failing neither spends the budget nor pages
   failedBackoffMs: 7 * dayMs,
 } as const satisfies {
   bands: readonly RankedCoverageBandPolicy[]
-  boardObservedWithinMs: number
+  playedRankedWithinMs: number
   failedBackoffMs: number
 }
 

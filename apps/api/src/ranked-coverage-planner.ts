@@ -64,7 +64,7 @@ export type RankedCoveragePlannerDependencies = {
   readSourceUsage: () => Promise<SourceUsage>
   readSourcePausedUntil: () => Promise<Date | null>
   coverage: {
-    candidates(input: { minimumRating: number; observedSince: Date }): Promise<RankedCoverageCandidate[]>
+    candidates(input: { minimumRating: number; playedRankedSince: Date }): Promise<RankedCoverageCandidate[]>
     lastRankedSuccess(brawlhallaId: number): Promise<Date | null>
   }
   operations: {
@@ -106,7 +106,7 @@ export function createRankedCoveragePlanner(deps: RankedCoveragePlannerDependenc
     const [candidates, attempts] = await Promise.all([
       deps.coverage.candidates({
         minimumRating: rankedCoverageMinimumRating,
-        observedSince: new Date(readAt - rankedCoveragePolicy.boardObservedWithinMs),
+        playedRankedSince: new Date(readAt - rankedCoveragePolicy.playedRankedWithinMs),
       }),
       deps.operations.recentRankedCoverageAttempts({ windowDays: attemptHistoryDays }),
     ])
