@@ -13,7 +13,7 @@ import type { BrawltoolsClient, GameMode } from '../source/brawltools-client'
 import type { RawMatch, RawPlacement, RawPlayer } from '../source/raw-types'
 import { decideBrawltoolsFailure } from './brawltools-failures'
 import { type EsportsRefreshPayload, esportsRefreshContract } from './esports-refresh-contract'
-import { type EsportsJobDependencies, runEsportsJob } from './run-esports-job'
+import { type EsportsJobDependencies, isFailedRefresh, runEsportsJob } from './run-esports-job'
 
 export type EsportsRefreshJobDependencies = EsportsJobDependencies & {
   // asks for the sets of the player's other events, once the refresh has saved them
@@ -97,11 +97,22 @@ async function fetchHighlightSets(
   }
 }
 
+// a backfill that can't be queued is logged, never thrown, so it can't hide why the refresh failed; the next refresh
+// asks again
+async function requestBackfill(dependencies: EsportsRefreshJobDependencies, brawlhallaId: number): Promise<void> {
+  try {
+    await dependencies.enqueueBackfill(brawlhallaId)
+  } catch (error) {
+    console.error(`queue an esports sets backfill for player ${brawlhallaId}:`, error)
+  }
+}
+
 async function refreshPlayer(
   dependencies: EsportsRefreshJobDependencies,
   client: BrawltoolsClient,
   brawlhallaId: number,
   legendLookup: LegendLookup,
+  leaseLost: AbortSignal,
 ): Promise<void> {
   const refresh = await fetchRefresh(client, brawlhallaId)
 
@@ -110,12 +121,17 @@ async function refreshPlayer(
   if (!isLinked(refresh)) return
 
   // the backfill is asked for even when a highlight event failed, or one broken event would keep the player from
-  // ever getting the sets of the rest
+  // ever getting the sets of the rest; after a rate limit this refresh runs again, and after a lost lease another
+  // run has the player, so that run asks instead
   try {
     await fetchHighlightSets(dependencies, client, refresh, legendLookup)
-  } finally {
-    await dependencies.enqueueBackfill(brawlhallaId)
+  } catch (error) {
+    if (isFailedRefresh(error, leaseLost)) await requestBackfill(dependencies, brawlhallaId)
+
+    throw error
   }
+
+  if (!leaseLost.aborted) await requestBackfill(dependencies, brawlhallaId)
 }
 
 /**
@@ -134,7 +150,7 @@ export function createEsportsRefreshJob(
     // player as its resource key, which keeps one active per player
     run: (lease, tools) =>
       runEsportsJob(dependencies, lease, tools, (client) =>
-        refreshPlayer(dependencies, client, lease.payload.brawlhallaId, legendLookup),
+        refreshPlayer(dependencies, client, lease.payload.brawlhallaId, legendLookup, tools.signal),
       ),
     decideFailure: decideBrawltoolsFailure,
   })

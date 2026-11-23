@@ -13,7 +13,7 @@ export type EsportsJobDependencies = {
 
 // a rate limit puts the job back to run soon, and a lost lease leaves the player to the run that took over, so
 // neither is a failed refresh
-function isFailedRefresh(error: unknown, leaseLost: AbortSignal): boolean {
+export function isFailedRefresh(error: unknown, leaseLost: AbortSignal): boolean {
   const isLeaseLost = leaseLost.aborted || error instanceof JobLeaseLostError
 
   return !isBrawltoolsRateLimited(error) && !isLeaseLost
