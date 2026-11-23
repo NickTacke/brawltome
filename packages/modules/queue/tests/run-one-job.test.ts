@@ -13,7 +13,7 @@ import {
   runOneJob,
   type WorkClass,
 } from '@brawltome/queue'
-import { runJobOnce, testJobContract } from '@brawltome/queue/testing'
+import { createPassthroughJobContract, runJobOnce, testJobContract } from '@brawltome/queue/testing'
 import { createTelemetry } from '@brawltome/telemetry'
 
 const admission: AdmissionConfig = {
@@ -142,6 +142,42 @@ describe('createJobRegistry', () => {
 })
 
 describe('runOneJob', () => {
+  test('runOneJob counts a coverage refresh attempt under its cohort', async () => {
+    const refreshContract = createPassthroughJobContract('interactive-player-refresh')
+    const operations = createPostgresRefreshOperations({ database }, { jobs: [refreshContract] })
+    const key = randomUUID()
+
+    await operations.accept({
+      job: refreshContract,
+      dedupeKey: key,
+      operationKey: key,
+      workClass: 'primary-monitoring',
+      payload: { cohort: 'ranked-coverage', brawlhallaId: 7, staleSections: ['ranked'] },
+      provenance: { source: 'ranked-coverage' },
+    })
+
+    const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
+
+    const job = defineJob({
+      ...refreshContract,
+      failureCode: 'test_refresh_failed',
+      run: async (lease, tools) => ((await tools.queue.complete(lease)) === 'lease-lost' ? 'lease_lost' : 'succeeded'),
+    })
+
+    await runOneJob(operations, 'worker-cohort', createJobRegistry([job]), { ...runOptions(), telemetry })
+
+    const attempts = telemetry.metrics.snapshot().find(({ name }) => name === 'operation_attempts_total')
+
+    expect(attempts?.series.map(({ labels }) => labels)).toEqual([
+      {
+        kind: 'interactive-player-refresh',
+        work_class: 'primary-monitoring',
+        outcome: 'succeeded',
+        cohort: 'ranked-coverage',
+      },
+    ])
+  })
+
   test('runOneJob traces the attempt with its kind, class and provenance source', async () => {
     const { operations } = await acceptProofOperation()
     const spans: { name: string; attributes: unknown }[] = []

@@ -343,6 +343,7 @@ app.get('/metrics', async (c) => {
         work_class: item.workClass,
         kind: item.kind,
         reason: item.reason,
+        cohort: item.cohort,
       })
     }
 

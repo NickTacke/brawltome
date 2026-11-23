@@ -178,6 +178,9 @@ const workClass = [
   'maintenance',
 ] as const
 
+// the background group an operation's payload names, the queue's operationCohorts, so alerts can tell them apart
+const operationCohort = ['none', 'recently-viewed', 'ranked-coverage'] as const
+
 // the coverage bands of the player module's rankedCoveragePolicy
 const rankedCoverageBand = ['2200+', '2000-2199', '1800-1999'] as const
 
@@ -256,7 +259,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   operation_attempts_total: {
     kind: 'counter',
     help: 'Durable operation attempts',
-    labels: { kind: operationKind, work_class: workClass, outcome },
+    labels: { kind: operationKind, work_class: workClass, outcome, cohort: operationCohort },
   },
   operation_duration_ms: {
     kind: 'histogram',
@@ -278,7 +281,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   operation_dead_letters: {
     kind: 'gauge',
     help: 'Current unresolved durable dead letters',
-    labels: { work_class: workClass, kind: operationKind, reason: ['execution', 'admission_rejected'] },
+    labels: {
+      work_class: workClass,
+      kind: operationKind,
+      reason: ['execution', 'admission_rejected'],
+      cohort: operationCohort,
+    },
   },
   replay_jobs: {
     kind: 'gauge',
@@ -893,7 +901,7 @@ export function createTelemetry(options: {
   }
 }) {
   const capacity = Math.max(1, Math.min(options.capacity ?? 1000, 10_000))
-  // operation_dead_letters keeps a series for every kind in every work class, 132 with twenty kinds
+  // operation_dead_letters keeps a series for every kind in every work class, 136 with twenty kinds and the cohorts
   const maxSeries = Math.max(1, Math.min(options.maxSeriesPerMetric ?? 256, 1024))
   const drainIntervalMs = Math.max(0, Math.min(options.drainIntervalMs ?? 1000, 60_000))
   const exportTimeoutMs = Math.max(1, Math.min(options.exportTimeoutMs ?? 250, 5_000))

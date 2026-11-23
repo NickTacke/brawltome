@@ -89,6 +89,7 @@ export function createOperationsTelemetryObserver(options: {
           work_class: item.workClass,
           kind: item.kind,
           reason: item.reason,
+          cohort: item.cohort,
         }),
       )
     }

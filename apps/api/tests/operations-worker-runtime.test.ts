@@ -6,7 +6,13 @@ const snapshot = {
   observedAt: '2025-01-01T00:00:00.000Z',
   oldestPending: [{ workClass: 'leaderboard' as const, ageMs: 42 }],
   deadLetters: [
-    { workClass: 'leaderboard' as const, kind: 'leaderboard-1v1' as const, reason: 'execution' as const, count: 2 },
+    {
+      workClass: 'leaderboard' as const,
+      kind: 'leaderboard-1v1' as const,
+      reason: 'execution' as const,
+      cohort: 'none' as const,
+      count: 2,
+    },
   ],
   scheduleLateness: [{ kind: 'leaderboard-1v1' as const, latenessMs: 17 }],
 }
@@ -72,7 +78,7 @@ describe('operations worker telemetry observer', () => {
     expect(metrics.find(({ name }) => name === 'operation_oldest_pending_age_ms')?.series[0]?.value).toBe(42)
 
     expect(metrics.find(({ name }) => name === 'operation_dead_letters')?.series[0]).toMatchObject({
-      labels: { work_class: 'leaderboard', kind: 'leaderboard-1v1', reason: 'execution' },
+      labels: { work_class: 'leaderboard', kind: 'leaderboard-1v1', reason: 'execution', cohort: 'none' },
       value: 2,
     })
 

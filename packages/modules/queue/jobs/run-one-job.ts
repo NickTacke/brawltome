@@ -6,6 +6,7 @@ import {
   retryDelayForAttempt,
 } from '../domain/failure-decision'
 import { SourceAdmissionLimitedError, type SourceDomain } from '../domain/job-errors'
+import { cohortOf } from '../domain/queue-telemetry'
 import type { AdmissionConfig, OperationFailure, TransitionResult } from '../model'
 import type {
   AttemptOutcome,
@@ -234,7 +235,7 @@ function recordAttemptCompleted(
   const labels = { kind: lease.kind, work_class: lease.workClass, outcome: attempt.outcome }
 
   recordTelemetry(telemetry, (active) => {
-    active.metrics.add('operation_attempts_total', 1, labels)
+    active.metrics.add('operation_attempts_total', 1, { ...labels, cohort: cohortOf(lease.payload) })
     active.metrics.observe('operation_duration_ms', performance.now() - startedAt, labels)
 
     if (attempt.outcome !== 'succeeded') {
