@@ -8,15 +8,21 @@ const alignments = {
   end: 'right-0',
 }
 
-type IconTooltipProps = { label: string; align?: keyof typeof alignments }
+// a parent at the bottom of the screen opens the tooltip above itself
+const sides = {
+  below: 'top-full mt-1',
+  above: 'bottom-full mb-1',
+}
+
+type IconTooltipProps = { label: string; align?: keyof typeof alignments; side?: keyof typeof sides }
 
 /** The name of an icon that has no visible label, shown below it on hover and keyboard focus. */
-export function IconTooltip({ label, align = 'center' }: IconTooltipProps) {
+export function IconTooltip({ label, align = 'center', side = 'below' }: IconTooltipProps) {
   return (
     <span
       data-tooltip
       aria-hidden="true"
-      className={`pointer-events-none absolute top-full z-10 mt-1 rounded-sm border border-line bg-raised px-2 py-1 text-xs font-semibold whitespace-nowrap text-strong opacity-0 shadow-lg transition-opacity delay-100 group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100 ${alignments[align]}`}
+      className={`pointer-events-none absolute z-10 rounded-sm border border-line bg-raised px-2 py-1 text-xs font-semibold whitespace-nowrap text-strong opacity-0 shadow-lg transition-opacity delay-100 group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100 ${sides[side]} ${alignments[align]}`}
     >
       {label}
     </span>
