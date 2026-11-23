@@ -150,10 +150,6 @@ export function createRankedCoveragePlanner(deps: RankedCoveragePlannerDependenc
     if (pausedUntil) return { reason: 'source_paused', untilMs: pausedUntil.getTime() }
 
     const busyUntilMs = now() + busyRecheckMs
-    const usage = await deps.readSourceUsage()
-
-    if (!sourceBudgetOpen(usage, deps.config.maxUsageRatio)) return { reason: 'budget', untilMs: busyUntilMs }
-
     const interactiveRefreshes = await deps.operations.activeInteractivePlayerRefreshes()
 
     if (interactiveRefreshes > 0) return { reason: 'interactive', untilMs: busyUntilMs }
@@ -161,6 +157,11 @@ export function createRankedCoveragePlanner(deps: RankedCoveragePlannerDependenc
     const backgroundRefreshes = await deps.operations.activeBackgroundPlayerRefreshes()
 
     if (backgroundRefreshes > 0) return { reason: 'slot_busy', untilMs: busyUntilMs }
+
+    // last: it reads every reservation in the 15-minute window, where the counts above use indexes
+    const usage = await deps.readSourceUsage()
+
+    if (!sourceBudgetOpen(usage, deps.config.maxUsageRatio)) return { reason: 'budget', untilMs: busyUntilMs }
 
     return null
   }

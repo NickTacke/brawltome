@@ -22,6 +22,7 @@ type FakeState = {
   lastSuccess: Map<number, Date>
   enqueued: number[]
   boardReads: number
+  usageReads: number
 }
 
 function createFakes(config: Partial<RankedCoveragePlannerConfig> = {}) {
@@ -41,13 +42,18 @@ function createFakes(config: Partial<RankedCoveragePlannerConfig> = {}) {
     lastSuccess: new Map(),
     enqueued: [],
     boardReads: 0,
+    usageReads: 0,
   }
 
   const telemetry = createTelemetry({ service: 'test', drainIntervalMs: 0 })
 
   const planner = createRankedCoveragePlanner({
     config: { enabled: true, callSpacingMs: 15_000, maxUsageRatio: 0.5, ...config },
-    readSourceUsage: async () => ({ used: state.used, limit: 180 }),
+    readSourceUsage: async () => {
+      state.usageReads++
+
+      return { used: state.used, limit: 180 }
+    },
     readSourcePausedUntil: async () => state.pausedUntil,
     coverage: {
       candidates: async () => {
@@ -146,6 +152,22 @@ describe('ranked coverage planner', () => {
     advance(2_000)
     expect(await planner.tick()).toBe(1)
     expect(state.enqueued).toEqual([2])
+  })
+
+  test('looks at refreshes in flight before it reads the V0 budget', async () => {
+    const { state, planner, advance, counter } = createFakes()
+
+    state.interactive = 1
+    expect(await planner.tick()).toBe(0)
+
+    state.interactive = 0
+    state.background = 1
+    advance(2_000)
+    expect(await planner.tick()).toBe(0)
+
+    expect(state.usageReads).toBe(0)
+    expect(counter('ranked_coverage_skips_total', { reason: 'interactive' })).toBe(1)
+    expect(counter('ranked_coverage_skips_total', { reason: 'slot_busy' })).toBe(1)
   })
 
   test('waits while another background player refresh holds the slot or the budget is past its share', async () => {
