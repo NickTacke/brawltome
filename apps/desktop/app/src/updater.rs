@@ -22,6 +22,10 @@ pub const UPDATE_FEED_URL: &str =
 /// 6 hours
 pub const UPDATE_CHECK_INTERVAL_MS: u64 = 21_600_000;
 
+/// detection finds a running game at its first look, within a second or two of the start; it says nothing while
+/// the game is closed, so the first check waits this long instead of for an answer that never comes
+pub const FIRST_CHECK_HOLD_OFF_MS: u64 = 10_000;
+
 /// when the api refuses this version
 pub const REQUIRED_UPDATE_RECHECK_MS: u64 = 600_000;
 
@@ -56,7 +60,7 @@ pub fn next_updater_step(
     }
 
     let Some(last_check_ms) = last_check_ms else {
-        return UpdaterStep::CheckNow;
+        return wait_until(FIRST_CHECK_HOLD_OFF_MS, now_ms);
     };
 
     let interval_ms = if is_update_required {
@@ -66,11 +70,15 @@ pub fn next_updater_step(
     };
     let next_check_ms = last_check_ms.saturating_add(interval_ms);
 
-    if now_ms >= next_check_ms {
+    wait_until(next_check_ms, now_ms)
+}
+
+fn wait_until(check_at_ms: u64, now_ms: u64) -> UpdaterStep {
+    if now_ms >= check_at_ms {
         return UpdaterStep::CheckNow;
     }
 
-    UpdaterStep::WaitMs(next_check_ms - now_ms)
+    UpdaterStep::WaitMs(check_at_ms - now_ms)
 }
 
 /// checks the feed in the background for as long as the app runs; debug builds never update
@@ -125,6 +133,21 @@ async fn run(updater: Updater, session: SessionHandle, app: AppHandle) {
     let started_at = Instant::now();
     let mut last_check_ms = None;
 
+    while wait_until_check_is_due(&mut status, started_at, last_check_ms).await {
+        let attempt = update_if_available(&updater, &session, &app, &mut status).await;
+
+        if attempt == Attempt::Counted {
+            last_check_ms = Some(elapsed_ms(started_at));
+        }
+    }
+}
+
+/// waits on the status and the clock until a check is due; false once the session has stopped
+async fn wait_until_check_is_due(
+    status: &mut watch::Receiver<AppStatus>,
+    started_at: Instant,
+    last_check_ms: Option<u64>,
+) -> bool {
     loop {
         let step = {
             let current = status.borrow_and_update();
@@ -138,19 +161,13 @@ async fn run(updater: Updater, session: SessionHandle, app: AppHandle) {
         };
 
         let is_session_running = match step {
-            UpdaterStep::WaitForGameToClose => wait_for_game_to_close(&mut status).await,
-            UpdaterStep::WaitMs(wait_ms) => sleep_or_status_change(&mut status, wait_ms).await,
-            UpdaterStep::CheckNow => {
-                let attempt = update_if_available(&updater, &session, &app, &mut status).await;
-                if attempt == Attempt::Counted {
-                    last_check_ms = Some(elapsed_ms(started_at));
-                }
-                true
-            }
+            UpdaterStep::CheckNow => return true,
+            UpdaterStep::WaitForGameToClose => wait_for_game_to_close(status).await,
+            UpdaterStep::WaitMs(wait_ms) => sleep_or_status_change(status, wait_ms).await,
         };
 
         if !is_session_running {
-            return;
+            return false;
         }
     }
 }
@@ -340,9 +357,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn checks_at_start_when_the_game_is_closed() {
+    fn the_first_check_gives_detection_time_to_find_the_game() {
         assert_eq!(
             next_updater_step(false, false, None, 0),
+            UpdaterStep::WaitMs(FIRST_CHECK_HOLD_OFF_MS)
+        );
+        assert_eq!(
+            next_updater_step(false, false, None, 4_000),
+            UpdaterStep::WaitMs(FIRST_CHECK_HOLD_OFF_MS - 4_000)
+        );
+    }
+
+    #[test]
+    fn checks_after_the_hold_off_when_the_game_is_closed() {
+        assert_eq!(
+            next_updater_step(false, false, None, FIRST_CHECK_HOLD_OFF_MS),
             UpdaterStep::CheckNow
         );
     }
@@ -413,6 +442,48 @@ mod tests {
             game: GameStatus::Running { game_version: None },
             ..AppStatus::default()
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_first_check_is_due_after_the_hold_off() {
+        let (_sender, mut status) = watch::channel(AppStatus::default());
+        let started_at = Instant::now();
+
+        let is_due = wait_until_check_is_due(&mut status, started_at, None).await;
+
+        assert!(is_due);
+        assert_eq!(
+            started_at.elapsed(),
+            Duration::from_millis(FIRST_CHECK_HOLD_OFF_MS)
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_game_found_during_the_hold_off_holds_the_first_check_until_it_closes() {
+        let (sender, mut status) = watch::channel(AppStatus::default());
+        let started_at = Instant::now();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(1_000)).await;
+            sender.send_replace(game_running());
+            tokio::time::sleep(Duration::from_millis(59_000)).await;
+            sender.send_replace(AppStatus::default());
+            std::future::pending::<()>().await;
+        });
+
+        let is_due = wait_until_check_is_due(&mut status, started_at, None).await;
+
+        assert!(is_due);
+        assert_eq!(started_at.elapsed(), Duration::from_millis(60_000));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stopped_session_ends_the_wait() {
+        let (sender, mut status) = watch::channel(AppStatus::default());
+        drop(sender);
+
+        let is_due = wait_until_check_is_due(&mut status, Instant::now(), None).await;
+
+        assert!(!is_due);
     }
 
     #[tokio::test(start_paused = true)]
