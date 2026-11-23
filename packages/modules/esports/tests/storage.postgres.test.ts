@@ -42,6 +42,21 @@ function linkedRefresh(overrides: Partial<RefreshInput> = {}): RefreshInput {
   }
 }
 
+// the test database, counting each transaction a read opens on it
+function countingSnapshots() {
+  let snapshots = 0
+
+  const db = new Proxy(database.db, {
+    get(target, property, receiver) {
+      if (property === 'transaction') snapshots += 1
+
+      return Reflect.get(target, property, receiver)
+    },
+  })
+
+  return { database: { ...database, db }, snapshots: () => snapshots }
+}
+
 function daysBeforeNow(days: number): Date {
   return new Date(now.getTime() - days * dayMs)
 }
@@ -226,6 +241,7 @@ describe('saveEventSets and readStoredEsports', () => {
   test('sets are keyed by tournament and a second save replaces the first', async () => {
     const fetchedAt = new Date('2026-11-01T00:00:00Z')
 
+    await saveRefresh(database, linkedRefresh())
     await saveEventSets(database, brawlhallaId, 'cup/1v1', [match({ matchId: 'a' })], fetchedAt)
     await saveEventSets(database, brawlhallaId, 'other/1v1', [match({ matchId: 'b' })], fetchedAt)
 
@@ -242,6 +258,25 @@ describe('saveEventSets and readStoredEsports', () => {
 
     expect(row).toBeNull()
     expect(stored).toEqual({ pr1v1: null, pr2v2: null, placements: [], setsByTournament: new Map() })
+  })
+
+  test('opens a snapshot only for a linked player', async () => {
+    const reader = countingSnapshots()
+
+    await saveRefresh(database, linkedRefresh({ link: 'none', player: null, placements: [] }))
+
+    const none = await readStoredEsports(reader.database, brawlhallaId)
+
+    expect(none.row?.link).toBe('none')
+    expect(none.stored.placements).toEqual([])
+    expect(reader.snapshots()).toBe(0)
+
+    await saveRefresh(database, linkedRefresh())
+
+    const linked = await readStoredEsports(reader.database, brawlhallaId)
+
+    expect(linked.stored.placements).toHaveLength(1)
+    expect(reader.snapshots()).toBe(1)
   })
 })
 
