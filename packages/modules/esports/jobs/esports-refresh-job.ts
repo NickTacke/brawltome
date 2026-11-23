@@ -11,7 +11,7 @@ import {
 } from '../domain'
 import type { BrawltoolsClient, GameMode } from '../source/brawltools-client'
 import type { RawMatch, RawPlacement, RawPlayer } from '../source/raw-types'
-import { decideBrawltoolsFailure } from './brawltools-failures'
+import { decideBrawltoolsFailure, isBrawltoolsRejected } from './brawltools-failures'
 import { type EsportsRefreshPayload, esportsRefreshContract } from './esports-refresh-contract'
 import { type EsportsJobDependencies, isFailedRefresh, runEsportsJob } from './run-esports-job'
 
@@ -92,9 +92,27 @@ async function fetchHighlightSets(
   const wanted = highlightIds.filter((tournamentId) => missing.has(tournamentId))
 
   for (const tournamentId of wanted) {
-    const sets = await client.matches(refresh.player.playerId, tournamentId)
+    const sets = await fetchEventSets(client, refresh, tournamentId)
 
-    await saveEventSets(dependencies.database, brawlhallaId, tournamentId, sets, new Date())
+    if (sets) await saveEventSets(dependencies.database, brawlhallaId, tournamentId, sets, new Date())
+  }
+}
+
+// null when brawltools turns the event down: it would answer the same on every retry, so the event is logged and
+// left to the backfill, as the backfill does with an event that won't fetch, and the rest of the refresh goes on
+async function fetchEventSets(
+  client: BrawltoolsClient,
+  refresh: LinkedRefresh,
+  tournamentId: string,
+): Promise<RawMatch[] | null> {
+  try {
+    return await client.matches(refresh.player.playerId, tournamentId)
+  } catch (error) {
+    if (!isBrawltoolsRejected(error)) throw error
+
+    console.error(`fetch the sets of event ${tournamentId} for player ${refresh.brawlhallaId}:`, error)
+
+    return null
   }
 }
 
