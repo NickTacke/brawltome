@@ -225,7 +225,10 @@ export function createRankedCoveragePlanner(deps: RankedCoveragePlannerDependenc
       try {
         return await plan()
       } catch (error) {
-        nextRunAt = now() + deps.config.callSpacingMs
+        // while off the planner only reads coverage, so a failing read waits as long as a good one would
+        const retryMs = deps.config.enabled ? deps.config.callSpacingMs : candidateReloadIntervalMs
+
+        nextRunAt = now() + retryMs
         record((active) => active.logger.error('ranked_coverage.plan_failed', error))
 
         return 0

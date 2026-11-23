@@ -235,6 +235,24 @@ describe('ranked coverage planner', () => {
     expect(state.boardReads).toBe(2)
   })
 
+  test('waits the full read interval after a failed read while disabled', async () => {
+    const { state, planner, advance } = createFakes({ enabled: false })
+    const candidates = state.candidates
+
+    state.candidates = null as never
+    expect(await planner.tick()).toBe(0)
+    expect(state.boardReads).toBe(1)
+
+    state.candidates = candidates
+    advance(15_000)
+    await planner.tick()
+    expect(state.boardReads).toBe(1)
+
+    advance(5 * 60_000)
+    await planner.tick()
+    expect(state.boardReads).toBe(2)
+  })
+
   test('never throws from a failed pass and tries the read again later', async () => {
     const { state, planner, advance } = createFakes()
     const candidates = state.candidates
