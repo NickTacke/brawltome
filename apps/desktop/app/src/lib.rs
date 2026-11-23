@@ -139,8 +139,8 @@ pub fn run() {
         .run(keep_running_without_windows);
 }
 
-/// the app lives in the tray, so closing its windows is no reason to quit; tray quit and the updater exit with
-/// a code, which goes through
+/// the app lives in the tray, so closing its last window is no reason to quit. only that asks to exit without a
+/// code: tray quit passes one, and the updater and a windows logoff end the process directly
 fn keep_running_without_windows(_app: &AppHandle, event: RunEvent) {
     if let RunEvent::ExitRequested {
         code: None, api, ..
