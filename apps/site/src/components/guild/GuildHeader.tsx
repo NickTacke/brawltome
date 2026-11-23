@@ -11,7 +11,7 @@ function discordInviteUrl(code: string | null): string | null {
   return `https://discord.gg/${code}`
 }
 
-const bullet = <span className="hidden sm:inline">•</span>
+const separator = <span className="hidden sm:inline">·</span>
 
 function RecruitingStatus() {
   return (
@@ -61,13 +61,13 @@ export function GuildHeader({ clan, refresh }: { clan: ClanProfileContract; refr
           {clan.isRecruiting && (
             <>
               <RecruitingStatus />
-              {bullet}
+              {separator}
             </>
           )}
           <div>
             {formatWhole(memberCount)} {memberCount === 1 ? 'member' : 'members'}
           </div>
-          {bullet}
+          {separator}
           <div>Created {formatDay(clan.clanCreateDate)}</div>
         </div>
 
@@ -81,7 +81,7 @@ export function GuildHeader({ clan, refresh }: { clan: ClanProfileContract; refr
               />
             </div>
           )}
-          {updatedAt && discordUrl && bullet}
+          {updatedAt && discordUrl && separator}
           {discordUrl && <DiscordLink url={discordUrl} />}
         </div>
       </div>
