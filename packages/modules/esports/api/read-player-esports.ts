@@ -12,7 +12,7 @@ import {
   shapeEsportsProfile,
 } from '../domain'
 import { enqueueEsportsRefresh } from '../jobs/enqueue-esports-jobs'
-import { type AccountSignals, readAccountSignals } from './account-signals'
+import { type AccountSignals, isKnownAccount, readAccountSignals } from './account-signals'
 
 const legendLookup = buildLegendLookup()
 
@@ -51,9 +51,13 @@ async function readTrustedProfile(
   return shapeEsportsProfile(stored, legendLookup)
 }
 
+// the trust rule checks a record against the account's names, region and legends, so for an id the player module
+// doesn't know a refresh could never show anything; asking anyway would let a crawler walking ids fill the queue.
 // a refresh that can't be queued must not cost the visitor the page; the next view asks again
 async function requestRefresh(database: Database, brawlhallaId: number): Promise<void> {
   try {
+    if (!(await isKnownAccount(database, brawlhallaId))) return
+
     await enqueueEsportsRefresh(database, brawlhallaId)
   } catch (error) {
     console.error(`queue an esports refresh for player ${brawlhallaId}:`, error)

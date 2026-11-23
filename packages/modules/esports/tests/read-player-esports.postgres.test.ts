@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from '
 import { playerEsportsSchema } from '@brawltome/contracts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
-import { queueModule } from '@brawltome/queue'
+import { acceptOperation, queueModule } from '@brawltome/queue'
 import { runJobOnce } from '@brawltome/queue/testing'
 import { call } from '@orpc/server'
 import { createEsportsProcedures } from '../api/procedures'
@@ -10,7 +10,7 @@ import { readPlayerEsports } from '../api/read-player-esports'
 import { recordFailure } from '../db/record-failure'
 import { saveEventSets } from '../db/save-event-sets'
 import { type RefreshInput, saveRefresh } from '../db/save-refresh'
-import { esportsModule } from '../index'
+import { esportsModule, esportsRefreshContract } from '../index'
 import { createEsportsRefreshJob } from '../jobs/esports-refresh-job'
 import { match, placement, powerRanking } from './domain/builders'
 import { answers, createQueue, createSourceAdmission, stubClient } from './jobs/job-harness'
@@ -157,6 +157,23 @@ async function runNoneRefresh() {
   })
 
   return runJobOnce(createQueue(database, job), job, { sourceAdmission: createSourceAdmission().sourceAdmission })
+}
+
+// active refreshes of other players, as many as the read allows before it stops queueing
+async function fillRefreshBacklog(count: number) {
+  for (let index = 1; index <= count; index += 1) {
+    const brawlhallaId = 900_000 + index
+
+    await acceptOperation(database, {
+      job: esportsRefreshContract,
+      dedupeKey: `esports-refresh:${brawlhallaId}`,
+      operationKey: `esports-refresh:${brawlhallaId}`,
+      resourceKey: `esports-refresh:${brawlhallaId}`,
+      workClass: 'maintenance',
+      payload: { brawlhallaId },
+      provenance: { source: 'integration-test' },
+    })
+  }
 }
 
 const fillerLegends = ['ada', 'bodvar', 'cassidy', 'orion', 'gnash', 'scarlet', 'thatch'].map((key, index) => ({
@@ -386,9 +403,39 @@ describe('readPlayerEsports queueing', () => {
   test('a read of a player never fetched queues one refresh', async () => {
     const brawlhallaId = newPlayerId()
 
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
+
     expect(await readPlayerEsports(database, brawlhallaId, now)).toEqual({ profile: null, freshness: 'missing' })
     expect(await readQueued('esports-refresh', brawlhallaId)).toHaveLength(1)
   })
+
+  test('a read of an id the player module does not know queues nothing', async () => {
+    const brawlhallaId = newPlayerId()
+
+    expect(await readPlayerEsports(database, brawlhallaId, now)).toEqual({ profile: null, freshness: 'missing' })
+    expect(await readQueued('esports-refresh', brawlhallaId)).toEqual([])
+  })
+
+  test('a read queues nothing once 500 refreshes are waiting', async () => {
+    const brawlhallaId = newPlayerId()
+
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
+    await fillRefreshBacklog(500)
+
+    expect(await readPlayerEsports(database, brawlhallaId, now)).toEqual({ profile: null, freshness: 'missing' })
+    expect(await readQueued('esports-refresh', brawlhallaId)).toEqual([])
+  }, 30_000)
+
+  test('a read queues a refresh while fewer than 500 are waiting', async () => {
+    const brawlhallaId = newPlayerId()
+
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
+    await fillRefreshBacklog(499)
+
+    await readPlayerEsports(database, brawlhallaId, now)
+
+    expect(await readQueued('esports-refresh', brawlhallaId)).toHaveLength(1)
+  }, 30_000)
 
   test('a fresh read queues nothing', async () => {
     const linked = newPlayerId()
@@ -408,6 +455,7 @@ describe('readPlayerEsports queueing', () => {
   test('a none player viewed 100 times in 30 days queues nothing after the first refresh', async () => {
     const brawlhallaId = newPlayerId()
 
+    await storeRankedAccount(brawlhallaId, 'Quartz', 'EU')
     await readPlayerEsports(database, brawlhallaId, new Date())
 
     expect(await runNoneRefresh()).toBe('succeeded')
@@ -426,6 +474,8 @@ describe('readPlayerEsports queueing', () => {
   test('a refresh that cannot be queued is logged, and the read still answers', async () => {
     const brawlhallaId = newPlayerId()
     const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
 
     await database.sql`
       ALTER TABLE queue.operations ADD CONSTRAINT test_no_esports_refresh CHECK (kind <> 'esports-refresh') NOT VALID
@@ -460,6 +510,8 @@ describe('esports.byPlayerId', () => {
   test('queues a refresh for a player never fetched', async () => {
     const brawlhallaId = newPlayerId()
     const { byPlayerId } = createEsportsProcedures({ database })
+
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
 
     const esports = await call(byPlayerId, { id: brawlhallaId }, internalCaller)
 
