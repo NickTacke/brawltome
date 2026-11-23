@@ -626,6 +626,12 @@ describe('PostgreSQL interactive refresh admission', () => {
             },
           },
           publication: {
+            async readLatestRegionalBoards() {
+              return new Map()
+            },
+            async publishRegion() {
+              return 'published' as const
+            },
             async publishGeneration() {
               return 'published' as const
             },

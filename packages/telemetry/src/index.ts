@@ -75,6 +75,7 @@ export type MetricName =
   | 'schedule_materializations_total'
   | 'schedule_missed_windows_total'
   | 'worker_heartbeat_timestamp_seconds'
+  | 'worker_planner_failures_total'
   | 'source_calls_total'
   | 'source_duration_ms'
   | 'source_quota_used'
@@ -294,6 +295,22 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'gauge',
     help: 'Last successful worker loop wall-clock timestamp',
     labels: { runtime: ['operations-worker'] },
+  },
+  worker_planner_failures_total: {
+    kind: 'counter',
+    help: 'Worker planner passes that threw, so only that planner skipped its tick',
+    labels: {
+      planner: [
+        'interactive-admissions',
+        'primary-monitoring',
+        'discovery',
+        'statistics-cohort',
+        'player-name-verification',
+        'freshness',
+        'leaderboard-schedules',
+      ],
+    },
+    unknownAsOther: ['planner'],
   },
   source_calls_total: { kind: 'counter', help: 'External source calls', labels: { domain: sourceDomain, outcome } },
   source_duration_ms: {

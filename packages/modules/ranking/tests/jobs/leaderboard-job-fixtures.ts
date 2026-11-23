@@ -10,6 +10,7 @@ import {
   defaultDeepCrawlSlicePages,
   type LeaderboardDeepCrawlJobDependencies,
 } from '../../jobs/leaderboard-deep-crawl-job'
+import type { RankingPublicationStore } from '../../leaderboard'
 
 export type LeaderboardJobOverrides = Partial<
   LeaderboardCollectionJobDependencies & LeaderboardDeepCrawlJobDependencies
@@ -18,6 +19,17 @@ export type LeaderboardJobOverrides = Partial<
 const idleTelemetry = createTelemetry({ service: 'worker', drainIntervalMs: 0 })
 
 const leaderboardJobRetryTimings = { retryDelayMs: 10, sourceUnavailableRetryMs: 60_000 }
+
+// a store where every region publishes and no region has an earlier board
+export function stubPublication(overrides: Partial<RankingPublicationStore> = {}): RankingPublicationStore {
+  return {
+    readLatestRegionalBoards: async () => new Map(),
+    publishRegion: async () => 'published',
+    publishGeneration: async () => 'published',
+    recordCollectionFailure: async () => 'recorded',
+    ...overrides,
+  }
+}
 
 function idleDependencies(): LeaderboardCollectionJobDependencies & LeaderboardDeepCrawlJobDependencies {
   return {
@@ -30,10 +42,7 @@ function idleDependencies(): LeaderboardCollectionJobDependencies & LeaderboardD
     waitForSourceAdmission: async () => {},
     waitForSourceRetry: async () => {},
     telemetry: idleTelemetry,
-    publication: {
-      publishGeneration: async () => 'published',
-      recordCollectionFailure: async () => 'recorded',
-    },
+    publication: stubPublication(),
     playerNames: { applyLeaderboardNames: async () => ({ changed: 0 }) },
     rankedStandings: { applyLeaderboardRanked: async () => ({ changed: 0 }) },
     teamModes: {

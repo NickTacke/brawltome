@@ -576,7 +576,7 @@ describe('recent ranked activity', () => {
     await control.end()
   })
 
-  test('returns not_enough_history when the newest official generation is missing the requested current scope', async () => {
+  test('reads EU activity from its own scans when a newer generation has no EU board', async () => {
     const operations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
     const control = postgres(connectionString, { max: 1 })
@@ -629,8 +629,9 @@ describe('recent ranked activity', () => {
     await control`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
 
     expect(await ranking.queries.getRecentActivity({ mode: '1v1', region: 'EU', page: 1 })).toMatchObject({
-      status: 'unavailable',
-      reason: 'not_enough_history',
+      region: 'EU',
+      previousObservedAt: new Date(previousWindow.getTime() + 1_000).toISOString(),
+      currentObservedAt: new Date(currentWindow.getTime() + 1_000).toISOString(),
     })
 
     await control.end()
@@ -1693,7 +1694,7 @@ describe('durable multi-mode collection operations', () => {
     await control.end()
   })
 
-  test('stops admission, page calls, and publication when the lease is expired and replaced', async () => {
+  test('stops admission and page calls when the lease is expired and replaced, keeping the region it published', async () => {
     const operations = createTestQueue({ database })
     const replacementOperations = createTestQueue({ database })
     const ranking = createPostgresRanking(database)
@@ -1776,7 +1777,8 @@ describe('durable multi-mode collection operations', () => {
           WHERE operation_id = ${accepted.operationId}) AS effects
     `
 
-    expect(counts).toEqual({ generations: 0, effects: 0 })
+    // US-E published under the first lease before it was replaced; the window itself never closed
+    expect(counts).toEqual({ generations: 1, effects: 0 })
     if (!replacementLease) throw new Error('Expected replacement lease')
 
     await replacementOperations.fail(
