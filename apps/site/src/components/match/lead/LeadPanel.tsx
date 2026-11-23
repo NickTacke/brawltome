@@ -1,22 +1,58 @@
+import { IconTooltip, iconTooltipParent } from '../../IconTooltip'
 import { statLabel } from '../../player/player-styles'
 import { LeadGraph, type LeadGraphProps } from './LeadGraph'
-import { formatLead, leadAt, leadRule, standingOf } from './lead-samples'
+import { formatLead, leadAt, standingOf } from './lead-samples'
 
 const sideName = 'text-[0.6875rem] leading-none font-bold tracking-wide text-soft uppercase'
 
+// the short form of leadRule, which the graph's own title gives in full
+const leadMeaning = 'Stocks ahead, counting damage as part of a stock'
+
+// beside the stage the panel is at the page's right edge, under it at the left, and its tooltips open inwards
+type Side = { isUpright: boolean }
+
 // the lead at the playhead, as a figure with its name over it and what it means under it
-function LeadNow({ lead, finalLead }: { lead: number; finalLead: number }) {
+function LeadNow({ lead, finalLead, isUpright }: { lead: number; finalLead: number } & Side) {
   return (
-    <div>
-      <div className={statLabel} title={leadRule}>
-        Lead
-      </div>
+    <div className={iconTooltipParent}>
+      <div className={statLabel}>Lead</div>
       <div className="mt-0.5 text-2xl leading-7 font-bold text-strong tabular-nums">{formatLead(lead)}</div>
       <div className="text-xs text-soft">{standingOf(lead)}</div>
       {/* the graph shows how it ended; a screen reader is told */}
       <span className="sr-only">
         <span>Final lead</span> <span>{formatLead(finalLead)}</span>
       </span>
+      <span className="sr-only">{leadMeaning}</span>
+      <IconTooltip label={leadMeaning} align={isUpright ? 'end' : 'start'} />
+    </div>
+  )
+}
+
+/** Which way along the graph is ahead, named at its two ends. */
+function SideNames({ isUpright }: Side) {
+  const meaning = isUpright
+    ? 'Right of the line, the picked player is ahead'
+    : 'Above the line, the picked player is ahead'
+
+  if (isUpright) {
+    return (
+      <div className={`mt-3 ${iconTooltipParent}`}>
+        <div className={`flex justify-between px-1 pb-1.5 ${sideName}`}>
+          <span>Behind</span>
+          <span>Ahead</span>
+        </div>
+        <IconTooltip label={meaning} align="end" />
+      </div>
+    )
+  }
+
+  return (
+    <div className={iconTooltipParent}>
+      <div className={`flex h-full flex-col justify-between py-1 text-right ${sideName}`}>
+        <span>Ahead</span>
+        <span>Behind</span>
+      </div>
+      <IconTooltip label={meaning} align="start" />
     </div>
   )
 }
@@ -33,12 +69,9 @@ export function LeadPanel(graph: LeadGraphProps) {
     return (
       <div className="mt-3 flex items-stretch gap-4">
         <div className="w-24 shrink-0">
-          <LeadNow lead={lead} finalLead={finalLead} />
+          <LeadNow lead={lead} finalLead={finalLead} isUpright={false} />
         </div>
-        <div className={`flex flex-col justify-between py-1 text-right ${sideName}`}>
-          <span>Ahead</span>
-          <span>Behind</span>
-        </div>
+        <SideNames isUpright={false} />
         <div className="h-16 min-w-0 flex-1">
           <LeadGraph {...graph} />
         </div>
@@ -48,11 +81,8 @@ export function LeadPanel(graph: LeadGraphProps) {
 
   return (
     <div className="flex h-full w-24 flex-col">
-      <LeadNow lead={lead} finalLead={finalLead} />
-      <div className={`mt-3 flex justify-between px-1 pb-1.5 ${sideName}`}>
-        <span>Behind</span>
-        <span>Ahead</span>
-      </div>
+      <LeadNow lead={lead} finalLead={finalLead} isUpright />
+      <SideNames isUpright />
       <div className="min-h-0 flex-1">
         <LeadGraph {...graph} />
       </div>
