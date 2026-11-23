@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "brawltome-desktop"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "base64 0.22.1",
  "brawltome-contracts",

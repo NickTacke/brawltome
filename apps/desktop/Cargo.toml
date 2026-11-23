@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 
 [workspace.dependencies]
 brawltome-detection = { path = "detection" }
