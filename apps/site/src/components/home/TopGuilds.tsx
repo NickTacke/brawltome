@@ -17,7 +17,7 @@ function TableBody({ guilds }: { guilds: TopGuild[] | null }) {
 // null when the ranking couldn't be read
 export function TopGuilds({ guilds }: { guilds: TopGuild[] | null }) {
   const viewAll = (
-    <Link to="/guilds" className={viewAllStyle}>
+    <Link to="/leaderboard/guilds" className={viewAllStyle}>
       View all
     </Link>
   )

@@ -11,7 +11,7 @@ export const Route = createFileRoute('/leaderboard')({
   validateSearch: parseLeaderboardSearch,
   loaderDeps: ({ search }) => ({ mode: search.mode ?? defaultMode, region: search.region, page: search.page ?? 1 }),
   loader: ({ deps }) => getLeaderboardPage({ data: deps }),
-  head: () => ({ meta: [{ title: 'Leaderboard | BrawlTome' }] }),
+  head: () => ({ meta: [{ title: 'Leaderboards | BrawlTome' }] }),
   component: Leaderboard,
 })
 

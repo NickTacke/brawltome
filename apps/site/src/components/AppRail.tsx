@@ -1,4 +1,4 @@
-import { BookBookmark, Cup, Gamepad, PieChart, UsersGroupRounded } from '@solar-icons/react'
+import { BookBookmark, Chart, Cup, Gamepad, PieChart, UsersGroupRounded } from '@solar-icons/react'
 import { Link } from '@tanstack/react-router'
 import type { ComponentType, SVGProps } from 'react'
 import { RailAccountLink } from './rail/RailAccountLink'
@@ -13,6 +13,7 @@ type RailItem = { to: string; label: string; icon: RailIcon; exact?: boolean; wi
 
 export const railItems: RailItem[] = [
   { to: '/', label: 'Home', icon: HouseOutline, exact: true },
+  { to: '/leaderboard', label: 'Leaderboards', icon: Chart as RailIcon },
   { to: '/stats', label: 'Statistics', icon: PieChart as RailIcon, wip: true },
   { to: '/matches', label: 'Matches', icon: Gamepad as RailIcon, wip: true },
   { to: '/queue', label: 'Queue', icon: UsersGroupRounded as RailIcon },

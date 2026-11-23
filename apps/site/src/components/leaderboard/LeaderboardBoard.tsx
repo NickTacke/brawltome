@@ -5,10 +5,10 @@ import { RankedTable, TableMessage } from '../home/RankedTable'
 import { TopPlayerRow } from '../home/TopPlayerRow'
 import { TopPlayerSkeleton } from '../home/TopPlayerSkeleton'
 import { rankWidthStyle } from '../page-number'
-import { RankingPageHeader } from '../RankingPageHeader'
-import { RankingPager } from '../RankingPager'
+import { RankingPager, RankingTopPager } from '../RankingPager'
 import type { RankedPage } from '../ranked-page'
 import { rankingPageStyle } from '../rankings-layout'
+import { LeaderboardHeader } from './LeaderboardHeader'
 import { lastLeaderboardPage } from './leaderboard-search'
 
 const defaultPageSize = 30
@@ -45,9 +45,20 @@ export function LeaderboardBoard({ board, page, filters, isLoading, avatarCount,
   const pageSize = board?.pageSize ?? defaultPageSize
   const rankWidth = rankWidthStyle(page * pageSize)
 
+  const pager = board && (
+    <RankingTopPager
+      label="Leaderboard"
+      page={page}
+      totalRows={board.totalRows}
+      pageSize={pageSize}
+      lastPage={lastLeaderboardPage}
+      onPage={onPage}
+    />
+  )
+
   return (
     <div className={rankingPageStyle}>
-      <RankingPageHeader title="Leaderboard" action={filters} />
+      <LeaderboardHeader tab="Players" filters={filters} pager={pager} />
       <RankedTable head={<PlayerTableHead rankWidthStyle={rankWidth} />}>
         <TableBody board={board} page={page} isLoading={isLoading} avatarCount={avatarCount} rankWidth={rankWidth} />
       </RankedTable>

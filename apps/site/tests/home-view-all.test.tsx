@@ -24,6 +24,6 @@ describe("home's view all links", () => {
   test('top guilds opens the guilds page', () => {
     const html = renderAt('/', <TopGuilds guilds={[]} />)
 
-    expect(html).toContain('href="/guilds"')
+    expect(html).toContain('href="/leaderboard/guilds"')
   })
 })

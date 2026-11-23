@@ -1,9 +1,9 @@
 import type { RankedGuild } from '../../server/load-guild-ranking'
 import { GuildRow, GuildTableHead, guildColumnCount } from '../home/GuildColumns'
 import { RankedTable, TableMessage } from '../home/RankedTable'
+import { LeaderboardHeader } from '../leaderboard/LeaderboardHeader'
 import { rankWidthStyle } from '../page-number'
-import { RankingPageHeader } from '../RankingPageHeader'
-import { RankingPager } from '../RankingPager'
+import { RankingPager, RankingTopPager } from '../RankingPager'
 import type { RankedPage } from '../ranked-page'
 import { rankingPageStyle } from '../rankings-layout'
 import { lastGuildRankingPage } from './guild-ranking-search'
@@ -42,9 +42,20 @@ export function GuildRanking({ ranking, page, onPage }: GuildRankingProps) {
   const pageSize = ranking?.pageSize ?? defaultPageSize
   const rankWidth = rankWidthStyle(page * pageSize)
 
+  const pager = ranking && (
+    <RankingTopPager
+      label="Guilds"
+      page={page}
+      totalRows={ranking.totalRows}
+      pageSize={pageSize}
+      lastPage={lastGuildRankingPage}
+      onPage={onPage}
+    />
+  )
+
   return (
     <div className={rankingPageStyle}>
-      <RankingPageHeader title="Guilds" />
+      <LeaderboardHeader tab="Guilds" pager={pager} />
       <RankedTable head={<GuildTableHead rankWidthStyle={rankWidth} />}>
         <TableBody ranking={ranking} page={page} rankWidth={rankWidth} />
       </RankedTable>

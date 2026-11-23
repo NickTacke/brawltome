@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe('leaderboard route', () => {
   test('titles the page', () => {
-    expect(options.head().meta[0]?.title).toBe('Leaderboard | BrawlTome')
+    expect(options.head().meta[0]?.title).toBe('Leaderboards | BrawlTome')
   })
 
   test('keeps a known bracket, region and page from the address', () => {
