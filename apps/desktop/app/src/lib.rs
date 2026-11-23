@@ -89,7 +89,8 @@ pub fn run() {
             let settings = open_settings(app.handle())?;
             start_overlay(app.handle(), settings.get().overlay_position)?;
             app.manage(settings);
-            tray::install(app.handle())?;
+            let session = app.state::<SessionHandle>().inner().clone();
+            tray::install(app.handle(), session)?;
             start_main_window(app.handle());
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
