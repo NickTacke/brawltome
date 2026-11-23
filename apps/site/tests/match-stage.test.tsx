@@ -151,6 +151,18 @@ describe('the level on the stage', () => {
     expect(markup.indexOf('<image')).toBeLessThan(markup.indexOf('<line'))
   })
 
+  test('a mirrored platform is drawn at its size without the sign, flipped over its corner before its turn', () => {
+    const markup = renderPicture([{ ...platform, width: -0.5, height: -0.25 }])
+    const height = 160 / stage.aspect
+    const y = platform.y * height
+
+    expect(markup).toContain('x="40"')
+    expect(markup).toContain(`y="${y}"`)
+    expect(markup).toContain('width="80"')
+    expect(markup).toContain(`height="${platform.height * height}"`)
+    expect(markup).toContain(`transform="rotate(10 40 ${y}) translate(40 ${y}) scale(-1 -1) translate(-40 ${-y})"`)
+  })
+
   test('without art the stage keeps its collision lines alone', () => {
     const markup = renderPicture([])
 

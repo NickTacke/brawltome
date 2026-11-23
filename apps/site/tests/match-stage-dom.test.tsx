@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { MatchDetailContract, ReviewScope } from '@brawltome/contracts'
+import type { MatchDetailContract, ReviewScope, StageArt } from '@brawltome/contracts'
 import type { Replay } from '@brawltome/replay-player'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
@@ -253,6 +253,50 @@ describe('the stage in a browser', () => {
     const images = [...container.querySelectorAll('svg image')].map((image) => image.getAttribute('href'))
 
     expect(images).toEqual([`https://art.test/${platformImage}`])
+
+    await unmount()
+  })
+
+  // what react reports while the first match's stage draws these pieces; two children with one key is such a report
+  async function reportsWhileDrawing(art: StageArt[]): Promise<unknown[]> {
+    const match = matchNamed('first')
+    const insights = readInsights('duel-a')
+    const withArt = { ...insights, insights: { ...insights.insights, stage: { ...insights.insights.stage, art } } }
+    const reports: unknown[] = []
+    const errorBefore = console.error
+
+    console.error = (...report: unknown[]) => reports.push(report[0])
+    await mount(<ReplayWithArt insights={withArt} art={match.art} playbackPath={match.playbackPath} selectedSlot={1} />)
+    console.error = errorBefore
+
+    return reports
+  }
+
+  const twinPiece = { file: 'Space.Platform_Space1.png', x: 0.25, y: 0.5, width: 0.5, height: 0.25, rotation: 0 }
+
+  test('a platform and its twin mirrored upwards on the same corner are two images', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece, height: -0.25 }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(2)
+    expect(reports).toEqual([])
+
+    await unmount()
+  })
+
+  test('a platform and its twin mirrored sideways on the same corner are two images', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece, width: -0.5 }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(2)
+    expect(reports).toEqual([])
+
+    await unmount()
+  })
+
+  test('moving platforms that start in one place repeat a piece exactly and are each drawn', async () => {
+    const reports = await reportsWhileDrawing([twinPiece, { ...twinPiece }, { ...twinPiece }])
+
+    expect(container.querySelectorAll('svg image')).toHaveLength(3)
+    expect(reports).toEqual([])
 
     await unmount()
   })

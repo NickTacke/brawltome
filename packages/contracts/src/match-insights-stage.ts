@@ -13,6 +13,8 @@ const stageSegmentSchema = z
 
 const stageRectSchema = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).strict()
 
+// a piece of platform art: its file, where its top left goes, its drawn size and its turn in degrees about that
+// corner. a negative width or height mirrors the image, which then reaches left of x or above y
 const stageArtSchema = stageRectSchema.extend({ file: z.string(), rotation: z.number() }).strict()
 
 const stageBoxSchema = z.object({ minX: z.number(), minY: z.number(), width: z.number(), height: z.number() }).strict()

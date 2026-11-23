@@ -12,6 +12,7 @@ import {
 } from '@brawltome/replay-player'
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
+import { artBoxOf } from '../src/components/match/stage/art-box'
 import {
   bodyMiddle,
   bodyPxOf,
@@ -464,5 +465,38 @@ describe('platform art', () => {
     }
 
     expect(placedArtOf([piece('Space.Platform_Space1.png')], outside)).toEqual([])
+  })
+})
+
+describe('where a platform’s image is drawn', () => {
+  const drawing = { width: 160, height: 90 }
+  const piece = { file: 'Space.Platform_Space1.png', x: 0.25, y: 0.5, width: 0.5, height: 0.2, rotation: 10 }
+
+  test('a piece lies from its corner over its size, turned about that corner', () => {
+    expect(artBoxOf(piece, drawing)).toEqual({ x: 40, y: 45, width: 80, height: 18, transform: 'rotate(10 40 45)' })
+  })
+
+  test('a negative width flips the image over its corner, so it reaches left of it', () => {
+    expect(artBoxOf({ ...piece, width: -0.5 }, drawing)).toEqual({
+      x: 40,
+      y: 45,
+      width: 80,
+      height: 18,
+      transform: 'rotate(10 40 45) translate(40 45) scale(-1 1) translate(-40 -45)',
+    })
+  })
+
+  test('a negative height flips it upwards, and both flip it both ways', () => {
+    expect(artBoxOf({ ...piece, height: -0.2 }, drawing).transform).toBe(
+      'rotate(10 40 45) translate(40 45) scale(1 -1) translate(-40 -45)',
+    )
+
+    expect(artBoxOf({ ...piece, width: -0.5, height: -0.2 }, drawing)).toEqual({
+      x: 40,
+      y: 45,
+      width: 80,
+      height: 18,
+      transform: 'rotate(10 40 45) translate(40 45) scale(-1 -1) translate(-40 -45)',
+    })
   })
 })
