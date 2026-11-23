@@ -104,6 +104,7 @@ export {
   reserveForAdmission,
   reserveForBinding,
 } from './db/reserve-operation'
+export { type RewriteUnstartedOperationInput, rewriteUnstartedOperation } from './db/rewrite-unstarted-operation'
 export { allSectionsCommitted, sectionCommitted } from './db/section-checkpoints'
 export type { Transaction } from './db/transaction'
 export { validateAdmissionConfig } from './domain/admission'

@@ -51,9 +51,9 @@ Everything other packages may import is exported from `index.ts`:
   happens when a job fails
 - `readPayloadObject`, `isPositiveInteger` and the other payload helpers: for a job's `parsePayload`
 - `acceptOperation`, `reserveForAdmission`, `reserveForBinding`, and `activateReserved`, `activateAdmitted`,
-  `activateBound`, `rejectReserved`, `rejectExpired`: for writing work
-- `findActiveOperation`, `listAwaiting`, `countActive`, `readAttemptHistory`, `readEffectLineage`, `operationMatches`:
-  for reading it
+  `activateBound`, `rejectReserved`, `rejectExpired`, `rewriteUnstartedOperation`: for writing work
+- `findActiveOperation`, `findActiveOnResource`, `listAwaiting`, `countActive`, `readAttemptHistory`,
+  `readEffectLineage`, `operationMatches`: for reading it
 - `reconcileFixedSchedule`, `reconcileResourceSchedules`, `disableFixedSchedule`: for the planners
 - the fences from `lease-fences.ts`
 - `model.ts`, re-exported whole
