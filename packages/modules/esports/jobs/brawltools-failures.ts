@@ -1,8 +1,13 @@
-import { type FailureDecision, failureDetails } from '@brawltome/queue'
+import { type FailureDecision, failureDetails, SourceAdmissionLimitedError } from '@brawltome/queue'
 import { BrawltoolsHttpError, BrawltoolsNetworkError, BrawltoolsRateLimitError } from '../source/brawltools-client'
 
 // a Retry-After of hours would stall every esports job that long; ten minutes is the most the worker waits on one
 const maxRateLimitPauseSeconds = 10 * 60
+
+/** Brawltools said 429, or our own budget for it is spent; either way the job waits and runs again soon. */
+export function isBrawltoolsRateLimited(error: unknown): boolean {
+  return error instanceof BrawltoolsRateLimitError || error instanceof SourceAdmissionLimitedError
+}
 
 /** Brawltools is down or never answered, so asking again soon would only fail again. */
 export function isBrawltoolsUnavailable(error: unknown): boolean {

@@ -394,6 +394,7 @@ describe('worker job list', () => {
     globalThis.fetch = (async () => new Response('slow down', { status: 429 })) as unknown as typeof fetch
 
     const tools = {
+      signal: new AbortController().signal,
       createSourceAdmitter: () => async (domain: string) => {
         admittedDomains.push(domain)
       },
