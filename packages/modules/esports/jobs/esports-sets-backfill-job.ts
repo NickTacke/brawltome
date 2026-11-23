@@ -5,6 +5,7 @@ import { readEsportsPlayer } from '../db/read-stored-esports'
 import { saveEventSets } from '../db/save-event-sets'
 import { isSideModeEvent } from '../domain'
 import type { BrawltoolsClient } from '../source/brawltools-client'
+import type { RawMatch } from '../source/raw-types'
 import { decideBrawltoolsFailure, isBrawltoolsRateLimited, isBrawltoolsUnavailable } from './brawltools-failures'
 import { type EsportsSetsBackfillPayload, esportsSetsBackfillContract } from './esports-sets-backfill-contract'
 import { type EsportsJobDependencies, runEsportsJob } from './run-esports-job'
@@ -14,25 +15,40 @@ export type EsportsSetsBackfillJobDependencies = EsportsJobDependencies
 type EventToFetch = { brawlhallaId: number; brawltoolsPlayerId: number; tournamentId: string }
 
 // this many events in a row finding brawltools down or not answering means it is down, not that one event is broken
-const maxUnavailableInARow = 3
+const maxOutagesInARow = 3
 
-// a failed event is returned, not thrown, so the events after it are still fetched; a rate limit still stops the run
-async function fetchEventSets(
+type EventFetch = { sets: RawMatch[]; outage: null } | { sets: null; outage: unknown }
+
+// an outage is returned, not thrown, so the events after it are still tried; a rate limit still stops the run. an
+// event brawltools answers for but that won't fetch is logged and skipped: it is no outage, and counting it as a
+// failed refresh would refresh a linked player every day for an event that never fetches
+async function fetchEvent(client: BrawltoolsClient, event: EventToFetch): Promise<EventFetch> {
+  try {
+    const sets = await client.matches(event.brawltoolsPlayerId, event.tournamentId)
+
+    return { sets, outage: null }
+  } catch (error) {
+    if (isBrawltoolsRateLimited(error)) throw error
+
+    if (isBrawltoolsUnavailable(error)) return { sets: null, outage: error }
+
+    console.error(`fetch the sets of event ${event.tournamentId} for player ${event.brawlhallaId}:`, error)
+
+    return { sets: null, outage: null }
+  }
+}
+
+// the outage, if brawltools was down for this event
+async function backfillEvent(
   dependencies: EsportsSetsBackfillJobDependencies,
   client: BrawltoolsClient,
   event: EventToFetch,
 ): Promise<unknown> {
-  try {
-    const sets = await client.matches(event.brawltoolsPlayerId, event.tournamentId)
+  const { sets, outage } = await fetchEvent(client, event)
 
-    await saveEventSets(dependencies.database, event.brawlhallaId, event.tournamentId, sets, new Date())
+  if (sets) await saveEventSets(dependencies.database, event.brawlhallaId, event.tournamentId, sets, new Date())
 
-    return null
-  } catch (error) {
-    if (isBrawltoolsRateLimited(error)) throw error
-
-    return error
-  }
+  return outage
 }
 
 async function listEventsToFetch(database: Database, brawlhallaId: number) {
@@ -43,7 +59,7 @@ async function listEventsToFetch(database: Database, brawlhallaId: number) {
 }
 
 // each event is saved as soon as it is fetched, so a backfill cut short keeps what it got and a rerun goes on from
-// there; a failed event is thrown once the rest are done, so the job counts one failed refresh for the run
+// there; an outage is thrown once the rest are done, so the job counts one failed refresh for the run
 async function backfillSets(
   dependencies: EsportsSetsBackfillJobDependencies,
   client: BrawltoolsClient,
@@ -55,22 +71,22 @@ async function backfillSets(
 
   if (row?.link !== 'linked' || !brawltoolsPlayerId) return
 
-  let lastFailure: unknown = null
-  let unavailableInARow = 0
+  let lastOutage: unknown = null
+  let outagesInARow = 0
 
   for (const { tournamentId } of await listEventsToFetch(dependencies.database, brawlhallaId)) {
     // a pro's first backfill is about a hundred calls; a lost lease means another run may take over, and a run of
-    // unavailable answers that brawltools is down, so either way stop spending
-    if (leaseLost.aborted || unavailableInARow >= maxUnavailableInARow) break
+    // outages that brawltools is down, so either way stop spending
+    if (leaseLost.aborted || outagesInARow >= maxOutagesInARow) break
 
-    const failure = await fetchEventSets(dependencies, client, { brawlhallaId, brawltoolsPlayerId, tournamentId })
+    const outage = await backfillEvent(dependencies, client, { brawlhallaId, brawltoolsPlayerId, tournamentId })
 
     // any other answer, a broken event's included, means brawltools is up, so the streak starts over
-    unavailableInARow = isBrawltoolsUnavailable(failure) ? unavailableInARow + 1 : 0
-    lastFailure = failure ?? lastFailure
+    outagesInARow = outage ? outagesInARow + 1 : 0
+    lastOutage = outage ?? lastOutage
   }
 
-  if (lastFailure) throw lastFailure
+  if (lastOutage) throw lastOutage
 }
 
 /** Fetches the sets of every stored event of one player that has none yet, or only some from before it was final. */
