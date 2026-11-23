@@ -1,13 +1,15 @@
 import { jsonb } from '@brawltome/foundation'
 import { bigint, boolean, integer, pgSchema, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core'
+import type { RawLegendCount, RawMatch, RawPr } from '../source/raw-types'
 
 // every column of each table the code uses, since tests/tables.test.ts compares them all with the database;
 // defaults, checks, indexes and triggers stay in the migrations
 
 export const esportsSchema = pgSchema('esports')
 
-// the raw { earnings, pr } object brawltools gives for one mode
-export type BrawltoolsPowerRanking = { earnings: number; pr: number }
+const esportsLinks = ['linked', 'none'] as const
+
+export type EsportsLink = (typeof esportsLinks)[number]
 
 // one row per player we asked Brawltools about; link is 'linked' when Brawltools knows the account and 'none' when
 // it answered 404. the failure columns drive the back-off after a failed refresh
@@ -15,10 +17,10 @@ export const players = esportsSchema.table('players', {
   brawlhallaId: bigint('brawlhalla_id', { mode: 'number' }).primaryKey(),
   brawltoolsPlayerId: integer('brawltools_player_id'),
   brawltoolsName: text('brawltools_name'),
-  link: text('link').notNull(),
-  powerRanking1v1: jsonb<BrawltoolsPowerRanking>('pr_1v1'),
-  powerRanking2v2: jsonb<BrawltoolsPowerRanking>('pr_2v2'),
-  eventLegends: jsonb<unknown[]>('event_legends').notNull(),
+  link: text('link', { enum: esportsLinks }).notNull(),
+  powerRanking1v1: jsonb<RawPr>('pr_1v1'),
+  powerRanking2v2: jsonb<RawPr>('pr_2v2'),
+  eventLegends: jsonb<RawLegendCount[]>('event_legends').notNull(),
   checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
   lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
   failureCount: integer('failure_count').notNull(),
@@ -46,7 +48,7 @@ export const eventSets = esportsSchema.table(
   {
     brawlhallaId: bigint('brawlhalla_id', { mode: 'number' }).notNull(),
     tournamentId: text('tournament_id').notNull(),
-    sets: jsonb<unknown[]>('sets').notNull(),
+    sets: jsonb<RawMatch[]>('sets').notNull(),
     fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.brawlhallaId, table.tournamentId] })],
