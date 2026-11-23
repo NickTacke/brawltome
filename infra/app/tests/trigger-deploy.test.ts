@@ -144,6 +144,22 @@ describe('triggerDeploy', () => {
     await expect(triggerDeploy(deployOptions(fake))).rejects.toThrow('401')
   })
 
+  test('skips the deploy when a newer commit is already on the branch', async () => {
+    const fake = createFakeDokploy({ composeResults: [[], [deployment('new', 'done')]] })
+    const overrides = { releaseSha: 'aaa111', readBranchHead: async () => 'bbb222' }
+
+    expect(await triggerDeploy(deployOptions(fake, overrides))).toBe('superseded')
+    expect(fake.calls.some((call) => call.url.includes('compose.deploy'))).toBe(false)
+  })
+
+  test('deploys when its own commit is still the head of the branch', async () => {
+    const fake = createFakeDokploy({ composeResults: [[], [deployment('new', 'done')]] })
+    const overrides = { releaseSha: 'aaa111', readBranchHead: async () => 'aaa111' }
+
+    expect(await triggerDeploy(deployOptions(fake, overrides))).toBe('done')
+    expect(fake.calls.some((call) => call.url.includes('compose.deploy'))).toBe(true)
+  })
+
   test('sends the token as x-api-key and never in the URL', async () => {
     const fake = createFakeDokploy({ composeResults: [[], [deployment('new', 'done')]] })
 
