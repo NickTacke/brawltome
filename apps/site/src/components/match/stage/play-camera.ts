@@ -1,6 +1,7 @@
 import type { StageBox } from '@brawltome/contracts'
 import type { Matrix, Rect } from '@brawltome/replay-player'
 import { createContext, useContext } from 'react'
+import type { DrawnBodies } from './body-ring'
 
 // the part of the stage playback shows. with the legends drawn, it is the game's own camera, worked out from the
 // timeline by the replay player; without them, the whole stage. everything here is in shares of the stage box, which
@@ -59,9 +60,17 @@ export function inFrame<Spot extends { x: number; y: number }>(spot: Spot, camer
   return { ...spot, x: (spot.x - camera.x) * camera.zoom, y: (spot.y - camera.y) * camera.zoom }
 }
 
-// what sits on the stage outside its picture, like the card of a review stop, reads where the camera looks from here
-export const StageCameraContext = createContext<Camera>(wholeStage)
+// how the frame shows the stage: how its players are drawn, in which level coordinates, and where the camera looks
+export type StageView = { bodies: DrawnBodies; camera: Camera }
 
-export function useStageCamera(): Camera {
-  return useContext(StageCameraContext)
+const noStage: StageView = {
+  bodies: { box: { minX: 0, minY: 0, width: 1, height: 1 }, areLegends: false },
+  camera: wholeStage,
+}
+
+// what sits on the stage outside its picture, like the card of a review stop, reads how the stage is shown from here
+export const StageViewContext = createContext<StageView>(noStage)
+
+export function useStageView(): StageView {
+  return useContext(StageViewContext)
 }

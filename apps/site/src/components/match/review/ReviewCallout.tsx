@@ -1,7 +1,7 @@
 import type { Moment } from '@brawltome/contracts'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { slotColour } from '../match-styles'
-import { inFrame, useStageCamera } from '../stage/play-camera'
+import { inFrame, useStageView } from '../stage/play-camera'
 import type { Pose } from '../stage/pose'
 import type { StopCount } from '../stage/ReviewControls'
 import { useStageBox } from '../stage/use-stage-box'
@@ -39,7 +39,7 @@ export function ReviewCallout({ moment, lanes, poses, count, panel, obstacles }:
   // measured again when the stop changes, as its hits decide how tall the card is
   const measured = useStageBox(cardRef, `${moment.key} ${isWide}`)
   // the card sits on the frame, not the stage, so the players are placed where the camera shows them
-  const camera = useStageCamera()
+  const { camera } = useStageView()
   const framed = poses.map((pose) => inFrame(pose, camera))
   const space = measured ? { card: measured.element, stage: measured.stage, panel, obstacles } : null
   const place = space ? placeCard(framed, space, { victim: moment.victim, attacker: moment.attacker }) : null

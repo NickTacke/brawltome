@@ -61,6 +61,11 @@ export function initialLegends(art: Art, playbackPath: string | null): Legends {
   return { replay: null, timeline: null, track: null, state, isDownloading: replay.status === 'loading' }
 }
 
+/** Whether the players are drawn as their legends: the art and the timeline are in. Until then tokens stand in. */
+export function areLegendsDrawn(legends: Legends): boolean {
+  return legends.state === 'ready' && legends.replay !== null && legends.timeline !== null
+}
+
 function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }

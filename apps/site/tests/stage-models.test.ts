@@ -3,6 +3,7 @@ import type { MatchDetailContract, StageBox } from '@brawltome/contracts'
 import type { Bubble, CameraTrack, PlayerPose, Replay, Timeline } from '@brawltome/replay-player'
 import { formatClock } from '../src/components/match/match-format'
 import { damageColour } from '../src/components/match/match-styles'
+import { bodyMiddle, bodyRingDiameter, bodyRingStyle, legendRingFloorPx } from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
@@ -12,7 +13,12 @@ import { posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
 import { tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
-import { initialLegends, type Legends, legendsStateOf } from '../src/components/match/stage/use-legends'
+import {
+  areLegendsDrawn,
+  initialLegends,
+  type Legends,
+  legendsStateOf,
+} from '../src/components/match/stage/use-legends'
 import { frameElapsedMs } from '../src/components/match/stage/use-playback'
 import { weaponIconName } from '../src/components/match/weapon-icon'
 import { readInsights, readPlayback } from './match-fixtures'
@@ -160,6 +166,60 @@ describe('the camera', () => {
     expect(isCameraMode('game')).toBe(true)
     expect(isCameraMode('stage')).toBe(true)
     expect(isCameraMode('follow')).toBe(false)
+  })
+})
+
+describe('the ring around a player’s body', () => {
+  // the game's standing hurtbox, the same for every legend
+  const hurtbox = { width: 145, height: 160 }
+  const anyBox: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
+  const legends = { box: anyBox, areLegends: true }
+  const tokens = { box: anyBox, areLegends: false }
+
+  test('holds a legend’s whole standing hurtbox, and is no bigger than that takes', () => {
+    const diagonal = Math.hypot(hurtbox.width, hurtbox.height)
+
+    expect(bodyMiddle).toBe(hurtbox.height / 2)
+    expect(bodyRingDiameter).toBeGreaterThanOrEqual(diagonal)
+    expect(bodyRingDiameter - diagonal).toBeLessThan(1)
+  })
+
+  test('around a legend it is placed in level units: its middle the body’s, over the feet', () => {
+    const whole = { left: '50%', top: '45%', width: 'max(32px, 5%)', aspectRatio: '1' }
+
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends)).toEqual(whole)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 0.25)).toEqual({ ...whole, width: 'max(8px, 1.25%)' })
+  })
+
+  test('around a legend it never gets too small to show beside the numbers of a stop’s hits', () => {
+    // size-4 on a hit's number
+    const hitNumberPx = 16
+
+    expect(legendRingFloorPx).toBeGreaterThan(hitNumberPx)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends).width).toBe(`max(${legendRingFloorPx}px, 5%)`)
+  })
+
+  test('around a token it is as big on every stage, and smaller on a phone’s', () => {
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, tokens)).toEqual({
+      left: '50%',
+      top: 'calc(50% - 14px)',
+      width: 'min(64px, 10%)',
+      aspectRatio: '1',
+    })
+  })
+
+  test('the players are drawn as their legends once the art and the timeline are in', () => {
+    const ready: Legends = {
+      replay: {} as Replay,
+      timeline: {} as Timeline,
+      track: null,
+      state: 'ready',
+      isDownloading: false,
+    }
+
+    expect(areLegendsDrawn(ready)).toBe(true)
+    expect(areLegendsDrawn({ ...ready, state: 'loading' })).toBe(false)
+    expect(areLegendsDrawn({ ...ready, replay: null })).toBe(false)
   })
 })
 

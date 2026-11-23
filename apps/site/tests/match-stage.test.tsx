@@ -1,9 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import type { MatchDetailContract } from '@brawltome/contracts'
+import type { MatchDetailContract, StageBox } from '@brawltome/contracts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MatchPage } from '../src/components/match/MatchPage'
+import { ReviewMarkers } from '../src/components/match/review/ReviewMarkers'
 import { cameraModeOptions } from '../src/components/match/stage/camera-mode'
+import { MomentRing } from '../src/components/match/stage/MomentRing'
+import { PlayEffects } from '../src/components/match/stage/PlayEffects'
+import { StageViewContext, wholeStage } from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline } from '../src/components/match/stage/playback-timeline'
+import type { Pose } from '../src/components/match/stage/pose'
 import { StageDeck } from '../src/components/match/stage/StageDeck'
 import { StagePicture } from '../src/components/match/stage/StagePicture'
 import { StagePlay } from '../src/components/match/stage/StagePlay'
@@ -145,6 +150,72 @@ describe('the level on the stage', () => {
 
     expect(markup).not.toContain('<image')
     expect(markup).toContain('<line')
+  })
+})
+
+describe('the rings on the stage', () => {
+  // a legend's ring is 216 level units across and 80 above the feet: 5% of this box's width, 5% of its height up.
+  // on a stage too small for that to show, it stays 32 pixels
+  const box: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
+  const legends = { box, areLegends: true }
+  const tokens = { box, areLegends: false }
+  const aroundLegend = 'left:50%;top:45%;width:max(32px, 5%);aspect-ratio:1'
+  const aroundToken = 'left:50%;top:calc(50% - 14px);width:min(64px, 10%);aspect-ratio:1'
+  const firstHit = readInsights('duel-a').insights.stage.marks.hits[0]
+  const punish = readInsights('duel-a').insights.moments.find((moment) => moment.attacker !== null)
+
+  if (!firstHit || !punish) throw new Error('the duel-a fixture has no hit or no punish')
+
+  const moment = { ...punish, spot: { x: 0.5, y: 0.5 } }
+
+  const standingAt = (slot: number, x: number): Pose => ({
+    slot,
+    x,
+    y: 0.5,
+    isInPlay: true,
+    facingRight: true,
+    weapon: 'Unarmed',
+    isHitstun: false,
+    isDodging: false,
+    damage: 0,
+    stocksLeft: 3,
+  })
+
+  const poses = [standingAt(moment.victim, 0.5), standingAt(moment.attacker ?? 0, 0.25)]
+
+  // the stop's rings as the stage hands them how its players are drawn
+  const renderMarkers = (bodies: typeof legends) =>
+    renderToStaticMarkup(
+      <StageViewContext.Provider value={{ bodies, camera: wholeStage }}>
+        <ReviewMarkers moment={moment} poses={poses} hits={[]} />
+      </StageViewContext.Provider>,
+    )
+
+  test('a review’s stop rings its two players around their legends’ bodies, in level units', () => {
+    const markup = renderMarkers(legends)
+
+    expect(markup).toContain(aroundLegend)
+    expect(markup).toContain('left:25%;top:45%;width:max(32px, 5%);aspect-ratio:1')
+  })
+
+  test('while tokens stand in for the legends, the rings keep the tokens’ size', () => {
+    expect(renderMarkers(tokens)).toContain(aroundToken)
+  })
+
+  test('the moment being watched is ringed around the body of whoever gets hit', () => {
+    const markup = renderToStaticMarkup(<MomentRing moment={moment} bodies={legends} timeMs={moment.timeMs} />)
+
+    expect(markup).toContain(aroundLegend)
+  })
+
+  test('a hit flashes on the target’s body, from a small ring out to the ring around it', () => {
+    const hit = { ...firstHit, x: 0.5, y: 0.5 }
+
+    const flashAt = (timeMs: number) =>
+      renderToStaticMarkup(<PlayEffects hits={[hit]} kos={[]} bodies={legends} timeMs={timeMs} />)
+
+    expect(flashAt(hit.timeMs)).toContain('left:50%;top:45%;width:max(8px, 1.25%);aspect-ratio:1')
+    expect(flashAt(hit.timeMs + 449)).toMatch(/left:50%;top:45%;width:max\(31\.9\d*px, 4\.99\d*%\)/)
   })
 })
 
