@@ -69,6 +69,7 @@ function fakeRefreshQueue({ usedV0Calls = 0, isUsageUnreadable = false }: QueueO
   const admittedActors: unknown[] = []
 
   const playerRefreshReservations = {
+    handBackgroundRefreshToVisitor: async () => 'free' as const,
     findActiveInteractivePlayerRefresh: async () => null,
     reserveInteractivePlayerRefresh: async (input: (typeof reserved)[number]) => {
       reserved.push(input)

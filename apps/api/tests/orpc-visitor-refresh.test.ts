@@ -49,6 +49,7 @@ function reservations() {
   const reserved = { outcome: 'reserved', operationId: crypto.randomUUID(), reservationToken: crypto.randomUUID() }
 
   return {
+    handBackgroundRefreshToVisitor: async () => 'free' as const,
     findActiveInteractivePlayerRefresh: async () => null,
     reserveInteractivePlayerRefresh: async () => reserved,
     activateInteractivePlayerRefresh: async () => 'transitioned',

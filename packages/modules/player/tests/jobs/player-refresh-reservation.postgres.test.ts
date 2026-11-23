@@ -200,7 +200,7 @@ describe('player refresh reservations', () => {
     expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'interactive' })
   })
 
-  test('promotes a queued ranked coverage refresh when a visitor asks for the same player', async () => {
+  test('promotes a queued ranked coverage refresh and widens it to the visitor sections', async () => {
     const brawlhallaId = nextBrawlhallaId++
 
     expect(await enqueueRankedCoverageRefresh(database, brawlhallaId)).toBe(true)
@@ -211,7 +211,7 @@ describe('player refresh reservations', () => {
 
     expect((await queue.inspect(reservation.operationId)).operation).toMatchObject({
       work_class: 'interactive',
-      payload: { cohort: 'ranked-coverage', brawlhallaId, staleSections: ['ranked'] },
+      payload: { cohort: 'ranked-coverage', brawlhallaId, staleSections: ['ranked', 'stats'] },
     })
   })
 })

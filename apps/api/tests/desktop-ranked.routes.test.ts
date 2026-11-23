@@ -37,6 +37,7 @@ describe('desktop ranked lookup route', () => {
       playerReferences: { byId: async () => ({ brawlhallaId: 42, name: 'Measured Zero', aliases: [] }) },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => {
           calls.active++
 
@@ -125,6 +126,7 @@ describe('desktop ranked lookup route', () => {
       },
       rankedPlayers: { byId: async () => freshProfile(observedAt) },
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('fresh ranked data must not request refresh')
         },
@@ -154,6 +156,7 @@ describe('desktop ranked lookup route', () => {
         },
       },
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => {
           throw new Error('failed reads must not request refresh')
         },
@@ -189,6 +192,7 @@ describe('desktop ranked lookup route', () => {
     const active = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => ({
           operationId,
           awaitingAdmission: false,
@@ -214,6 +218,7 @@ describe('desktop ranked lookup route', () => {
     const limited = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => ({
           outcome: 'reserved' as const,
@@ -243,6 +248,7 @@ describe('desktop ranked lookup route', () => {
     const temporary = createDesktopRankedRoutes({
       ...shared,
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async () => {
           throw new Error('operations unavailable')
@@ -268,6 +274,7 @@ describe('desktop ranked lookup route', () => {
       playerReferences: { byId: async () => null },
       rankedPlayers: { byId: async () => null },
       playerRefreshReservations: {
+        handBackgroundRefreshToVisitor: async () => 'free' as const,
         findActiveInteractivePlayerRefresh: async () => null,
         reserveInteractivePlayerRefresh: async (input: unknown) => {
           calls.reserve = input

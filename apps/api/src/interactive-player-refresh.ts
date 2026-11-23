@@ -7,6 +7,12 @@ const temporarilyUnavailable = {
   retry: { kind: 'after' as const, afterSeconds: 30 },
 }
 
+// a background refresh of the player is running without one of the sections asked for; it ends in seconds
+const backgroundRefreshRunning = {
+  outcome: 'temporarilyUnavailable' as const,
+  retry: { kind: 'after' as const, afterSeconds: 2 },
+}
+
 type ActorResolution = AdmissionActor | RefreshOutcomeContract
 
 interface InteractivePlayerRefreshRequest {
@@ -32,6 +38,14 @@ export async function requestInteractivePlayerRefresh(
   request: InteractivePlayerRefreshRequest,
 ): Promise<RefreshOutcomeContract> {
   try {
+    // never attach the visitor to a background refresh that leaves out a section they need
+    const handover = await request.playerRefreshReservations.handBackgroundRefreshToVisitor(
+      request.brawlhallaId,
+      request.staleSections,
+    )
+
+    if (handover === 'background-running') return backgroundRefreshRunning
+
     const active = await request.playerRefreshReservations.findActiveInteractivePlayerRefresh(
       request.dedupeKey,
       request.brawlhallaId,

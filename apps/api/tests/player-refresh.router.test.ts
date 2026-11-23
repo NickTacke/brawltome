@@ -38,6 +38,7 @@ function harness(
   const playerReferenceQueries: PlayerReferenceQueries = { byId: async () => cached }
 
   const operations: PlayerRefreshReservations = {
+    handBackgroundRefreshToVisitor: async () => 'free' as const,
     findActiveInteractivePlayerRefresh: async (dedupeKey, brawlhallaId) => {
       activeLookupDedupeKey = dedupeKey
       activeLookupPlayerId = brawlhallaId

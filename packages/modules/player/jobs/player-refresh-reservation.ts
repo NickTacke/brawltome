@@ -6,20 +6,16 @@ import {
   findActiveOperation,
   interactiveRefreshMaxAttempts,
   type OperationProvenance,
-  promotePendingWorkClass,
   type ReserveInteractiveRefreshResult,
-  rankedCoverageCohort,
-  recentlyViewedCohort,
   rejectExpired,
   rejectReserved,
   reserveForAdmission,
   type TransitionResult,
 } from '@brawltome/queue'
-import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
+import { handBackgroundRefreshToVisitor, promoteBackgroundRefreshes } from './background-refresh-handover'
+import { interactivePlayerRefreshContract, type PlayerRefreshSection } from './interactive-player-refresh-contract'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const
-// the background cohorts a visitor's request may pull forward; an account's Primary refresh keeps its own schedule
-const promotableCohorts = [recentlyViewedCohort, rankedCoverageCohort] as const
 
 export type InteractivePlayerRefreshReservation = {
   dedupeKey: string
@@ -65,19 +61,12 @@ export function reserveInteractivePlayerRefresh(
   }
 
   return reserveForAdmission(database, reservation, {
-    // a visitor outranks the background: a queued recently viewed or coverage refresh for this player becomes
-    // interactive work, so the visitor waits on interactive priority instead of behind the monitoring queue
-    beforeInsert: async (transaction) => {
-      for (const cohort of promotableCohorts) {
-        await promotePendingWorkClass(transaction, {
-          kind: 'interactive-player-refresh',
-          resourceKey,
-          from: 'primary-monitoring',
-          to: 'interactive',
-          payloadEquals: { cohort },
-        })
-      }
-    },
+    // a background refresh queued after the visitor's first look is handed over here, in the same transaction
+    beforeInsert: (transaction) =>
+      promoteBackgroundRefreshes(transaction, {
+        brawlhallaId: input.brawlhallaId,
+        staleSections: input.staleSections,
+      }),
   })
 }
 
@@ -123,6 +112,9 @@ export function createPlayerRefreshReservations(database: Database) {
   return {
     findActiveInteractivePlayerRefresh: (dedupeKey: string, brawlhallaId?: number) =>
       findActiveInteractivePlayerRefresh(database, dedupeKey, brawlhallaId),
+
+    handBackgroundRefreshToVisitor: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
+      handBackgroundRefreshToVisitor(database, { brawlhallaId, staleSections }),
 
     reserveInteractivePlayerRefresh: (input: InteractivePlayerRefreshReservation) =>
       reserveInteractivePlayerRefresh(database, input),
