@@ -265,6 +265,7 @@ export type OperationsTelemetrySnapshot = {
     workClass: WorkClass
     kind: OperationLease['kind']
     reason: DeadLetterReason
+    cohort: OperationCohort
     count: number
   }[]
   scheduleLateness: { kind: OperationLease['kind']; latenessMs: number }[]
@@ -322,6 +323,14 @@ type LeaseFields = {
 // belong to no account assignment.
 export const recentlyViewedCohort = 'recently-viewed' as const
 
+// Background refreshes that keep the ranked profiles of high-rated leaderboard players fresh. They fetch the ranked
+// section only, one V0 call each, and share the primary-monitoring work class like the recently viewed cohort.
+export const rankedCoverageCohort = 'ranked-coverage' as const
+
+// the background group an operation's payload names, as telemetry labels it; work outside a cohort is 'none'
+export const operationCohorts = ['none', recentlyViewedCohort, rankedCoverageCohort] as const
+export type OperationCohort = (typeof operationCohorts)[number]
+
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
   | (LeaseFields & { kind: 'primary-player-verification'; workClass: 'interactive'; payload: { value: string } })
@@ -346,6 +355,15 @@ export type OperationLease =
         cohort: typeof recentlyViewedCohort
         brawlhallaId: number
         staleSections: ['ranked', 'stats']
+      }
+    })
+  | (LeaseFields & {
+      kind: 'interactive-player-refresh'
+      workClass: 'primary-monitoring'
+      payload: {
+        cohort: typeof rankedCoverageCohort
+        brawlhallaId: number
+        staleSections: ['ranked']
       }
     })
   | (LeaseFields & {

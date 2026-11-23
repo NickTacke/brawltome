@@ -549,6 +549,7 @@ describe('telemetry foundation', () => {
               ? 'global-statistics'
               : 'projection',
         outcome: 'succeeded',
+        cohort: 'none',
       })
     }
 
@@ -556,6 +557,7 @@ describe('telemetry foundation', () => {
       kind: 'statistics-player-42' as never,
       work_class: 'global-statistics',
       outcome: 'succeeded',
+      cohort: 'none',
     })
 
     const output = renderPrometheus([...telemetry.metrics.snapshot(), ...operationTelemetry.metrics.snapshot()])
@@ -599,15 +601,30 @@ describe('telemetry foundation', () => {
         kind,
         work_class: workClass,
         outcome: 'succeeded',
+        cohort: 'none',
       })
 
-      telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
+      telemetry.metrics.set('operation_dead_letters', 0, {
+        kind,
+        work_class: workClass,
+        reason: 'execution',
+        cohort: 'none',
+      })
+    }
+
+    for (const cohort of ['recently-viewed', 'ranked-coverage']) {
+      telemetry.metrics.add('operation_attempts_total', 1, {
+        kind: 'interactive-player-refresh',
+        work_class: 'primary-monitoring',
+        outcome: 'dead_letter',
+        cohort,
+      })
     }
 
     expect(telemetry.stats().seriesDropped).toBe(0)
   })
 
-  test('keeps every dead letter series the queue reports, one per kind and work class', () => {
+  test('keeps every dead letter series the queue reports, one per kind, work class and cohort', () => {
     const telemetry = createTelemetry({ service: 'operations-worker', drainIntervalMs: 0 })
 
     const kinds = [
@@ -647,7 +664,12 @@ describe('telemetry foundation', () => {
 
     for (const workClass of workClasses) {
       for (const kind of kinds) {
-        telemetry.metrics.set('operation_dead_letters', 0, { kind, work_class: workClass, reason: 'execution' })
+        telemetry.metrics.set('operation_dead_letters', 0, {
+          kind,
+          work_class: workClass,
+          reason: 'execution',
+          cohort: 'none',
+        })
       }
 
       for (const kind of admissionKinds) {
@@ -655,6 +677,19 @@ describe('telemetry foundation', () => {
           kind,
           work_class: workClass,
           reason: 'admission_rejected',
+          cohort: 'none',
+        })
+      }
+    }
+
+    // player refreshes keep a series per cohort in the two classes a cohort runs in
+    for (const workClass of ['interactive', 'primary-monitoring']) {
+      for (const cohort of ['recently-viewed', 'ranked-coverage']) {
+        telemetry.metrics.set('operation_dead_letters', 0, {
+          kind: 'interactive-player-refresh',
+          work_class: workClass,
+          reason: 'execution',
+          cohort,
         })
       }
     }

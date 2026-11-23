@@ -403,6 +403,18 @@ export function createPostgresRequestAdmission(database: Database, config: Reque
       })
     },
 
+    // when a 429 or an outage pause on the source ends, or null when it isn't paused
+    async sourcePausedUntil(domain: SourceDomain): Promise<Date | null> {
+      if (!sourceLimits[domain]) throw new Error(`Unknown source admission domain: ${domain}`)
+
+      const [state] = await client<{ paused_until: Date }[]>`
+        SELECT paused_until FROM request_admission.source_backoffs
+        WHERE domain = ${domain} AND paused_until > clock_timestamp()
+      `
+
+      return state?.paused_until ?? null
+    },
+
     async inspectCurrentUsage(): Promise<SourceQuotaUsage> {
       const window = await captureWindow(client)
       const domains = (Object.keys(sourceLimits) as SourceDomain[]).sort()

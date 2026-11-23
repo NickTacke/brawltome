@@ -7,6 +7,7 @@ import {
   readAttemptHistory,
   recentlyViewedCohort,
 } from '@brawltome/queue'
+import { activeBackgroundPlayerRefreshes } from './active-player-refreshes'
 import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
 
 const playerRefreshKind = 'interactive-player-refresh'
@@ -96,7 +97,7 @@ export async function recentFreshnessAttempts(
 /** The planner's queue operations bound to one database. */
 export function createRecentlyViewedRefreshes(database: Database) {
   return {
-    activeRecentlyViewedRefreshes: () => activeRecentlyViewedRefreshes(database),
+    activeBackgroundPlayerRefreshes: () => activeBackgroundPlayerRefreshes(database),
 
     enqueueRecentlyViewedRefreshes: (brawlhallaIds: readonly number[]) =>
       enqueueRecentlyViewedRefreshes(database, brawlhallaIds),

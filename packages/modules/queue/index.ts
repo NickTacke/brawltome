@@ -62,10 +62,12 @@ export {
 } from './db/effect-lineage'
 export {
   type ActiveOperation,
+  type ActiveOperationDetails,
   type CountActiveInput,
   countActive,
   type FindActiveOperationInput,
   findActiveOperation,
+  findActiveOperationDetails,
   type ListAwaitingInput,
   listAwaiting,
 } from './db/find-operations'
@@ -76,7 +78,6 @@ export {
   type PostgresRefreshOperations,
   type RefreshOperationsDatabases,
 } from './db/postgres-queue'
-export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
 export {
   type AttemptHistory,
   type ReadAttemptHistoryInput,
@@ -97,11 +98,11 @@ export {
 } from './db/reconcile-resource-schedules'
 export {
   type ReserveForAdmissionInput,
-  type ReserveForAdmissionOptions,
   type ReserveForBindingInput,
   reserveForAdmission,
   reserveForBinding,
 } from './db/reserve-operation'
+export { type RewritePendingOperationInput, rewritePendingOperation } from './db/rewrite-pending-operation'
 export { allSectionsCommitted, sectionCommitted } from './db/section-checkpoints'
 export type { Transaction } from './db/transaction'
 export { validateAdmissionConfig } from './domain/admission'

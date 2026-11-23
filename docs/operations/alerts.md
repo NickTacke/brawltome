@@ -298,7 +298,9 @@ roll back the release that introduced it rather than waiting for it to clear.
 
 **Meaning:** at least one operation of the named kind was dead-lettered in the last 30 minutes after exhausting its
 retries. Admission rejections are expected outcomes and are not counted. Statistics collection loses a few players to
-upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes.
+upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes. Ranked coverage
+refreshes (`cohort="ranked-coverage"`) are left out; [RankedCoverageDeadLettersElevated](#rankedcoveragedeadletterselevated)
+watches their rate instead. A coverage refresh a visitor took over has left the cohort, so it counts here.
 
 **Likely causes:** a bug in that operation kind (consistent failures); a payload Brawlhalla changed shape on; a long
 outage that outlasted the retry budget. A row with the code `invalid_payload` never ran: its payload doesn't parse, or
@@ -324,6 +326,22 @@ bun run operations:dead-letters replay <operation-id> --reason "fixed in #123"
 # Or, if the work is no longer wanted:
 bun run operations:dead-letters discard <operation-id> --reason "player deleted"
 ```
+
+### RankedCoverageDeadLettersElevated
+
+**Severity:** warning. A coverage refresh a visitor takes over leaves the cohort and pages through
+[NewDeadLetters](#newdeadletters), so this only counts refreshes nobody waits on. A dead letter is kept for replay.
+
+**Meaning:** more than 2% of the ranked coverage refreshes that settled in the last 6 hours were dead-lettered, with at
+least 50 settled. Player refreshes usually dead-letter about 0.1% of the time, so one dead letter among thousands is
+expected and doesn't fire this.
+
+**Likely causes:** a change in Brawlhalla's ranked response that the decoder rejects; players the boards still list but
+V0 no longer finds; a bug in the ranked refresh. Each dead-lettered player rests for 7 days before coverage tries again.
+
+**First steps:** list the dead letters with the operator CLI (see [NewDeadLetters](#newdeadletters)) and look at their
+`last_error` codes. If one code dominates, fix the cause and replay. To stop coverage meanwhile, set
+`RANKED_COVERAGE_ENABLED=false` on the operations-worker and redeploy.
 
 ### RefreshFailuresElevated
 

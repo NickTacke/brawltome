@@ -115,6 +115,31 @@ describe('runRefresh', () => {
     expect(fake.statuses).toEqual(['updating', 'idle'])
   })
 
+  // another refresh of the player is still running; it can wait its turn on the game's api for several seconds
+  test('a few-second wait is asked again for as long as the api says, then the refresh lands', async () => {
+    const otherRefreshRunning: RefreshAnswer = { kind: 'unavailable', retryAfterSeconds: 2 }
+
+    const fake = fakeRun({
+      answers: [otherRefreshRunning, otherRefreshRunning, otherRefreshRunning, otherRefreshRunning, refreshing],
+    })
+
+    await runRefresh(fake.run)
+
+    expect(fake.tokens).toHaveLength(5)
+    expect(fake.waitsMs.slice(0, 4)).toEqual([2_000, 2_000, 2_000, 2_000])
+    expect(fake.statuses).toEqual(['updating', 'idle'])
+  })
+
+  test('few-second waits stop after 30 seconds in all', async () => {
+    const fake = fakeRun({ answers: [{ kind: 'unavailable', retryAfterSeconds: 2 }] })
+
+    await runRefresh(fake.run)
+
+    expect(fake.waitsMs.reduce((total, waitMs) => total + waitMs, 0)).toBe(30_000)
+    expect(fake.tokens).toHaveLength(16)
+    expect(fake.statuses).toEqual(['updating', 'failed'])
+  })
+
   test('a request that throws counts as an unavailable api', async () => {
     const fake = fakeRun({ answers: [refreshing] })
     const failing = { ...fake.run, request: () => Promise.reject(new Error('network down')) }

@@ -25,6 +25,10 @@ const longestWaitMs = 90_000
 const automaticRetries = 2
 // a longer wait means the visitor's own limit, worth telling them instead of keeping the line on "updating"
 const longestAutomaticRetrySeconds = 60
+// a wait of a few seconds means another refresh of the player is finishing, which can take a while on the game's api,
+// so those are asked again for as long as the api says, up to a total
+const shortRetrySeconds = 5
+const longestShortRetriesMs = 30_000
 const longestPollDelaySeconds = 8
 const failedRequest: RefreshAnswer = { kind: 'unavailable', retryAfterSeconds: 30 }
 
@@ -54,15 +58,31 @@ async function askWithChallenge(run: AskingRun): Promise<RefreshAnswer> {
   return ask(run, turnstileToken)
 }
 
+type RetriesSoFar = { longRetries: number; shortWaitedMs: number }
+
+function hasRetryLeft(answer: RetryableAnswer, retries: RetriesSoFar): boolean {
+  if (answer.retryAfterSeconds > shortRetrySeconds) return retries.longRetries < automaticRetries
+
+  return retries.shortWaitedMs + answer.retryAfterSeconds * 1_000 <= longestShortRetriesMs
+}
+
+function countRetry(answer: RetryableAnswer, retries: RetriesSoFar): RetriesSoFar {
+  if (answer.retryAfterSeconds > shortRetrySeconds) return { ...retries, longRetries: retries.longRetries + 1 }
+
+  return { ...retries, shortWaitedMs: retries.shortWaitedMs + answer.retryAfterSeconds * 1_000 }
+}
+
 /** Asks for a refresh, answering a challenge and retrying short refusals, until the api gives a lasting answer. */
 export async function askUntilSettled(run: AskingRun): Promise<RefreshAnswer> {
   let answer = await askWithChallenge(run)
+  let retries: RetriesSoFar = { longRetries: 0, shortWaitedMs: 0 }
 
-  for (let retry = 0; retry < automaticRetries && isRetryable(answer); retry += 1) {
+  while (isRetryable(answer) && hasRetryLeft(answer, retries)) {
     await run.wait(answer.retryAfterSeconds * 1_000)
 
     if (run.isCancelled()) return answer
 
+    retries = countRetry(answer, retries)
     answer = await askWithChallenge(run)
   }
 

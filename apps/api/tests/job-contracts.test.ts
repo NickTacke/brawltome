@@ -59,6 +59,11 @@ const cases: { job: JobContract<unknown>; accepted: Sample[]; rejected: Sample[]
         workClass: 'primary-monitoring',
         payload: { cohort: 'recently-viewed', brawlhallaId: 1, staleSections: ['ranked', 'stats'] },
       },
+      {
+        name: 'ranked coverage',
+        workClass: 'primary-monitoring',
+        payload: { cohort: 'ranked-coverage', brawlhallaId: 1, staleSections: ['ranked'] },
+      },
     ],
     rejected: [
       { name: 'zero id', workClass: 'interactive', payload: { brawlhallaId: 0, staleSections: ['ranked'] } },
@@ -79,6 +84,16 @@ const cases: { job: JobContract<unknown>; accepted: Sample[]; rejected: Sample[]
         name: 'cohort beside an assignment that is not a string',
         workClass: 'primary-monitoring',
         payload: { assignmentId: 7, cohort: 'recently-viewed', brawlhallaId: 1, staleSections: ['ranked', 'stats'] },
+      },
+      {
+        name: 'ranked coverage with stats',
+        workClass: 'primary-monitoring',
+        payload: { cohort: 'ranked-coverage', brawlhallaId: 1, staleSections: ['ranked', 'stats'] },
+      },
+      {
+        name: 'ranked coverage beside an assignment',
+        workClass: 'primary-monitoring',
+        payload: { assignmentId: uuid, cohort: 'ranked-coverage', brawlhallaId: 1, staleSections: ['ranked'] },
       },
     ],
   },

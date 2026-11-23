@@ -6,15 +6,14 @@ import {
   findActiveOperation,
   interactiveRefreshMaxAttempts,
   type OperationProvenance,
-  promotePendingWorkClass,
   type ReserveInteractiveRefreshResult,
-  recentlyViewedCohort,
   rejectExpired,
   rejectReserved,
   reserveForAdmission,
   type TransitionResult,
 } from '@brawltome/queue'
-import { interactivePlayerRefreshContract } from './interactive-player-refresh-contract'
+import { interactivePlayerRefreshContract, type PlayerRefreshSection } from './interactive-player-refresh-contract'
+import { findActiveRefreshForVisitor, takeOverPlayerRefresh } from './visitor-refresh-takeover'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const
 
@@ -61,18 +60,8 @@ export function reserveInteractivePlayerRefresh(
     reservationTtlSeconds: input.reservationTtlSeconds,
   }
 
-  return reserveForAdmission(database, reservation, {
-    // a visitor outranks the background: a queued recently viewed refresh for this player becomes interactive
-    // work, so the visitor waits on interactive priority instead of behind the monitoring queue
-    beforeInsert: (transaction) =>
-      promotePendingWorkClass(transaction, {
-        kind: 'interactive-player-refresh',
-        resourceKey,
-        from: 'primary-monitoring',
-        to: 'interactive',
-        payloadEquals: { cohort: recentlyViewedCohort },
-      }),
-  })
+  // a refresh already holding the player comes back as already-active; the caller takes it over once admitted
+  return reserveForAdmission(database, reservation)
 }
 
 export function activateInteractivePlayerRefresh(
@@ -115,8 +104,15 @@ export function rejectExpiredInteractivePlayerRefresh(
 /** The reservation use cases bound to one database, for the API context. */
 export function createPlayerRefreshReservations(database: Database) {
   return {
-    findActiveInteractivePlayerRefresh: (dedupeKey: string, brawlhallaId?: number) =>
-      findActiveInteractivePlayerRefresh(database, dedupeKey, brawlhallaId),
+    // with how a visitor needing these sections deals with it, so one read answers both
+    findActiveInteractivePlayerRefresh: (
+      dedupeKey: string,
+      brawlhallaId: number,
+      staleSections: readonly PlayerRefreshSection[],
+    ) => findActiveRefreshForVisitor(database, { dedupeKey, brawlhallaId, staleSections }),
+
+    takeOverPlayerRefresh: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
+      takeOverPlayerRefresh(database, { brawlhallaId, staleSections }),
 
     reserveInteractivePlayerRefresh: (input: InteractivePlayerRefreshReservation) =>
       reserveInteractivePlayerRefresh(database, input),

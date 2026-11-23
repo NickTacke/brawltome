@@ -112,7 +112,7 @@
       },
       "targets": [
         {
-          "expr": "max by (work_class, kind, reason) (operation_dead_letters)",
+          "expr": "sum by (work_class, kind, reason) (max by (work_class, kind, reason, cohort) (operation_dead_letters))",
           "legendFormat": "{{work_class}} / {{kind}} / {{reason}}",
           "refId": "A"
         }

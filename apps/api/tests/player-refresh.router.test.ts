@@ -38,6 +38,7 @@ function harness(
   const playerReferenceQueries: PlayerReferenceQueries = { byId: async () => cached }
 
   const operations: PlayerRefreshReservations = {
+    takeOverPlayerRefresh: async () => ({ outcome: 'none' as const }),
     findActiveInteractivePlayerRefresh: async (dedupeKey, brawlhallaId) => {
       activeLookupDedupeKey = dedupeKey
       activeLookupPlayerId = brawlhallaId
@@ -47,6 +48,7 @@ function harness(
             operationId: options.activeOperationId,
             awaitingAdmission: options.activeAwaiting ?? false,
             reservationExpired: options.activeAwaiting ?? false,
+            fit: 'attach' as const,
           }
         : null
     },

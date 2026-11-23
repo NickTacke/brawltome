@@ -94,6 +94,10 @@ export type MetricName =
   | 'freshness_refreshes_total'
   | 'freshness_due_players'
   | 'freshness_planner_skips_total'
+  | 'ranked_coverage_refreshes_total'
+  | 'ranked_coverage_skips_total'
+  | 'ranked_coverage_players'
+  | 'ranked_coverage_due_players'
   | 'leaderboard_deep_crawl_pages_total'
   | 'leaderboard_deep_crawl_changed_total'
   | 'analytics_pageviews_total'
@@ -175,6 +179,12 @@ const workClass = [
   'maintenance',
 ] as const
 
+// the background group an operation's payload names, the queue's operationCohorts, so alerts can tell them apart
+const operationCohort = ['none', 'recently-viewed', 'ranked-coverage'] as const
+
+// the coverage bands of the player module's rankedCoveragePolicy
+const rankedCoverageBand = ['2200+', '2000-2199', '1800-1999'] as const
+
 // the deep crawl skips 3v3, like leaderboardDeepCrawlModes in the queue module
 const deepCrawlModes = ['1v1', 'solo2v2', '2v2'] as const satisfies readonly RankedMode[]
 const deepCrawlMode = [...deepCrawlModes, 'other'] as const
@@ -250,7 +260,7 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   operation_attempts_total: {
     kind: 'counter',
     help: 'Durable operation attempts',
-    labels: { kind: operationKind, work_class: workClass, outcome },
+    labels: { kind: operationKind, work_class: workClass, outcome, cohort: operationCohort },
   },
   operation_duration_ms: {
     kind: 'histogram',
@@ -272,7 +282,12 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
   operation_dead_letters: {
     kind: 'gauge',
     help: 'Current unresolved durable dead letters',
-    labels: { work_class: workClass, kind: operationKind, reason: ['execution', 'admission_rejected'] },
+    labels: {
+      work_class: workClass,
+      kind: operationKind,
+      reason: ['execution', 'admission_rejected'],
+      cohort: operationCohort,
+    },
   },
   replay_jobs: {
     kind: 'gauge',
@@ -414,6 +429,26 @@ const metricsCatalog: Readonly<Record<MetricName, MetricDefinition>> = {
     kind: 'counter',
     help: 'Freshness planner passes that enqueued nothing',
     labels: { reason: ['budget', 'slots'] },
+  },
+  ranked_coverage_refreshes_total: {
+    kind: 'counter',
+    help: 'Ranked-only V0 refreshes the coverage planner requested for high-rated leaderboard players, one call each',
+    labels: { band: rankedCoverageBand, outcome: ['enqueued', 'already_active'] },
+  },
+  ranked_coverage_skips_total: {
+    kind: 'counter',
+    help: 'Coverage planner passes that enqueued nothing',
+    labels: { reason: ['source_paused', 'budget', 'interactive', 'slot_busy', 'nothing_due'] },
+  },
+  ranked_coverage_players: {
+    kind: 'gauge',
+    help: 'Players on the 1v1 boards in each coverage band, by the age of their V0 ranked profile',
+    labels: { band: rankedCoverageBand, age: ['under_1_day', '1_to_2_days', '2_to_7_days', 'over_7_days', 'missing'] },
+  },
+  ranked_coverage_due_players: {
+    kind: 'gauge',
+    help: "Players whose V0 ranked profile is older than their coverage band's refresh interval",
+    labels: { band: rankedCoverageBand },
   },
   analytics_pageviews_total: {
     kind: 'counter',
@@ -883,7 +918,7 @@ export function createTelemetry(options: {
   }
 }) {
   const capacity = Math.max(1, Math.min(options.capacity ?? 1000, 10_000))
-  // operation_dead_letters keeps a series for every kind in every work class, 132 with twenty kinds
+  // operation_dead_letters keeps a series for every kind in every work class, 136 with twenty kinds and the cohorts
   const maxSeries = Math.max(1, Math.min(options.maxSeriesPerMetric ?? 256, 1024))
   const drainIntervalMs = Math.max(0, Math.min(options.drainIntervalMs ?? 1000, 60_000))
   const exportTimeoutMs = Math.max(1, Math.min(options.exportTimeoutMs ?? 250, 5_000))

@@ -437,6 +437,28 @@ describe('PostgreSQL interactive refresh admission', () => {
     )
   })
 
+  test('reports when a source pause ends, and nothing once it has passed', async () => {
+    const admission = createPostgresRequestAdmission(database, {
+      authenticatedIpLimit: 120,
+      sourceLimits: { 'brawlhalla-v0': 180, 'brawlhalla-v1': 1800 },
+    })
+
+    expect(await admission.sourcePausedUntil('brawlhalla-v0')).toBeNull()
+
+    await admission.pauseSource('brawlhalla-v0', 60)
+
+    const pausedUntil = await admission.sourcePausedUntil('brawlhalla-v0')
+
+    expect(pausedUntil?.getTime()).toBeGreaterThan(Date.now() + 50_000)
+    expect(await admission.sourcePausedUntil('brawlhalla-v1')).toBeNull()
+
+    await database.sql`
+      UPDATE request_admission.source_backoffs SET paused_until = clock_timestamp() - interval '1 second'
+    `
+
+    expect(await admission.sourcePausedUntil('brawlhalla-v0')).toBeNull()
+  })
+
   test('uses one database timestamp when a transaction crosses a window boundary', async () => {
     let delayed = false
     let capturedAt: Date | undefined
