@@ -103,6 +103,13 @@ function createFakes(options: FakeOptions = {}) {
         return 11
       },
     },
+    rankedCoverage: {
+      tick: async () => {
+        calls.push(['ranked-coverage'])
+
+        return 13
+      },
+    },
     schedules: {
       store: {
         leaderboard: scheduleStore('leaderboard-schedule'),
@@ -153,13 +160,14 @@ describe('worker planners', () => {
       'statistics-cohort',
       'player-name-verification',
       'freshness',
+      'ranked-coverage',
       'leaderboard-schedules',
     ])
 
-    // 2 activated + 7 monitoring + 5 cohort + 7 name verification + 11 freshness + 5 schedules
-    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 5)
+    // 2 activated + 7 monitoring + 5 cohort + 7 name verification + 11 freshness + 13 coverage + 5 schedules
+    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 13 + 5)
     // the schedules are already in place on the second tick
-    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11)
+    expect(await runPlanners(planners)).toBe(2 + 7 + 5 + 7 + 11 + 13)
   })
 
   test('runs the planners in a fixed order', async () => {
@@ -175,6 +183,7 @@ describe('worker planners', () => {
       'statistics-cohort',
       'name-verification',
       'freshness',
+      'ranked-coverage',
       'leaderboard-schedule',
       'leaderboard-schedule',
       'retention-schedule',

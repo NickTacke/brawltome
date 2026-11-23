@@ -62,6 +62,7 @@ export type PlannerDependencies = {
   statisticsCohort: { reconcile(): Promise<number> }
   nameVerification: Pick<Planner, 'tick'>
   freshness: Pick<Planner, 'tick'>
+  rankedCoverage: Pick<Planner, 'tick'>
   schedules: {
     store: ScheduleStore
     leaderboard: readonly CreateLeaderboardSchedule[]
@@ -250,6 +251,8 @@ export function createPlanners(dependencies: PlannerDependencies): readonly Plan
     { name: 'statistics-cohort', tick: () => dependencies.statisticsCohort.reconcile() },
     { name: 'player-name-verification', tick: () => dependencies.nameVerification.tick() },
     { name: 'freshness', tick: () => dependencies.freshness.tick() },
+    // after freshness: a recently viewed player takes the shared background slot before a coverage refresh does
+    { name: 'ranked-coverage', tick: () => dependencies.rankedCoverage.tick() },
     createScheduleReconciliationPlanner(dependencies),
   ]
 }

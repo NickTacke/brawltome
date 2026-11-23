@@ -27,7 +27,9 @@ import {
   createPostgresPlayerFreshness,
   createPostgresPlayerNameVerifications,
   createPostgresProfileViews,
+  createPostgresRankedCoverage,
   createPostgresRankedPlayers,
+  createRankedCoverageRefreshes,
   createRecentlyViewedRefreshes,
   createSteamPlayerEvidenceResolver,
   reconcilePrimaryMonitoring,
@@ -78,6 +80,7 @@ import {
   readPlayerNameVerificationConfig,
 } from './player-name-verification'
 import { createPostgresReadiness } from './postgres-readiness'
+import { createRankedCoveragePlanner, readRankedCoveragePlannerConfig } from './ranked-coverage-planner'
 import { readAuthenticatedRefreshIpLimit, readPort, readRuntimeConfig } from './runtime-config'
 import { createRuntimeLifecycle } from './runtime-lifecycle'
 import { reconcileStatisticsCohort } from './statistics-cohort-reconciliation'
@@ -435,6 +438,15 @@ const freshnessPlanner = createFreshnessPlanner({
   telemetry,
 })
 
+const rankedCoveragePlanner = createRankedCoveragePlanner({
+  config: readRankedCoveragePlannerConfig(process.env),
+  readSourceUsage: readV0SourceUsage,
+  readSourcePausedUntil: () => requestAdmission.sourcePausedUntil('brawlhalla-v0'),
+  coverage: createPostgresRankedCoverage(databases.main),
+  operations: createRankedCoverageRefreshes(databases.main),
+  telemetry,
+})
+
 const planners = createPlanners({
   operations,
   actorAdmission: requestAdmission,
@@ -454,6 +466,7 @@ const planners = createPlanners({
   statisticsCohort: { reconcile: () => reconcileStatisticsCohort(statistics, statisticsReservations, ranking.queries) },
   nameVerification: nameVerificationPlanner,
   freshness: freshnessPlanner,
+  rankedCoverage: rankedCoveragePlanner,
   schedules: {
     store: {
       leaderboard: (schedule) => reconcileLeaderboardSchedule(databases.main, schedule),
