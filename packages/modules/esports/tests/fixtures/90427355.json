@@ -1,0 +1,383 @@
+{
+  "player": { "name": "Chewy" },
+  "pr1v1": {
+    "earnings": 0,
+    "pr": { "top8": 0, "top32": 0, "gold": 0, "silver": 0, "bronze": 0, "powerRanking": 0, "region": "" }
+  },
+  "pr2v2": {
+    "earnings": 0,
+    "pr": { "top8": 0, "top32": 0, "gold": 0, "silver": 0, "bronze": 0, "powerRanking": 0, "region": "" }
+  },
+  "placements1v1": [
+    {
+      "placement": 193,
+      "tournament": {
+        "id": "tournament/winter-championship-north-america-2025/event/brawlhalla-championship-1v1",
+        "tournamentName": "Winter Championship - North America 2025",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1740330900
+      }
+    },
+    {
+      "placement": 5,
+      "tournament": {
+        "id": "tournament/frostbyte-9-brawlhalla-na-1v1-250-prize-pool/event/brawlhalla-na-1v1-2",
+        "tournamentName": "FROSTBYTE #9: Brawlhalla NA 1v1 | $250 Prize Pool",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1736107200
+      }
+    },
+    {
+      "placement": 25,
+      "tournament": {
+        "id": "tournament/galaxy-cup-aero/event/na-1v1",
+        "tournamentName": "Galaxy Cup: Aero",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1729969200
+      }
+    },
+    {
+      "placement": 257,
+      "tournament": {
+        "id": "tournament/moose-wars-gobble-gauntlet/event/brawlhalla-1v1s-1000",
+        "tournamentName": "Moose Wars: Gobble Gauntlet",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1699819200
+      }
+    },
+    {
+      "placement": 129,
+      "tournament": {
+        "id": "tournament/north-america-autumn-championship-2023/event/brawlhalla-championship-1v1",
+        "tournamentName": "North America - Autumn Championship 2023",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1695572100
+      }
+    }
+  ],
+  "placements2v2": [
+    {
+      "placement": 49,
+      "tournament": {
+        "id": "tournament/autumn-doubles-championship-north-america/event/brawlhalla-championship-2v2",
+        "tournamentName": "Autumn Doubles Championship - North America",
+        "isOfficial": true,
+        "isOnline": true,
+        "startTime": 1728231300
+      }
+    },
+    {
+      "placement": 49,
+      "tournament": {
+        "id": "tournament/moose-wars-gobble-gauntlet/event/brawlhalla-2v2s-1000",
+        "tournamentName": "Moose Wars: Gobble Gauntlet",
+        "isOfficial": false,
+        "isOnline": true,
+        "startTime": 1699732800
+      }
+    }
+  ],
+  "matches": {
+    "tournament/winter-championship-north-america-2025/event/brawlhalla-championship-1v1": [
+      {
+        "matchId": "85780858",
+        "scores": [0, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "DraconicEND" }],
+        "startTime": null
+      },
+      {
+        "matchId": "85780850",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Zevorus" }],
+        "startTime": null
+      },
+      {
+        "matchId": "85780695",
+        "scores": [0, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 30226535, "name": "Raydish" }],
+        "startTime": null
+      },
+      {
+        "matchId": "85780656",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "TNOgrizzly79" }],
+        "startTime": null
+      }
+    ],
+    "tournament/frostbyte-9-brawlhalla-na-1v1-250-prize-pool/event/brawlhalla-na-1v1-2": [
+      {
+        "matchId": "83924025",
+        "scores": [0, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 57433184, "name": "DMT | Rutsmy" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83924009",
+        "scores": [0, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 7634001, "name": "Zinquer" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923937",
+        "scores": [3, 2],
+        "legends": [["TEROS", "JIRO", "JIRO", "TEROS", "TEROS"], ["VIVI", "VIVI", "VIVI", "VIVI", "VIVI"]],
+        "opponent": [{ "brawlhallaId": 7249123, "name": "mogul_" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923929",
+        "scores": [2, 1],
+        "legends": [["MORDEX", "JIRO", "MORDEX"], ["VAL", "VAL", "VAL"]],
+        "opponent": [{ "brawlhallaId": null, "name": "SKIPS" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923256",
+        "scores": [2, 1],
+        "legends": [["JIRO", "MORDEX", "MORDEX"], ["QUEEN_NAI", "QUEEN_NAI", "QUEEN_NAI"]],
+        "opponent": [{ "brawlhallaId": null, "name": "LGN | Yami" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923240",
+        "scores": [0, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "NateyJJ" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923208",
+        "scores": [0, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 24116692, "name": "Bunny meow" }],
+        "startTime": null
+      },
+      {
+        "matchId": "83923145",
+        "scores": [0, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Xion" }],
+        "startTime": null
+      }
+    ],
+    "tournament/galaxy-cup-aero/event/na-1v1": [
+      {
+        "matchId": "81503744",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "KnicBH" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81503735",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Knew" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81503721",
+        "scores": [0, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Angmond_0657" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81503482",
+        "scores": [1, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 40409749, "name": "jahlil" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81503455",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "reclaimgod" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81503392",
+        "scores": [2, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Sbbologna" }],
+        "startTime": null
+      },
+      {
+        "matchId": "81501912",
+        "scores": [0, 3],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": 9198510, "name": "animefan1266" }],
+        "startTime": null
+      }
+    ],
+    "tournament/moose-wars-gobble-gauntlet/event/brawlhalla-1v1s-1000": [
+      {
+        "matchId": "67607852",
+        "scores": [-1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "Dash_With_A_Bag" }],
+        "startTime": null
+      },
+      {
+        "matchId": "67607844",
+        "scores": [-1, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "teeandee" }],
+        "startTime": null
+      },
+      {
+        "matchId": "67607830",
+        "scores": [-1, -1],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "elvis2cool11" }],
+        "startTime": null
+      },
+      {
+        "matchId": "67607724",
+        "scores": [-1, 0],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "runawayy-_-" }],
+        "startTime": null
+      }
+    ],
+    "tournament/north-america-autumn-championship-2023/event/brawlhalla-championship-1v1": [
+      {
+        "matchId": "65563740",
+        "scores": [0, 2],
+        "legends": [[""], [""]],
+        "opponent": [{ "brawlhallaId": null, "name": "EloBully" }],
+        "startTime": null
+      },
+      {
+        "matchId": "65563736",
+        "scores": [2, 1],
+        "legends": [["", "ULGRIM"], ["ORION", "KAYA"]],
+        "opponent": [{ "brawlhallaId": null, "name": "Crazy Dave" }],
+        "startTime": null
+      },
+      {
+        "matchId": "65563730",
+        "scores": [2, 0],
+        "legends": [["ULGRIM", "LIN_FEI"], ["TEZCA", ""]],
+        "opponent": [{ "brawlhallaId": null, "name": "KingAssassin473" }],
+        "startTime": null
+      },
+      {
+        "matchId": "65563612",
+        "scores": [0, 2],
+        "legends": [["TEROS", "MORDEX"], ["MORDEX", ""]],
+        "opponent": [{ "brawlhallaId": null, "name": "itsarthurr" }],
+        "startTime": null
+      },
+      {
+        "matchId": "65563604",
+        "scores": [2, 0],
+        "legends": [["TEROS", "ULGRIM"], ["VAL", "CASPIAN"]],
+        "opponent": [{ "brawlhallaId": null, "name": "iNeedADoc" }],
+        "startTime": null
+      }
+    ],
+    "tournament/autumn-doubles-championship-north-america/event/brawlhalla-championship-2v2": [
+      {
+        "matchId": "80685608",
+        "scores": [0, 3],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 99659243, "name": "Asesino" }, { "brawlhallaId": null, "name": "Cyclone" }],
+        "startTime": null
+      },
+      {
+        "matchId": "80685576",
+        "scores": [3, 2],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Dreadtrapreaper" }, { "brawlhallaId": null, "name": "ryna" }],
+        "startTime": null
+      },
+      {
+        "matchId": "80685544",
+        "scores": [3, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "xHollowed" }, { "brawlhallaId": null, "name": "Random_BH" }],
+        "startTime": null
+      },
+      {
+        "matchId": "80684764",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "TeeJayWms" }, { "brawlhallaId": null, "name": "YungDr4ko22" }],
+        "startTime": null
+      },
+      {
+        "matchId": "80684653",
+        "scores": [0, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": 4690119, "name": "experiencedoa" },
+          { "brawlhallaId": 5827766, "name": "Zen |" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "80684618",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Scoozixo" }, { "brawlhallaId": null, "name": "Mxzi" }],
+        "startTime": null
+      }
+    ],
+    "tournament/moose-wars-gobble-gauntlet/event/brawlhalla-2v2s-1000": [
+      {
+        "matchId": "67546357",
+        "scores": [0, 2],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": 60025258, "name": ".kira" }, { "brawlhallaId": null, "name": "Mexo" }],
+        "startTime": null
+      },
+      {
+        "matchId": "67546352",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "Rahmaan" }, { "brawlhallaId": null, "name": "myname" }],
+        "startTime": null
+      },
+      {
+        "matchId": "67546155",
+        "scores": [0, 2],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "Webbster" },
+          { "brawlhallaId": null, "name": "Seleleleleleleelelel" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "67546123",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [
+          { "brawlhallaId": null, "name": "YeaAnxiety" },
+          { "brawlhallaId": 105379605, "name": "LGN | HaLo" }
+        ],
+        "startTime": null
+      },
+      {
+        "matchId": "67546064",
+        "scores": [2, 0],
+        "legends": [[], []],
+        "opponent": [{ "brawlhallaId": null, "name": "asta" }, { "brawlhallaId": null, "name": "goku" }],
+        "startTime": null
+      }
+    ]
+  }
+}
