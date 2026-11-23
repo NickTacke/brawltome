@@ -31,9 +31,10 @@ The `esports` schema, described in `db/tables.ts`:
   fresh, and `freshness.ts` decides from a player's row whether it is due a refresh
 - `jobs/`: the two queue jobs. `esports-refresh` asks Brawltools for one player's power rankings, placements and
   event legends, and the sets of the events the highlight cards show. `esports-sets-backfill` fetches the sets of
-  the player's other events. A 429 pauses the `brawltools` source and defers the job. Every other error counts a
-  failed refresh, so the read backs off for a day. A 5xx or a request that never got an answer then completes the
-  job; anything else still fails it, so it shows up in the dead letters
+  the player's other events, skipping side modes and going on past an event that fails. A 429 pauses the
+  `brawltools` source and defers the job. Every other error counts a failed refresh, so the read backs off for a
+  day. A 5xx or a request that never got an answer then completes the job; anything else still fails it, so it
+  shows up in the dead letters
 - `migrations/`: creates the schema and the tables
 - `source/`: the Brawltools client and the raw response types
 - `tests/`: the table check, the client, the domain code, the jobs and the read, with a few saved public Brawltools

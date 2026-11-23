@@ -109,8 +109,13 @@ async function refreshPlayer(
 
   if (!isLinked(refresh)) return
 
-  await fetchHighlightSets(dependencies, client, refresh, legendLookup)
-  await dependencies.enqueueBackfill(brawlhallaId)
+  // the backfill is asked for even when a highlight event failed, or one broken event would keep the player from
+  // ever getting the sets of the rest
+  try {
+    await fetchHighlightSets(dependencies, client, refresh, legendLookup)
+  } finally {
+    await dependencies.enqueueBackfill(brawlhallaId)
+  }
 }
 
 /**

@@ -221,7 +221,7 @@ describe('esports refresh job', () => {
     expect(row?.failureCount).toBe(1)
   })
 
-  test('a 503 while fetching highlight sets keeps the saved profile and records a failure', async () => {
+  test('a 503 while fetching highlight sets keeps the saved profile, records a failure and asks for a backfill', async () => {
     const unavailable = new BrawltoolsHttpError('brawltools answered 503 for /player/match', 503, '/player/match')
 
     const stub = answers({
@@ -237,7 +237,8 @@ describe('esports refresh job', () => {
     expect(stored.placements.map((saved) => saved.tournamentId)).toEqual(['solo'])
     expect(row).toMatchObject({ link: 'linked', failureCount: 1 })
     expect(row?.checkedAt.getTime()).toBeGreaterThan(row?.lastSuccessAt?.getTime() ?? Number.POSITIVE_INFINITY)
-    expect(backfills).toEqual([])
+    // the backfill goes on to the other events, so one broken event can't hold back the rest
+    expect(backfills).toEqual([brawlhallaId])
   })
 
   test('a timeout records a failure like a 503', async () => {

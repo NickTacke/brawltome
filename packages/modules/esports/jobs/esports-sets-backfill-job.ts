@@ -1,15 +1,39 @@
 import type { Database } from '@brawltome/foundation'
 import { defineJob, type JobDefinition } from '@brawltome/queue'
 import { listEventsMissingSets } from '../db/list-events-missing-sets'
-import { readStoredEsports } from '../db/read-stored-esports'
+import { readEsportsPlayer } from '../db/read-stored-esports'
 import { saveEventSets } from '../db/save-event-sets'
 import { isSideModeEvent } from '../domain'
 import type { BrawltoolsClient } from '../source/brawltools-client'
-import { decideBrawltoolsFailure } from './brawltools-failures'
+import { decideBrawltoolsFailure, isBrawltoolsRateLimited } from './brawltools-failures'
 import { type EsportsSetsBackfillPayload, esportsSetsBackfillContract } from './esports-sets-backfill-contract'
 import { type EsportsJobDependencies, runEsportsJob } from './run-esports-job'
 
 export type EsportsSetsBackfillJobDependencies = EsportsJobDependencies
+
+type EventToFetch = { brawlhallaId: number; brawltoolsPlayerId: number; tournamentId: string }
+
+// this many events failing one after another means brawltools is down, not that one event is broken
+const maxFailuresInARow = 3
+
+// a failed event is returned, not thrown, so the events after it are still fetched; a rate limit still stops the run
+async function fetchEventSets(
+  dependencies: EsportsSetsBackfillJobDependencies,
+  client: BrawltoolsClient,
+  event: EventToFetch,
+): Promise<unknown> {
+  try {
+    const sets = await client.matches(event.brawltoolsPlayerId, event.tournamentId)
+
+    await saveEventSets(dependencies.database, event.brawlhallaId, event.tournamentId, sets, new Date())
+
+    return null
+  } catch (error) {
+    if (isBrawltoolsRateLimited(error)) throw error
+
+    return error
+  }
+}
 
 async function listEventsToFetch(database: Database, brawlhallaId: number) {
   const missing = await listEventsMissingSets(database, brawlhallaId, new Date())
@@ -18,26 +42,34 @@ async function listEventsToFetch(database: Database, brawlhallaId: number) {
   return missing.filter((event) => !isSideModeEvent(event.tournamentName))
 }
 
-// each event is saved as soon as it is fetched, so a backfill cut short keeps what it got and a rerun goes on from there
+// each event is saved as soon as it is fetched, so a backfill cut short keeps what it got and a rerun goes on from
+// there; a failed event is thrown once the rest are done, so the job counts one failed refresh for the run
 async function backfillSets(
   dependencies: EsportsSetsBackfillJobDependencies,
   client: BrawltoolsClient,
   brawlhallaId: number,
   leaseLost: AbortSignal,
 ): Promise<void> {
-  const { row } = await readStoredEsports(dependencies.database, brawlhallaId)
+  const row = await readEsportsPlayer(dependencies.database, brawlhallaId)
   const brawltoolsPlayerId = row?.brawltoolsPlayerId
 
   if (row?.link !== 'linked' || !brawltoolsPlayerId) return
 
+  let lastFailure: unknown = null
+  let failuresInARow = 0
+
   for (const { tournamentId } of await listEventsToFetch(dependencies.database, brawlhallaId)) {
-    // a pro's first backfill is about a hundred calls; a lost lease means another run may take over, so stop spending
-    if (leaseLost.aborted) return
+    // a pro's first backfill is about a hundred calls; a lost lease means another run may take over, and a run of
+    // failures that brawltools is down, so either way stop spending
+    if (leaseLost.aborted || failuresInARow >= maxFailuresInARow) break
 
-    const sets = await client.matches(brawltoolsPlayerId, tournamentId)
+    const failure = await fetchEventSets(dependencies, client, { brawlhallaId, brawltoolsPlayerId, tournamentId })
 
-    await saveEventSets(dependencies.database, brawlhallaId, tournamentId, sets, new Date())
+    failuresInARow = failure ? failuresInARow + 1 : 0
+    lastFailure = failure ?? lastFailure
   }
+
+  if (lastFailure) throw lastFailure
 }
 
 /** Fetches the sets of every stored event of one player that has none yet, or only some from before it was final. */
