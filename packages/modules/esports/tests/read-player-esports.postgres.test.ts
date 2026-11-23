@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { playerEsportsSchema } from '@brawltome/contracts'
 import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
 import { playerModule } from '@brawltome/player'
 import { queueModule } from '@brawltome/queue'
+import { runJobOnce } from '@brawltome/queue/testing'
 import { call } from '@orpc/server'
 import { createEsportsProcedures } from '../api/procedures'
 import { readPlayerEsports } from '../api/read-player-esports'
@@ -10,7 +11,9 @@ import { recordFailure } from '../db/record-failure'
 import { saveEventSets } from '../db/save-event-sets'
 import { type RefreshInput, saveRefresh } from '../db/save-refresh'
 import { esportsModule } from '../index'
+import { createEsportsRefreshJob } from '../jobs/esports-refresh-job'
 import { match, placement, powerRanking } from './domain/builders'
+import { answers, createQueue, createSourceAdmission, stubClient } from './jobs/job-harness'
 
 const dayMs = 24 * 60 * 60 * 1000
 const hourMs = 60 * 60 * 1000
@@ -35,6 +38,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await database?.drop()
 }, 20_000)
+
+// the reads queue refreshes, and a test that runs one must find only its own
+beforeEach(async () => {
+  await database.sql`DELETE FROM queue.attempts`
+  await database.sql`DELETE FROM queue.operations`
+})
 
 function newPlayerId(): number {
   nextBrawlhallaId += 1
@@ -128,6 +137,26 @@ async function storeRecordKnownByPlay(brawlhallaId: number) {
       { name: 'Mordex', count: 2 },
     ],
   })
+}
+
+type QueuedOperation = { status: string; workClass: string; resourceKey: string | null; payload: unknown }
+
+async function readQueued(kind: string, brawlhallaId: number): Promise<QueuedOperation[]> {
+  return database.sql<QueuedOperation[]>`
+    SELECT status, work_class AS "workClass", resource_key AS "resourceKey", payload
+    FROM queue.operations WHERE kind = ${kind} AND dedupe_key = ${`${kind}:${brawlhallaId}`}
+  `
+}
+
+// the refresh job against a brawltools that does not know the player
+async function runNoneRefresh() {
+  const job = createEsportsRefreshJob({
+    database,
+    createClient: stubClient(answers({ player: null }), []),
+    enqueueBackfill: async () => {},
+  })
+
+  return runJobOnce(createQueue(database, job), job, { sourceAdmission: createSourceAdmission().sourceAdmission })
 }
 
 const fillerLegends = ['ada', 'bodvar', 'cassidy', 'orion', 'gnash', 'scarlet', 'thatch'].map((key, index) => ({
@@ -331,6 +360,88 @@ describe('readPlayerEsports', () => {
   })
 })
 
+describe('readPlayerEsports queueing', () => {
+  test('a stale read queues one refresh, a second read while it is pending queues nothing', async () => {
+    const brawlhallaId = newPlayerId()
+
+    await storeLinked(brawlhallaId, { checkedAt: ago(8 * dayMs) })
+    await storeRankedAccount(brawlhallaId, 'Ember', 'EU')
+
+    const first = await readPlayerEsports(database, brawlhallaId, now)
+    const second = await readPlayerEsports(database, brawlhallaId, now)
+
+    expect(first.freshness).toBe('stale')
+    expect(second.profile).not.toBeNull()
+
+    expect(await readQueued('esports-refresh', brawlhallaId)).toEqual([
+      {
+        status: 'pending',
+        workClass: 'maintenance',
+        resourceKey: `esports-refresh:${brawlhallaId}`,
+        payload: { brawlhallaId },
+      },
+    ])
+  })
+
+  test('a read of a player never fetched queues one refresh', async () => {
+    const brawlhallaId = newPlayerId()
+
+    expect(await readPlayerEsports(database, brawlhallaId, now)).toEqual({ profile: null, freshness: 'missing' })
+    expect(await readQueued('esports-refresh', brawlhallaId)).toHaveLength(1)
+  })
+
+  test('a fresh read queues nothing', async () => {
+    const linked = newPlayerId()
+    const none = newPlayerId()
+    const backingOff = newPlayerId()
+
+    await storeLinked(linked, { checkedAt: ago(6 * dayMs) })
+    await storeNone(none, ago(29 * dayMs))
+    await recordFailure(database, backingOff, ago(12 * hourMs))
+
+    for (const brawlhallaId of [linked, none, backingOff]) {
+      expect((await readPlayerEsports(database, brawlhallaId, now)).freshness).toBe('fresh')
+      expect(await readQueued('esports-refresh', brawlhallaId)).toEqual([])
+    }
+  })
+
+  test('a none player viewed 100 times in 30 days queues nothing after the first refresh', async () => {
+    const brawlhallaId = newPlayerId()
+
+    await readPlayerEsports(database, brawlhallaId, new Date())
+
+    expect(await runNoneRefresh()).toBe('succeeded')
+
+    const refreshedAt = Date.now()
+
+    for (let view = 0; view < 100; view += 1) {
+      const viewedAt = new Date(refreshedAt + (view * 30 * dayMs) / 100)
+
+      await readPlayerEsports(database, brawlhallaId, viewedAt)
+    }
+
+    expect((await readQueued('esports-refresh', brawlhallaId)).map(({ status }) => status)).toEqual(['succeeded'])
+  })
+
+  test('a refresh that cannot be queued is logged, and the read still answers', async () => {
+    const brawlhallaId = newPlayerId()
+    const errors = spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await database.sql`
+      ALTER TABLE queue.operations ADD CONSTRAINT test_no_esports_refresh CHECK (kind <> 'esports-refresh') NOT VALID
+    `
+
+    try {
+      expect(await readPlayerEsports(database, brawlhallaId, now)).toEqual({ profile: null, freshness: 'missing' })
+      expect(errors).toHaveBeenCalledTimes(1)
+      expect(String(errors.mock.calls[0]?.[0])).toContain(`esports refresh for player ${brawlhallaId}`)
+    } finally {
+      errors.mockRestore()
+      await database.sql`ALTER TABLE queue.operations DROP CONSTRAINT test_no_esports_refresh`
+    }
+  })
+})
+
 describe('esports.byPlayerId', () => {
   test('answers with the stored profile and its freshness', async () => {
     const brawlhallaId = newPlayerId()
@@ -344,6 +455,16 @@ describe('esports.byPlayerId', () => {
     expect(esports.freshness).toBe('fresh')
     expect(esports.profile?.results.map((result) => result.fullName)).toEqual(['Frostbyte #19'])
     expect(esports.profile?.results[0]?.sets[0]?.opponents).toEqual([{ brawlhallaId: null, name: 'Opponent' }])
+  })
+
+  test('queues a refresh for a player never fetched', async () => {
+    const brawlhallaId = newPlayerId()
+    const { byPlayerId } = createEsportsProcedures({ database })
+
+    const esports = await call(byPlayerId, { id: brawlhallaId }, internalCaller)
+
+    expect(esports).toEqual({ profile: null, freshness: 'missing' })
+    expect(await readQueued('esports-refresh', brawlhallaId)).toHaveLength(1)
   })
 
   test('rejects callers from outside', async () => {

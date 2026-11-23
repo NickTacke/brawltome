@@ -6,7 +6,7 @@ import { runJobOnce } from '@brawltome/queue/testing'
 import { readStoredEsports } from '../../db/read-stored-esports'
 import { saveEventSets } from '../../db/save-event-sets'
 import { saveRefresh } from '../../db/save-refresh'
-import { esportsModule } from '../../index'
+import { enqueueEsportsSetsBackfill, esportsModule } from '../../index'
 import { esportsRefreshContract } from '../../jobs/esports-refresh-contract'
 import { createEsportsRefreshJob } from '../../jobs/esports-refresh-job'
 import { BrawltoolsHttpError, BrawltoolsNetworkError, BrawltoolsRateLimitError } from '../../source/brawltools-client'
@@ -44,6 +44,15 @@ beforeEach(async () => {
 
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * dayMs)
+}
+
+type QueuedBackfill = { status: string; dedupeKey: string; resourceKey: string | null; workClass: string }
+
+async function readBackfills(): Promise<QueuedBackfill[]> {
+  return database.sql<QueuedBackfill[]>`
+    SELECT status, dedupe_key AS "dedupeKey", resource_key AS "resourceKey", work_class AS "workClass"
+    FROM queue.operations WHERE kind = 'esports-sets-backfill'
+  `
 }
 
 async function readLastError(kind: string): Promise<string | undefined> {
@@ -193,6 +202,32 @@ describe('esports refresh job', () => {
     await runJobOnce(createQueue(database, job), job, { sourceAdmission })
 
     expect(backfillsSeen).toEqual([`${brawlhallaId} linked 1 placements`])
+  })
+
+  test('refresh queues one backfill', async () => {
+    const { sourceAdmission } = createSourceAdmission()
+
+    const job = createEsportsRefreshJob({
+      database,
+      createClient: stubClient(linkedStub(), []),
+      enqueueBackfill: (id) => enqueueEsportsSetsBackfill(database, id),
+    })
+
+    // the second refresh finds the first one's backfill still pending
+    for (let run = 0; run < 2; run += 1) {
+      await enqueue(database, esportsRefreshContract, brawlhallaId)
+
+      expect(await runJobOnce(createQueue(database, job), job, { sourceAdmission })).toBe('succeeded')
+    }
+
+    expect(await readBackfills()).toEqual([
+      {
+        status: 'pending',
+        dedupeKey: `esports-sets-backfill:${brawlhallaId}`,
+        resourceKey: `esports-sets-backfill:${brawlhallaId}`,
+        workClass: 'maintenance',
+      },
+    ])
   })
 
   test('a 429 while fetching highlight sets asks for no backfill', async () => {

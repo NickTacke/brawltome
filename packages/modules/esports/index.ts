@@ -3,6 +3,7 @@ import { createEsportsProcedures } from './api/procedures'
 import { createEsports } from './migrations/0001-create-esports'
 
 export { failureBackoffMs, linkedTtlMs, noneTtlMs } from './domain'
+export { enqueueEsportsSetsBackfill } from './jobs/enqueue-esports-jobs'
 export { type EsportsRefreshPayload, esportsRefreshContract } from './jobs/esports-refresh-contract'
 export { createEsportsRefreshJob, type EsportsRefreshJobDependencies } from './jobs/esports-refresh-job'
 export { type EsportsSetsBackfillPayload, esportsSetsBackfillContract } from './jobs/esports-sets-backfill-contract'
