@@ -1,3 +1,4 @@
+export { isSideModeEvent } from './event-names'
 export { type EsportsFreshness, esportsFreshness, type RefreshState } from './freshness'
 export { highlightTournamentIds, pickHighlights } from './highlights'
 export { buildLegendLookup, type LegendLookup, resolveLegendKey } from './legend-keys'

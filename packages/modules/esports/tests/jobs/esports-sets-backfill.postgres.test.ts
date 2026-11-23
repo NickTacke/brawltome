@@ -143,6 +143,23 @@ describe('esports sets backfill job', () => {
     expect(stored.setsByTournament.get('a-first')?.map((set) => set.matchId)).toEqual(['saved'])
   })
 
+  test('backfill leaves side mode events out', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'crew', tournamentName: 'Winter Crew Battle' }),
+          placement({ tournamentId: 'solo', tournamentName: 'Frostbyte #19' }),
+        ],
+      }),
+    )
+
+    const { outcome, calls } = await runBackfill(answers())
+
+    expect(outcome).toBe('succeeded')
+    expect(calls).toEqual(['matches solo'])
+  })
+
   test('backfill stops between events once the lease is lost', async () => {
     await saveRefresh(
       database,

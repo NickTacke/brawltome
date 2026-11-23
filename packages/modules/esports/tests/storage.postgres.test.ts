@@ -307,7 +307,11 @@ describe('listEventsMissingSets', () => {
 
     const missing = await listEventsMissingSets(database, brawlhallaId, now)
 
-    expect([...missing].sort()).toEqual(['fetched-young-now-final/1v1', 'never-fetched/1v1', 'never-fetched/2v2'])
+    expect(missing.map((event) => event.tournamentId).sort()).toEqual([
+      'fetched-young-now-final/1v1',
+      'never-fetched/1v1',
+      'never-fetched/2v2',
+    ])
   })
 
   test('another player is not listed', async () => {
