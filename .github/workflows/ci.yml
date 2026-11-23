@@ -151,9 +151,10 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.target }},mode=max
 
   # Images are pushed as <sha>-candidate while the checks run. Only this job, which needs every check, promotes the
-  # candidates to <sha>, the tag deploy.sh and compose pull. Dokploy deploys the current head of master, so when a newer
-  # commit's checks are still running its images are not promoted yet: the pull fails before any container is touched,
-  # and that commit's own run deploys it once it passes.
+  # candidates to <sha>, the tag deploy.sh and compose pull. Dokploy deploys the current head of master, whose images are
+  # not promoted until that commit's own run gets here, so a run whose commit is no longer the head skips its deploy.
+  # The queue keeps every waiting deploy job in order; without it a newer pending job could be cancelled by an older one
+  # that then skips, leaving the head undeployed.
   deploy:
     needs: [images, architecture, infrastructure, contracts, check]
     runs-on: ubuntu-latest
@@ -165,6 +166,7 @@ jobs:
     concurrency:
       group: production-deploy
       cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
