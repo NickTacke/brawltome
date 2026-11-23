@@ -447,6 +447,20 @@ body {
   text-align: center;
 }
 
+/* ---------- last match usage ---------- */
+
+/* clear of the list's fade, so a full list doesn't run into it */
+.window .usage {
+  flex: none;
+  margin: 6px 20px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: hsl(var(--soft));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ---------- settings ---------- */
 
 .window .settings {

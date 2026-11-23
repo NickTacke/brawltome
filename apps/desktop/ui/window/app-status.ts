@@ -41,6 +41,15 @@ export type OwnStanding = {
   recentResults: OwnResult[]
 }
 
+// what the app itself used during one match: its cpu share of the whole machine, its memory at the end, its lookups
+export type MatchUsage = {
+  cpuMs: number
+  cpuPercent: number
+  ramMb: number
+  requestCount: number
+  durationMs: number
+}
+
 export type AppStatus = {
   game: GameStatus
   detection: DetectionStatus
@@ -50,6 +59,8 @@ export type AppStatus = {
   isMatchRunning: boolean
   you: OwnStanding | null
   recentMatches: RecentMatch[]
+  // null until a match of this run is measured, which only windows can
+  lastMatchUsage: MatchUsage | null
 }
 
 export type OverlayPosition =

@@ -6,5 +6,6 @@
   "isOverlayPaused": false,
   "isMatchRunning": false,
   "you": null,
-  "recentMatches": []
+  "recentMatches": [],
+  "lastMatchUsage": null
 }

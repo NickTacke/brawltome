@@ -1,6 +1,7 @@
 import '../shared/tokens.css'
 import './window.css'
 import type { AppStatus, OverlayPosition, Settings } from './app-status'
+import { MatchUsageLine } from './MatchUsageLine'
 import { RecentMatches } from './RecentMatches'
 import { SettingsSection } from './SettingsSection'
 import { StandingHeader } from './StandingHeader'
@@ -37,6 +38,7 @@ export function MainWindow({
       <StandingHeader you={status.you} nowMs={nowMs} />
       <StatusSection lines={statusLines(status)} onResume={onResume} />
       <RecentMatches matches={status.recentMatches} nowMs={nowMs} onOpenProfile={onOpenProfile} />
+      {status.lastMatchUsage !== null && <MatchUsageLine usage={status.lastMatchUsage} />}
       <SettingsSection
         settings={settings}
         onOverlayPositionChange={onOverlayPositionChange}

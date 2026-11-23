@@ -7,6 +7,7 @@ pub mod detection_source;
 pub mod lobby_client;
 mod log_prune;
 pub mod main_window;
+pub mod match_usage;
 pub mod overlay_view;
 pub mod overlay_window;
 pub mod post_match;

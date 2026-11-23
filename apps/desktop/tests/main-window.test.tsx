@@ -7,6 +7,7 @@ import type { AppStatus, Settings } from '../ui/window/app-status'
 import { MainWindow, type MainWindowProps } from '../ui/window/MainWindow'
 import { RecentMatches } from '../ui/window/RecentMatches'
 import { SettingsSection } from '../ui/window/SettingsSection'
+import { percentText } from '../ui/window/usage-format'
 
 // twelve minutes after the newest match in the ready fixture
 const NOW_MS = 2_520_000
@@ -225,5 +226,35 @@ describe('main window', () => {
     const status = partOf(render({ ...fixture('ready'), isOverlayPaused: true }), 'status-lines')
 
     expect(textOf(status)).toContain('Overlay pausedResume')
+  })
+})
+
+describe('last match usage', () => {
+  const usage = { cpuMs: 290, cpuPercent: 0.018125, ramMb: 92, requestCount: 1, durationMs: 200_000 }
+
+  function usageText(overrides: Partial<typeof usage>): string {
+    const status = { ...fixture('ready'), lastMatchUsage: { ...usage, ...overrides } }
+
+    return textOf(partOf(render(status), 'usage'))
+  }
+
+  test('says what the app used in the last match', () => {
+    expect(textOf(partOf(render(fixture('ready')), 'usage'))).toBe('Last match·0.02% CPU·92 MB·1 request')
+  })
+
+  test('keeps a share too small for two decimals honest', () => {
+    expect(percentText(0)).toBe('<0.01%')
+    expect(percentText(0.004)).toBe('<0.01%')
+    expect(percentText(0.018125)).toBe('0.02%')
+    expect(usageText({ cpuPercent: 1.5 })).toContain('1.50% CPU')
+  })
+
+  test('counts the requests in words', () => {
+    expect(usageText({ requestCount: 0 })).toEndWith('0 requests')
+    expect(usageText({ requestCount: 3 })).toEndWith('3 requests')
+  })
+
+  test('draws nothing before a match is measured', () => {
+    expect(render(fixture('idle'))).not.toContain('class="usage"')
   })
 })

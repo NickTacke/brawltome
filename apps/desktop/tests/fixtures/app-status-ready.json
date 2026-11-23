@@ -28,5 +28,6 @@
       "isWin": null,
       "ratingChange": null
     }
-  ]
+  ],
+  "lastMatchUsage": { "cpuMs": 290, "cpuPercent": 0.018125, "ramMb": 92, "requestCount": 1, "durationMs": 200000 }
 }
