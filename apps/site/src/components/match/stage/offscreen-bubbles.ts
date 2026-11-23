@@ -30,6 +30,22 @@ export function intoBubble(pose: PlayerPose, bubble: Bubble | undefined): Player
   return { ...pose, x: bubble.player.x, y: bubble.player.y }
 }
 
+/**
+ * An object where the game draws it. One that follows a player moves with them, so it goes into their bubble with them:
+ * as far as the player is moved from their feet.
+ */
+export function objectIntoBubble(
+  object: ObjectPose,
+  bubble: Bubble | undefined,
+  feet: { x: number; y: number } | undefined,
+): ObjectPose {
+  if (object.follows === null || !bubble || !feet) return object
+
+  const [a, b, c, d, x, y] = object.matrix
+
+  return { ...object, matrix: [a, b, c, d, x + bubble.player.x - feet.x, y + bubble.player.y - feet.y] }
+}
+
 /** The bubble's art as one of the objects, with no look; its animation comes after the timeline's own objects'. */
 export function bubblePose(bubble: Bubble, animationIndex: number): ObjectPose {
   return {
@@ -41,6 +57,7 @@ export function bubblePose(bubble: Bubble, animationIndex: number): ObjectPose {
     alpha: bubble.alpha,
     behind: false,
     owner: null,
+    follows: null,
   }
 }
 

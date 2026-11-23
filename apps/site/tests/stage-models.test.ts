@@ -5,7 +5,9 @@ import {
   type CameraTrack,
   cameraAt,
   cameraTrack,
+  type ObjectPose,
   type PlayerPose,
+  positionAt,
   type Rect,
   type Replay,
   type Timeline,
@@ -21,8 +23,14 @@ import {
   legendRingFloorPx,
 } from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
+import { objectsDrawnAt } from '../src/components/match/stage/draw-moment'
 import { placedArtOf } from '../src/components/match/stage/map-art'
-import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
+import {
+  bubblePose,
+  bubblesBySlot,
+  intoBubble,
+  objectIntoBubble,
+} from '../src/components/match/stage/offscreen-bubbles'
 import {
   boxInFrame,
   cameraOn,
@@ -379,6 +387,66 @@ describe('off-screen bubbles', () => {
 
     expect(intoBubble(pose, bubble)).toMatchObject({ x: 7, y: 8, weapon: 'Unarmed' })
     expect(bubblePose(bubble, 54)).toMatchObject({ animationIndex: 54, look: '-', alpha: 0.5, behind: false })
+  })
+
+  test('an object that follows a player goes into their bubble with them, and others stay where they are', () => {
+    const bubble = { slot: '1', x: 5, y: 6, angle: 0, alpha: 1, player: { x: 7, y: 8 }, zoom: 1 } as Bubble
+
+    const sweat = {
+      index: 0,
+      animationIndex: 3,
+      look: '-',
+      frame: 2,
+      matrix: [1, 0, 0, 1, 100, 190],
+      alpha: 1,
+      behind: false,
+      owner: 2,
+      follows: 1,
+    } satisfies ObjectPose
+
+    const feet = { x: 100, y: 200 }
+
+    expect(objectIntoBubble(sweat, bubble, feet).matrix).toEqual([1, 0, 0, 1, 7, -2])
+    expect(objectIntoBubble({ ...sweat, follows: null }, bubble, feet).matrix).toEqual(sweat.matrix)
+    expect(objectIntoBubble(sweat, undefined, feet)).toBe(sweat)
+  })
+
+  test('the stage draws an object that follows a player in their bubble, and one that follows no one where it is', () => {
+    const line = readPlaybackTimeline(readPlayback('duel-a'))
+    const step = stepAt(line, 20_000)
+    const corner = { x: -100_000, y: -100_000, width: 10, height: 10 }
+
+    const sweat = {
+      from: step - 10,
+      to: step + 10,
+      owner: 2,
+      file: 'SFX_1.swf',
+      class: 'a_Sweat',
+      follows: 1,
+      animation: [[step - 10, 0, 0, 0.384]],
+      transform: [[step - 10, 1, 0, 0, 1, 100, 200]],
+    } satisfies NonNullable<Timeline['objects']>[number]
+
+    const timeline: Timeline = {
+      ...line,
+      objectAnimations: [['a_Sweat', 'Ready']],
+      objects: [sweat, { ...sweat, follows: undefined }],
+    }
+
+    const replay = { objects: { animations: { frameCount: () => 0 } } } as unknown as Replay
+    const bubbles = bubblesBySlot(timeline, corner, step)
+    const bubble = bubbles.get('1')
+    const feet = positionAt(timeline, '1', step)
+
+    expect(bubble).toBeDefined()
+    expect(feet).toBeDefined()
+    if (!bubble || !feet) return
+
+    const [followed, unfollowed] = objectsDrawnAt({ replay, timeline }, step, bubbles)
+
+    expect(followed?.matrix).toEqual([1, 0, 0, 1, 100 + bubble.player.x - feet.x, 200 + bubble.player.y - feet.y])
+    expect(followed?.matrix).not.toEqual(sweat.transform[0].slice(1))
+    expect(unfollowed?.matrix).toEqual([1, 0, 0, 1, 100, 200])
   })
 
   test('a view of a corner of the stage puts the players out of it in bubbles', () => {

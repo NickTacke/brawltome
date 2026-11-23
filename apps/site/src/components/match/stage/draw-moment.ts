@@ -1,14 +1,17 @@
 import {
+  type Bubble,
   drawObject,
   drawPlayer,
   type Matrix,
+  type ObjectPose,
   objectsAt,
   poseAt,
+  positionAt,
   type Rect,
   type Replay,
   type Timeline,
 } from '@brawltome/replay-player'
-import { bubblesBySlot, drawBubbles, intoBubble } from './offscreen-bubbles'
+import { bubblesBySlot, drawBubbles, intoBubble, objectIntoBubble } from './offscreen-bubbles'
 
 // while a frame can't be drawn whole, the last one that could stays on screen, unless the clock has jumped away from it
 const heldFrameSteps = 30
@@ -19,6 +22,26 @@ export type DrawnMatch = { replay: Replay; timeline: Timeline }
 // how the frame shows the level: the matrix to the canvas's pixels, and the part of the level in view
 export type Framing = { transform: Matrix; view: Rect }
 
+/** An object where the game draws it: in the bubble of the player it follows, with them. */
+function placedObject(timeline: Timeline, bubbles: Map<string, Bubble>, step: number, object: ObjectPose): ObjectPose {
+  if (object.follows === null) return object
+
+  const slot = String(object.follows)
+
+  return objectIntoBubble(object, bubbles.get(slot), positionAt(timeline, slot, step))
+}
+
+/** The objects drawn at a step, each where the game draws it, given the bubbles of the players out of view. */
+export function objectsDrawnAt(match: DrawnMatch, step: number, bubbles: Map<string, Bubble>): ObjectPose[] {
+  const { replay, timeline } = match
+
+  if (!replay.objects) return []
+
+  const objectFrames = (index: number) => replay.objects?.animations.frameCount(index) ?? 0
+
+  return objectsAt(timeline, step, objectFrames).map((object) => placedObject(timeline, bubbles, step, object))
+}
+
 /**
  * Draws the players and objects at a step, objects marked as behind under the players and the rest over them, then
  * the bubbles of the players out of view, who are drawn in them. Each is drawn whole or not at all; false when one
@@ -27,9 +50,8 @@ export type Framing = { transform: Matrix; view: Rect }
 function drawStep(context: CanvasRenderingContext2D, match: DrawnMatch, step: number, framing: Framing): boolean {
   const { replay, timeline } = match
   const { transform } = framing
-  const objectFrames = (index: number) => replay.objects?.animations.frameCount(index) ?? 0
-  const objects = replay.objects ? objectsAt(timeline, step, objectFrames) : []
   const bubbles = bubblesBySlot(timeline, framing.view, step)
+  const objects = objectsDrawnAt(match, step, bubbles)
   let isWhole = true
 
   for (const object of objects) {

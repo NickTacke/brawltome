@@ -54,7 +54,9 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
   A page that pauses while they return `false` never shows a half-loaded legend.
 - `isReady(replay, player, animationIndex)` says whether an animation can be drawn at every frame the match shows.
 - `poseAt(timeline, slot, step, frameCount?)` is a player's animation frame, position, facing, weapon and tint at a
-  step; `objectsAt(timeline, step, frameCount?)` lists the objects drawn then. Draw the `behind` ones first.
+  step; `objectsAt(timeline, step, frameCount?)` lists the objects drawn then. Draw the `behind` ones first. An
+  object that `follows` a player (their slot) moves with them: while they're in an off-screen bubble, move it as far
+  as they're moved.
 - `cameraTrack(timeline, bounds, options)` plays the game's camera over the match; `cameraAt(track, step)` is its
   rectangle at a step and `viewToCanvas(rect, width, height)` the matrix that shows it on a canvas. A track is for
   one frame rate and one playback speed: pass `fps` and `speed` as [The camera](#the-camera) says.
