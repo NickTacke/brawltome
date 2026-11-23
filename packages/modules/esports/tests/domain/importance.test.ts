@@ -1,12 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { eventWeight, importance } from '../../domain/importance'
+import { eventWeight, importance, type ScoredFinish } from '../../domain/importance'
 import { buildLegendLookup } from '../../domain/legend-keys'
 import { shapeEsportsProfile } from '../../domain/profile'
 import { storedFromFixture } from './builders'
 
-type Finish = { placement: number; fullName: string; isOfficial: boolean; isOnline: boolean }
-
-const online = (placement: number, fullName: string, isOfficial: boolean): Finish => ({
+const online = (placement: number, fullName: string, isOfficial: boolean): ScoredFinish => ({
   placement,
   fullName,
   isOfficial,
@@ -16,6 +14,10 @@ const online = (placement: number, fullName: string, isOfficial: boolean): Finis
 describe('event weight', () => {
   // names as brawltools sends them, taken from the saved fixtures and from production
   test.each([
+    ['Brawlhalla World Championship Expo 2025 Last Chance Qualifier', 1.5],
+    ['BCX 2026 Regional Qualifier - Europe', 1.5],
+    ['Brawlhalla World Championship 2021', 3],
+    ['Brawlhalla Winter Championship 2020', 2],
     ['Brawlhalla World Championship Expo 2025', 3],
     ['Brawlhalla World Championship Expo 2026 - 1v1', 3],
     ['Brawlhalla World Championship Expo 2025 - 2v2', 3],
@@ -30,7 +32,7 @@ describe('event weight', () => {
     ['CEO 2025', 1.5],
     ['MAX MODE 2025', 1.5],
     ['Brawlhalla - Autumn Royale 2025', 1.5],
-  ])('official %s weighs %d', (fullName, weight) => {
+  ])('official %s weighs %p', (fullName, weight) => {
     expect(eventWeight(fullName, true)).toBe(weight)
   })
 
@@ -70,7 +72,7 @@ describe('importance', () => {
     [8, 32],
     [9, 0],
     [33, 0],
-  ])('a community %dth online scores %d', (placement, score) => {
+  ])('a community placement %d online scores %d', (placement, score) => {
     expect(importance(online(placement, 'Galaxy Cup: Titan - EU 1v1', false))).toBe(score)
   })
 
