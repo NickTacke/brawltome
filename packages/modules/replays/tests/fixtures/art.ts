@@ -50,6 +50,15 @@ export function fakeManifest(names: ArtNames = fixedNames) {
   }
 }
 
+/** The same match's manifest in format 4: its player in one look, drawn from both of its art groups. */
+export function fakeManifestFormat4(names: ArtNames = fixedNames) {
+  const manifest = fakeManifest(names)
+  const player = manifest.players['1']
+  const looks = [{ weapon: 'Fists', look: 0, art: [0, 1], swaps: [[0xff0000, 0x00ff00, 2]] }]
+
+  return { ...manifest, format: 4, players: { '1': { ...player, looks } } }
+}
+
 const bounds = { x: -100, y: 0, width: 3000, height: 1600 }
 
 /** A stage with one floor, in the shape the map file carries it. */
