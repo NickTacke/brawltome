@@ -15,8 +15,7 @@ export type MainWindowProps = {
   onOpenProfile: (brawlhallaId: number) => void
   onResume: () => void
   onOverlayPositionChange: (position: OverlayPosition) => void
-  // the app can't change it yet, so its row is drawn only with a handler
-  onStartsWithWindowsChange?: (isOn: boolean) => void
+  onStartsWithWindowsChange: (isOn: boolean) => void
   onMinimize: () => void
   onClose: () => void
 }

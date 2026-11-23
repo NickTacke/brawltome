@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { AppStatus, Settings } from '../ui/window/app-status'
 import { MainWindow, type MainWindowProps } from '../ui/window/MainWindow'
 import { RecentMatches } from '../ui/window/RecentMatches'
+import { SettingsSection } from '../ui/window/SettingsSection'
 
 // twelve minutes after the newest match in the ready fixture
 const NOW_MS = 2_520_000
@@ -29,6 +30,7 @@ function render(status: AppStatus, overrides: Partial<MainWindowProps> = {}): st
       onOpenProfile={ignore}
       onResume={ignore}
       onOverlayPositionChange={ignore}
+      onStartsWithWindowsChange={ignore}
       onMinimize={ignore}
       onClose={ignore}
       {...overrides}
@@ -182,8 +184,9 @@ describe('main window', () => {
 
   test('marks the stored overlay position in the picker', () => {
     const html = render(fixture('ready'), { settings: { ...settings, overlayPosition: 'topLeft' } })
+    const picker = partOf(html, 'stage')
 
-    expect(html.match(/aria-checked="true"/g)?.length).toBe(1)
+    expect(picker.match(/aria-checked="true"/g)?.length).toBe(1)
     expect(html).toMatch(/aria-label="Top left"[^>]*aria-checked="true"/)
     expect(html).toContain('data-banner-side="left"')
   })
@@ -195,9 +198,27 @@ describe('main window', () => {
     expect(html).not.toMatch(/upload/i)
   })
 
-  test('draws Start with Windows only once the app can change it', () => {
-    expect(render(fixture('ready'))).not.toContain('Start with Windows')
-    expect(render(fixture('ready'), { onStartsWithWindowsChange: () => {} })).toContain('Start with Windows')
+  test('draws the start with Windows toggle in its stored state', () => {
+    const on = partOf(render(fixture('ready')), 'toggle')
+    const off = partOf(render(fixture('ready'), { settings: { ...settings, startsWithWindows: false } }), 'toggle')
+
+    expect(on).toContain('aria-label="Start with Windows"')
+    expect(on).toContain('aria-checked="true"')
+    expect(off).toContain('aria-checked="false"')
+  })
+
+  test('the toggle asks for the opposite of its stored state', () => {
+    const asked: boolean[] = []
+
+    const section = SettingsSection({
+      settings,
+      onOverlayPositionChange: () => {},
+      onStartsWithWindowsChange: (isOn) => asked.push(isOn),
+    })
+
+    elementWithClass(section, 'toggle')?.onClick?.()
+
+    expect(asked).toEqual([false])
   })
 
   test('a paused overlay can be resumed from its line', () => {

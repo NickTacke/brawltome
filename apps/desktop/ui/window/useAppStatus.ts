@@ -11,6 +11,7 @@ export type AppStatusState = {
   openProfile: (brawlhallaId: number) => void
   resumeOverlay: () => void
   changeOverlayPosition: (position: OverlayPosition) => void
+  changeStartsWithWindows: (isEnabled: boolean) => void
   minimize: () => void
   close: () => void
 }
@@ -54,6 +55,13 @@ export function useAppStatus(): AppStatusState {
     [keepSettings],
   )
 
+  const changeStartsWithWindows = useCallback(
+    (isEnabled: boolean) => {
+      ask<Settings>('set_starts_with_windows', { isEnabled }).then(keepSettings)
+    },
+    [keepSettings],
+  )
+
   const minimize = useCallback(() => {
     getCurrentWindow()
       .minimize()
@@ -64,7 +72,17 @@ export function useAppStatus(): AppStatusState {
     ask('hide_main_window')
   }, [])
 
-  return { status, settings, nowMs, openProfile, resumeOverlay, changeOverlayPosition, minimize, close }
+  return {
+    status,
+    settings,
+    nowMs,
+    openProfile,
+    resumeOverlay,
+    changeOverlayPosition,
+    changeStartsWithWindows,
+    minimize,
+    close,
+  }
 }
 
 // listens first and asks second, so a status sent in between is never overwritten by an older one

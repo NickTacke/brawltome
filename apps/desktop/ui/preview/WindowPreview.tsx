@@ -36,7 +36,7 @@ function VariantsSheet() {
   )
 }
 
-// the picker works in the preview, so the spots can be tried; nothing is saved
+// the picker and the toggle work in the preview; nothing is saved
 function PreviewWindow({ status, nowMs }: { status: AppStatus; nowMs: number }) {
   const [settings, setSettings] = useState<Settings>({ overlayPosition: 'middleRight', startsWithWindows: true })
 
@@ -48,6 +48,7 @@ function PreviewWindow({ status, nowMs }: { status: AppStatus; nowMs: number }) 
       onOpenProfile={(brawlhallaId) => console.info(`open profile ${brawlhallaId}`)}
       onResume={() => console.info('resume the overlay')}
       onOverlayPositionChange={(overlayPosition) => setSettings({ ...settings, overlayPosition })}
+      onStartsWithWindowsChange={(startsWithWindows) => setSettings({ ...settings, startsWithWindows })}
       onMinimize={() => console.info('minimise')}
       onClose={() => console.info('close')}
     />

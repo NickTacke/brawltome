@@ -2,6 +2,7 @@
 //! Tauri builder + plugin wiring + setup callback that wires the focused modules.
 
 pub mod app_status;
+pub mod autostart;
 pub mod detection_source;
 pub mod lobby_client;
 mod log_prune;
@@ -22,6 +23,7 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
 
+use autostart::was_autostarted;
 use lobby_client::LobbyClient;
 use overlay_window::{OverlayPosition, OverlayWindow};
 use session_runner::{LinkOpener, OverlaySurface, SessionHandle};
@@ -68,6 +70,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(
             |app, _arguments, _directory| main_window::open(app),
         ))
+        .plugin(autostart::plugin())
         .plugin(build_log_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -78,6 +81,7 @@ pub fn run() {
             overlay_window::retry_lookup,
             settings::get_settings,
             settings::set_overlay_position,
+            autostart::set_starts_with_windows,
             main_window::get_app_status,
             main_window::hide_main_window,
             main_window::set_overlay_paused,
@@ -92,10 +96,18 @@ pub fn run() {
 
             let settings = open_settings(app.handle())?;
             start_overlay(app.handle(), settings.get().overlay_position)?;
+            let wants_autostart = settings.get().starts_with_windows;
             app.manage(settings);
             let session = app.state::<SessionHandle>().inner().clone();
             tray::install(app.handle(), session)?;
-            start_main_window(app.handle());
+
+            // the first start registers it, because the default is on; a failure is not worth stopping the app
+            if let Err(error) = autostart::apply(app.handle(), wants_autostart) {
+                log::warn!("{error}");
+            }
+
+            let launch_arguments: Vec<String> = std::env::args().collect();
+            start_main_window(app.handle(), !was_autostarted(&launch_arguments));
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we
@@ -195,13 +207,16 @@ fn start_overlay(app: &AppHandle, position: OverlayPosition) -> Result<(), Strin
     Ok(())
 }
 
-/// the window opens at every start for now and follows the session's status
-fn start_main_window(app: &AppHandle) {
+/// the window follows the session's status; a start at login keeps it closed, in the tray
+fn start_main_window(app: &AppHandle, should_open: bool) {
     let status = app.state::<SessionHandle>().status();
 
     main_window::hide_on_close(app);
     main_window::forward_status(app, status);
-    main_window::open(app);
+
+    if should_open {
+        main_window::open(app);
+    }
 }
 
 fn api_url() -> String {

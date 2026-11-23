@@ -19,6 +19,7 @@ function MainWindowPage() {
       onOpenProfile={app.openProfile}
       onResume={app.resumeOverlay}
       onOverlayPositionChange={app.changeOverlayPosition}
+      onStartsWithWindowsChange={app.changeStartsWithWindows}
       onMinimize={app.minimize}
       onClose={app.close}
     />
