@@ -84,6 +84,7 @@ type ActivityIntervalRow = Extract<SnapshotRow, { source: 'brawlhalla-v1-ranked-
   previous_snapshot_id: string
   previous_observed_at: Date
   previous_provenance: Record<string, unknown> | null
+  previous_schedule_window_at: Date | null
 }
 
 type ActivityIntervalLookupRow = Omit<ActivityIntervalRow, 'previous_snapshot_id' | 'previous_observed_at'> & {
@@ -213,6 +214,7 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
            previous_scan.snapshot_id AS previous_snapshot_id,
            previous_scan.observed_at AS previous_observed_at,
            previous_scan.provenance AS previous_provenance,
+           previous_scan.schedule_window_at AS previous_schedule_window_at,
            EXISTS (
              SELECT 1
              FROM board_scans earlier_scan
@@ -221,7 +223,7 @@ async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Pro
            ) AS has_earlier_scans
     FROM current_endpoint
     LEFT JOIN LATERAL (
-      SELECT scan.snapshot_id, scan.observed_at, scan.provenance
+      SELECT scan.snapshot_id, scan.observed_at, scan.provenance, scan.schedule_window_at
       FROM board_scans scan
       WHERE scan.schedule_window_at <= current_endpoint.schedule_window_at - ${shortestComparedSpan}::interval
         AND scan.schedule_window_at >= current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
@@ -249,18 +251,56 @@ function staleRegionsOf(provenance: Record<string, unknown> | null): string[] {
   return Array.isArray(staleRegions) ? staleRegions.filter((region) => typeof region === 'string') : []
 }
 
-// a global board carries a failed region's rows from an earlier scan, so comparing either end of the interval with
-// them would show no games during the outage and all of them in the scan where the region comes back
-function comparedSnapshots(interval: ActivityIntervalRow): ComparedSnapshots {
-  const carriedRegions = new Set([
-    ...staleRegionsOf(interval.provenance),
-    ...staleRegionsOf(interval.previous_provenance),
-  ])
+type CarriedBoard = { windowAt: Date; region: string }
+
+function carriedBoardsOf(interval: ActivityIntervalRow): CarriedBoard[] {
+  const current = staleRegionsOf(interval.provenance).map((region) => ({
+    windowAt: interval.schedule_window_at,
+    region,
+  }))
+
+  const previousWindowAt = interval.previous_schedule_window_at
+
+  if (!previousWindowAt) return current
+
+  const previous = staleRegionsOf(interval.previous_provenance).map((region) => ({
+    windowAt: previousWindowAt,
+    region,
+  }))
+
+  return [...current, ...previous]
+}
+
+// a global board carried the region's latest board from before its own window, so that is the board to look up
+async function readCarriedSnapshotIds(sql: Sql, mode: LeaderboardMode, carried: CarriedBoard[]): Promise<string[]> {
+  const windows = carried.map(({ windowAt }) => windowAt.toISOString())
+  const regions = carried.map(({ region }) => region)
+
+  const rows = await sql<{ snapshot_id: string }[]>`
+    SELECT DISTINCT ON (carried.window_at, carried.scope) snapshot.id AS snapshot_id
+    FROM unnest(${windows}::timestamptz[], ${regions}::text[]) AS carried(window_at, scope)
+    JOIN rankings.snapshots snapshot ON snapshot.mode = ${mode} AND snapshot.scope = carried.scope
+    JOIN rankings.generations generation
+      ON generation.id = snapshot.generation_id AND generation.mode = snapshot.mode
+    WHERE generation.finalized
+      AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
+      AND generation.schedule_window_at < carried.window_at
+    ORDER BY carried.window_at, carried.scope, generation.schedule_window_at DESC, generation.id DESC
+  `
+
+  return rows.map(({ snapshot_id }) => snapshot_id)
+}
+
+// a global board carries a failed region's board from an earlier scan, so comparing either end of the interval with
+// it would show no games during the outage and all of them in the scan where the region comes back
+async function readComparedSnapshots(sql: Sql, interval: ActivityIntervalRow): Promise<ComparedSnapshots> {
+  const carried = carriedBoardsOf(interval)
+  const carriedSnapshotIds = carried.length > 0 ? await readCarriedSnapshotIds(sql, interval.mode, carried) : []
 
   return {
     currentSnapshotId: interval.snapshot_id,
     previousSnapshotId: interval.previous_snapshot_id,
-    carriedRegions: [...carriedRegions],
+    carriedSnapshotIds,
   }
 }
 
@@ -449,12 +489,13 @@ export function createPostgresRanking(
       }
 
       const { interval } = lookup
+      const compared = await readComparedSnapshots(sql, interval)
       const offset = (page - 1) * pageSize
 
       const entries = await sql<ActivityStandingRow[]>`
       SELECT ${activityColumns(sql)},
              (count(*) OVER ())::integer AS total_count
-      ${playedRows(sql, comparedSnapshots(interval))}
+      ${playedRows(sql, compared)}
       ORDER BY current.rating_standing
       OFFSET ${offset}
       LIMIT ${pageSize}
@@ -465,7 +506,7 @@ export function createPostgresRanking(
       if (entries.length === 0 && offset > 0) {
         const [count] = await sql<{ total_count: number }[]>`
         SELECT count(*)::integer AS total_count
-        ${playedRows(sql, comparedSnapshots(interval))}
+        ${playedRows(sql, compared)}
       `
 
         totalRows = count?.total_count ?? 0
@@ -519,7 +560,8 @@ export function createPostgresRanking(
       }
 
       const { interval } = lookup
-      const movers = await readRecentMovers(sql, comparedSnapshots(interval))
+      const compared = await readComparedSnapshots(sql, interval)
+      const movers = await readRecentMovers(sql, compared)
 
       return {
         status: 'available',

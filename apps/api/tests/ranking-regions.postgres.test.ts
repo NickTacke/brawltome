@@ -91,44 +91,57 @@ function playerIdOf(region: RegionalLeaderboardScope): number {
   return 700_000 + regionalLeaderboardScopes.indexOf(region)
 }
 
+// an EU player that brawlhalla lists only on US-E's board
+const usEastVisitorId = 799_999
+
+function sourceRow(id: number, region: RegionalLeaderboardScope, rank: number, wins: number) {
+  return {
+    identity: { type: 'one-vs-one-player' as const, player: { id, username: `Player ${id}` } },
+    rating: 2_000 + wins - rank,
+    best_rating: 2_100 + wins,
+    rank,
+    wins,
+    losses: 10,
+    region,
+    tier: 'Diamond',
+  }
+}
+
 // one player per region, whose wins count the games played up to this scan
-function scanSource(wins: number, failingRegions: readonly RegionalLeaderboardScope[] = []): LeaderboardPageSource {
+function scanSource(
+  wins: number,
+  failingRegions: readonly RegionalLeaderboardScope[] = [],
+  hasUsEastVisitor = false,
+): LeaderboardPageSource {
   return {
     async fetchPage({ region }) {
       if (failingRegions.includes(region)) {
         throw new LeaderboardSourceError('source_unavailable', `V1 leaderboard returned 502 for 1v1/${region}`, true)
       }
 
-      const id = playerIdOf(region)
+      const rankings = [sourceRow(playerIdOf(region), region, 1, wins)]
 
-      return {
-        rankings: [
-          {
-            identity: { type: 'one-vs-one-player', player: { id, username: `${region} Player` } },
-            rating: 2_000 + wins,
-            best_rating: 2_100 + wins,
-            rank: 1,
-            wins,
-            losses: 10,
-            region,
-            tier: 'Diamond',
-          },
-        ],
-        totalPages: 1,
-      }
+      if (hasUsEastVisitor && region === 'US-E') rankings.push(sourceRow(usEastVisitorId, 'EU', 2, wins))
+
+      return { rankings, totalPages: 1 }
     },
   }
 }
 
 // a scheduled scan whose source answers at the window, one game later than the scan before
-async function scanWindow(windowAt: Date, wins: number, failingRegions: readonly RegionalLeaderboardScope[] = []) {
+async function scanWindow(
+  windowAt: Date,
+  wins: number,
+  failingRegions: readonly RegionalLeaderboardScope[] = [],
+  hasUsEastVisitor = false,
+) {
   const operations = createTestQueue({ database })
   const lease = await leaseScan(operations, `window-${windowAt.toISOString()}`)
 
   const result = await collectAndPublishLeaderboardGeneration({
     mode: '1v1',
     authorization: authorizationOf(lease, windowAt),
-    source: scanSource(wins, failingRegions),
+    source: scanSource(wins, failingRegions, hasUsEastVisitor),
     publication: createPostgresRanking(database),
     pageDepth: 1,
     intervalMs,
@@ -138,6 +151,10 @@ async function scanWindow(windowAt: Date, wins: number, failingRegions: readonly
   await operations.complete(lease)
 
   return result
+}
+
+function playerOf(identity: { type: string; player?: { brawlhallaId: number } }): number {
+  return identity.player?.brawlhallaId ?? 0
 }
 
 function minutesAfter(time: Date, minutes: number): Date {
@@ -235,16 +252,17 @@ describe('leaderboard regions publish apart', () => {
     })
   })
 
-  test('leaves a carried region out of the global Queue, so its recovery adds no backlog of games', async () => {
+  test('leaves the players of a carried board out of the global Queue, visitors included', async () => {
     const ranking = createPostgresRanking(database)
     const start = new Date('2000-03-01T00:00:00.000Z')
     const usEastFails = minutesAfter(start, 60)
     const usEastRecovers = minutesAfter(start, 120)
 
-    // every player wins 2 games a scan; US-E's 4 since the start land in one scan when it recovers
-    await scanWindow(start, 30)
-    await scanWindow(usEastFails, 32, ['US-E'])
-    await scanWindow(usEastRecovers, 34)
+    // every player wins 2 games a scan; the 4 of US-E's board since the start land in one scan when it recovers. that
+    // board also lists an EU player, whose own region says nothing about the board their row came from
+    await scanWindow(start, 30, [], true)
+    await scanWindow(usEastFails, 32, ['US-E'], true)
+    await scanWindow(usEastRecovers, 34, [], true)
 
     const global = await ranking.queries.getRecentActivity({
       mode: '1v1',
@@ -259,12 +277,17 @@ describe('leaderboard regions publish apart', () => {
       totalRows: 8,
     })
 
-    expect(global.status !== 'unavailable' && global.entries.map(({ region }) => region)).not.toContain('US-E')
+    const globalIds = global.status === 'unavailable' ? [] : global.entries.map(({ identity }) => playerOf(identity))
+
+    expect(globalIds).not.toContain(playerIdOf('US-E'))
+    expect(globalIds).not.toContain(usEastVisitorId)
     expect(global.status !== 'unavailable' && global.entries.every(({ gamesDelta }) => gamesDelta === 2)).toBe(true)
 
     const movers = await ranking.queries.getRecentMovers({ mode: '1v1', region: 'all' })
 
-    expect(movers.status !== 'unavailable' && movers.mostGames.map(({ region }) => region)).not.toContain('US-E')
+    const moverIds = movers.status === 'unavailable' ? [] : movers.mostGames.map(({ identity }) => playerOf(identity))
+
+    expect(moverIds).not.toContain(usEastVisitorId)
   })
 
   test('keeps the regions a superseded window already published', async () => {
