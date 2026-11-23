@@ -84,6 +84,24 @@ describe('shapeEsportsProfile', () => {
     expect(profile?.results[0]?.sets.map((set) => set.id)).toEqual(['b'])
   })
 
+  test('drops a 0-0 set', () => {
+    const sets = [
+      match({ matchId: 'unplayed', scores: [0, 0] }),
+      match({ matchId: 'won', scores: [2, 0] }),
+      match({ matchId: 'no-show', scores: [0, -1] }),
+    ]
+
+    const profile = shapeOne({
+      placements: [placement()],
+      setsByTournament: new Map([[placement().tournamentId, sets]]),
+    })
+
+    const [result] = profile?.results ?? []
+
+    expect(result?.sets.map((set) => set.id).toSorted()).toEqual(['no-show', 'won'])
+    expect(result?.setRecord).toEqual({ wins: 1, losses: 0 })
+  })
+
   test('treats a Random pick and an unknown legend as no legend', () => {
     const sets = [
       match({ matchId: 'a', legends: [['RANDOM'], ['NOT A LEGEND']] }),
@@ -306,6 +324,15 @@ describe('shapeEsportsProfile over saved Brawltools responses', () => {
       expect(result.title.length).toBeGreaterThan(0)
       expect(result.meta.length).toBeGreaterThan(0)
     }
+  })
+
+  test("Marckiem00's 4th at Apocalypse reads 5-2, the 0-0 set left out", () => {
+    const profile = profiles.find(({ brawlhallaId }) => brawlhallaId === 110282750)?.profile
+    const apocalypse = profile?.results.find((result) => result.fullName.startsWith('APOCALYPSE'))
+
+    expect(apocalypse?.placement).toBe(4)
+    expect(apocalypse?.setRecord).toEqual({ wins: 5, losses: 2 })
+    expect(apocalypse?.sets.some((set) => set.score === '0-0')).toBe(false)
   })
 
   test('finds art for the legends brawltools writes with an underscore', () => {

@@ -115,8 +115,17 @@ function toSet(match: RawMatch, legendLookup: LegendLookup): EsportsSet {
   }
 }
 
-// a set where neither side showed has no result to show
-const isPlayedOrForfeited = (match: RawMatch) => match.scores.some((score) => score >= 0)
+// brawltools lists sets neither side played as 0-0 or as -1 against -1; a set counts once a side scored, or when
+// exactly one side didn't show
+function isPlayedOrForfeited(match: RawMatch): boolean {
+  const [own, theirs] = match.scores
+
+  const hasScore = Math.max(own, theirs) > 0
+  const isOwnNoShow = own < 0
+  const isTheirNoShow = theirs < 0
+
+  return hasScore || isOwnNoShow !== isTheirNoShow
+}
 
 // sets come latest first for most events; where every set has a start time, that time decides the order instead
 function inRunOrder(matches: RawMatch[]): RawMatch[] {
