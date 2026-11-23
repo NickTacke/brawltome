@@ -5,6 +5,7 @@ import { legendAvatarUrl } from '../guild/legend-avatar-url'
 import { tierName, winPercent, winRateColour } from '../player/player-format'
 import { stripedTallRowStyle } from '../table-styles'
 import { entryPlayers } from './entry-players'
+import { legendDisplayName } from './legend-display-name'
 import { nameLinkStyle, Place, statCellStyle } from './RankedTable'
 
 function WinRate({ entry }: { entry: LeaderboardEntry }) {
@@ -24,7 +25,7 @@ function Avatars({ entry }: { entry: LeaderboardEntry }) {
         <div key={player.brawlhallaId} className="size-9 overflow-hidden rounded-md bg-raised">
           <img
             src={legendAvatarUrl(player.bestLegendNameKey ?? null)}
-            alt=""
+            alt={player.bestLegendNameKey ? legendDisplayName(player.bestLegendNameKey) : ''}
             className="size-full object-cover object-top"
           />
         </div>
