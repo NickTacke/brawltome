@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, jest, test } from 'bu
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { shownOnStage } from '../src/components/match/stage/StageControls'
 import { StageFrame } from '../src/components/match/stage/StageFrame'
 import { useStageControls } from '../src/components/match/stage/use-stage-controls'
@@ -196,21 +195,28 @@ describe('the controls over a stage that fills the screen', () => {
     expect(isShown()).toBe(true)
   })
 
-  test('take the pointer with them', () => {
-    const frameFor = (isShown: boolean) =>
-      renderToStaticMarkup(
-        <StageFrame
-          frameRef={{ current: null }}
-          fullscreen={filledScreen}
-          controls={{ ...shownControls, isShown }}
-          aspect={16 / 9}
-        >
-          <div data-stage-window />
-        </StageFrame>,
+  test('take the pointer with them, unless the keyboard or an open menu brings them back', async () => {
+    const stageClasses = async (isShown: boolean) => {
+      await act(async () =>
+        root.render(
+          <StageFrame
+            frameRef={{ current: null }}
+            fullscreen={filledScreen}
+            controls={{ ...shownControls, isShown }}
+            aspect={16 / 9}
+          >
+            <div data-stage-window />
+          </StageFrame>,
+        ),
       )
 
-    expect(frameFor(false)).toContain('cursor-none')
-    expect(frameFor(true)).not.toContain('cursor-none')
+      return find('[data-stage-window]').parentElement?.className.split(' ') ?? []
+    }
+
+    await mount(null)
+
+    expect(await stageClasses(false)).toContain('[&:not(:has(:focus-visible,[aria-expanded=true]))]:cursor-none')
+    expect((await stageClasses(true)).join(' ')).not.toContain('cursor-none')
   })
 
   test('stay while a menu among them is open, as the camera’s', () => {

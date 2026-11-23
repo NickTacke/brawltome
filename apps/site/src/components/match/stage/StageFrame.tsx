@@ -8,6 +8,8 @@ const fullscreenFrame = '@container flex items-center justify-center bg-black'
 const overlaidFrame = 'fixed inset-0 z-[100]'
 // on a phone's page the stage runs to the screen's edges, past the page's px-6 gutter
 const phoneBleed = 'phone:-mx-6'
+// hidden with the controls, but back with them when the keyboard or an open menu brings them back, see shownOnStage
+const pointerHidden = '[&:not(:has(:focus-visible,[aria-expanded=true]))]:cursor-none'
 
 type StageFrameProps = {
   frameRef: RefObject<HTMLDivElement | null>
@@ -30,7 +32,7 @@ export function StageFrame({ frameRef, fullscreen, controls, aspect, children }:
   const frame = (
     <div ref={frameRef} className={`min-w-0 ${frameLook}`}>
       {/* moving over the stage shows the controls, a press on it plays or pauses */}
-      <div {...controls.stage} style={stageSize} className={`${stageLook} ${isPointerHidden ? 'cursor-none' : ''}`}>
+      <div {...controls.stage} style={stageSize} className={`${stageLook} ${isPointerHidden ? pointerHidden : ''}`}>
         {children}
       </div>
     </div>
