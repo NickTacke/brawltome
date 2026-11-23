@@ -55,9 +55,10 @@ pub enum Input {
     },
     OverlayPaused(bool),
     UpdateStatusChanged(UpdateStatus),
+    /// none when windows wouldn't give a reading; it comes back either way, so a match can't wait on it
     UsageSampled {
         point: UsagePoint,
-        sample: ProcessTreeSample,
+        sample: Option<ProcessTreeSample>,
         logical_cores: u32,
     },
 }
@@ -530,21 +531,25 @@ impl Session {
     fn on_usage_sampled(
         &mut self,
         point: UsagePoint,
-        sample: ProcessTreeSample,
+        sample: Option<ProcessTreeSample>,
         logical_cores: u32,
     ) -> Vec<Effect> {
         if point == UsagePoint::MatchStart {
             if let Some(meter) = &mut self.match_meter {
-                meter.start = Some(sample);
+                meter.start = sample;
             }
             return Vec::new();
         }
 
+        // the end reading closes the match whatever it brings, so the results screen can't read again
         let Some(MatchMeter {
             start: Some(start),
             request_count,
         }) = self.match_meter.take()
         else {
+            return Vec::new();
+        };
+        let Some(sample) = sample else {
             return Vec::new();
         };
 
@@ -564,7 +569,8 @@ impl Session {
             .iter()
             .filter(|effect| matches!(effect, Effect::LookUp { .. }))
             .count();
-        meter.request_count += u32::try_from(lookup_count).unwrap_or(u32::MAX);
+        let lookup_count = u32::try_from(lookup_count).unwrap_or(u32::MAX);
+        meter.request_count = meter.request_count.saturating_add(lookup_count);
     }
 
     fn forget_awaited_result(&mut self) {
@@ -2499,7 +2505,15 @@ mod tests {
     fn sampled(point: UsagePoint, sample: ProcessTreeSample) -> Input {
         Input::UsageSampled {
             point,
-            sample,
+            sample: Some(sample),
+            logical_cores: LOGICAL_CORES,
+        }
+    }
+
+    fn not_sampled(point: UsagePoint) -> Input {
+        Input::UsageSampled {
+            point,
+            sample: None,
             logical_cores: LOGICAL_CORES,
         }
     }
@@ -2719,6 +2733,24 @@ mod tests {
         end_measured(&mut seen_end, 180_000);
         let result = seen_end.handle(won_1v1(), 181_000);
         assert_eq!(usage_samples(&result), vec![]);
+    }
+
+    #[test]
+    fn a_failed_end_reading_closes_the_match() {
+        let mut session = Session::new();
+        start_measured(&mut session, ranked_1v1(), 0);
+        session.handle(detection(Event::MatchEnded), 180_000);
+
+        let failed_end = session.handle(not_sampled(UsagePoint::MatchEnd), 180_000);
+        let result = session.handle(won_1v1(), 181_000);
+
+        assert_eq!(reported(&failed_end), Vec::<&MatchUsage>::new());
+        assert_eq!(
+            usage_samples(&result),
+            vec![],
+            "the result reads nothing more"
+        );
+        assert_eq!(session.status().last_match_usage, None);
     }
 
     #[test]

@@ -182,23 +182,23 @@ impl<L: LobbyLookup> Runner<L> {
                 }
             }
             Effect::StatusChanged(status) => self.publish_status(*status),
-            Effect::SampleUsage(point) => return self.sample_usage(point),
+            Effect::SampleUsage(point) => return Some(self.sample_usage(point)),
             Effect::ReportMatchUsage(usage) => log::info!("{}", usage.log_line()),
         }
 
         None
     }
 
-    /// one reading of totals windows already keeps; none where the app can't read them
-    fn sample_usage(&self, point: UsagePoint) -> Option<Input> {
-        let sample = sample_process_tree(self.clock.now_ms())?;
+    /// one reading of totals windows already keeps; handed back even when there is none, so the session moves on
+    fn sample_usage(&self, point: UsagePoint) -> Input {
+        let sample = sample_process_tree(self.clock.now_ms());
         let logical_cores = available_parallelism().map_or(1, |cores| cores.get());
 
-        Some(Input::UsageSampled {
+        Input::UsageSampled {
             point,
             sample,
             logical_cores: u32::try_from(logical_cores).unwrap_or(u32::MAX),
-        })
+        }
     }
 
     fn look_up(&mut self, lobby_id: u64, request: LobbyRequest) {

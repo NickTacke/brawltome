@@ -52,6 +52,8 @@ pub fn usage_between(
         .iter()
         .map(|(pid, end_cpu_ms)| cpu_used_ms(start, *pid, *end_cpu_ms))
         .sum();
+    // each process's working set counts the pages it shares with the others, such as the webview's, so the sum
+    // errs high next to task manager's private memory
     let working_set_bytes: u64 = end.working_set_bytes_by_pid.values().sum();
 
     MatchUsage {

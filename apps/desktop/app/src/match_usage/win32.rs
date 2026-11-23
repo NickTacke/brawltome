@@ -1,4 +1,4 @@
-//! The Win32 calls that read the totals windows keeps for the app's processes: cpu time and working set.
+//! the win32 calls that read the totals windows keeps for the app's processes: cpu time and working set
 
 use std::mem;
 
@@ -9,7 +9,6 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcessId, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_VM_READ,
 };
 
 use super::{process_tree, ProcessTreeSample};
@@ -112,7 +111,7 @@ fn working_set_bytes(process: &OwnedHandle) -> Option<u64> {
         ..PROCESS_MEMORY_COUNTERS::default()
     };
 
-    // SAFETY: the handle is open with query and read rights, and counters is a live struct of the size passed
+    // SAFETY: the handle is open with query rights, and counters is a live struct of the size passed
     let succeeded = unsafe { GetProcessMemoryInfo(process.0, &mut counters, size) };
     if succeeded == 0 {
         return None;
@@ -129,11 +128,12 @@ fn filetime_steps(time: FILETIME) -> u64 {
 struct OwnedHandle(HANDLE);
 
 impl OwnedHandle {
-    /// none for a process that exited or that the app may not read
+    /// none for a process that exited or that the app may not query
     fn open(pid: u32) -> Option<Self> {
+        // the limited query right is all GetProcessTimes and GetProcessMemoryInfo need since windows vista; asking
+        // for the memory read right too would lose a sandboxed webview process that refuses it, cpu time and all
         // SAFETY: OpenProcess only reads its arguments; failure is a null handle, checked below
-        let handle =
-            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, 0, pid) };
+        let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
         if handle.is_null() {
             return None;
         }
