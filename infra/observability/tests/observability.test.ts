@@ -16,6 +16,7 @@ const requiredAlerts = [
   'ReplayQueueStuck',
   'ScheduleMaterializationLate',
   'NewDeadLetters',
+  'RankedCoverageDeadLettersElevated',
   'RefreshFailuresElevated',
   'BrawlhallaSourceUnavailable',
   'HttpLatencyHigh',
