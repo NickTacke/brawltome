@@ -46,9 +46,10 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
   in the manifest is resolved against `baseUrl`, the art store's root, not against the manifest's URL;
   `replay.assetUrl(path)` resolves one the same way (the map's `layout`, the `background`). In the background it
   fetches the other packs, then every sheet in `sheetOrder`, four at a time. `replay.loaded` settles when everything
-  is in. It rejects a manifest whose `format` isn't `FORMAT` (3). Abort `signal` when the page leaves the match or
-  opens another: every download stops, `loadReplay` rejects if it hasn't resolved yet, and `replay.loaded` rejects
-  with the signal's reason (an `AbortError`), so catch it or ignore that error.
+  is in. It reads manifests and art groups of format 3 and 4 (`FORMATS`), and rejects any other format, or a format 4
+  file of the wrong shape, saying what's wrong. Abort `signal` when the page leaves the match or opens another: every
+  download stops, `loadReplay` rejects if it hasn't resolved yet, and `replay.loaded` rejects with the signal's reason
+  (an `AbortError`), so catch it or ignore that error.
 - `drawPlayer` and `drawObject` draw a player or an object whole or not at all: while a piece of the frame hasn't
   loaded they draw nothing, return `false`, and move the sheets that frame needs to the front of what's left to load.
   A page that pauses while they return `false` never shows a half-loaded legend.
@@ -67,7 +68,8 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
 
 | File | What it does |
 | --- | --- |
-| `src/format.ts` | the types of the export's files, and `FORMAT` |
+| `src/format.ts` | the types of the export's files, and the formats this reads |
+| `src/read.ts` | checks a fetched manifest's and art group's format, and format 4's shape |
 | `src/load.ts` | loads a match's manifest, art groups, packs and sheets |
 | `src/map-art.ts` | finds a map's platform art in the art store |
 | `src/draw.ts` | draws players and objects on a canvas |

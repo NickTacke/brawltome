@@ -9,13 +9,29 @@ export {
 } from './src/camera.ts'
 export { drawObject, drawPlayer, isReady, zoomOf } from './src/draw.ts'
 export {
+  type AnyArtGroup,
+  type AnyManifest,
   type ArtGroup,
+  type ArtGroupFormat4,
+  type ClassSetName,
+  DRAW_PER_LOOK,
   FORMAT,
+  FORMATS,
   type LevelLayout,
   type Manifest,
+  type ManifestFormat4,
+  type ManifestLook,
   type ManifestPlayer,
+  type ManifestPlayerFormat4,
   type MapFile,
+  NOTHING_TO_DRAW,
   type Rect,
+  SET_FORMAT,
+  type SetIndex,
+  type SetKind,
+  type SetName,
+  type SetPath,
+  type SetSheet,
 } from './src/format.ts'
 export {
   type LoadOptions,

@@ -1,6 +1,6 @@
 // Which piece of which art group each draw of an animation shows, and where: the part of src/draw.ts that needs no
 // DOM, so it runs outside a browser too
-import type { ArtGroup } from './format.ts'
+import type { AnyArtGroup } from './format.ts'
 import { DRAW_FIELDS, type Pack, type PackedAnimation } from './pack.ts'
 
 // Matrix is [a, b, c, d, e, f], as canvas setTransform takes it: x' = a*x + c*y + e, y' = b*x + d*y + f
@@ -63,7 +63,7 @@ export class ArtSet {
   private readonly tables = new Map<string, Int32Array[]>()
 
   // names are the bones' ids, which sets drawing the same animations share
-  constructor(groups: number[], groupJson: (group: number) => ArtGroup, names = new Map<string, number>()) {
+  constructor(groups: number[], groupJson: (group: number) => AnyArtGroup, names = new Map<string, number>()) {
     this.groups = groups
     this.names = names
 
@@ -77,7 +77,7 @@ export class ArtSet {
   }
 
   // baseTable is each bone's pieces without a weapon skin, from every group in lookup order
-  private baseTable(groupJson: (group: number) => ArtGroup): Int32Array[] {
+  private baseTable(groupJson: (group: number) => AnyArtGroup): Int32Array[] {
     const table: Int32Array[] = []
 
     for (const group of this.groups) {
@@ -92,7 +92,7 @@ export class ArtSet {
   }
 
   // weaponTable is the base table with the bones a weapon's skin changes replaced by that skin's pieces
-  private weaponTable(weapon: string, base: Int32Array[], groupJson: (group: number) => ArtGroup): Int32Array[] {
+  private weaponTable(weapon: string, base: Int32Array[], groupJson: (group: number) => AnyArtGroup): Int32Array[] {
     const table = base.map((row) => row.slice())
     const overridden = new Set<number>()
 

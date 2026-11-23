@@ -59,7 +59,7 @@ test('loadReplay rejects a manifest of another format', async () => {
   const { fetch } = stubFetch(manifestOf(2), manifestUrl, 'https://art.test/')
 
   await expect(loadReplay(manifestUrl, { baseUrl: 'https://art.test/', fetch })).rejects.toThrow(
-    'manifest format 2, expected 3',
+    'manifest format 2, expected 3 or 4',
   )
 })
 

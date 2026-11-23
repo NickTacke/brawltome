@@ -3,9 +3,10 @@
 //
 // The manifest is the match's own file. Every path inside it (art/, sheets/, anims/, maps/) is relative to the art
 // store's root, baseUrl, which is shared by every match and can live on another domain.
-import { type ArtGroup, FORMAT, type Manifest, type ManifestArt, type ManifestPlayer } from './format.ts'
+import type { AnyArtGroup, AnyManifest, ManifestArt, ManifestPlayer, ManifestPlayerFormat4 } from './format.ts'
 import { type Pack, readPack } from './pack.ts'
 import { Animations, ArtSet, eachDraw, type Frame, groupOf, type Matrix, pieceOf } from './placement.ts'
+import { readArtGroup, readManifest } from './read.ts'
 
 export type Progress = {
   // bytes loaded so far
@@ -38,16 +39,16 @@ const SHEETS_AT_ONCE = 4
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 
-type Group = { url: string; json: ArtGroup; sheets: (ImageBitmap | undefined)[] }
+type Group = { url: string; json: AnyArtGroup; sheets: (ImageBitmap | undefined)[] }
 
 // Drawable is a player's (or the objects') animations, with the art they're drawn with
 type Drawable = { animations: Animations; sets: Map<string, ArtSet>; ready: Map<string, boolean> }
 
-export type PlayerAssets = Drawable & { slot: string; info: ManifestPlayer; set: ArtSet }
+export type PlayerAssets = Drawable & { slot: string; info: ManifestPlayer | ManifestPlayerFormat4; set: ArtSet }
 export type ObjectAssets = Drawable
 
 export type Replay = {
-  manifest: Manifest
+  manifest: AnyManifest
   players: Map<string, PlayerAssets>
   objects?: ObjectAssets
   // settles once everything has loaded
@@ -70,7 +71,7 @@ function storeRootOf(baseUrl: string | URL): URL {
   return root
 }
 
-async function fetchManifest(manifestUrl: string | URL, options: LoadOptions): Promise<Manifest> {
+async function fetchManifest(manifestUrl: string | URL, options: LoadOptions): Promise<AnyManifest> {
   const url = new URL(manifestUrl, globalThis.location?.href).href
   const signal = options.signal
 
@@ -82,18 +83,12 @@ async function fetchManifest(manifestUrl: string | URL, options: LoadOptions): P
 
   if (!response.ok) throw new Error(`load replay ${url}: HTTP ${response.status}`)
 
-  const manifest = (await response.json()) as Manifest
-
-  if (manifest.format !== FORMAT) {
-    throw new Error(`load replay ${url}: manifest format ${manifest.format}, expected ${FORMAT}`)
-  }
-
-  return manifest
+  return readManifest(await response.json(), url)
 }
 
 // Store fetches a match's files from the art store and counts their bytes for progress
 class Store {
-  readonly manifest: Manifest
+  readonly manifest: AnyManifest
   started = false
   private readonly root: URL
   private readonly get: Fetch
@@ -102,7 +97,7 @@ class Store {
   private readonly totalBytes: number
   private loadedBytes = 0
 
-  constructor(manifest: Manifest, options: LoadOptions) {
+  constructor(manifest: AnyManifest, options: LoadOptions) {
     this.manifest = manifest
     this.root = storeRootOf(options.baseUrl)
     this.get = fetchOf(options)
@@ -151,8 +146,8 @@ class Store {
     return response
   }
 
-  async json<T>(path: string): Promise<T> {
-    const value = (await (await this.file(path)).json()) as T
+  async artGroup(path: string): Promise<AnyArtGroup> {
+    const value = readArtGroup(await (await this.file(path)).json(), this.urlOf(path))
 
     this.progress(path)
 
@@ -251,13 +246,13 @@ class Sheets {
 // loadGroups loads every group's piece table first: they're small, and say which sheets the first seconds need
 async function loadGroups(store: Store, arts: ManifestArt[]): Promise<Group[]> {
   const urls = [...new Set(arts.flatMap((art) => art.art))]
-  const jsons = await Promise.all(urls.map((url) => store.json<ArtGroup>(url)))
+  const jsons = await Promise.all(urls.map((url) => store.artGroup(url)))
 
   return jsons.map((json, index) => ({ url: urls[index], json, sheets: json.sheets.map(() => undefined) }))
 }
 
 // GroupTable finds a manifest art's groups among the replay's, and their tables
-type GroupTable = { indexesOf: (art: ManifestArt) => number[]; jsonOf: (group: number) => ArtGroup }
+type GroupTable = { indexesOf: (art: ManifestArt) => number[]; jsonOf: (group: number) => AnyArtGroup }
 
 function groupTableOf(groups: Group[]): GroupTable {
   const urls = groups.map((group) => group.url)
@@ -268,7 +263,7 @@ function groupTableOf(groups: Group[]): GroupTable {
   }
 }
 
-function playersOf(manifest: Manifest, table: GroupTable): Map<string, PlayerAssets> {
+function playersOf(manifest: AnyManifest, table: GroupTable): Map<string, PlayerAssets> {
   const players = new Map<string, PlayerAssets>()
 
   for (const [slot, info] of Object.entries(manifest.players)) {
