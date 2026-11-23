@@ -25,8 +25,9 @@ The `esports` schema, described in `db/tables.ts`:
   account's names, top legends and region from the player module for the trust check
 - `db/`: `tables.ts` and one file per read or write
 - `domain/`: pure code, no I/O. `profile.ts` shapes the stored rows into the profile the player page shows,
-  `event-names.ts` and `result-labels.ts` give each result a short title and meta line, `highlights.ts` picks the
-  finishes the section leads with, `trust.ts` decides whether a Brawltools player really is the account it links to,
+  `event-names.ts` and `result-labels.ts` give each result a short title and meta line, `importance.ts` scores how
+  much a finish counts by placement, event tier and venue, `highlights.ts` picks the finishes the section leads
+  with, `trust.ts` decides whether a Brawltools player really is the account it links to,
   `legend-keys.ts` turns a Brawltools legend name into the key of the site's art for it, `refresh-timing.ts`
   holds how long stored data stays fresh, and `freshness.ts` decides from a player's row whether it is due a refresh
 - `jobs/`: the two queue jobs. `esports-refresh` asks Brawltools for one player's power rankings, placements and

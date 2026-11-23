@@ -36,14 +36,18 @@ function stripRegions(text: string): string {
 }
 
 const seasonal = /\b(Winter|Spring|Summer|Autumn|Midseason)\b(?: Doubles)? Championships?\b/i
+const lastChanceQualifier = /Last Chance Qualifier/i
+const qualifier = /\bQualifier\b/i
+// bcx since 2022, "Brawlhalla World Championship" before it
+const worldChampionship = /World Championship/i
 
 // blue mammoth's own events, named the way players say them
 function officialTitle(fullName: string): string | null {
   if (/World Championship Expo/i.test(fullName)) return 'BCX'
 
-  if (/Last Chance Qualifier/i.test(fullName)) return 'BCX LCQ'
+  if (lastChanceQualifier.test(fullName)) return 'BCX LCQ'
 
-  if (/World Championship/i.test(fullName)) return 'Worlds'
+  if (worldChampionship.test(fullName)) return 'Worlds'
 
   const season = fullName.match(seasonal)
 
@@ -56,6 +60,20 @@ function officialTitle(fullName: string): string | null {
   const invitational = fullName.match(/\b(SteelSeries|Mammoth Cup|Trial of \w+)/i)
 
   return invitational ? (invitational[1] ?? null) : null
+}
+
+export type OfficialSeries = 'world-championship' | 'seasonal-championship' | 'other'
+
+// which of blue mammoth's series an official event belongs to; a qualifier is a way into the event it names, not
+// that event
+export function officialSeries(fullName: string): OfficialSeries {
+  if (qualifier.test(fullName)) return 'other'
+
+  if (worldChampionship.test(fullName)) return 'world-championship'
+
+  if (seasonal.test(fullName)) return 'seasonal-championship'
+
+  return 'other'
 }
 
 const noise = [

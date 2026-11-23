@@ -1,5 +1,6 @@
 import type { RawMatch, RawOpponent, RawPr } from '../source/raw-types'
 import { eventHeading, isSideModeEvent } from './event-names'
+import { importance } from './importance'
 import { type LegendLookup, resolveLegendKey } from './legend-keys'
 import { resultLabels } from './result-labels'
 import type { StoredEsports, StoredPlacement } from './stored-esports'
@@ -48,6 +49,8 @@ export type EsportsResult = {
   isOfficial: boolean
   isOnline: boolean
   legendKey: string | null
+  // how much the finish counts for the cards, see importance.ts
+  importance: number
   // first round first
   sets: EsportsSet[]
   // forfeits left out; null when no set was played
@@ -152,6 +155,13 @@ function toResult(stored: StoredPlacement, matches: RawMatch[], legendLookup: Le
   const sets = inRunOrder(matches.filter(isPlayedOrForfeited)).map((match) => toSet(match, legendLookup))
   const startTime = Math.floor(stored.startTime.getTime() / 1000)
 
+  const finish = {
+    placement: stored.placement,
+    fullName: stored.tournamentName,
+    isOfficial: stored.isOfficial,
+    isOnline: stored.isOnline,
+  }
+
   return {
     id: `${mode}-${stored.tournamentId}`,
     tournamentId: stored.tournamentId,
@@ -163,6 +173,7 @@ function toResult(stored: StoredPlacement, matches: RawMatch[], legendLookup: Le
     isOfficial: stored.isOfficial,
     isOnline: stored.isOnline,
     legendKey: mostCommon(sets.map((set) => set.legendKey)),
+    importance: importance(finish),
     sets,
     setRecord: toSetRecord(sets),
   }

@@ -53,7 +53,7 @@ export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded, 
       </aside>
       <div className={`min-w-0 ${stackedSections} xl:border-l xl:border-line/50 xl:pl-14`}>
         <RatingHistory history={snapshot?.ratingHistory ?? []} seasonStarts={seasonStarts} />
-        {player.esports && <EsportsSection esports={player.esports} />}
+        {player.esports && <EsportsSection esports={player.esports} loadedAt={loadedAt} />}
         <LegendRoster legends={legends} rankedLegends={rankedLegends} />
         <WeaponStrip legends={legends} rankedLegends={rankedLegends} isUnarmedExcludedAtStart={isUnarmedExcluded} />
         <Teammates teams={snapshot?.fixedTeams ?? []} playerId={player.brawlhallaId} />

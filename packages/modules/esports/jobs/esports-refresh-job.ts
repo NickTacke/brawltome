@@ -88,7 +88,8 @@ async function fetchHighlightSets(
 
   const missingEvents = await listEventsMissingSets(dependencies.database, brawlhallaId, new Date())
   const missing = new Set(missingEvents.map((event) => event.tournamentId))
-  const wanted = highlightTournamentIds(profile).filter((tournamentId) => missing.has(tournamentId))
+  const highlightIds = highlightTournamentIds(profile, refresh.checkedAt)
+  const wanted = highlightIds.filter((tournamentId) => missing.has(tournamentId))
 
   for (const tournamentId of wanted) {
     const sets = await client.matches(refresh.player.playerId, tournamentId)
