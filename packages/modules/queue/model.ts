@@ -322,6 +322,10 @@ type LeaseFields = {
 // belong to no account assignment.
 export const recentlyViewedCohort = 'recently-viewed' as const
 
+// Background refreshes that keep the ranked profiles of high-rated leaderboard players fresh. They fetch the ranked
+// section only, one V0 call each, and share the primary-monitoring work class like the recently viewed cohort.
+export const rankedCoverageCohort = 'ranked-coverage' as const
+
 export type OperationLease =
   | (LeaseFields & { kind: 'proof'; workClass: WorkClass; payload: { value: string } })
   | (LeaseFields & { kind: 'primary-player-verification'; workClass: 'interactive'; payload: { value: string } })
@@ -346,6 +350,15 @@ export type OperationLease =
         cohort: typeof recentlyViewedCohort
         brawlhallaId: number
         staleSections: ['ranked', 'stats']
+      }
+    })
+  | (LeaseFields & {
+      kind: 'interactive-player-refresh'
+      workClass: 'primary-monitoring'
+      payload: {
+        cohort: typeof rankedCoverageCohort
+        brawlhallaId: number
+        staleSections: ['ranked']
       }
     })
   | (LeaseFields & {
