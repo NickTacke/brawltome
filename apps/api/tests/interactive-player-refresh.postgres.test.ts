@@ -107,7 +107,7 @@ async function startOnWorker(operationId: string): Promise<void> {
 }
 
 describe('a visitor refresh beside a ranked coverage refresh', () => {
-  test('takes over a queued coverage refresh and widens it to their sections', async () => {
+  test('takes over a queued coverage refresh, widens it to their sections and drops its cohort', async () => {
     const coverageId = await queueCoverage(1001)
 
     expect(await visitorRefresh(1001)).toEqual({
@@ -116,10 +116,11 @@ describe('a visitor refresh beside a ranked coverage refresh', () => {
       retry: { kind: 'poll', afterSeconds: 2 },
     })
 
+    // a refresh a visitor waits on pages like any visitor refresh, not under the coverage rate
     expect(await readOperation(coverageId)).toEqual({
       work_class: 'interactive',
       status: 'pending',
-      payload: { cohort: 'ranked-coverage', brawlhallaId: 1001, staleSections: ['ranked', 'stats'] },
+      payload: { brawlhallaId: 1001, staleSections: ['ranked', 'stats'] },
     })
   })
 

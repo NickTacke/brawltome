@@ -279,7 +279,7 @@ Worker logs, filtered by the `kind` label, show what that schedule is doing.
 retries. Admission rejections are expected outcomes and are not counted. Statistics collection loses a few players to
 upstream errors by design, so it only fires for those kinds above 10 dead letters in 30 minutes. Ranked coverage
 refreshes (`cohort="ranked-coverage"`) are left out; [RankedCoverageDeadLettersElevated](#rankedcoveragedeadletterselevated)
-watches their rate instead.
+watches their rate instead. A coverage refresh a visitor took over has left the cohort, so it counts here.
 
 **Likely causes:** a bug in that operation kind (consistent failures); a payload Brawlhalla changed shape on; a long
 outage that outlasted the retry budget. A row with the code `invalid_payload` never ran: its payload doesn't parse, or
@@ -308,8 +308,8 @@ bun run operations:dead-letters discard <operation-id> --reason "player deleted"
 
 ### RankedCoverageDeadLettersElevated
 
-**Severity:** warning. Coverage only keeps high-rated players' ranked data fresh in the background; no visitor waits on
-it, and a dead letter is kept for replay.
+**Severity:** warning. A coverage refresh a visitor takes over leaves the cohort and pages through
+[NewDeadLetters](#newdeadletters), so this only counts refreshes nobody waits on. A dead letter is kept for replay.
 
 **Meaning:** more than 2% of the ranked coverage refreshes that settled in the last 6 hours were dead-lettered, with at
 least 50 settled. Player refreshes usually dead-letter about 0.1% of the time, so one dead letter among thousands is

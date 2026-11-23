@@ -47,12 +47,15 @@ function joinSections(held: readonly string[], wanted: readonly PlayerRefreshSec
   return sectionOrder.filter((section) => held.includes(section) || wanted.includes(section))
 }
 
+// a visitor's refresh belongs to no cohort, so its dead letters page like any other visitor's
 function takenOverPayload(
   payload: Record<string, unknown>,
-  _isBackgroundCohort: boolean,
+  isBackgroundCohort: boolean,
   staleSections: PlayerRefreshSection[],
 ): InteractivePlayerRefreshPayload {
-  return { ...(payload as InteractivePlayerRefreshPayload), staleSections }
+  if (!isBackgroundCohort) return { ...(payload as InteractivePlayerRefreshPayload), staleSections }
+
+  return { brawlhallaId: payload.brawlhallaId as number, staleSections }
 }
 
 /** Decides how a visitor needing these sections deals with the refresh already holding their player. */

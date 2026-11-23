@@ -53,7 +53,7 @@ describe('visitor refresh takeover', () => {
     })
   })
 
-  test('makes a queued coverage refresh the visitor own, with both sections', async () => {
+  test('makes a queued coverage refresh the visitor own, with both sections and no cohort', async () => {
     expect(await enqueueRankedCoverageRefresh(database, 501)).toBe(true)
     expect(await inspectVisitorFit(database, { brawlhallaId: 501, staleSections: ['stats'] })).toBe('take-over')
 
@@ -65,7 +65,7 @@ describe('visitor refresh takeover', () => {
     expect(await readCoverage(501)).toMatchObject({
       work_class: 'interactive',
       status: 'pending',
-      payload: { cohort: 'ranked-coverage', brawlhallaId: 501, staleSections: ['ranked', 'stats'] },
+      payload: { brawlhallaId: 501, staleSections: ['ranked', 'stats'] },
     })
   })
 

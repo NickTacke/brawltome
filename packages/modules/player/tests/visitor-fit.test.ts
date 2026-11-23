@@ -6,12 +6,12 @@ const recentlyViewed = { cohort: 'recently-viewed', brawlhallaId: 7, staleSectio
 const primary = { assignmentId: 'assignment', brawlhallaId: 7, staleSections: ['ranked', 'stats'] }
 
 describe('visitor fit', () => {
-  test('takes over a queued coverage refresh as interactive work with the sections joined', () => {
+  test('takes over a queued coverage refresh as interactive work with the sections joined and no cohort', () => {
     expect(fitForVisitor({ workClass: 'primary-monitoring', status: 'pending', payload: coverage }, ['stats'])).toEqual(
       {
         action: 'take-over',
         workClass: 'interactive',
-        payload: { cohort: 'ranked-coverage', brawlhallaId: 7, staleSections: ['ranked', 'stats'] },
+        payload: { brawlhallaId: 7, staleSections: ['ranked', 'stats'] },
       },
     )
   })
@@ -22,7 +22,7 @@ describe('visitor fit', () => {
     expect(fitForVisitor(active, ['ranked'])).toEqual({
       action: 'take-over',
       workClass: 'interactive',
-      payload: { cohort: 'recently-viewed', brawlhallaId: 7, staleSections: ['ranked', 'stats'] },
+      payload: { brawlhallaId: 7, staleSections: ['ranked', 'stats'] },
     })
   })
 
