@@ -1,4 +1,5 @@
 import type { BrawltomeModule } from '@brawltome/foundation'
+import { createEsportsProcedures } from './api/procedures'
 import { createEsports } from './migrations/0001-create-esports'
 
 export { failureBackoffMs, linkedTtlMs, noneTtlMs } from './domain'
@@ -19,6 +20,5 @@ export const esportsModule = {
   name: 'esports' as const,
   dependsOn: ['queue', 'player'],
   migrations,
-  // no procedures yet; the player page's esports read adds them
-  routes: () => ({}),
+  routes: createEsportsProcedures,
 } satisfies BrawltomeModule

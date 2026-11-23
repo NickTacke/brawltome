@@ -74,7 +74,7 @@ describe('oRPC router built from a module list', () => {
 
     expect(Object.keys(router.clan).sort()).toEqual(['byId', 'membershipByPlayerId', 'rankedList', 'standingById'])
     expect(Object.keys(router.discovery)).toEqual(['search'])
-    expect(Object.keys(router.esports)).toEqual([])
+    expect(Object.keys(router.esports)).toEqual(['byPlayerId'])
 
     expect(Object.keys(router.replays)).toEqual([
       'access',
