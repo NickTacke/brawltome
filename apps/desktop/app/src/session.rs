@@ -7,6 +7,7 @@ use crate::app_status::{
     RecentMatch, ServiceStatus, UpdateStatus,
 };
 use crate::lobby_client::{LobbyAnswer, LobbyPlayer, LobbyRequest, LookupFailure};
+use crate::match_usage::{usage_between, MatchUsage, ProcessTreeSample};
 use crate::overlay_view::{
     answered_view, failed_view, failure_reason, loading_view, Card, CardData, Failure,
     FailureReason, LobbyOpponents, OverlayView, PlayerHead, StatusView, TeamData,
@@ -30,6 +31,13 @@ pub enum Timer {
     LookUp,
 }
 
+/// the two moments the app reads what it has used: a match's loading screen and the match's end
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UsagePoint {
+    MatchStart,
+    MatchEnd,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Input {
     Detection(Event),
@@ -47,6 +55,12 @@ pub enum Input {
     },
     OverlayPaused(bool),
     UpdateStatusChanged(UpdateStatus),
+    /// none when windows wouldn't give a reading; it comes back either way, so a match can't wait on it
+    UsageSampled {
+        point: UsagePoint,
+        sample: Option<ProcessTreeSample>,
+        logical_cores: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,7 +79,11 @@ pub enum Effect {
     ShowCards(OverlayView),
     HideCards,
     OpenLinks(Vec<String>),
-    StatusChanged(AppStatus),
+    /// boxed, so every other effect stays small
+    StatusChanged(Box<AppStatus>),
+    /// read the app's processes now and hand the reading back before anything else
+    SampleUsage(UsagePoint),
+    ReportMatchUsage(MatchUsage),
 }
 
 #[derive(Debug, Default)]
@@ -77,6 +95,15 @@ pub struct Session {
     awaiting_result: Option<Vec<PlayerHead>>,
     /// the match under way is a ranked 1v1 whose result moves the player's own elo
     is_own_result_due: bool,
+    /// what the match under way has used so far; none outside a match
+    match_meter: Option<MatchMeter>,
+}
+
+#[derive(Debug, Default)]
+struct MatchMeter {
+    /// none until the runner hands the reading back, and for good where it can't read one
+    start: Option<ProcessTreeSample>,
+    request_count: u32,
 }
 
 #[derive(Debug, Default)]
@@ -135,11 +162,17 @@ impl Session {
                 self.status.update = update;
                 Vec::new()
             }
+            Input::UsageSampled {
+                point,
+                sample,
+                logical_cores,
+            } => self.on_usage_sampled(point, sample, logical_cores),
         };
+        self.count_requests(&effects);
 
         self.status.is_match_running = matches!(self.phase, Phase::InMatch);
         if self.status != status_before {
-            effects.push(Effect::StatusChanged(self.status.clone()));
+            effects.push(Effect::StatusChanged(Box::new(self.status.clone())));
         }
 
         effects
@@ -178,21 +211,21 @@ impl Session {
                 self.report_game(game_version, DetectionStatus::Unsupported { message });
                 self.show_status(status, UNSUPPORTED_VISIBLE_MS)
             }
-            Event::MatchStarted(snapshot) => self.on_match_started(&snapshot, now_ms),
+            Event::MatchStarted(snapshot) => self.start_match(&snapshot, now_ms),
             Event::Queueing => {
-                self.forget_awaited_result();
+                self.abandon_match();
                 self.change_phase(Phase::Menus)
             }
-            Event::MatchEnded => self.leave_match(),
+            Event::MatchEnded => self.end_match(),
             Event::MatchSkipped { .. } => {
-                self.forget_awaited_result();
+                self.abandon_match();
                 self.leave_match()
             }
-            Event::MatchResult(result) => self.on_match_result(&result, now_ms),
+            Event::MatchResult(result) => self.on_results_screen(&result, now_ms),
             Event::GameClosed => {
                 self.status.game = GameStatus::NotRunning;
                 self.status.detection = DetectionStatus::Waiting;
-                self.forget_awaited_result();
+                self.abandon_match();
                 self.leave_match()
             }
         }
@@ -215,6 +248,35 @@ impl Session {
         }
 
         self.show_notice(Card::Status { status }, visible_ms, true)
+    }
+
+    /// the usage is read before the app does anything for the match, so all of that counts
+    fn start_match(&mut self, snapshot: &MatchSnapshot, now_ms: u64) -> Vec<Effect> {
+        let usage_start = self.start_measuring();
+        let effects = self.on_match_started(snapshot, now_ms);
+
+        usage_start.into_iter().chain(effects).collect()
+    }
+
+    fn end_match(&mut self) -> Vec<Effect> {
+        let mut effects = self.leave_match();
+        effects.extend(self.finish_measuring());
+
+        effects
+    }
+
+    /// a match whose end went unseen ends at its results screen
+    fn on_results_screen(&mut self, result: &MatchResult, now_ms: u64) -> Vec<Effect> {
+        let usage_end = self.finish_measuring();
+        let effects = self.on_match_result(result, now_ms);
+
+        usage_end.into_iter().chain(effects).collect()
+    }
+
+    /// a match left before its end, by a queue, a skip or the game closing, records nothing
+    fn abandon_match(&mut self) {
+        self.forget_awaited_result();
+        self.match_meter = None;
     }
 
     fn on_match_started(&mut self, snapshot: &MatchSnapshot, now_ms: u64) -> Vec<Effect> {
@@ -441,6 +503,74 @@ impl Session {
 
         self.is_own_result_due = true;
         self.status.you = Some(own_standing);
+    }
+
+    /// a changed preview is the same match, so it keeps the reading of the first
+    fn start_measuring(&mut self) -> Option<Effect> {
+        let is_in_match = matches!(self.phase, Phase::Loading(_) | Phase::InMatch);
+        if is_in_match {
+            return None;
+        }
+
+        self.match_meter = Some(MatchMeter::default());
+
+        Some(Effect::SampleUsage(UsagePoint::MatchStart))
+    }
+
+    /// nothing to subtract from without a reading at the start
+    fn finish_measuring(&mut self) -> Option<Effect> {
+        let has_start = self.match_meter.as_ref()?.start.is_some();
+        if !has_start {
+            self.match_meter = None;
+            return None;
+        }
+
+        Some(Effect::SampleUsage(UsagePoint::MatchEnd))
+    }
+
+    fn on_usage_sampled(
+        &mut self,
+        point: UsagePoint,
+        sample: Option<ProcessTreeSample>,
+        logical_cores: u32,
+    ) -> Vec<Effect> {
+        if point == UsagePoint::MatchStart {
+            if let Some(meter) = &mut self.match_meter {
+                meter.start = sample;
+            }
+            return Vec::new();
+        }
+
+        // the end reading closes the match whatever it brings, so the results screen can't read again
+        let Some(MatchMeter {
+            start: Some(start),
+            request_count,
+        }) = self.match_meter.take()
+        else {
+            return Vec::new();
+        };
+        let Some(sample) = sample else {
+            return Vec::new();
+        };
+
+        let usage = usage_between(&start, &sample, logical_cores, request_count);
+        self.status.last_match_usage = Some(usage.clone());
+
+        vec![Effect::ReportMatchUsage(usage)]
+    }
+
+    /// every lookup the session asks for belongs to the match under way
+    fn count_requests(&mut self, effects: &[Effect]) {
+        let Some(meter) = &mut self.match_meter else {
+            return;
+        };
+
+        let lookup_count = effects
+            .iter()
+            .filter(|effect| matches!(effect, Effect::LookUp { .. }))
+            .count();
+        let lookup_count = u32::try_from(lookup_count).unwrap_or(u32::MAX);
+        meter.request_count = meter.request_count.saturating_add(lookup_count);
     }
 
     fn forget_awaited_result(&mut self) {
@@ -711,6 +841,7 @@ mod tests {
         MatchSnapshot, MatchType, Player, RankedStanding, SkipReason, UnsupportedReason,
     };
     use serde_json::Value;
+    use std::collections::HashMap;
 
     use super::*;
     use crate::app_status::{
@@ -1000,7 +1131,7 @@ mod tests {
             GameStatus::Running { game_version: None }
         );
         assert_eq!(session.status().detection, DetectionStatus::Starting);
-        assert!(effects.contains(&Effect::StatusChanged(session.status().clone())));
+        assert!(effects.contains(&Effect::StatusChanged(Box::new(session.status().clone()))));
 
         let ready = Event::Ready {
             local_brawlhalla_id: 1,
@@ -1186,6 +1317,7 @@ mod tests {
             }],
         };
         let expected = vec![
+            Effect::SampleUsage(UsagePoint::MatchStart),
             Effect::DropLobbyWork,
             Effect::ShowCards(loading),
             Effect::LookUp { lobby_id, request },
@@ -1194,7 +1326,7 @@ mod tests {
                 timer: Timer::HideCards,
                 after_ms: 12_000,
             },
-            Effect::StatusChanged(session.status().clone()),
+            Effect::StatusChanged(Box::new(session.status().clone())),
         ];
         assert_eq!(effects, expected);
         let page_fixture = view_fixture(
@@ -1403,7 +1535,7 @@ mod tests {
         let expected = vec![
             Effect::HideCards,
             Effect::DropLobbyWork,
-            Effect::StatusChanged(session.status().clone()),
+            Effect::StatusChanged(Box::new(session.status().clone())),
         ];
         assert_eq!(effects, expected);
         assert_eq!(session.overlay_view(), None);
@@ -1726,7 +1858,7 @@ mod tests {
         let expected = vec![
             Effect::HideCards,
             Effect::DropLobbyWork,
-            Effect::StatusChanged(loading_session.status().clone()),
+            Effect::StatusChanged(Box::new(loading_session.status().clone())),
         ];
         assert_eq!(paused, expected);
         assert!(loading_session.status().is_overlay_paused);
@@ -1784,12 +1916,12 @@ mod tests {
 
         let offline = session.handle(failed(lobby_id, LookupFailure::Offline), 500);
         assert_eq!(session.status().service, ServiceStatus::Offline);
-        assert!(offline.contains(&Effect::StatusChanged(session.status().clone())));
+        assert!(offline.contains(&Effect::StatusChanged(Box::new(session.status().clone()))));
 
         session.handle(fired(lobby_id, Timer::LookUp), 1_500);
         let working = session.handle(answered(lobby_id, answer_for(&ranked_1v1())), 1_800);
         assert_eq!(session.status().service, ServiceStatus::Ok);
-        assert!(working.contains(&Effect::StatusChanged(session.status().clone())));
+        assert!(working.contains(&Effect::StatusChanged(Box::new(session.status().clone()))));
     }
 
     #[test]
@@ -2002,7 +2134,15 @@ mod tests {
             with_local_player(ranked_1v1(), moonfall),
             1_800_000,
         );
+        let start_sample = usage_sample(1_800_000, &[(100, 5_000), (200, 12_000)], &[]);
+        ready.handle(sampled(UsagePoint::MatchStart, start_sample), 1_800_000);
         ready.handle(detection(Event::MatchEnded), 2_000_000);
+        let end_sample = usage_sample(
+            2_000_000,
+            &[(100, 5_120), (200, 12_170)],
+            &[(100, 41 * MB), (200, 51 * MB)],
+        );
+        ready.handle(sampled(UsagePoint::MatchEnd, end_sample), 2_000_000);
         ready.handle(
             detection(Event::MatchResult(won_against_shinigami)),
             2_001_000,
@@ -2247,7 +2387,7 @@ mod tests {
 
         let expected = with_results(own_standing(1667, 41), vec![won_at(201_000, 15)]);
         assert_eq!(session.status().you, Some(expected));
-        assert!(effects.contains(&Effect::StatusChanged(session.status().clone())));
+        assert!(effects.contains(&Effect::StatusChanged(Box::new(session.status().clone()))));
     }
 
     #[test]
@@ -2345,5 +2485,296 @@ mod tests {
             own_results(&session),
             vec![won_at(1_000, 15), won_at(next_day_ms, 15)]
         );
+    }
+
+    const LOGICAL_CORES: u32 = 8;
+    const MB: u64 = 1024 * 1024;
+
+    fn usage_sample(
+        at_ms: u64,
+        cpu_ms: &[(u32, u64)],
+        private_bytes: &[(u32, u64)],
+    ) -> ProcessTreeSample {
+        ProcessTreeSample {
+            cpu_ms_by_pid: HashMap::from_iter(cpu_ms.iter().copied()),
+            private_bytes_by_pid: HashMap::from_iter(private_bytes.iter().copied()),
+            at_ms,
+        }
+    }
+
+    fn sampled(point: UsagePoint, sample: ProcessTreeSample) -> Input {
+        Input::UsageSampled {
+            point,
+            sample: Some(sample),
+            logical_cores: LOGICAL_CORES,
+        }
+    }
+
+    fn not_sampled(point: UsagePoint) -> Input {
+        Input::UsageSampled {
+            point,
+            sample: None,
+            logical_cores: LOGICAL_CORES,
+        }
+    }
+
+    fn usage_samples(effects: &[Effect]) -> Vec<UsagePoint> {
+        effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::SampleUsage(point) => Some(*point),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn reported(effects: &[Effect]) -> Vec<&MatchUsage> {
+        effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::ReportMatchUsage(usage) => Some(usage),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// a lobby shown and its start read, as the runner does on windows; returns the lobby id
+    fn start_measured(session: &mut Session, snapshot: MatchSnapshot, at_ms: u64) -> u64 {
+        let lobby_id = start(session, snapshot, at_ms);
+        let start_sample = usage_sample(at_ms, &[(100, 5_000)], &[(100, 92 * MB)]);
+        session.handle(sampled(UsagePoint::MatchStart, start_sample), at_ms);
+
+        lobby_id
+    }
+
+    /// ends the match and hands back the end reading; returns what the app used
+    fn end_measured(session: &mut Session, at_ms: u64) -> Option<MatchUsage> {
+        let ended = session.handle(detection(Event::MatchEnded), at_ms);
+        assert_eq!(usage_samples(&ended), vec![UsagePoint::MatchEnd]);
+
+        let end_sample = usage_sample(at_ms, &[(100, 5_040)], &[(100, 92 * MB)]);
+        let measured = session.handle(sampled(UsagePoint::MatchEnd, end_sample), at_ms);
+
+        reported(&measured).first().copied().cloned()
+    }
+
+    #[test]
+    fn a_match_is_measured_from_its_loading_screen_to_its_end() {
+        let mut session = Session::new();
+
+        let started_effects = session.handle(started(ranked_1v1()), 1_000);
+        assert_eq!(
+            started_effects[0],
+            Effect::SampleUsage(UsagePoint::MatchStart),
+            "read before the app does anything for the match"
+        );
+        let start_sample = usage_sample(1_000, &[(100, 5_000)], &[(100, 92 * MB)]);
+        session.handle(sampled(UsagePoint::MatchStart, start_sample), 1_000);
+
+        let ended = session.handle(detection(Event::MatchEnded), 183_000);
+        assert_eq!(usage_samples(&ended), vec![UsagePoint::MatchEnd]);
+
+        let end_sample = usage_sample(183_000, &[(100, 5_040)], &[(100, 92 * MB)]);
+        let measured = session.handle(sampled(UsagePoint::MatchEnd, end_sample), 183_000);
+
+        let usage = MatchUsage {
+            cpu_ms: 40,
+            cpu_percent: 4_000.0 / (182_000.0 * 8.0),
+            ram_mb: 92,
+            request_count: 1,
+            duration_ms: 182_000,
+        };
+        assert_eq!(reported(&measured), vec![&usage]);
+        assert_eq!(session.status().last_match_usage, Some(usage));
+        assert!(measured.contains(&Effect::StatusChanged(Box::new(session.status().clone()))));
+    }
+
+    #[test]
+    fn nothing_is_read_while_the_match_runs() {
+        let mut session = Session::new();
+        let lobby_id = start_measured(&mut session, ranked_1v1(), 0);
+        session.handle(failed(lobby_id, LookupFailure::Offline), 500);
+
+        let inputs = [
+            fired(lobby_id, Timer::HideCards),
+            fired(lobby_id, Timer::LookUp),
+            Input::RetryClicked,
+            Input::OverlayPaused(true),
+        ];
+
+        for input in inputs {
+            let description = format!("{input:?}");
+            let effects = session.handle(input, 12_000);
+
+            assert_eq!(usage_samples(&effects), vec![], "{description}");
+        }
+    }
+
+    fn answer_refreshing(session: &mut Session, lobby_id: u64) {
+        let refreshing_answer = refreshing(answer_for(&ranked_1v1()));
+
+        session.handle(answered(lobby_id, refreshing_answer.clone()), 500);
+        session.handle(fired(lobby_id, Timer::LookUp), 2_000);
+        session.handle(answered(lobby_id, refreshing_answer), 2_500);
+    }
+
+    fn fail_twice_then_answer(session: &mut Session, lobby_id: u64) {
+        let unavailable = LookupFailure::Unavailable {
+            retry_after_seconds: None,
+        };
+
+        session.handle(failed(lobby_id, unavailable.clone()), 500);
+        session.handle(fired(lobby_id, Timer::LookUp), 1_500);
+        session.handle(failed(lobby_id, unavailable), 1_800);
+        session.handle(fired(lobby_id, Timer::LookUp), 3_800);
+        session.handle(answered(lobby_id, answer_for(&ranked_1v1())), 4_000);
+    }
+
+    fn click_retry(session: &mut Session, lobby_id: u64) {
+        session.handle(failed(lobby_id, LookupFailure::Offline), 500);
+        session.handle(Input::RetryClicked, 700);
+    }
+
+    fn change_the_preview(session: &mut Session, _lobby_id: u64) {
+        start(session, ranked_1v1_against(KOA, "Koa"), 400);
+    }
+
+    /// what happens in a lobby between its start and the end of the match
+    type LobbyPlay = fn(&mut Session, u64);
+
+    #[test]
+    fn every_lookup_of_the_match_is_counted() {
+        let cases: [(&str, LobbyPlay, u32); 5] = [
+            ("the first ask", |_, _| {}, 1),
+            ("a refresh asked once more", answer_refreshing, 2),
+            ("two retries", fail_twice_then_answer, 3),
+            ("a retry clicked", click_retry, 2),
+            (
+                "a changed preview asks for the new lobby",
+                change_the_preview,
+                2,
+            ),
+        ];
+
+        for (description, play, request_count) in cases {
+            let mut session = Session::new();
+            let lobby_id = start_measured(&mut session, ranked_1v1(), 0);
+
+            play(&mut session, lobby_id);
+            let usage = end_measured(&mut session, 180_000);
+
+            let counted = usage.map(|usage| usage.request_count);
+            assert_eq!(counted, Some(request_count), "{description}");
+        }
+    }
+
+    #[test]
+    fn a_changed_preview_keeps_the_reading_of_the_first() {
+        let mut session = Session::new();
+        start_measured(&mut session, ranked_1v1(), 0);
+
+        let changed = session.handle(started(ranked_1v1_against(KOA, "Koa")), 400);
+
+        assert_eq!(usage_samples(&changed), vec![]);
+        let usage = end_measured(&mut session, 180_000);
+        assert_eq!(usage.map(|usage| usage.duration_ms), Some(180_000));
+    }
+
+    #[test]
+    fn a_match_without_cards_is_still_measured() {
+        let mut session = Session::new();
+        session.handle(Input::OverlayPaused(true), 0);
+
+        let effects = session.handle(started(ranked_1v1()), 1_000);
+        assert_eq!(usage_samples(&effects), vec![UsagePoint::MatchStart]);
+        let start_sample = usage_sample(1_000, &[(100, 5_000)], &[]);
+        session.handle(sampled(UsagePoint::MatchStart, start_sample), 1_000);
+
+        let usage = end_measured(&mut session, 181_000);
+        assert_eq!(usage.map(|usage| usage.request_count), Some(0));
+    }
+
+    #[test]
+    fn a_match_left_without_an_end_records_nothing() {
+        let leaving_events = [
+            Event::Queueing,
+            Event::MatchSkipped {
+                reason: SkipReason::Spectating,
+            },
+            Event::GameClosed,
+        ];
+
+        for event in leaving_events {
+            let mut session = Session::new();
+            start_measured(&mut session, ranked_1v1(), 0);
+            let description = format!("{event:?}");
+
+            let left = session.handle(detection(event), 60_000);
+            let ended = session.handle(detection(Event::MatchEnded), 61_000);
+            let late_sample = usage_sample(61_000, &[(100, 5_040)], &[]);
+            let late = session.handle(sampled(UsagePoint::MatchEnd, late_sample), 61_000);
+
+            assert_eq!(usage_samples(&left), vec![], "{description}");
+            assert_eq!(usage_samples(&ended), vec![], "{description}");
+            assert_eq!(reported(&late), Vec::<&MatchUsage>::new(), "{description}");
+            assert_eq!(session.status().last_match_usage, None, "{description}");
+        }
+    }
+
+    #[test]
+    fn the_result_ends_the_match_only_when_its_end_was_missed() {
+        let mut missed_end = Session::new();
+        start_measured(&mut missed_end, ranked_1v1(), 0);
+        let result = missed_end.handle(won_1v1(), 180_000);
+        assert_eq!(usage_samples(&result), vec![UsagePoint::MatchEnd]);
+
+        let mut seen_end = Session::new();
+        start_measured(&mut seen_end, ranked_1v1(), 0);
+        end_measured(&mut seen_end, 180_000);
+        let result = seen_end.handle(won_1v1(), 181_000);
+        assert_eq!(usage_samples(&result), vec![]);
+    }
+
+    #[test]
+    fn a_failed_end_reading_closes_the_match() {
+        let mut session = Session::new();
+        start_measured(&mut session, ranked_1v1(), 0);
+        session.handle(detection(Event::MatchEnded), 180_000);
+
+        let failed_end = session.handle(not_sampled(UsagePoint::MatchEnd), 180_000);
+        let result = session.handle(won_1v1(), 181_000);
+
+        assert_eq!(reported(&failed_end), Vec::<&MatchUsage>::new());
+        assert_eq!(
+            usage_samples(&result),
+            vec![],
+            "the result reads nothing more"
+        );
+        assert_eq!(session.status().last_match_usage, None);
+    }
+
+    #[test]
+    fn a_match_whose_start_was_not_read_reads_nothing_at_its_end() {
+        let mut session = Session::new();
+        start(&mut session, ranked_1v1(), 0);
+
+        let ended = session.handle(detection(Event::MatchEnded), 180_000);
+        let result = session.handle(won_1v1(), 181_000);
+
+        assert_eq!(usage_samples(&ended), vec![]);
+        assert_eq!(usage_samples(&result), vec![]);
+    }
+
+    #[test]
+    fn the_next_match_replaces_the_last_usage() {
+        let mut session = Session::new();
+        start_measured(&mut session, ranked_1v1(), 0);
+        end_measured(&mut session, 180_000);
+
+        start_measured(&mut session, ranked_1v1_against(KOA, "Koa"), 300_000);
+        let usage = end_measured(&mut session, 400_000);
+
+        assert_eq!(usage.as_ref().map(|usage| usage.duration_ms), Some(100_000));
+        assert_eq!(session.status().last_match_usage, usage);
     }
 }

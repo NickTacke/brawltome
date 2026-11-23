@@ -69,7 +69,7 @@ export function useAppStatus(): AppStatusState {
   }, [])
 
   const close = useCallback(() => {
-    ask('hide_main_window')
+    ask('close_main_window')
   }, [])
 
   return {

@@ -3,6 +3,7 @@
 use brawltome_detection::{MatchResult, MatchSnapshot, MatchType};
 use serde::Serialize;
 
+use crate::match_usage::MatchUsage;
 use crate::overlay_view::{LobbyOpponents, PlayerHead};
 use crate::post_match::{is_win, signed_change};
 
@@ -152,6 +153,8 @@ pub struct AppStatus {
     /// none until the first ranked 1v1 of this run
     pub you: Option<OwnStanding>,
     pub recent_matches: Vec<RecentMatch>,
+    /// none until a match of this run is measured, which only windows can
+    pub last_match_usage: Option<MatchUsage>,
 }
 
 /// "Patch 11.01 isn't supported yet" for game version 11.01.36258

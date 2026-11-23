@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { AppStatus, Settings } from '../ui/window/app-status'
+import type { AppStatus, OverlayPosition, Settings } from '../ui/window/app-status'
 import { MainWindow, type MainWindowProps } from '../ui/window/MainWindow'
+import { menuAction, spotGroups, spotLabel } from '../ui/window/overlay-spots'
+import { PositionPicker } from '../ui/window/PositionPicker'
 import { RecentMatches } from '../ui/window/RecentMatches'
 import { SettingsSection } from '../ui/window/SettingsSection'
+import { percentText } from '../ui/window/usage-format'
 
 // twelve minutes after the newest match in the ready fixture
 const NOW_MS = 2_520_000
@@ -77,8 +80,15 @@ type ElementProps = { className?: string; children?: ReactNode; onClick?: () => 
 
 // walks the elements a component returned, without rendering, to reach a handler
 function elementWithClass(node: ReactNode, className: string): ElementProps | null {
+  // stops at the first match, so a later component that holds state is never called outside a render
   if (Array.isArray(node)) {
-    return node.map((child) => elementWithClass(child, className)).find((found) => found !== null) ?? null
+    for (const child of node) {
+      const found = elementWithClass(child, className)
+
+      if (found !== null) return found
+    }
+
+    return null
   }
 
   if (typeof node !== 'object' || node === null || !('props' in node)) return null
@@ -182,13 +192,18 @@ describe('main window', () => {
     expect(matches.match(/class="ghost-row"/g)?.length).toBe(4)
   })
 
-  test('marks the stored overlay position in the picker', () => {
-    const html = render(fixture('ready'), { settings: { ...settings, overlayPosition: 'topLeft' } })
-    const picker = partOf(html, 'stage')
+  test('names the stored overlay spot on a closed menu', () => {
+    const settingsPart = partOf(
+      render(fixture('ready'), { settings: { ...settings, overlayPosition: 'topLeft' } }),
+      'settings',
+    )
 
-    expect(picker.match(/aria-checked="true"/g)?.length).toBe(1)
-    expect(html).toMatch(/aria-label="Top left"[^>]*aria-checked="true"/)
-    expect(html).toContain('data-banner-side="left"')
+    const button = partOf(settingsPart, 'spot-button')
+
+    expect(textOf(settingsPart)).toBe('Start with WindowsOverlay spotTop left')
+    expect(button).toContain('aria-haspopup="listbox"')
+    expect(button).toContain('aria-expanded="false"')
+    expect(settingsPart).not.toContain('role="listbox"')
   })
 
   test('draws no sign-in and no upload settings', () => {
@@ -225,5 +240,85 @@ describe('main window', () => {
     const status = partOf(render({ ...fixture('ready'), isOverlayPaused: true }), 'status-lines')
 
     expect(textOf(status)).toContain('Overlay pausedResume')
+  })
+})
+
+describe('last match usage', () => {
+  const usage = { cpuMs: 290, cpuPercent: 0.018125, ramMb: 92, requestCount: 1, durationMs: 200_000 }
+
+  function usageText(overrides: Partial<typeof usage>): string {
+    const status = { ...fixture('ready'), lastMatchUsage: { ...usage, ...overrides } }
+
+    return textOf(partOf(render(status), 'usage'))
+  }
+
+  test('says what the app used in the last match', () => {
+    expect(textOf(partOf(render(fixture('ready')), 'usage'))).toBe('Last match·0.02% CPU·92 MB·1 request')
+  })
+
+  test('keeps a share too small for two decimals honest', () => {
+    expect(percentText(0)).toBe('<0.01%')
+    expect(percentText(0.004)).toBe('<0.01%')
+    expect(percentText(0.018125)).toBe('0.02%')
+    expect(usageText({ cpuPercent: 1.5 })).toContain('1.50% CPU')
+  })
+
+  test('counts the requests in words', () => {
+    expect(usageText({ requestCount: 0 })).toEndWith('0 requests')
+    expect(usageText({ requestCount: 3 })).toEndWith('3 requests')
+  })
+
+  test('draws nothing before a match is measured', () => {
+    expect(render(fixture('idle'))).not.toContain('class="usage"')
+  })
+})
+
+describe('overlay spot menu', () => {
+  function openMenu(position: OverlayPosition): string {
+    return renderToStaticMarkup(<PositionPicker position={position} onChange={() => {}} isInitiallyOpen />)
+  }
+
+  test('lists the nine spots in three groups, row by row', () => {
+    const groups = spotGroups.map((group) => group.map((spot) => spot.label))
+
+    expect(groups).toEqual([
+      ['Top left', 'Top centre', 'Top right'],
+      ['Middle left', 'Centre', 'Middle right'],
+      ['Bottom left', 'Bottom centre', 'Bottom right'],
+    ])
+
+    expect(spotLabel('bottomCenter')).toBe('Bottom centre')
+  })
+
+  test('an open menu marks the stored spot and starts on it', () => {
+    const html = openMenu('middleRight')
+    const list = partOf(html, 'spot-menu')
+    const selected = list.match(/<[^>]*aria-selected="true"[^>]*>[^<]*/g) ?? []
+
+    const active = list.match(/<[^>]*data-active="true"[^>]*>[^<]*/g) ?? []
+    const rowStarts = list.match(/<[^>]*data-starts-row="true"[^>]*>[^<]*/g) ?? []
+
+    expect(partOf(html, 'spot-button')).toContain('aria-expanded="true"')
+    expect(list.match(/role="option"/g)?.length).toBe(9)
+    expect(selected.map(textOf)).toEqual(['Middle right'])
+    expect(active.map(textOf)).toEqual(['Middle right'])
+    expect(rowStarts.map(textOf)).toEqual(['Middle left', 'Bottom left'])
+  })
+
+  test('arrow keys move through the spots and stop at the ends', () => {
+    expect(menuAction('ArrowDown', 4)).toEqual({ kind: 'move', activeIndex: 5 })
+    expect(menuAction('ArrowUp', 4)).toEqual({ kind: 'move', activeIndex: 3 })
+    expect(menuAction('ArrowDown', 8)).toEqual({ kind: 'move', activeIndex: 8 })
+    expect(menuAction('ArrowUp', 0)).toEqual({ kind: 'move', activeIndex: 0 })
+    expect(menuAction('Home', 6)).toEqual({ kind: 'move', activeIndex: 0 })
+    expect(menuAction('End', 2)).toEqual({ kind: 'move', activeIndex: 8 })
+  })
+
+  test('Enter or Space chooses, Escape or Tab closes, other keys do nothing', () => {
+    expect(menuAction('Enter', 1)).toEqual({ kind: 'choose', position: 'topCenter' })
+    expect(menuAction(' ', 8)).toEqual({ kind: 'choose', position: 'bottomRight' })
+    expect(menuAction('Escape', 3)).toEqual({ kind: 'close' })
+    expect(menuAction('Tab', 3)).toEqual({ kind: 'close' })
+    expect(menuAction('a', 3)).toEqual({ kind: 'none' })
   })
 })

@@ -1,6 +1,8 @@
 //! runs what the session decides: lookups, timers, the overlay, links and the published status
 
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::thread::available_parallelism;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use brawltome_detection::Event;
@@ -10,8 +12,9 @@ use tokio::time::Instant;
 
 use crate::app_status::AppStatus;
 use crate::lobby_client::{LobbyLookup, LobbyRequest};
+use crate::match_usage::sample_process_tree;
 use crate::overlay_view::OverlayView;
-use crate::session::{Effect, Input, Session, Timer};
+use crate::session::{Effect, Input, Session, Timer, UsagePoint};
 
 pub trait OverlaySurface: Send + Sync + 'static {
     fn show(&self, view: &OverlayView);
@@ -137,16 +140,25 @@ impl<L: LobbyLookup> Runner<L> {
                 }
             };
 
-            let effects = self.session.handle(input, self.clock.now_ms());
-            for effect in effects {
-                self.run_effect(effect);
-            }
+            self.handle(input);
         }
 
         log::info!("detection stopped, so the session stops too");
     }
 
-    fn run_effect(&mut self, effect: Effect) {
+    /// an effect's own input, such as a usage reading, reaches the session before the next event does
+    fn handle(&mut self, input: Input) {
+        let mut pending = VecDeque::from([input]);
+
+        while let Some(input) = pending.pop_front() {
+            let effects = self.session.handle(input, self.clock.now_ms());
+            for effect in effects {
+                pending.extend(self.run_effect(effect));
+            }
+        }
+    }
+
+    fn run_effect(&mut self, effect: Effect) -> Option<Input> {
         match effect {
             // dropping the old set aborts its tasks and discards what they already returned
             Effect::DropLobbyWork => self.lobby_work = JoinSet::new(),
@@ -169,7 +181,23 @@ impl<L: LobbyLookup> Runner<L> {
                     self.links.open(&url);
                 }
             }
-            Effect::StatusChanged(status) => self.publish_status(status),
+            Effect::StatusChanged(status) => self.publish_status(*status),
+            Effect::SampleUsage(point) => return Some(self.sample_usage(point)),
+            Effect::ReportMatchUsage(usage) => log::info!("{}", usage.log_line()),
+        }
+
+        None
+    }
+
+    /// one reading of totals windows already keeps; handed back even when there is none, so the session moves on
+    fn sample_usage(&self, point: UsagePoint) -> Input {
+        let sample = sample_process_tree(self.clock.now_ms());
+        let logical_cores = available_parallelism().map_or(1, |cores| cores.get());
+
+        Input::UsageSampled {
+            point,
+            sample,
+            logical_cores: u32::try_from(logical_cores).unwrap_or(u32::MAX),
         }
     }
 
