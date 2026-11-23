@@ -143,7 +143,7 @@ describe('esports refresh job', () => {
 
     const fetchedEvents = calls.filter((call) => call.startsWith('matches ')).map((call) => call.slice(8))
 
-    // All takes solo-1, duo-1, solo-2 and duo-2, which the 1v1 and 2v2 filters take too
+    // All and 1v1 take solo-1 to solo-4 from the last year; 2v2 has nothing that recent, so it takes duo-1 to duo-4
     expect(fetchedEvents.toSorted()).toEqual(
       ['duo-1', 'duo-2', 'duo-3', 'duo-4', 'solo-1', 'solo-2', 'solo-3', 'solo-4'].toSorted(),
     )
