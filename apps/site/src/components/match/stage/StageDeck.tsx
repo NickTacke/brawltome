@@ -110,11 +110,14 @@ export function StageDeck(props: StageDeckProps) {
           topLeftRef={props.topLeftRef}
         />
         <FullscreenButton fullscreen={fullscreen} controls={controls} />
-        {fold.isFolded ? null : (
-          <TransportCorner isShown={controls.isShown} isPartOfBar={!isAlongTop} bar={controls.bar}>
-            {props.transport}
-          </TransportCorner>
-        )}
+        <TransportCorner
+          isShown={controls.isShown}
+          isPartOfBar={!isAlongTop}
+          isFolded={fold.isFolded}
+          bar={controls.bar}
+        >
+          {props.transport}
+        </TransportCorner>
         <LanesPanel
           panelRef={lanes.panelRef}
           isShown={controls.isShown}
@@ -122,7 +125,6 @@ export function StageDeck(props: StageDeckProps) {
           isFolded={fold.isFolded}
           bar={controls.bar}
           onHeld={lanes.onHeld}
-          head={fold.isFolded ? props.transport : null}
           timeline={props.timeline(isAlongTop)}
           ends={ends}
         />
