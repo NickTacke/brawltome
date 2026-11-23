@@ -10,7 +10,7 @@ const levelSegmentSchema = z
   .strict()
 
 // a piece of platform art: the file under the map route, where its top left goes, its drawn size and its turn in
-// degrees
+// degrees about that corner. a negative width or height mirrors the image, which then reaches left of x or above y
 const levelArtSchema = z
   .object({
     file: z.string(),
