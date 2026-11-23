@@ -27,6 +27,11 @@ function boardPage(page: number, entryCount: number, totalRows: number): RankedP
   return { entries: body.entries as LeaderboardEntry[], totalRows, pageSize: 30 }
 }
 
+// the opening tag of the tab link with this text
+function tabLink(html: string, label: string): string {
+  return html.match(new RegExp(`<a[^>]*>${label}</a>`))?.[0] ?? ''
+}
+
 describe('leaderboard page', () => {
   test('shows thirty players linked to their pages, with a pager', () => {
     const html = renderBoard(boardPage(2, 30, 200), 2)
@@ -34,6 +39,25 @@ describe('leaderboard page', () => {
     expect(html.match(/href="\/player\/\d+"/g)).toHaveLength(30)
     expect(html).toContain('href="/player/31"')
     expect(html).toContain('31–60 of 200')
+  })
+
+  test('pages from the top of the board as well as the bottom', () => {
+    const html = renderBoard(boardPage(2, 30, 200), 2)
+
+    expect(html).toContain('aria-label="Leaderboard pages, top"')
+    expect(html).toContain('aria-label="Leaderboard pages"')
+  })
+
+  test('marks Players as the shown leaderboard, with Guilds a tab away', () => {
+    const html = renderBoard(boardPage(1, 30, 200))
+
+    const players = tabLink(html, 'Players')
+    const guilds = tabLink(html, 'Guilds')
+
+    expect(players).toContain('href="/leaderboard"')
+    expect(players).toContain('aria-current="page"')
+    expect(guilds).toContain('href="/leaderboard/guilds"')
+    expect(guilds).not.toContain('aria-current')
   })
 
   test("a player's legend avatar names the legend, and an unknown one stays decorative", () => {

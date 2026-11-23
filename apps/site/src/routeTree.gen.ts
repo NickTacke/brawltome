@@ -22,6 +22,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
 import { Route as ClanIdRouteImport } from './routes/clan.$id'
 import { Route as GuildIdRouteImport } from './routes/guild.$id'
+import { Route as LeaderboardGuildsRouteImport } from './routes/leaderboard_.guilds'
 import { Route as MatchIdRouteImport } from './routes/match.$id'
 import { Route as PatchImagesNameRouteImport } from './routes/patch-images.$name'
 import { Route as PlayerIdRouteImport } from './routes/player.$id'
@@ -93,6 +94,11 @@ const GuildIdRoute = GuildIdRouteImport.update({
   path: '/guild/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LeaderboardGuildsRoute = LeaderboardGuildsRouteImport.update({
+  id: '/leaderboard_/guilds',
+  path: '/leaderboard/guilds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MatchIdRoute = MatchIdRouteImport.update({
   id: '/match/$id',
   path: '/match/$id',
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/leaderboard/guilds': typeof LeaderboardGuildsRoute
   '/match/$id': typeof MatchIdRouteWithChildren
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/leaderboard/guilds': typeof LeaderboardGuildsRoute
   '/match/$id': typeof MatchIdRouteWithChildren
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/tournaments': typeof TournamentsRoute
   '/clan/$id': typeof ClanIdRoute
   '/guild/$id': typeof GuildIdRoute
+  '/leaderboard_/guilds': typeof LeaderboardGuildsRoute
   '/match/$id': typeof MatchIdRouteWithChildren
   '/patch-images/$name': typeof PatchImagesNameRoute
   '/player/$id': typeof PlayerIdRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/tournaments'
     | '/clan/$id'
     | '/guild/$id'
+    | '/leaderboard/guilds'
     | '/match/$id'
     | '/patch-images/$name'
     | '/player/$id'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/tournaments'
     | '/clan/$id'
     | '/guild/$id'
+    | '/leaderboard/guilds'
     | '/match/$id'
     | '/patch-images/$name'
     | '/player/$id'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/tournaments'
     | '/clan/$id'
     | '/guild/$id'
+    | '/leaderboard_/guilds'
     | '/match/$id'
     | '/patch-images/$name'
     | '/player/$id'
@@ -258,6 +270,7 @@ export interface RootRouteChildren {
   TournamentsRoute: typeof TournamentsRoute
   ClanIdRoute: typeof ClanIdRoute
   GuildIdRoute: typeof GuildIdRoute
+  LeaderboardGuildsRoute: typeof LeaderboardGuildsRoute
   MatchIdRoute: typeof MatchIdRouteWithChildren
   PatchImagesNameRoute: typeof PatchImagesNameRoute
   PlayerIdRoute: typeof PlayerIdRoute
@@ -356,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/leaderboard_/guilds': {
+      id: '/leaderboard_/guilds'
+      path: '/leaderboard/guilds'
+      fullPath: '/leaderboard/guilds'
+      preLoaderRoute: typeof LeaderboardGuildsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/match/$id': {
       id: '/match/$id'
       path: '/match/$id'
@@ -421,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   TournamentsRoute: TournamentsRoute,
   ClanIdRoute: ClanIdRoute,
   GuildIdRoute: GuildIdRoute,
+  LeaderboardGuildsRoute: LeaderboardGuildsRoute,
   MatchIdRoute: MatchIdRouteWithChildren,
   PatchImagesNameRoute: PatchImagesNameRoute,
   PlayerIdRoute: PlayerIdRoute,

@@ -32,6 +32,16 @@ describe('guilds page', () => {
     expect(html).toContain('31–60 of 500')
   })
 
+  test('pages from the top of the ranking as well as the bottom, under the Guilds tab', () => {
+    const html = renderGuilds(guildPage(2, 30, 500), 2)
+
+    expect(html).toContain('aria-label="Guilds pages, top"')
+    const guildsTab = html.match(/<a[^>]*>Guilds<\/a>/)?.[0] ?? ''
+
+    expect(guildsTab).toContain('href="/leaderboard/guilds"')
+    expect(guildsTab).toContain('aria-current="page"')
+  })
+
   test('an unranked guild takes its place on the page', () => {
     const ranking = guildPage(2, 1, 31)
     const unranked = { ...ranking, entries: [{ ...ranking.entries[0], rank: null }] } as RankedPage<RankedGuild>

@@ -24,7 +24,7 @@ function load(search: Record<string, unknown>) {
 }
 
 beforeAll(async () => {
-  const { Route } = await import('../src/routes/guilds')
+  const { Route } = await import('../src/routes/leaderboard_.guilds')
 
   options = Route.options as unknown as RouteOptions
 })
@@ -33,9 +33,9 @@ afterEach(() => {
   getGuildRanking.mockClear()
 })
 
-describe('guilds route', () => {
+describe('guild leaderboard route', () => {
   test('titles the page', () => {
-    expect(options.head().meta[0]?.title).toBe('Guilds | BrawlTome')
+    expect(options.head().meta[0]?.title).toBe('Guilds | Leaderboards | BrawlTome')
   })
 
   test('keeps the page from the address', () => {
