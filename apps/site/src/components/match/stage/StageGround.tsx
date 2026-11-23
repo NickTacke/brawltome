@@ -1,22 +1,22 @@
 import type { Stage } from '@brawltome/contracts'
+import { artBoxOf } from './art-box'
 import type { PlacedArt } from './map-art'
 
 // the drawing is this wide and as tall as the stage box makes it; a share of the box times these gives a spot on it
 export const stageWidth = 160
 
 function PlatformArt({ piece, height }: { piece: PlacedArt; height: number }) {
-  const x = piece.x * stageWidth
-  const y = piece.y * height
+  const box = artBoxOf(piece, { width: stageWidth, height })
 
   return (
     <image
       href={piece.url}
-      x={x}
-      y={y}
-      width={piece.width * stageWidth}
-      height={piece.height * height}
+      x={box.x}
+      y={box.y}
+      width={box.width}
+      height={box.height}
       preserveAspectRatio="none"
-      transform={`rotate(${piece.rotation} ${x} ${y})`}
+      transform={box.transform}
     />
   )
 }
