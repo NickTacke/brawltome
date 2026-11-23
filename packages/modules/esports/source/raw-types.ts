@@ -30,7 +30,14 @@ export type RawPr = {
   }
 }
 
-export type RawOpponent = { brawlhallaId: number | null; name: string }
+// brawltools ties an opponent to its start.gg and other ids too; the brawlhalla id is null or 0 when it has none
+export type RawOpponent = {
+  playerId?: number | null
+  sggPlayerId?: number | null
+  cmPlayerId?: number | null
+  brawlhallaId: number | null
+  name: string
+}
 
 export type RawMatch = {
   matchId: string

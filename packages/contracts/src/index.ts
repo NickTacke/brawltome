@@ -81,6 +81,7 @@ export {
   discoverySearchInputSchema,
   discoverySearchOutputSchema,
 } from './discovery'
+export { type PlayerEsportsContract, playerEsportsSchema } from './esports'
 export {
   type LeaderboardEntry,
   type LeaderboardIdentity,
