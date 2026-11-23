@@ -4,7 +4,7 @@ import { saveEventSets } from '../db/save-event-sets'
 import { type RefreshInput, saveRefresh } from '../db/save-refresh'
 import { buildKnownLegendKeys, highlightTournamentIds, type StoredPlacement, shapeEsportsProfile } from '../domain'
 import type { BrawltoolsClient, GameMode } from '../source/brawltools-client'
-import type { RawPlacement, RawPlayer } from '../source/raw-types'
+import type { RawMatch, RawPlacement, RawPlayer } from '../source/raw-types'
 import { decideBrawltoolsFailure } from './brawltools-failures'
 import { type EsportsRefreshPayload, esportsRefreshContract } from './esports-refresh-contract'
 import { type EsportsJobDependencies, runEsportsJob } from './run-esports-job'
@@ -75,7 +75,7 @@ async function fetchHighlightSets(
   legendKeys: ReadonlySet<string>,
 ): Promise<void> {
   const { brawlhallaId, pr1v1, pr2v2, placements } = refresh
-  const stored = { pr1v1, pr2v2, placements, setsByTournament: new Map() }
+  const stored = { pr1v1, pr2v2, placements, setsByTournament: new Map<string, RawMatch[]>() }
   const profile = shapeEsportsProfile(stored, legendKeys)
 
   if (!profile) return

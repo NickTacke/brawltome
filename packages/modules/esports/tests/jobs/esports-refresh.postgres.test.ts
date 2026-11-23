@@ -210,6 +210,36 @@ describe('esports refresh job', () => {
     expect(backfills).toEqual([])
   })
 
+  test('a 500 records a failure like a 503', async () => {
+    const serverError = new BrawltoolsHttpError('brawltools answered 500 for /player/pr', 500, '/player/pr')
+    const { outcome } = await runRefresh(answers({ player, failures: new Map([['pr 2', serverError]]) }))
+
+    const { row } = await readStoredEsports(database, brawlhallaId)
+
+    expect(outcome).toBe('succeeded')
+    expect((await readOperation(database, 'esports-refresh')).status).toBe('succeeded')
+    expect(row?.failureCount).toBe(1)
+  })
+
+  test('a 503 while fetching highlight sets keeps the saved profile and records a failure', async () => {
+    const unavailable = new BrawltoolsHttpError('brawltools answered 503 for /player/match', 503, '/player/match')
+
+    const stub = answers({
+      player,
+      placements: { 1: [rawPlacement('solo', 1, daysAgo(3))], 2: [] },
+      failures: new Map([['matches solo', unavailable]]),
+    })
+
+    const { outcome, backfills } = await runRefresh(stub)
+    const { row, stored } = await readStoredEsports(database, brawlhallaId)
+
+    expect(outcome).toBe('succeeded')
+    expect(stored.placements.map((saved) => saved.tournamentId)).toEqual(['solo'])
+    expect(row).toMatchObject({ link: 'linked', failureCount: 1 })
+    expect(row?.checkedAt.getTime()).toBeGreaterThan(row?.lastSuccessAt?.getTime() ?? Number.POSITIVE_INFINITY)
+    expect(backfills).toEqual([])
+  })
+
   test('a timeout records a failure like a 503', async () => {
     const timeout = new BrawltoolsNetworkError(
       'brawltools request timed out after 10000 ms: /player/bhId/:id',

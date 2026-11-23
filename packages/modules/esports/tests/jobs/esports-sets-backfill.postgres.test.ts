@@ -143,6 +143,43 @@ describe('esports sets backfill job', () => {
     expect(stored.setsByTournament.get('a-first')?.map((set) => set.matchId)).toEqual(['saved'])
   })
 
+  test('backfill stops between events once the lease is lost', async () => {
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [
+          placement({ tournamentId: 'a-first', startTime: daysAgo(30) }),
+          placement({ tournamentId: 'b-second', startTime: daysAgo(40) }),
+        ],
+      }),
+    )
+
+    const calls: string[] = []
+    const leaseLost = new AbortController()
+    const createClient = stubClient(answers(), calls)
+
+    // the lease is lost while the first event is being fetched
+    const job = createEsportsSetsBackfillJob({
+      database,
+      createClient: (admit) =>
+        createClient(async () => {
+          await admit()
+          leaseLost.abort()
+        }),
+    })
+
+    const tools = {
+      signal: leaseLost.signal,
+      createSourceAdmitter: () => async () => {},
+      queue: { complete: async () => 'lease-lost' },
+    }
+
+    const lease = { payload: { brawlhallaId } }
+
+    expect(await job.run(lease as never, tools as never)).toBe('lease_lost')
+    expect(calls).toEqual(['matches a-first'])
+  })
+
   test('a 429 during the backfill pauses the brawltools source and defers', async () => {
     await saveRefresh(database, linkedRefresh({ placements: [placement({ tournamentId: 'slow' })] }))
 
