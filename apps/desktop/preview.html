@@ -63,13 +63,73 @@
           #0b0d12;
       }
 
-      .preview-cell h2 {
+      .preview-cell > h2 {
         margin: 0 0 10px;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: rgb(255 255 255 / 0.6);
+      }
+
+      /* a 1080p desktop with the taskbar, where the app opens the main window: 16 px in from the work area */
+      .preview-desktop {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #1d2536 0%, #121620 55%, #0c0f15 100%);
+      }
+
+      .preview-desktop .window {
+        position: absolute;
+        right: 16px;
+        bottom: 64px;
+      }
+
+      /* windows draws a frameless window with rounded corners and a shadow */
+      .preview-desktop .window,
+      .preview-window-sheet .window {
+        border-radius: 8px;
+        box-shadow:
+          0 8px 16px rgb(0 0 0 / 0.28),
+          0 32px 64px rgb(0 0 0 / 0.42);
+      }
+
+      .preview-taskbar {
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 48px;
+        border-top: 1px solid rgb(255 255 255 / 0.07);
+        background: rgb(28 31 40 / 0.97);
+      }
+
+      .preview-tray-icon {
+        position: absolute;
+        top: 15px;
+        right: 72px;
+        width: 16px;
+        height: 18px;
+        object-fit: contain;
+      }
+
+      .preview-clock {
+        position: absolute;
+        top: 15px;
+        right: 16px;
+        font: 12px/18px "Segoe UI", system-ui, sans-serif;
+        color: #e6e9ef;
+      }
+
+      /* five windows side by side, a little smaller so a 1080p screenshot holds them all */
+      .preview-window-sheet {
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 40px 0;
+        zoom: 0.88;
+        background: #0b0d12;
       }
 
       .preview-missing {

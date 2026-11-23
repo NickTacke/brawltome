@@ -5,12 +5,13 @@
   "update": { "state": "idle" },
   "isOverlayPaused": false,
   "isMatchRunning": false,
+  "you": { "name": "moonfall", "legend": "Bodvar", "rating": 2130, "games": 313 },
   "recentMatches": [
     {
       "startedAtMs": 1800000,
       "opponents": [{ "brawlhallaId": 91913839, "name": "Shinigami", "legend": "Hattori" }],
-      "isWin": null,
-      "ratingChange": null
+      "isWin": true,
+      "ratingChange": 18
     },
     {
       "startedAtMs": 600000,

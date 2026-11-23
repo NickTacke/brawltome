@@ -16,8 +16,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      // index.html stays empty until the main window has a page
-      input: path.resolve(__dirname, 'overlay.html'),
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        overlay: path.resolve(__dirname, 'overlay.html'),
+      },
     },
   },
 })

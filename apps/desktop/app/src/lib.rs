@@ -5,6 +5,7 @@ pub mod app_status;
 pub mod detection_source;
 pub mod lobby_client;
 mod log_prune;
+pub mod main_window;
 pub mod overlay_view;
 pub mod overlay_window;
 pub mod post_match;
@@ -23,7 +24,7 @@ use tokio::sync::mpsc;
 
 use lobby_client::LobbyClient;
 use overlay_window::{OverlayPosition, OverlayWindow};
-use session_runner::{LinkOpener, OverlaySurface};
+use session_runner::{LinkOpener, OverlaySurface, SessionHandle};
 use settings::SettingsStore;
 
 const DEFAULT_API_URL: &str = "https://api.brawltome.app";
@@ -73,6 +74,9 @@ pub fn run() {
             overlay_window::retry_lookup,
             settings::get_settings,
             settings::set_overlay_position,
+            main_window::get_app_status,
+            main_window::hide_main_window,
+            main_window::set_overlay_paused,
         ])
         .setup(|app| {
             // Best-effort: keep the log dir bounded. Runs synchronously on
@@ -86,6 +90,7 @@ pub fn run() {
             start_overlay(app.handle(), settings.get().overlay_position)?;
             app.manage(settings);
             tray::install(app.handle())?;
+            start_main_window(app.handle());
 
             // Open devtools automatically in dev builds. Tauri compiles devtools
             // into debug builds only; this just auto-launches the panel so we
@@ -183,6 +188,15 @@ fn start_overlay(app: &AppHandle, position: OverlayPosition) -> Result<(), Strin
     app.manage(session);
 
     Ok(())
+}
+
+/// the window opens at every start for now and follows the session's status
+fn start_main_window(app: &AppHandle) {
+    let status = app.state::<SessionHandle>().status();
+
+    main_window::hide_on_close(app);
+    main_window::forward_status(app, status);
+    main_window::open(app);
 }
 
 fn api_url() -> String {

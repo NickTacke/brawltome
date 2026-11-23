@@ -25,6 +25,18 @@
         "skipTaskbar": true,
         "shadow": false,
         "resizable": false
+      },
+      {
+        "label": "main",
+        "title": "BrawlTome",
+        "url": "index.html",
+        "width": 400,
+        "height": 620,
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "maximizable": false,
+        "skipTaskbar": false
       }
     ]
   },

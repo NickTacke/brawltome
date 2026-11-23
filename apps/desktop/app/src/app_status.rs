@@ -1,8 +1,9 @@
 //! what the main window and the tray show about the game, detection, the service and updates
 
+use brawltome_detection::{MatchResult, MatchSnapshot, MatchType};
 use serde::Serialize;
 
-use crate::overlay_view::PlayerHead;
+use crate::overlay_view::{LobbyOpponents, PlayerHead};
 
 #[derive(Serialize, Clone, Debug, PartialEq, Default)]
 #[serde(
@@ -77,6 +78,43 @@ pub struct RecentMatch {
     pub rating_change: Option<i32>,
 }
 
+/// the local player's 1v1 standing as the game's memory gives it; the page derives the tier from it
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnStanding {
+    pub name: String,
+    pub legend: Option<String>,
+    pub rating: u32,
+    pub games: u32,
+}
+
+impl OwnStanding {
+    /// the local player of a ranked 1v1 that reads cleanly; none for any other lobby
+    pub fn read(snapshot: &MatchSnapshot) -> Option<Self> {
+        if snapshot.match_type != MatchType::Ranked1v1 {
+            return None;
+        }
+
+        // the same rule as the cards: a lobby that doesn't read cleanly gives nothing
+        LobbyOpponents::read(snapshot)?;
+        let local_player = snapshot.players.iter().find(|player| player.is_local)?;
+        let ranked = local_player.ranked.as_ref()?;
+
+        Some(Self {
+            name: local_player.name.clone(),
+            legend: local_player.legend.clone(),
+            rating: ranked.rating,
+            games: ranked.games,
+        })
+    }
+
+    /// the results screen of a ranked 1v1 gives the elo after it
+    pub fn apply_result(&mut self, result: &MatchResult) {
+        self.rating = result.rating.after;
+        self.games += 1;
+    }
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppStatus {
@@ -86,6 +124,8 @@ pub struct AppStatus {
     pub update: UpdateStatus,
     pub is_overlay_paused: bool,
     pub is_match_running: bool,
+    /// none until the first ranked 1v1 of this run
+    pub you: Option<OwnStanding>,
     pub recent_matches: Vec<RecentMatch>,
 }
 
