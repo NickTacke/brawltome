@@ -62,9 +62,11 @@ export {
 } from './db/effect-lineage'
 export {
   type ActiveOperation,
+  type ActiveResourceOperation,
   type CountActiveInput,
   countActive,
   type FindActiveOperationInput,
+  findActiveOnResource,
   findActiveOperation,
   type ListAwaitingInput,
   listAwaiting,

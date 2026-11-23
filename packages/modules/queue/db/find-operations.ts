@@ -53,6 +53,39 @@ export function findActiveOperation(
   return readActiveOperation(database.db, input)
 }
 
+export type ActiveResourceOperation = {
+  operationId: string
+  workClass: WorkClass
+  status: (typeof activeStatuses)[number]
+  payload: unknown
+}
+
+/** The active operation of a kind holding a resource, with its class, status and payload. */
+export async function findActiveOnResource(
+  database: Database,
+  input: { kind: string; resourceKey: string },
+): Promise<ActiveResourceOperation | null> {
+  const [active] = await database.db
+    .select({
+      operationId: operations.id,
+      workClass: operations.workClass,
+      status: operations.status,
+      payload: operations.payload,
+    })
+    .from(operations)
+    .where(
+      and(
+        eq(operations.kind, input.kind),
+        eq(operations.resourceKey, input.resourceKey),
+        inArray(operations.status, activeStatuses),
+      ),
+    )
+
+  if (!active) return null
+
+  return { ...active, status: active.status as ActiveResourceOperation['status'] }
+}
+
 export type ListAwaitingInput = {
   kinds: readonly string[]
   status: OperationStatus
