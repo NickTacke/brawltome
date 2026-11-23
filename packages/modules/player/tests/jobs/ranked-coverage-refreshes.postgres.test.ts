@@ -3,6 +3,7 @@ import { createTestDatabase, type TestDatabase } from '@brawltome/foundation/tes
 import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
 import { interactivePlayerRefreshContract, playerModule } from '../../index'
 import { activeBackgroundPlayerRefreshes, activeInteractivePlayerRefreshes } from '../../jobs/active-player-refreshes'
+import { reserveInteractivePlayerRefresh } from '../../jobs/player-refresh-reservation'
 import { enqueueRankedCoverageRefresh, recentRankedCoverageAttempts } from '../../jobs/ranked-coverage-refreshes'
 import { enqueueRecentlyViewedRefreshes } from '../../jobs/recently-viewed-refreshes'
 
@@ -72,6 +73,30 @@ describe('ranked coverage operations', () => {
 
     expect(await activeBackgroundPlayerRefreshes(database)).toBe(backgroundBefore + 1)
     expect(await activeInteractivePlayerRefreshes(database)).toBe(interactiveBefore + 1)
+  })
+
+  test('stops counting a visitor reservation once its admission window has passed', async () => {
+    const before = await activeInteractivePlayerRefreshes(database)
+
+    const reservation = await reserveInteractivePlayerRefresh(database, {
+      brawlhallaId: 250,
+      dedupeKey: 'player:250:visit',
+      operationKey: 'player:250:visit',
+      staleSections: ['ranked'],
+      provenance: { source: 'interactive-api' },
+      reservationTtlSeconds: 30,
+    })
+
+    expect(reservation.outcome).toBe('reserved')
+    expect(await activeInteractivePlayerRefreshes(database)).toBe(before + 1)
+
+    // nobody asks for this player again, so the expired reservation is never rejected
+    await database.sql`
+      UPDATE queue.operations SET reservation_expires_at = clock_timestamp() - interval '1 second'
+      WHERE dedupe_key = 'player:250:visit'
+    `
+
+    expect(await activeInteractivePlayerRefreshes(database)).toBe(before)
   })
 
   test('reads the planner attempts and dead letters of its own refreshes only', async () => {

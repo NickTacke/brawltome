@@ -111,7 +111,12 @@ export type CountActiveInput = {
   payloadEquals: Record<string, string>
 }
 
-/** How many operations of this kind and class are waiting for admission, pending or leased. */
+// a reservation whose admission window has passed is only rejected when someone next asks for that resource, so
+// until then it sits in awaiting_admission without being work anyone is waiting on
+const isLiveReservation = sql`(${operations.status} <> 'awaiting_admission'
+  OR ${operations.reservationExpiresAt} > clock_timestamp())`
+
+/** How many operations of this kind and class are waiting for admission, pending or leased; expired reservations aside. */
 export async function countActive(database: Database, input: CountActiveInput): Promise<number> {
   const [row] = await database.db
     .select({ count: sql<number>`count(*)::integer` })
@@ -121,6 +126,7 @@ export async function countActive(database: Database, input: CountActiveInput): 
         eq(operations.kind, input.kind),
         eq(operations.workClass, input.workClass),
         inArray(operations.status, activeStatuses),
+        isLiveReservation,
         ...payloadMatches(input.payloadEquals),
       ),
     )
