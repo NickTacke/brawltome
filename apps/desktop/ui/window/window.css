@@ -1,7 +1,7 @@
 /* the main window: the parts that look like the overlay cards take their sizes and colours from overlay.css */
 
 :root {
-  /* a step darker than the window, for the status lines and the overlay spot's stage */
+  /* a step darker than the window, for the status lines */
   --rail: 226 19.4% 11.6%;
 }
 
@@ -486,14 +486,6 @@ body {
   color: hsl(var(--text));
 }
 
-.window .setting small {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 500;
-  color: hsl(var(--soft));
-}
-
 .window .toggle {
   width: 40px;
   height: 20px;
@@ -521,72 +513,66 @@ body {
   background: hsl(var(--ink));
 }
 
-/* the game's screen in miniature; each spot sits in the corner or the middle of its third */
-.window .stage {
-  display: grid;
+.window .spot-picker {
+  position: relative;
   flex: none;
-  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
-  width: 128px;
-  height: 72px;
+}
+
+.window .spot-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  border: 1px solid hsl(var(--line));
+  border-radius: 7px;
+  background: hsl(var(--raised) / 0.6);
+  font-size: 13px;
+  color: hsl(var(--strong));
+}
+
+.window .spot-button svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: hsl(var(--soft));
+  stroke-width: 1.4;
+}
+
+/* opens upward: the settings sit at the window's foot, so there is no room below */
+.window .spot-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 3;
+  width: 170px;
   padding: 4px;
   border: 1px solid hsl(var(--line));
+  border-radius: 8px;
+  background: hsl(var(--raised));
+  font-size: 13px;
+}
+
+.window .spot-option {
+  padding: 6px 10px;
   border-radius: 5px;
-  background: hsl(var(--rail));
+  color: hsl(var(--text));
+  cursor: pointer;
+  outline: none;
 }
 
-.window .spot {
-  display: flex;
-  align-items: flex-start;
-  padding: 2px;
-  border-radius: 3px;
-}
-
-.window .spot:nth-child(3n + 2) {
-  justify-content: center;
-}
-
-.window .spot:nth-child(3n) {
-  justify-content: flex-end;
-}
-
-.window .spot:nth-child(n + 4) {
-  align-items: center;
-}
-
-.window .spot:nth-child(n + 7) {
-  align-items: flex-end;
-}
-
-.window .spot-mark {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: hsl(var(--strong) / 0.3);
-}
-
-/* the overlay card in small, with its banner hanging over the bottom edge like on the real card */
-.window .card-outline {
+/* the rule between the screen's thirds, 4 px clear on either side */
+.window .spot-option[data-starts-row="true"] {
   position: relative;
-  width: 28px;
-  height: 12px;
-  border: 1px solid hsl(var(--primary));
-  border-radius: 2px;
-  background: hsl(var(--ink));
+  margin-top: 9px;
 }
 
-.window .card-banner {
+.window .spot-option[data-starts-row="true"]::before {
+  content: "";
   position: absolute;
-  top: -1px;
-  left: 3px;
-  width: 7px;
-  height: 15px;
-  border-radius: 0 0 1px 1px;
-  background: hsl(var(--primary) / 0.75);
-}
-
-.window [data-banner-side="right"] .card-banner {
-  right: 3px;
-  left: auto;
+  top: -5px;
+  right: 2px;
+  left: 2px;
+  border-top: 1px solid hsl(var(--line));
 }
 
 /* ---------- states, last so they win over the parts above ---------- */
@@ -599,8 +585,19 @@ body {
   color: hsl(var(--primary));
 }
 
-.window .spot:hover .spot-mark {
-  background: hsl(var(--primary));
+.window .spot-button:hover,
+.window .spot-button[aria-expanded="true"] {
+  border-color: hsl(var(--primary) / 0.8);
+}
+
+.window .spot-option[data-active="true"] {
+  background: hsl(var(--line) / 0.7);
+  color: hsl(var(--strong));
+}
+
+.window .spot-option[aria-selected="true"] {
+  background: hsl(var(--primary) / 0.18);
+  color: hsl(var(--strong));
 }
 
 @media (prefers-reduced-motion: reduce) {

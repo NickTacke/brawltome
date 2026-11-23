@@ -28,10 +28,7 @@ export function SettingsSection({
         </button>
       </div>
       <div className="setting-row">
-        <span className="setting">
-          Overlay spot
-          <small>Where the cards show up in game</small>
-        </span>
+        <span className="setting">Overlay spot</span>
         <PositionPicker position={settings.overlayPosition} onChange={onOverlayPositionChange} />
       </div>
     </section>
