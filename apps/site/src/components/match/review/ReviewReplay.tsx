@@ -39,12 +39,20 @@ export function ReviewReplay({ insights, legends, selectedSlot }: ReviewReplayPr
   const { stage } = insights.insights
   const playback = usePlayback(stage.durationMs)
   const isPhone = usePhoneLayout()
-  const controls = useStageControls(playback.isPlaying, playback.toggle, isPhone)
   const frameRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreen(frameRef)
   const fold = useLanesFold()
   const [cameraMode, setCameraMode] = useState<CameraMode>(defaultCameraMode)
   const mode = useReviewMode(insights, selectedSlot, playback)
+
+  const controls = useStageControls({
+    isPlaying: playback.isPlaying,
+    onToggle: playback.toggle,
+    isPhone,
+    isFullscreen: fullscreen.isOn,
+    isAtStop: mode.explained !== null,
+  })
+
   const lanes = useMemo(() => lanePlayersOf(insights), [insights])
   const poses = legends.timeline ? posesAt(legends.timeline, stage.box, playback.timeMs) : noPoses
   const { review } = mode

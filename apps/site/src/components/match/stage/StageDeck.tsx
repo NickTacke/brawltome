@@ -71,7 +71,11 @@ function TopLeftCorner({ controls, fullscreen, tools, note, topLeftRef }: TopLef
       data-stage-top-left
       className={`absolute top-2 left-2 flex flex-col items-start gap-1 ${place}`}
     >
-      {fullscreen.isOn ? <div className={`px-2 py-1 ${toolsLook}`}>{tools}</div> : null}
+      {fullscreen.isOn ? (
+        <div {...controls.bar} className={`px-2 py-1 ${toolsLook}`}>
+          {tools}
+        </div>
+      ) : null}
       {note}
     </div>
   )

@@ -89,7 +89,14 @@ const shownControls = {
   isShown: true,
   isHeld: false,
   wake: ignore,
-  stage: { onPointerMove: ignore, onPointerDown: ignore, onPointerLeave: ignore, onClick: ignore },
+  stage: {
+    onPointerMove: ignore,
+    onPointerDown: ignore,
+    onPointerUp: ignore,
+    onPointerCancel: ignore,
+    onPointerLeave: ignore,
+    onClick: ignore,
+  },
   bar: { onPointerEnter: ignore, onPointerLeave: ignore },
 }
 
@@ -282,7 +289,7 @@ describe('tap targets on a phone', () => {
 
 // a stage that plays, with only its picture and the hook that decides what a tap on it does
 function PlayingStage({ isPhone, onToggle }: { isPhone: boolean; onToggle: () => void }) {
-  const controls = useStageControls(true, onToggle, isPhone)
+  const controls = useStageControls({ isPlaying: true, onToggle, isPhone, isFullscreen: false, isAtStop: false })
 
   return (
     <div {...controls.stage}>

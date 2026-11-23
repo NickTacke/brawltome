@@ -98,6 +98,8 @@ const shownControls = {
   stage: {
     onPointerMove: () => undefined,
     onPointerDown: () => undefined,
+    onPointerUp: () => undefined,
+    onPointerCancel: () => undefined,
     onPointerLeave: () => undefined,
     onClick: () => undefined,
   },

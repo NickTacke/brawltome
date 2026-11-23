@@ -23,12 +23,13 @@ const shownByKeyboard =
 /**
  * How a part of the controls looks while they show, and put away while the replay plays undisturbed. Put away, it can
  * still be reached with the keyboard: all of them come back as soon as the keyboard puts focus in one. Focus left
- * behind by a click doesn't count, or pressing play would keep them up.
+ * behind by a click doesn't count, or pressing play would keep them up. They fade, or with less motion asked for,
+ * come and go at once.
  */
 export function shownOnStage(isShown: boolean): string {
   const shown = isShown ? 'pointer-events-auto' : 'pointer-events-none opacity-0'
 
-  return `transition duration-200 ${shownByKeyboard} ${shown}`
+  return `transition duration-200 motion-reduce:transition-none ${shownByKeyboard} ${shown}`
 }
 
 type TransportCornerProps = {

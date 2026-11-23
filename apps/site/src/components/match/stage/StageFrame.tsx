@@ -23,11 +23,14 @@ export function StageFrame({ frameRef, fullscreen, controls, aspect, children }:
   const frameLook = fullscreen.isOn ? `${fullscreenFrame} ${fullscreen.isOverlay ? overlaidFrame : ''}` : ''
   // letterboxed: as wide as the screen, or as wide as its height allows at the stage's own shape
   const stageSize = fullscreen.isOn ? { width: `min(100%, calc(100dvh * ${aspect}))` } : undefined
+  // the pointer goes with the controls over a stage that fills the screen, as over a video
+  const isPointerHidden = fullscreen.isOn && !controls.isShown
+  const stageLook = fullscreen.isOn ? '' : phoneBleed
 
   const frame = (
     <div ref={frameRef} className={`min-w-0 ${frameLook}`}>
       {/* moving over the stage shows the controls, a press on it plays or pauses */}
-      <div {...controls.stage} style={stageSize} className={fullscreen.isOn ? undefined : phoneBleed}>
+      <div {...controls.stage} style={stageSize} className={`${stageLook} ${isPointerHidden ? 'cursor-none' : ''}`}>
         {children}
       </div>
     </div>
