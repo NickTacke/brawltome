@@ -40,6 +40,17 @@ test('a format 3 player reads into the tables it did before format 4', () => {
   expect(dumpArtSet(set, boneNames)).toEqual(expected)
 })
 
+test('no frame past the end of a format 3 row shows a piece', () => {
+  const set = new ArtSet(
+    groups.map((_, index) => index),
+    (index) => groups[index],
+  )
+
+  for (const weapon of set.weapons()) {
+    for (const name of boneNames) expect(set.tail(weapon, set.nameId(name))).toBeUndefined()
+  }
+})
+
 const artUrl = 'https://art.test/'
 const manifestUrl = 'https://brawltome.test/matches/abc/manifest.json'
 const packPath = 'anims/0123456789abcdef.bin'

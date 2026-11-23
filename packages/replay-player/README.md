@@ -50,6 +50,8 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
   file of the wrong shape, saying what's wrong. Abort `signal` when the page leaves the match or opens another: every
   download stops, `loadReplay` rejects if it hasn't resolved yet, and `replay.loaded` rejects with the signal's reason
   (an `AbortError`), so catch it or ignore that error.
+- A bone shows the piece its row in an art group gives the sprite frame. Past the end of the row, a format 4 group
+  shows the row's last piece, as the game shows a symbol's last frame, and a format 3 group shows none.
 - `drawPlayer` and `drawObject` draw a player or an object whole or not at all: while a piece of the frame hasn't
   loaded they draw nothing, return `false`, and move the sheets that frame needs to the front of what's left to load.
   A page that pauses while they return `false` never shows a half-loaded legend.

@@ -1,12 +1,12 @@
 // dumpArtSet writes out what an ArtSet looks a piece up in: for each weapon table, each bone's candidates per sprite
 // frame, so a test can compare two ways of reading the same groups
-import type { ArtGroup } from '../src/format.ts'
+import type { AnyArtGroup } from '../src/format.ts'
 import type { ArtSet } from '../src/placement.ts'
 
 export type ArtSetDump = Record<string, Record<string, number[]>>
 
 // boneNamesOf is every bone the groups draw, with or without a weapon skin, sorted
-export function boneNamesOf(groups: ArtGroup[]): string[] {
+export function boneNamesOf(groups: AnyArtGroup[]): string[] {
   const names = new Set<string>()
 
   for (const group of groups) {
