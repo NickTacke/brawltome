@@ -6,6 +6,7 @@ import type { StopCount } from '../stage/ReviewControls'
 import { transportCornerPx } from '../stage/StageControls'
 import { StageDeck } from '../stage/StageDeck'
 import type { Fullscreen } from '../stage/use-fullscreen'
+import type { LanesFold } from '../stage/use-lanes-fold'
 import { type StageBox, useStageBox } from '../stage/use-stage-box'
 import type { StageControlsState } from '../stage/use-stage-controls'
 import { usePhoneLayout } from '../use-phone-layout'
@@ -29,6 +30,7 @@ type ReviewDeckProps = {
   lanes: LanePlayer[]
   controls: StageControlsState
   fullscreen: Fullscreen
+  fold: LanesFold
   transport: ReactNode
   timeline: (opensBelow: boolean) => ReactNode
   speed: ReactNode
@@ -36,13 +38,21 @@ type ReviewDeckProps = {
   note: ReactNode
 }
 
+type Corners = { stage: { width: number; height: number }; topLeft: StageBox | null; isFolded: boolean }
+
 // what lies in the stage's corners, for the card to keep clear of: the fullscreen button, the transport, and the
-// tools and note in the top left
-function cornersOf(stage: { width: number; height: number }, topLeft: StageBox | null): Rect[] {
-  const corners = [
-    { left: stage.width - cornerButtonPx, top: 0, right: stage.width, bottom: cornerButtonPx },
-    { left: 0, top: stage.height - transportCornerPx.height, right: transportCornerPx.width, bottom: stage.height },
-  ]
+// tools and note in the top left. folded lanes hold the transport in their bar, which the card keeps clear of anyway
+function cornersOf({ stage, topLeft, isFolded }: Corners): Rect[] {
+  const fullscreenButton = { left: stage.width - cornerButtonPx, top: 0, right: stage.width, bottom: cornerButtonPx }
+
+  const transport = {
+    left: 0,
+    top: stage.height - transportCornerPx.height,
+    right: transportCornerPx.width,
+    bottom: stage.height,
+  }
+
+  const corners = isFolded ? [fullscreenButton] : [fullscreenButton, transport]
 
   if (!topLeft || topLeft.element.width === 0) return corners
 
@@ -53,13 +63,14 @@ function cornersOf(stage: { width: number; height: number }, topLeft: StageBox |
 
 type CardChoice = Pick<ReviewDeckProps, 'explained' | 'count' | 'lanes' | 'poses'> & {
   isPhone: boolean
+  isFolded: boolean
   place: CardSpace['panel']
   topLeft: StageBox | null
 }
 
 // a phone's card lies under the lanes, in a slot that is there for the whole review; anywhere else the card lies on
 // the stage at a stop, once the corners it keeps clear of are measured
-function cardOf({ explained, count, lanes, poses, isPhone, place, topLeft }: CardChoice): ReactNode {
+function cardOf({ explained, count, lanes, poses, isPhone, isFolded, place, topLeft }: CardChoice): ReactNode {
   if (!count) return null
 
   if (isPhone) return <ReviewCardSlot moment={explained} lanes={lanes} count={count} />
@@ -73,7 +84,7 @@ function cardOf({ explained, count, lanes, poses, isPhone, place, topLeft }: Car
       poses={poses}
       count={count}
       panel={place}
-      obstacles={cornersOf(topLeft.stage, topLeft)}
+      obstacles={cornersOf({ stage: topLeft.stage, topLeft, isFolded })}
     />
   )
 }
@@ -84,7 +95,7 @@ function cardOf({ explained, count, lanes, poses, isPhone, place, topLeft }: Car
  * phone held upright the lanes and the card lie under the stage, so neither has to keep clear of anyone.
  */
 export function ReviewDeck(props: ReviewDeckProps) {
-  const { explained, poses, fullscreen } = props
+  const { explained, poses, fullscreen, fold } = props
   const panelRef = useRef<HTMLDivElement>(null)
   const topLeftRef = useRef<HTMLDivElement>(null)
   const [isOnLanes, setIsOnLanes] = useState(false)
@@ -96,15 +107,18 @@ export function ReviewDeck(props: ReviewDeckProps) {
   const inPlay = poses.filter((pose) => pose.isInPlay)
   const players = (explained ? inPlay.filter(isOfStop) : inPlay).map((pose) => inFrame(pose, camera))
   const key = explained?.key ?? (props.isPlaying ? null : 'paused')
-  const place = usePanelPlace(panelRef, { key, players, isBottomOnly: fullscreen.isOn || isPhone }, isOnLanes)
+  // folded, the bar is low enough to lie on the players' feet instead of jumping to the top
+  const isBottomOnly = fullscreen.isOn || isPhone || fold.isFolded
+  const place = usePanelPlace(panelRef, { key, players, isBottomOnly }, isOnLanes)
 
-  const card = cardOf({ ...props, isPhone, place, topLeft })
+  const card = cardOf({ ...props, isPhone, isFolded: fold.isFolded, place, topLeft })
 
   return (
     <StageDeck
       controls={props.controls}
       fullscreen={fullscreen}
       lanes={{ edge: place.edge, panelRef, onHeld: setIsOnLanes }}
+      fold={fold}
       transport={props.transport}
       timeline={props.timeline}
       speed={props.speed}

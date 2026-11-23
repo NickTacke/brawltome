@@ -8,6 +8,8 @@ type StageKeys = {
   playback: Playback
   fullscreen: Fullscreen
   onStep: (direction: -1 | 1, isLong: boolean) => void
+  // T folds the lanes down to a thin bar and back
+  onFoldLanes: () => void
   // a key that moves the clock brings the controls on the stage back, as moving the pointer does
   onUsed: () => void
   // R in a review plays the stop again; Escape outside fullscreen leaves the review
@@ -16,14 +18,17 @@ type StageKeys = {
 }
 
 /**
- * The replay's keys: space plays, the arrows step (further with shift), F fills the screen and Escape leaves it. In a
- * review R plays the stop again, and Escape leaves the review once the screen is back.
+ * The replay's keys: space plays, the arrows step (further with shift), T folds the lanes, F fills the screen and
+ * Escape leaves it. In a review R plays the stop again, and Escape leaves the review once the screen is back.
  */
-export function useStageKeys({ frameRef, playback, fullscreen, onStep, onUsed, onReplayStop, onLeave }: StageKeys) {
+export function useStageKeys(keys: StageKeys) {
+  const { frameRef, playback, fullscreen, onStep, onFoldLanes, onUsed, onReplayStop, onLeave } = keys
+
   useReplayKeys(frameRef, (event) => {
     if (event.key === ' ') playback.toggle()
     else if (event.key === 'ArrowLeft') onStep(-1, event.shiftKey)
     else if (event.key === 'ArrowRight') onStep(1, event.shiftKey)
+    else if (event.key === 't' || event.key === 'T') onFoldLanes()
     else if (event.key === 'f' || event.key === 'F') fullscreen.toggle()
     // the browser leaves its own fullscreen on Escape; this covers the overlay, and a browser that hands the key on
     else if (event.key === 'Escape' && fullscreen.isOn) fullscreen.exit()

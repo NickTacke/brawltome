@@ -128,6 +128,8 @@ afterAll(async () => {
 })
 
 async function mount(element: ReactNode): Promise<void> {
+  // every test starts with the lanes as a new viewer has them
+  window.localStorage.clear()
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -371,6 +373,66 @@ describe('the review in a browser', () => {
     }
 
     await unmount()
+  })
+
+  test('T folds the lanes into a thin bar and back, and the review steps on over the bar', async () => {
+    const pressKey = (key: string) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      })
+
+    await mount(replayFor(1))
+    await press('Review')
+
+    pressKey('t')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(0)
+    expect(container.querySelector('[data-folded-timeline]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Show timeline"]')).not.toBeNull()
+
+    const clockMs = clockNow()
+
+    await pressLabelled('Next stop')
+
+    expect(clockNow()).toBeGreaterThan(clockMs)
+    expect(container.querySelector('[aria-label="Speed 1×, switch to 2×"]')).not.toBeNull()
+
+    pressKey('T')
+
+    expect(container.querySelectorAll('[data-lane]')).toHaveLength(2)
+    expect(container.querySelector('[data-folded-timeline]')).toBeNull()
+
+    await unmount()
+    window.localStorage.clear()
+  })
+
+  test('T keeps keyboard focus on a control it keeps, and hands it to the fold button from a stop it takes away', async () => {
+    const pressKey = (key: string) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+      })
+
+    const focus = (selector: string) =>
+      act(() => {
+        container.querySelector<HTMLElement>(selector)?.focus()
+      })
+
+    await mount(replayFor(1))
+    await press('Review')
+
+    focus('[aria-label="Next stop"]')
+    pressKey('t')
+
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Next stop')
+
+    pressKey('t')
+    focus('button[aria-label^="Stop "]')
+    pressKey('t')
+
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Show timeline')
+
+    await unmount()
+    window.localStorage.clear()
   })
 })
 
