@@ -95,7 +95,7 @@ pub fn run() {
                 log_prune::prune_log_dir(&log_dir, 10);
             }
 
-            let settings = open_settings(app.handle())?;
+            let settings = open_settings(app.handle());
             start_overlay(app.handle(), settings.get().overlay_position)?;
 
             // before the window reads the setting; a failure is not worth stopping the app
@@ -127,17 +127,19 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn open_settings(app: &AppHandle) -> Result<SettingsStore, String> {
-    let directory = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| format!("find the config folder for settings: {error}"))?;
+fn open_settings(app: &AppHandle) -> SettingsStore {
+    let directory = app.path().app_config_dir().unwrap_or_else(|error| {
+        // the app config folder can't be named without a home folder; the temp folder always can, so the app
+        // still starts, with settings that may not outlive the session
+        let fallback = std::env::temp_dir().join(&app.config().identifier);
+        log::warn!(
+            "find the config folder for settings: {error}; using {}",
+            fallback.display()
+        );
+        fallback
+    });
 
-    // the first start has no config folder yet
-    std::fs::create_dir_all(&directory)
-        .map_err(|error| format!("create the config folder {}: {error}", directory.display()))?;
-
-    Ok(SettingsStore::open(&directory))
+    SettingsStore::open(&directory)
 }
 
 /// detection feeds the session, and the session drives the overlay window

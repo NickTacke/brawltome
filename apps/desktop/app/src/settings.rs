@@ -37,8 +37,16 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    /// reads `<directory>/settings.json`; whatever it can't read becomes the default. never fails
+    /// reads `<directory>/settings.json`, making the folder if it is missing; whatever it can't read becomes the
+    /// default. never fails: a folder it can't make only costs the saves, which then say why
     pub fn open(directory: &Path) -> Self {
+        if let Err(error) = std::fs::create_dir_all(directory) {
+            log::warn!(
+                "create the settings folder {}: {error}; using the defaults",
+                directory.display()
+            );
+        }
+
         let path = directory.join(FILE_NAME);
         let (settings, was_created_now) = read_settings(&path);
 
@@ -240,6 +248,33 @@ mod tests {
 
         assert_eq!(settings.overlay_position, OverlayPosition::MiddleRight);
         assert!(!settings.starts_with_windows);
+    }
+
+    #[test]
+    fn a_missing_folder_is_made_on_open() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = directory.path().join("com.brawltome.overlay");
+
+        let store = SettingsStore::open(&folder);
+        let saved = store.update(|settings| settings.starts_with_windows = false);
+
+        assert!(saved.is_ok(), "{saved:?}");
+        assert!(store.was_created_now());
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_made_still_opens_with_the_defaults() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("a-file");
+        std::fs::write(&file, "").unwrap();
+
+        let store = SettingsStore::open(&file.join("config"));
+        let message = store
+            .update(|settings| settings.starts_with_windows = false)
+            .unwrap_err();
+
+        assert_defaults(&store.get());
+        assert!(message.contains("save settings to"), "{message}");
     }
 
     #[test]
