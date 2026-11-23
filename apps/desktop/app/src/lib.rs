@@ -64,6 +64,10 @@ fn build_log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 pub fn run() {
     tauri::Builder::default()
+        // first, so a second start hands over and exits before any other plugin starts
+        .plugin(tauri_plugin_single_instance::init(
+            |app, _arguments, _directory| main_window::open(app),
+        ))
         .plugin(build_log_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())

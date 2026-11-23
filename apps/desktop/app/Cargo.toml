@@ -18,6 +18,7 @@ brawltome-contracts = { path = "../../../packages/contracts/rust" }
 reqwest = "=0.13.2"
 tauri = { version = "=2.12.7", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "=2.7.3"
+tauri-plugin-single-instance = "=2.5.5"
 tauri-plugin-updater = "=2.14.1"
 serde.workspace = true
 serde_json.workspace = true
