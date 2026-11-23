@@ -113,12 +113,18 @@ function cleanSegments(fullName: string): string[] {
   return joinBareNumbers(segments)
 }
 
+const splitWords = (text: string) => text.split(/\s+/).filter(Boolean)
+
 // whole words only, never an ellipsis; an edition number always stays
 function fitTitle(title: string): string {
   if (title.length <= maximumTitleLength) return title
 
   const number = title.match(/#\d+/)?.[0]
-  const words = title.replace(/#\d+/, ' ').replace(fillerWords, ' ').split(/\s+/).filter(Boolean)
+  const withoutNumber = title.replace(/#\d+/, ' ')
+  const meaningfulWords = splitWords(withoutNumber.replace(fillerWords, ' '))
+
+  // a name made only of filler words keeps them, an empty title is worse than a generic one
+  const words = meaningfulWords.length > 0 ? meaningfulWords : splitWords(withoutNumber)
   const budget = maximumTitleLength - (number ? number.length + 1 : 0)
   const kept: string[] = []
 

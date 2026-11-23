@@ -35,6 +35,19 @@ describe('eventName', () => {
     expect(name.region).toBe('NA')
   })
 
+  test('never gives a name made only of filler words an empty title', () => {
+    const name = eventName('Championship Series Invitational Online', false, march2026)
+
+    expect(name.title).toBe('Championship Series')
+  })
+
+  test('keeps a single word over the limit whole, without an ellipsis', () => {
+    const name = eventName('Supercalifragilisticexpialidocious Cup', false, march2026)
+
+    expect(name.title).toBe('Supercalifragilisticexpialidocious')
+    expect(name.title.endsWith('…')).toBe(false)
+  })
+
   test('does not read a region out of the middle of a word', () => {
     expect(eventName('SEA-food Saturdays', false, march2026).region).toBeNull()
   })

@@ -162,7 +162,13 @@ function withoutPoolRepeats(results: UnlabelledResult[]): UnlabelledResult[] {
 function withLabels(results: UnlabelledResult[]): EsportsResult[] {
   const labels = resultLabels(results)
 
-  return results.map((result) => ({ ...result, ...(labels.get(result.id) as { title: string; meta: string }) }))
+  return results.map((result) => {
+    const label = labels.get(result.id)
+
+    if (!label) throw new Error(`label esports result ${result.id}: no label was made for it`)
+
+    return { ...result, ...label }
+  })
 }
 
 // null when the player has no placement to show: a power ranking or earnings alone make no section
