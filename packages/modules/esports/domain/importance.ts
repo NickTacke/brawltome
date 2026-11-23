@@ -19,8 +19,8 @@ const worldChampionshipWeight = 3
 const seasonalChampionshipWeight = 2
 // trials, partner events like ceo or dreamhack, and qualifiers have a strong field but less at stake
 const otherOfficialWeight = 1.5
-// community events are open brackets that top players often skip
-const communityWeight = 1
+// below 1 because a big community event can't be told from a small one, and a champs top 4 is always a strong result
+const communityWeight = 0.8
 // an in-person bracket means travel and a stage, which only the players who mean it make it to
 const inPersonWeight = 1.25
 
@@ -41,7 +41,7 @@ export function eventWeight(fullName: string, isOfficial: boolean): number {
 
 /**
  * How much a finish counts for the esports cards: placement points times the event's weight, a quarter more in
- * person. A BCX 7th (96) beats a Galaxy Cup 3rd (60), and a seasonal Champs 3rd (120) beats both.
+ * person. A BCX 7th (96) beats a Galaxy Cup 3rd (48), and a seasonal Champs 3rd (120) beats both.
  */
 export function importance(finish: ScoredFinish): number {
   const points = placementPoints.get(finish.placement) ?? 0

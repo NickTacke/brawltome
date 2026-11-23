@@ -138,19 +138,19 @@ describe('highlights', () => {
 
   test('the same score goes to the better placement, then the newer', () => {
     const tournamentIds = pickedIds([
-      // a trial 4th online scores 75, the same as a community 2nd
+      // a trial 5th online scores 60, the same as a community 2nd
       placement({
-        tournamentId: 'trial-fourth',
+        tournamentId: 'trial-fifth',
         tournamentName: 'Trial of Frigg - Europe (Brawl League)',
         isOfficial: true,
-        placement: 4,
+        placement: 5,
         startTime: daysBefore(5),
       }),
       placement({ tournamentId: 'cup-second-old', tournamentName: 'Old Cup', placement: 2, startTime: daysBefore(90) }),
       placement({ tournamentId: 'cup-second-new', tournamentName: 'New Cup', placement: 2, startTime: daysBefore(30) }),
     ])
 
-    expect(tournamentIds).toEqual(['cup-second-new', 'cup-second-old', 'trial-fourth'])
+    expect(tournamentIds).toEqual(['cup-second-new', 'cup-second-old', 'trial-fifth'])
   })
 
   test('older top 8s fill by date however much they scored', () => {

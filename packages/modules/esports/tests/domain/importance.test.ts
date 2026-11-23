@@ -41,12 +41,12 @@ describe('event weight', () => {
     'FROSTBYTE #23 | EU 2v2',
     'ASCENDED - 1v1 ($2000)',
     "MW: Champion's Path 2v2s",
-  ])('community %s weighs 1', (fullName) => {
-    expect(eventWeight(fullName, false)).toBe(1)
+  ])('community %s weighs 0.8', (fullName) => {
+    expect(eventWeight(fullName, false)).toBe(0.8)
   })
 
   test('an official name brawltools does not mark official counts as community', () => {
-    expect(eventWeight('Spring Championship - Europe 2026 - 1v1', false)).toBe(1)
+    expect(eventWeight('Spring Championship - Europe 2026 - 1v1', false)).toBe(0.8)
   })
 
   // a qualifier only leads to the event it names, so a future world championship qualifier stays other official
@@ -61,6 +61,7 @@ describe('event weight', () => {
 })
 
 describe('importance', () => {
+  // a seasonal champs weighs 2, so its score is twice the placement points
   test.each([
     [1, 100],
     [2, 75],
@@ -72,7 +73,18 @@ describe('importance', () => {
     [8, 32],
     [9, 0],
     [33, 0],
-  ])('a community placement %d online scores %d', (placement, score) => {
+  ])('placement %p is worth %p points', (placement, points) => {
+    expect(importance(online(placement, 'Spring Championship - Europe 2026 - 1v1', true))).toBe(points * 2)
+  })
+
+  test.each([
+    [1, 80],
+    [2, 60],
+    [3, 48],
+    [4, 40],
+    [7, 25.6],
+    [9, 0],
+  ])('a community placement %p online scores %p', (placement, score) => {
     expect(importance(online(placement, 'Galaxy Cup: Titan - EU 1v1', false))).toBe(score)
   })
 
@@ -81,7 +93,23 @@ describe('importance', () => {
     const galaxyThird = importance(online(3, 'Galaxy Cup: Titan - EU 1v1', false))
 
     expect(bcxSeventh).toBe(96)
-    expect(galaxyThird).toBe(60)
+    expect(galaxyThird).toBe(48)
+  })
+
+  test('a community 1st loses to a Champs 4th', () => {
+    const communityFirst = importance(online(1, 'Galaxy Cup: Titan - EU 1v1', false))
+    const champsFourth = importance(online(4, 'Autumn Championship - Europe 2026 - 1v1', true))
+
+    expect(communityFirst).toBe(80)
+    expect(champsFourth).toBe(100)
+  })
+
+  test('a community 1st beats a Champs 7th', () => {
+    const communityFirst = importance(online(1, 'FROSTBYTE #26 | EU 2v2', false))
+    const champsSeventh = importance(online(7, 'Autumn Championship - Europe 2026 - 2v2', true))
+
+    expect(communityFirst).toBe(80)
+    expect(champsSeventh).toBe(64)
   })
 
   test('a Champs 3rd beats a BCX 7th', () => {
@@ -97,7 +125,7 @@ describe('importance', () => {
     const communityInPerson = { ...online(2, 'Local Smash Night', false), isOnline: false }
 
     expect(importance(inPerson)).toBe(120)
-    expect(importance(communityInPerson)).toBe(93.75)
+    expect(importance(communityInPerson)).toBe(75)
   })
 
   test('an official event no name rule knows scores as other official', () => {
