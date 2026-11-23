@@ -14,6 +14,9 @@
   --color-primary-ink: hsl(224 30% 12%);
   /* stays the same on every theme, a red or orange accent must never make a good win rate look bad */
   --color-win: hsl(212 92% 65%);
+  /* the two halves of a win/loss record, and the words that name them */
+  --color-record-win: var(--color-emerald-400);
+  --color-record-loss: var(--color-red-400);
 
   --color-gold: var(--color-yellow-500);
   --color-silver: var(--color-slate-300);

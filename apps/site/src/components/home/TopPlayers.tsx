@@ -36,7 +36,7 @@ export function TopPlayers({ entries, filters, isLoading, avatarCount }: TopPlay
       search={(previous) => ({ mode: previous.mode, region: previous.region })}
       className={viewAllStyle}
     >
-      View all →
+      View all
     </Link>
   )
 

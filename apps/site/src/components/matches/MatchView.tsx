@@ -34,7 +34,7 @@ export function MatchView({ match }: { match: MatchDetailContract }) {
               download={match.replay.fileName}
               className="inline-flex h-10 items-center rounded-control bg-raised px-4 text-sm font-semibold text-strong transition-colors hover:bg-line/40"
             >
-              Save replay
+              Download replay
             </a>
             <p className="mt-1 text-xs text-soft">Plays on patch {match.replay.patch}</p>
           </div>

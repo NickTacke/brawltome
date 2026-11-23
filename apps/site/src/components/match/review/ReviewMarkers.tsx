@@ -7,7 +7,7 @@ import type { Pose } from '../stage/pose'
 const ring = 'pointer-events-none absolute size-16 max-sm:size-9 -translate-x-1/2 -translate-y-[72%] rounded-full'
 
 const hitNumber =
-  'pointer-events-none absolute flex size-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ink/85 font-mono text-[0.625rem] font-bold text-strong ring-1'
+  'pointer-events-none absolute flex size-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ink/85 font-mono text-[0.6875rem] font-bold text-strong ring-1'
 
 type ReviewMarkersProps = {
   moment: Moment

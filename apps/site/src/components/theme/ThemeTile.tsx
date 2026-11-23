@@ -69,7 +69,9 @@ export function ThemeTile({ label, isSelected, onSelect, onPreview, onPreviewEnd
       onMouseLeave={onPreviewEnd}
       className="group relative block min-w-0 cursor-pointer pb-1.5 text-left"
     >
-      <span className="block transition-transform duration-150 group-hover:scale-[1.03]">{children}</span>
+      <span className="block transition-transform duration-150 group-hover:scale-[1.03] motion-reduce:group-hover:scale-100">
+        {children}
+      </span>
       <span className={`mt-1 block truncate text-xs font-bold transition-colors ${labelStyle}`}>{label}</span>
       <span
         className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary transition-opacity duration-150 ${markerStyle}`}

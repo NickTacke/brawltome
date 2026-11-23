@@ -1,10 +1,11 @@
 import type { LeaderboardEntry } from '@brawltome/contracts'
 import { Link } from '@tanstack/react-router'
 import { fixEncoding, formatWhole } from '../../lib'
-import { legendAvatarUrl } from '../guild/legend-avatar-url'
+import { knownLegendKeys, legendAvatarUrl } from '../guild/legend-avatar-url'
 import { tierName, winPercent, winRateColour } from '../player/player-format'
 import { stripedTallRowStyle } from '../table-styles'
 import { entryPlayers } from './entry-players'
+import { legendDisplayName } from './legend-display-name'
 import { nameLinkStyle, Place, statCellStyle } from './RankedTable'
 
 function WinRate({ entry }: { entry: LeaderboardEntry }) {
@@ -17,6 +18,13 @@ function WinRate({ entry }: { entry: LeaderboardEntry }) {
   return <td className={`${cellStyle} ${winRateColour(percent)}`}>{percent.toFixed(1)}%</td>
 }
 
+// the placeholder stands in for a legend the site doesn't know yet, so it isn't named as one
+function avatarAlt(legendKey: string | null): string {
+  if (legendKey === null || !knownLegendKeys.has(legendKey)) return ''
+
+  return legendDisplayName(legendKey)
+}
+
 function Avatars({ entry }: { entry: LeaderboardEntry }) {
   return (
     <div className="flex shrink-0 gap-1">
@@ -24,7 +32,7 @@ function Avatars({ entry }: { entry: LeaderboardEntry }) {
         <div key={player.brawlhallaId} className="size-9 overflow-hidden rounded-md bg-raised">
           <img
             src={legendAvatarUrl(player.bestLegendNameKey ?? null)}
-            alt=""
+            alt={avatarAlt(player.bestLegendNameKey ?? null)}
             className="size-full object-cover object-top"
           />
         </div>
