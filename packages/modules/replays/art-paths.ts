@@ -2,17 +2,25 @@ import { createHash } from 'node:crypto'
 import { MAX_ART_FILE_BYTES } from './limits'
 
 // the files the replay worker may put in the public art bucket, as the brawlhalla-anims export names them. art groups
-// and map files are named by a fingerprint of their inputs, so only their shape can be checked; sheets and packs are
-// named by their content, so their bytes must hash to their name
+// (pre-drawn sets among them) and map files are named by a fingerprint of their inputs, so only their shape can be
+// checked; sheets, packs and a patch's set index are named by their content, so their bytes must hash to their name
 
-export type ArtFileKind = 'art' | 'sheet' | 'anim' | 'map'
+export type ArtFileKind = 'art' | 'sheet' | 'anim' | 'map' | 'set-index'
 
 const artPathRules: { pattern: RegExp; kind: ArtFileKind; contentType: string }[] = [
   { pattern: /^art\/[0-9a-f]{32}\.json$/, kind: 'art', contentType: 'application/json' },
   { pattern: /^maps\/[0-9a-f]{32}\.json$/, kind: 'map', contentType: 'application/json' },
   { pattern: /^sheets\/[0-9a-f]{16}\.webp$/, kind: 'sheet', contentType: 'image/webp' },
   { pattern: /^anims\/[0-9a-f]{16}\.bin$/, kind: 'anim', contentType: 'application/octet-stream' },
+  { pattern: /^sets\/[0-9a-f]{32}\.json$/, kind: 'set-index', contentType: 'application/json' },
 ]
+
+// a sheet or pack is named by the first 16 hex characters of its sha1, a set index by the first 32 of its sha256
+const contentNames: Partial<Record<ArtFileKind, { algorithm: string; length: number }>> = {
+  sheet: { algorithm: 'sha1', length: 16 },
+  anim: { algorithm: 'sha1', length: 16 },
+  'set-index': { algorithm: 'sha256', length: 32 },
+}
 
 /** The kind of art file a path names, or null for anything outside the art layout. */
 export function parseArtPath(path: string): { kind: ArtFileKind; contentType: string } | null {
@@ -35,7 +43,9 @@ export function verifyArtFile(path: string, bytes: Uint8Array): string | null {
 
   if (parsed.kind === 'sheet' && !isWebp(bytes)) return `${path} is not a webp image`
 
-  return contentNameProblem(path, bytes)
+  if (parsed.kind === 'set-index') return jsonObjectProblem(path, bytes) ?? contentNameProblem(path, parsed.kind, bytes)
+
+  return contentNameProblem(path, parsed.kind, bytes)
 }
 
 function jsonObjectProblem(path: string, bytes: Uint8Array): string | null {
@@ -59,12 +69,15 @@ function isWebp(bytes: Uint8Array): boolean {
   return header.startsWith('RIFF') && header.endsWith('WEBP')
 }
 
-// the export names a sheet or pack by the first 16 hex characters of its sha1
-function contentNameProblem(path: string, bytes: Uint8Array): string | null {
-  const name = path.slice(path.indexOf('/') + 1, path.lastIndexOf('.'))
-  const hash = createHash('sha1').update(bytes).digest('hex').slice(0, 16)
+function contentNameProblem(path: string, kind: ArtFileKind, bytes: Uint8Array): string | null {
+  const naming = contentNames[kind]
 
-  if (hash !== name) return `${path} holds bytes whose sha1 starts ${hash}`
+  if (!naming) return null
+
+  const name = path.slice(path.indexOf('/') + 1, path.lastIndexOf('.'))
+  const hash = createHash(naming.algorithm).update(bytes).digest('hex').slice(0, naming.length)
+
+  if (hash !== name) return `${path} holds bytes whose ${naming.algorithm} starts ${hash}`
 
   return null
 }

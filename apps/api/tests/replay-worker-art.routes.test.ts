@@ -123,6 +123,21 @@ describe('replay worker art routes', () => {
     expect(art.store).toHaveBeenCalledWith(jobId, leaseToken, groupPath, bytes)
   })
 
+  test("a patch's set index reaches the art jobs", async () => {
+    const { app, art } = routes()
+    const indexPath = `sets/${'a'.repeat(32)}.json`
+    const bytes = new TextEncoder().encode('{"format":4}')
+
+    const response = await app.request(`/art/${jobId}/files/${indexPath}`, {
+      method: 'PUT',
+      headers: leased,
+      body: bytes,
+    })
+
+    expect(response.status).toBe(204)
+    expect(art.store).toHaveBeenCalledWith(jobId, leaseToken, indexPath, bytes)
+  })
+
   test('a file under a path outside the art layout is refused before it is read', async () => {
     const { app, art } = routes()
 
