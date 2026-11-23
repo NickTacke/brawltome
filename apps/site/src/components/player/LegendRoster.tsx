@@ -67,7 +67,7 @@ function LegendTile({ legend, ranked, value, isSelected }: LegendTileProps) {
 
   return (
     <span
-      className={`block overflow-hidden rounded-lg p-[0.125rem] pb-0 transition-transform duration-150 group-hover:scale-105 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+      className={`block overflow-hidden rounded-lg p-[0.125rem] pb-0 transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100 ${isSelected ? 'ring-2 ring-primary' : ''}`}
       style={{ backgroundColor: frameColour }}
     >
       <img
