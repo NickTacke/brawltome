@@ -2,7 +2,7 @@ import { statLabel } from '../../player/player-styles'
 import { LeadGraph, type LeadGraphProps } from './LeadGraph'
 import { formatLead, leadAt, leadRule, standingOf } from './lead-samples'
 
-const sideName = 'text-[0.625rem] leading-none font-bold tracking-wide text-soft uppercase'
+const sideName = 'text-[0.6875rem] leading-none font-bold tracking-wide text-soft uppercase'
 
 // the lead at the playhead, as a figure with its name over it and what it means under it
 function LeadNow({ lead, finalLead }: { lead: number; finalLead: number }) {
