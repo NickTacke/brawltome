@@ -30,7 +30,7 @@ function pickedIds(placements: ReturnType<typeof placement>[]): string[] {
 }
 
 describe('highlights', () => {
-  test('takes the four best top-8 finishes, the newer first on a tie', () => {
+  test('among community finishes takes the four best top-8 placements, the newer first on a tie', () => {
     const profile = profileOf([
       placement({ tournamentId: 'second-old', tournamentName: 'Old Cup', placement: 2, startTime: onDay(1) }),
       placement({ tournamentId: 'second-new', tournamentName: 'New Cup', placement: 2, startTime: onDay(9) }),
@@ -107,6 +107,69 @@ describe('highlights', () => {
     ])
 
     expect(tournamentIds).toEqual(['fourth', 'sixth', 'second', 'seventh'])
+  })
+
+  test('a BCX 7th leads a Galaxy Cup 3rd, and a Champs 3rd leads both', () => {
+    const tournamentIds = pickedIds([
+      placement({
+        tournamentId: 'galaxy-third',
+        tournamentName: 'Galaxy Cup: Titan - EU 1v1',
+        placement: 3,
+        startTime: daysBefore(10),
+      }),
+      placement({
+        tournamentId: 'bcx-seventh',
+        tournamentName: 'Brawlhalla World Championship Expo 2025 - 1v1',
+        isOfficial: true,
+        placement: 7,
+        startTime: daysBefore(200),
+      }),
+      placement({
+        tournamentId: 'champs-third',
+        tournamentName: 'Spring Championship - Europe 2026 - 1v1',
+        isOfficial: true,
+        placement: 3,
+        startTime: daysBefore(240),
+      }),
+    ])
+
+    expect(tournamentIds).toEqual(['champs-third', 'bcx-seventh', 'galaxy-third'])
+  })
+
+  test('the same score goes to the better placement, then the newer', () => {
+    const tournamentIds = pickedIds([
+      // a trial 4th online scores 75, the same as a community 2nd
+      placement({
+        tournamentId: 'trial-fourth',
+        tournamentName: 'Trial of Frigg - Europe (Brawl League)',
+        isOfficial: true,
+        placement: 4,
+        startTime: daysBefore(5),
+      }),
+      placement({ tournamentId: 'cup-second-old', tournamentName: 'Old Cup', placement: 2, startTime: daysBefore(90) }),
+      placement({ tournamentId: 'cup-second-new', tournamentName: 'New Cup', placement: 2, startTime: daysBefore(30) }),
+    ])
+
+    expect(tournamentIds).toEqual(['cup-second-new', 'cup-second-old', 'trial-fourth'])
+  })
+
+  test('older top 8s fill by date however much they scored', () => {
+    const tournamentIds = pickedIds([
+      placement({ tournamentId: 'recent-eighth', tournamentName: 'Late Cup', placement: 8, startTime: daysBefore(20) }),
+      placement({
+        tournamentId: 'old-bcx-first',
+        tournamentName: 'Brawlhalla World Championship Expo 2024',
+        isOfficial: true,
+        isOnline: false,
+        placement: 1,
+        startTime: daysBefore(400),
+      }),
+      placement({ tournamentId: 'newer-cup', tournamentName: 'Newer Cup', placement: 8, startTime: daysBefore(380) }),
+      placement({ tournamentId: 'older-cup', tournamentName: 'Older Cup', placement: 2, startTime: daysBefore(420) }),
+      placement({ tournamentId: 'oldest-cup', tournamentName: 'Oldest Cup', placement: 1, startTime: daysBefore(800) }),
+    ])
+
+    expect(tournamentIds).toEqual(['recent-eighth', 'newer-cup', 'old-bcx-first', 'older-cup'])
   })
 
   test('a finish exactly 365 days ago still counts as recent', () => {
