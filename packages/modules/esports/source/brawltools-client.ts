@@ -47,7 +47,7 @@ export type BrawltoolsClientOptions = {
   // spends one call of the brawltools source budget, or throws when there is none left
   admit: () => Promise<void>
   baseUrl?: string
-  fetch?: typeof fetch
+  fetch?: (input: string, init: RequestInit) => Promise<Response>
   timeoutMs?: number
 }
 

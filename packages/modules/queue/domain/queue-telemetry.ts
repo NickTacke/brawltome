@@ -36,6 +36,8 @@ const allOperationKinds: OperationKind[] = [
   ...statisticsCollectionKinds,
   'statistics-publication',
   'statistics-legend-meta-publication',
+  'esports-refresh',
+  'esports-sets-backfill',
 ]
 
 const scheduledKinds: OperationKind[] = [

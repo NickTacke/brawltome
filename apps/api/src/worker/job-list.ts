@@ -19,6 +19,8 @@ import {
   type PlayerProjectionSource,
   type PostgresDiscovery,
 } from '@brawltome/discovery'
+import { createBrawltoolsClient, createEsportsRefreshJob, createEsportsSetsBackfillJob } from '@brawltome/esports'
+import type { Database } from '@brawltome/foundation'
 import {
   type CareerLegendResolver,
   createInteractivePlayerRefreshJob,
@@ -55,7 +57,7 @@ import {
   type StatisticsLegendMetaPublicationJobDependencies,
   type StatisticsPublicationJobDependencies,
 } from '@brawltome/statistics'
-import type { Telemetry } from '@brawltome/telemetry'
+import { type Telemetry, telemetryFetch } from '@brawltome/telemetry'
 
 export type WorkerDiscoveryDependencies = {
   // projection and reconciliation work, on the discovery client
@@ -110,6 +112,10 @@ export type WorkerStatisticsDependencies = Omit<StatisticsCollectionJobDependenc
 
 export type WorkerLeaderboardDependencies = LeaderboardCollectionJobDependencies & LeaderboardDeepCrawlJobDependencies
 
+export type WorkerEsportsDependencies = {
+  database: Database
+}
+
 export type WorkerJobDependencies = {
   ranking: RankingRetentionStore
   leaderboards: WorkerLeaderboardDependencies
@@ -120,6 +126,7 @@ export type WorkerJobDependencies = {
   accounts: WorkerAccountsDependencies
   player: WorkerPlayerDependencies
   statistics: WorkerStatisticsDependencies
+  esports: WorkerEsportsDependencies
 }
 
 function createDiscoveryJobs(discovery: WorkerDiscoveryDependencies): JobDefinition<unknown>[] {
@@ -222,6 +229,20 @@ export function createStatisticsJobs(statistics: WorkerStatisticsDependencies): 
   ]
 }
 
+function createEsportsJobs(esports: WorkerEsportsDependencies, telemetry: Telemetry): JobDefinition<unknown>[] {
+  const { database } = esports
+
+  // through telemetry, so source_calls_total counts every brawltools call
+  const countedFetch = (input: string, init: RequestInit) => telemetryFetch(telemetry, 'brawltools', fetch, input, init)
+  const createClient = (admit: () => Promise<void>) => createBrawltoolsClient({ admit, fetch: countedFetch })
+
+  // nothing writes a backfill yet: a new kind ships one release before anything enqueues it
+  const refresh = createEsportsRefreshJob({ database, createClient, enqueueBackfill: async () => {} })
+  const backfill = createEsportsSetsBackfillJob({ database, createClient })
+
+  return [refresh, backfill]
+}
+
 // a proof row with a primary-player key is a verification written before the kind existed, or a replay of one
 function createProofJob(
   primaryPlayerVerification: JobDefinition<ProofEffectPayload>,
@@ -254,6 +275,7 @@ export function createWorkerJobs(dependencies: WorkerJobDependencies): JobDefini
     ...createClanJobs(dependencies.clan),
     ...createPlayerJobs(dependencies.player, dependencies.accounts.primaryMonitoring),
     ...createStatisticsJobs(dependencies.statistics),
+    ...createEsportsJobs(dependencies.esports, dependencies.telemetry),
     primaryPlayerVerification,
     createProofJob(primaryPlayerVerification),
   ]

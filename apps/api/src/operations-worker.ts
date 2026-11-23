@@ -254,6 +254,7 @@ const workerJobs = createWorkerJobs({
     sourceAdmission: { admitSource: (input) => requestAdmission.admitSource(input) },
     ...createStatisticsCollection((queue) => createWorkerBhApiClient(undefined, queue)),
   },
+  esports: { database: databases.main },
 })
 
 const jobRegistry = createJobRegistry(workerJobs)

@@ -427,6 +427,8 @@ export type OperationLease =
       payload: StatisticsLegendMetaPublicationPayload
     })
   | (LeaseFields & { kind: LeaderboardOperationKind; workClass: 'leaderboard'; payload: LeaderboardOperationPayload })
+  | (LeaseFields & { kind: 'esports-refresh'; workClass: 'maintenance'; payload: { brawlhallaId: number } })
+  | (LeaseFields & { kind: 'esports-sets-backfill'; workClass: 'maintenance'; payload: { brawlhallaId: number } })
 
 export type OperationFailure = {
   code: string

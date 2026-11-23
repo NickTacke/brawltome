@@ -20,6 +20,7 @@ import {
 import {
   createTestDeadLetters,
   createTestQueue,
+  idleEsportsDependencies,
   idleLeaderboardDependencies,
   idlePlayerDependencies,
   idleStatisticsDependencies,
@@ -73,6 +74,7 @@ function createVerificationJobs(verify: Verify) {
     accounts,
     player: idlePlayerDependencies,
     statistics: idleStatisticsDependencies,
+    esports: idleEsportsDependencies,
   })
 
   return (kind: string): JobDefinition<unknown> => {

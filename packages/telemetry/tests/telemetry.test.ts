@@ -594,6 +594,8 @@ describe('telemetry foundation', () => {
       ['statistics-lifetime-collection', 'global-statistics'],
       ['statistics-publication', 'global-statistics'],
       ['statistics-legend-meta-publication', 'global-statistics'],
+      ['esports-refresh', 'maintenance'],
+      ['esports-sets-backfill', 'maintenance'],
     ] as const
 
     for (const [kind, workClass] of durableKinds) {
@@ -648,6 +650,8 @@ describe('telemetry foundation', () => {
       'statistics-lifetime-collection',
       'statistics-publication',
       'statistics-legend-meta-publication',
+      'esports-refresh',
+      'esports-sets-backfill',
     ]
 
     const workClasses = [
