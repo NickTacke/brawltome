@@ -78,7 +78,6 @@ export {
   type PostgresRefreshOperations,
   type RefreshOperationsDatabases,
 } from './db/postgres-queue'
-export { type PromotePendingWorkClassInput, promotePendingWorkClass } from './db/promote-work-class'
 export {
   type AttemptHistory,
   type ReadAttemptHistoryInput,
@@ -99,7 +98,6 @@ export {
 } from './db/reconcile-resource-schedules'
 export {
   type ReserveForAdmissionInput,
-  type ReserveForAdmissionOptions,
   type ReserveForBindingInput,
   reserveForAdmission,
   reserveForBinding,
