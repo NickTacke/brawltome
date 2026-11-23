@@ -1,11 +1,21 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createArtClient } from '../src/art-client'
 import { createExporter, type Exporter } from '../src/art-export'
 import { ArtRunner, type ArtRunnerDeps } from '../src/art-runner'
-import { fakeGroups, fakeMap, fakeMapId, fakePack, fakeSheet, warmGroup, warmMaps } from './fake-export'
+import {
+  fakeGroups,
+  fakeMap,
+  fakeMapId,
+  fakePack,
+  fakeSheet,
+  longWarmSkip,
+  warmGroup,
+  warmMaps,
+  warningBeforeFailure,
+} from './fake-export'
 
 const token = 'replay-worker-token-for-tests-32-bytes-long'
 const jobId = '1b2f7508-8e9c-4b1a-950f-d60fabe27176'
@@ -44,6 +54,8 @@ describe('the art runner', () => {
   let failedUploads: Map<string, { kind: 'stall' | 'error'; count: number }>
   // how long the api takes to answer a result
   let resultDelayMs: number
+  // what the runner logged as a warning
+  let warned: ReturnType<typeof spyOn<Console, 'warn'>>
 
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
@@ -52,6 +64,10 @@ describe('the art runner', () => {
     mkdirSync(join(root, 'games', '11.01'), { recursive: true })
     // and its warm --list names a path outside the store for this one
     mkdirSync(join(root, 'games', '11.02'), { recursive: true })
+    // and its warm leaves a level out for this one
+    mkdirSync(join(root, 'games', '11.03'), { recursive: true })
+    // and with a very long reason for this one
+    mkdirSync(join(root, 'games', '11.04'), { recursive: true })
     mkdirSync(join(root, 'work'))
 
     server = Bun.serve({ port: 0, fetch: (request) => answer(request) })
@@ -72,7 +88,16 @@ describe('the art runner', () => {
     resultDelayMs = 0
     bucket = new Map()
     received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
+    warned = spyOn(console, 'warn').mockImplementation(() => undefined)
   })
+
+  afterEach(() => {
+    warned.mockRestore()
+  })
+
+  function warnings(): string[] {
+    return warned.mock.calls.map((call) => String(call[0]))
+  }
 
   // the api's art routes, as far as the worker sees them
   async function answer(request: Request): Promise<Response> {
@@ -394,7 +419,13 @@ describe('the art runner', () => {
     await runner().runOnce()
 
     expect(received.calls).toEqual(['claim', 'plan', 'failure'])
-    expect(received.failures).toEqual([{ code: 'no-animations', message: 'no animations in the line' }])
+
+    // the fake warns before it exits, and a step that fails logs no warning: its stderr is the failure's message
+    expect(received.failures).toEqual([
+      { code: 'no-animations', message: `${warningBeforeFailure}\nno animations in the line` },
+    ])
+
+    expect(warnings()).toEqual([])
   })
 
   test('a failed render reports export-failed, and the pool is unlimited after it', async () => {
@@ -404,6 +435,7 @@ describe('the art runner', () => {
 
     expect(received.calls.slice(-4)).toEqual(['limit 1', 'render', 'unlimit', 'failure'])
     expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('boom') }])
+    expect(warnings()).toEqual([])
   })
 
   test('a render past its timeout reports export-failed, and the pool is unlimited after it', async () => {
@@ -510,6 +542,58 @@ describe('the art runner', () => {
         artFormat: 3,
       },
     ])
+  })
+
+  test('a warm that leaves a level out still completes, and each step warns of the level and the job', async () => {
+    const [warmedMap] = warmMaps as [string, string]
+
+    nextJob = { kind: 'warm', patch: '11.03' }
+
+    await runner().runOnce()
+
+    expect(received.failures).toEqual([])
+
+    expect(received.results).toEqual([
+      { manifest: null, maps: [{ patch: '11.03', mapId: 6, path: warmedMap }], artFormat: 3 },
+    ])
+
+    const skipped = 'warm: Brawlhaven (map 7) is left out: read level layout: Bare.png has no W or H'
+
+    expect(warnings()).toEqual([
+      `export warm --list for job ${jobId}: ${skipped}`,
+      `export warm for job ${jobId}: ${skipped}`,
+    ])
+  })
+
+  test('a warning is cut at 500 characters', async () => {
+    const listed = `export warm --list for job ${jobId}: `
+    const warned = longWarmSkip.slice('warning: '.length)
+
+    nextJob = { kind: 'warm', patch: '11.04' }
+
+    await runner().runOnce()
+
+    expect(warned.length).toBeGreaterThan(500)
+    expect(warnings()[0]).toBe(`${listed}${warned.slice(0, 500)}`)
+    expect(warnings()[0]).toHaveLength(listed.length + 500)
+  })
+
+  test('the progress a warm writes to stderr is not a warning', async () => {
+    nextJob = { kind: 'warm' }
+
+    await runner().runOnce()
+
+    expect(received.results).toHaveLength(1)
+    expect(warnings()).toEqual([])
+  })
+
+  test('steps that write nothing to stderr warn of nothing', async () => {
+    nextJob = { kind: 'match', fake: 'ok' }
+
+    await runner().runOnce()
+
+    expect(received.results).toHaveLength(1)
+    expect(warnings()).toEqual([])
   })
 
   test('a warm runs under its own timeout, not the one for a match', async () => {
