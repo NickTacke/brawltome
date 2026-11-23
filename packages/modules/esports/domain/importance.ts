@@ -1,4 +1,4 @@
-import { officialSeries } from './event-names'
+import { type OfficialSeries, officialSeries } from './event-names'
 
 // how deep the run went; the steps shrink further down because one set separates 5th from 7th but a whole bracket
 // separates 1st from 5th. below top 8 a finish never leads the cards, so it scores nothing
@@ -28,7 +28,7 @@ const seriesWeights = {
   'world-championship': worldChampionshipWeight,
   'seasonal-championship': seasonalChampionshipWeight,
   other: otherOfficialWeight,
-} as const
+} satisfies Record<OfficialSeries, number>
 
 export type ScoredFinish = { placement: number; fullName: string; isOfficial: boolean; isOnline: boolean }
 
