@@ -40,6 +40,8 @@ const ranked = {
 const valhallanEvidence = { oneVsOne: true, fixedTwoVsTwoTeams: [], soloTwoVsTwo: false }
 const boardRanksPath = '/players/7/board-ranks?region=EU'
 const boardRanks = { globalRank: 184, regionRank: 61 }
+const esportsPath = '/players/7/esports'
+const esportsProfile = { earnings: 1200, rankings: [], results: [] }
 
 type Answers = Record<string, { status: number; body: unknown }>
 
@@ -52,6 +54,7 @@ function healthyAnswers(): Answers {
     '/players/7/valhallan-evidence': { status: 200, body: null },
     [boardRanksPath]: { status: 200, body: { globalRank: null, regionRank: null } },
     '/seasons': { status: 200, body: seasons },
+    [esportsPath]: { status: 200, body: { profile: null, freshness: 'fresh' } },
   }
 }
 
@@ -70,6 +73,25 @@ function stubApi(answers: Answers): string[] {
   globalThis.fetch = mock(stub) as unknown as typeof fetch
 
   return paths
+}
+
+// answers every path but one, which only gives up when the caller stops waiting
+function stubApiSilentAt(silentPath: string) {
+  const answers = healthyAnswers()
+
+  const stub = (input: string | URL | Request, init?: RequestInit) => {
+    const path = String(input).replace(`${apiUrl}/v1`, '')
+    const answer = answers[path] ?? { status: 404, body: {} }
+
+    if (path !== silentPath)
+      return Promise.resolve(new Response(JSON.stringify(answer.body), { status: answer.status }))
+
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+    })
+  }
+
+  globalThis.fetch = mock(stub) as unknown as typeof fetch
 }
 
 function failing(path: string): Answers {
@@ -193,4 +215,34 @@ describe('loadPlayer', () => {
 
     expect((await loadPlayer(7))?.player.currentSeason?.snapshot?.oneVsOne.tier).toBe('Valhallan')
   })
+
+  test("returns the player's esports profile", async () => {
+    stubApi({
+      ...healthyAnswers(),
+      [esportsPath]: { status: 200, body: { profile: esportsProfile, freshness: 'fresh' } },
+    })
+
+    expect((await loadPlayer(7))?.player.esports).toEqual(esportsProfile)
+  })
+
+  test('a failed esports read loads the page without esports', async () => {
+    stubApi(failing(esportsPath))
+
+    const page = await loadPlayer(7)
+
+    expect(page?.player.name).toBe('Seven')
+    expect(page?.player.esports).toBeNull()
+  })
+
+  test('an esports read that gets no answer gives up after 3 s and loads the page', async () => {
+    stubApiSilentAt(esportsPath)
+
+    const startedAt = performance.now()
+    const page = await loadPlayer(7)
+    const waitedMs = performance.now() - startedAt
+
+    expect(page?.player.name).toBe('Seven')
+    expect(page?.player.esports).toBeNull()
+    expect(waitedMs).toBeLessThan(4_000)
+  }, 6_000)
 })

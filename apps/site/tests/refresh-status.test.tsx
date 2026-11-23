@@ -19,6 +19,7 @@ const page: PlayerPageData = {
     bestLegendNameKey: null,
     currentSeason: null,
     career: null,
+    esports: null,
   },
   seasonStarts: [],
   loadedAt,

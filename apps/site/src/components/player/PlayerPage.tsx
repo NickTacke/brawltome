@@ -1,6 +1,7 @@
 import type { PlayerPage as PlayerPageData } from '../../server/load-player'
 import type { RefreshStatusProps } from '../refresh/RefreshStatus'
 import { Career } from './Career'
+import { EsportsSection } from './esports/EsportsSection'
 import { Identity } from './Identity'
 import { LegendRoster } from './LegendRoster'
 import { Ranked } from './Ranked'
@@ -52,6 +53,7 @@ export function PlayerPage({ player, seasonStarts, loadedAt, isUnarmedExcluded, 
       </aside>
       <div className={`min-w-0 ${stackedSections} xl:border-l xl:border-line/50 xl:pl-14`}>
         <RatingHistory history={snapshot?.ratingHistory ?? []} seasonStarts={seasonStarts} />
+        {player.esports && <EsportsSection esports={player.esports} />}
         <LegendRoster legends={legends} rankedLegends={rankedLegends} />
         <WeaponStrip legends={legends} rankedLegends={rankedLegends} isUnarmedExcludedAtStart={isUnarmedExcluded} />
         <Teammates teams={snapshot?.fixedTeams ?? []} playerId={player.brawlhallaId} />
