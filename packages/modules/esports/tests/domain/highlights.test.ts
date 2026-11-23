@@ -136,7 +136,7 @@ describe('highlights', () => {
     expect(tournamentIds).toEqual(['champs-third', 'bcx-seventh', 'galaxy-third'])
   })
 
-  test('the same score goes to the better placement, then the newer', () => {
+  test('the same score goes to the higher tier, then the newer', () => {
     const tournamentIds = pickedIds([
       // a trial 5th online scores 60, the same as a community 2nd
       placement({
@@ -144,13 +144,65 @@ describe('highlights', () => {
         tournamentName: 'Trial of Frigg - Europe (Brawl League)',
         isOfficial: true,
         placement: 5,
-        startTime: daysBefore(5),
+        startTime: daysBefore(200),
       }),
       placement({ tournamentId: 'cup-second-old', tournamentName: 'Old Cup', placement: 2, startTime: daysBefore(90) }),
       placement({ tournamentId: 'cup-second-new', tournamentName: 'New Cup', placement: 2, startTime: daysBefore(30) }),
     ])
 
-    expect(tournamentIds).toEqual(['cup-second-new', 'cup-second-old', 'trial-fifth'])
+    expect(tournamentIds).toEqual(['trial-fifth', 'cup-second-new', 'cup-second-old'])
+  })
+
+  test('a Champs 4th and 5th lead community 1sts of the same score', () => {
+    const tournamentIds = pickedIds([
+      placement({
+        tournamentId: 'champs-fourth',
+        tournamentName: 'Autumn Championship - Europe 2026 - 1v1',
+        isOfficial: true,
+        placement: 4,
+        startTime: daysBefore(100),
+      }),
+      placement({
+        tournamentId: 'champs-fifth',
+        tournamentName: 'Summer Championship - Europe 2026 - 1v1',
+        isOfficial: true,
+        placement: 5,
+        startTime: daysBefore(150),
+      }),
+      // in person a community 1st scores 100, online 80
+      placement({
+        tournamentId: 'lan-first',
+        tournamentName: 'Local Smash Night',
+        isOnline: false,
+        placement: 1,
+        startTime: daysBefore(10),
+      }),
+      placement({
+        tournamentId: 'cup-first',
+        tournamentName: 'Galaxy Cup: Titan',
+        placement: 1,
+        startTime: daysBefore(5),
+      }),
+    ])
+
+    expect(tournamentIds).toEqual(['champs-fourth', 'lan-first', 'champs-fifth', 'cup-first'])
+  })
+
+  test('the same score at the same tier goes to the better placement, then the newer', () => {
+    const tournamentIds = pickedIds([
+      // a community 5th in person scores 40, the same as a community 4th online
+      placement({
+        tournamentId: 'lan-fifth',
+        tournamentName: 'Local Smash Night',
+        isOnline: false,
+        placement: 5,
+        startTime: daysBefore(5),
+      }),
+      placement({ tournamentId: 'cup-fourth-old', tournamentName: 'Old Cup', placement: 4, startTime: daysBefore(90) }),
+      placement({ tournamentId: 'cup-fourth-new', tournamentName: 'New Cup', placement: 4, startTime: daysBefore(30) }),
+    ])
+
+    expect(tournamentIds).toEqual(['cup-fourth-new', 'cup-fourth-old', 'lan-fifth'])
   })
 
   test('older top 8s fill by date however much they scored', () => {

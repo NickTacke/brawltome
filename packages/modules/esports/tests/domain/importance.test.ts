@@ -11,6 +11,12 @@ const online = (placement: number, fullName: string, isOfficial: boolean): Score
   isOnline: true,
 })
 
+// the score without the tier's tie-break, which only ever adds a few thousandths
+const score = (finish: ScoredFinish) => Math.round(importance(finish) * 100) / 100
+
+const champsName = 'Autumn Championship - Europe 2026 - 1v1'
+const communityName = 'Galaxy Cup: Titan - EU 1v1'
+
 describe('event weight', () => {
   // names as brawltools sends them, taken from the saved fixtures and from production
   test.each([
@@ -74,7 +80,7 @@ describe('importance', () => {
     [9, 0],
     [33, 0],
   ])('placement %p is worth %p points', (placement, points) => {
-    expect(importance(online(placement, 'Spring Championship - Europe 2026 - 1v1', true))).toBe(points * 2)
+    expect(score(online(placement, 'Spring Championship - Europe 2026 - 1v1', true))).toBe(points * 2)
   })
 
   test.each([
@@ -84,37 +90,37 @@ describe('importance', () => {
     [4, 40],
     [7, 25.6],
     [9, 0],
-  ])('a community placement %p online scores %p', (placement, score) => {
-    expect(importance(online(placement, 'Galaxy Cup: Titan - EU 1v1', false))).toBe(score)
+  ])('a community placement %p online scores %p', (placement, expected) => {
+    expect(score(online(placement, 'Galaxy Cup: Titan - EU 1v1', false))).toBe(expected)
   })
 
   test('a BCX 7th beats a Galaxy Cup 3rd', () => {
-    const bcxSeventh = importance(online(7, 'Brawlhalla World Championship Expo 2025 - 1v1', true))
-    const galaxyThird = importance(online(3, 'Galaxy Cup: Titan - EU 1v1', false))
+    const bcxSeventh = score(online(7, 'Brawlhalla World Championship Expo 2025 - 1v1', true))
+    const galaxyThird = score(online(3, 'Galaxy Cup: Titan - EU 1v1', false))
 
     expect(bcxSeventh).toBe(96)
     expect(galaxyThird).toBe(48)
   })
 
   test('a community 1st loses to a Champs 4th', () => {
-    const communityFirst = importance(online(1, 'Galaxy Cup: Titan - EU 1v1', false))
-    const champsFourth = importance(online(4, 'Autumn Championship - Europe 2026 - 1v1', true))
+    const communityFirst = score(online(1, 'Galaxy Cup: Titan - EU 1v1', false))
+    const champsFourth = score(online(4, 'Autumn Championship - Europe 2026 - 1v1', true))
 
     expect(communityFirst).toBe(80)
     expect(champsFourth).toBe(100)
   })
 
   test('a community 1st beats a Champs 7th', () => {
-    const communityFirst = importance(online(1, 'FROSTBYTE #26 | EU 2v2', false))
-    const champsSeventh = importance(online(7, 'Autumn Championship - Europe 2026 - 2v2', true))
+    const communityFirst = score(online(1, 'FROSTBYTE #26 | EU 2v2', false))
+    const champsSeventh = score(online(7, 'Autumn Championship - Europe 2026 - 2v2', true))
 
     expect(communityFirst).toBe(80)
     expect(champsSeventh).toBe(64)
   })
 
   test('a Champs 3rd beats a BCX 7th', () => {
-    const champsThird = importance(online(3, 'Spring Championship - Europe 2026 - 1v1', true))
-    const bcxSeventh = importance(online(7, 'Brawlhalla World Championship Expo 2025 - 1v1', true))
+    const champsThird = score(online(3, 'Spring Championship - Europe 2026 - 1v1', true))
+    const bcxSeventh = score(online(7, 'Brawlhalla World Championship Expo 2025 - 1v1', true))
 
     expect(champsThird).toBe(120)
     expect(bcxSeventh).toBe(96)
@@ -124,18 +130,71 @@ describe('importance', () => {
     const inPerson = { ...online(7, 'Brawlhalla World Championship Expo 2026 - 1v1', true), isOnline: false }
     const communityInPerson = { ...online(2, 'Local Smash Night', false), isOnline: false }
 
-    expect(importance(inPerson)).toBe(120)
-    expect(importance(communityInPerson)).toBe(75)
+    expect(score(inPerson)).toBe(120)
+    expect(score(communityInPerson)).toBe(75)
   })
 
   test('an official event no name rule knows scores as other official', () => {
-    expect(importance(online(1, 'Some New Official Cup 2027', true))).toBe(150)
+    expect(score(online(1, 'Some New Official Cup 2027', true))).toBe(150)
   })
 
   test('the shaped profile carries each result its importance', () => {
     const profile = shapeEsportsProfile(storedFromFixture(110282750), buildLegendLookup())
     const bcx = profile?.results.find((result) => result.fullName === 'Brawlhalla World Championship Expo 2026 - 1v1')
 
-    expect(bcx).toMatchObject({ placement: 7, isOnline: false, importance: 120 })
+    expect(bcx).toMatchObject({ placement: 7, isOnline: false })
+    expect(bcx?.importance).toBeCloseTo(120, 2)
+  })
+})
+
+describe('the tier breaks a tie', () => {
+  test('an in-person community 1st loses to an online Champs 4th', () => {
+    const communityFirst = { ...online(1, communityName, false), isOnline: false }
+    const champsFourth = online(4, champsName, true)
+
+    expect(score(communityFirst)).toBe(100)
+    expect(score(champsFourth)).toBe(100)
+    expect(importance(champsFourth)).toBeGreaterThan(importance(communityFirst))
+  })
+
+  test('a community 1st loses to a Champs 5th', () => {
+    const communityFirst = online(1, communityName, false)
+    const champsFifth = online(5, champsName, true)
+
+    expect(score(communityFirst)).toBe(80)
+    expect(score(champsFifth)).toBe(80)
+    expect(importance(champsFifth)).toBeGreaterThan(importance(communityFirst))
+  })
+
+  test('the same score at the same tier stays an exact tie, for the placement to break', () => {
+    const fourthOnline = online(4, communityName, false)
+    const fifthInPerson = { ...online(5, communityName, false), isOnline: false }
+
+    expect(importance(fifthInPerson)).toBe(importance(fourthOnline))
+  })
+
+  test('the tie-break never reorders two different scores', () => {
+    const names: [string, boolean][] = [
+      ['Brawlhalla World Championship Expo 2026 - 1v1', true],
+      [champsName, true],
+      ['Trial of Frigg - Europe (Brawl League)', true],
+      [communityName, false],
+    ]
+
+    const finishes = names.flatMap(([fullName, isOfficial]) =>
+      [1, 2, 3, 4, 5, 6, 7, 8].flatMap((placement) =>
+        [true, false].map((isOnline) => ({ placement, fullName, isOfficial, isOnline })),
+      ),
+    )
+
+    for (const left of finishes) {
+      for (const right of finishes) {
+        if (score(left) > score(right)) expect(importance(left)).toBeGreaterThan(importance(right))
+      }
+    }
+  })
+
+  test('a finish below top 8 still scores 0', () => {
+    expect(importance(online(9, champsName, true))).toBe(0)
   })
 })

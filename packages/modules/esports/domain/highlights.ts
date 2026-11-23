@@ -6,7 +6,8 @@ const highlightCutoff = 8
 // the cards show how a player does now, so an old peak doesn't hold them for years
 const recentWindowSeconds = 365 * 24 * 60 * 60
 
-// a deeper run at a bigger event first, see importance.ts
+// a deeper run at a bigger event first; the importance already puts the higher tier first on an equal score, see
+// importance.ts
 function mostImportantFirst(left: EsportsResult, right: EsportsResult): number {
   return right.importance - left.importance || left.placement - right.placement || right.startTime - left.startTime
 }
@@ -17,10 +18,10 @@ function newestFirst(left: EsportsResult, right: EsportsResult): number {
 
 /**
  * The results the section leads with as large cards: the four top-8 finishes of the 365 days before `now` with the
- * highest importance, the better placement and then the newer first on a tie, and when fewer than four are that
- * recent, the newest older top 8s after them. The site picks them again from the importance this sends, in
- * `apps/site/src/components/player/esports/EsportsSection.tsx`, and the two must agree, or a card shows up whose sets
- * the refresh never fetched.
+ * highest importance (which puts the higher tier first on an equal score), the better placement and then the newer
+ * first on a tie, and when fewer than four are that recent, the newest older top 8s after them. The site picks them
+ * again from the importance this sends, in `apps/site/src/components/player/esports/EsportsSection.tsx`, and the two
+ * must agree, or a card shows up whose sets the refresh never fetched.
  */
 export function pickHighlights(results: EsportsResult[], now: Date): EsportsResult[] {
   const recentSince = Math.floor(now.getTime() / 1000) - recentWindowSeconds

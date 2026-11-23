@@ -24,6 +24,12 @@ const communityWeight = 0.8
 // an in-person bracket means travel and a stage, which only the players who mean it make it to
 const inPersonWeight = 1.25
 
+// on an equal score the higher tier leads, so a community win sits below a champs top 4. the tier rides in the score
+// as a thousandth of its weight rather than in a field of its own: the site sorts the cards by importance alone, so
+// it breaks the tie exactly as the server does without knowing about tiers. two different scores are at least 2
+// apart and the tie-break adds at most 0.003, so it never reorders them
+const tierTieBreakShare = 1 / 1000
+
 const seriesWeights = {
   'world-championship': worldChampionshipWeight,
   'seasonal-championship': seasonalChampionshipWeight,
@@ -41,11 +47,17 @@ export function eventWeight(fullName: string, isOfficial: boolean): number {
 
 /**
  * How much a finish counts for the esports cards: placement points times the event's weight, a quarter more in
- * person. A BCX 7th (96) beats a Galaxy Cup 3rd (48), and a seasonal Champs 3rd (120) beats both.
+ * person, plus a few thousandths for the tier. A BCX 7th (96) beats a Galaxy Cup 3rd (48), a seasonal Champs 3rd
+ * (120) beats both, and a Champs 4th online (100) beats a community 1st in person (100).
  */
 export function importance(finish: ScoredFinish): number {
   const points = placementPoints.get(finish.placement) ?? 0
-  const venueWeight = finish.isOnline ? 1 : inPersonWeight
 
-  return points * eventWeight(finish.fullName, finish.isOfficial) * venueWeight
+  if (points === 0) return 0
+
+  const tierWeight = eventWeight(finish.fullName, finish.isOfficial)
+  const venueWeight = finish.isOnline ? 1 : inPersonWeight
+  const score = points * tierWeight * venueWeight
+
+  return score + tierWeight * tierTieBreakShare
 }
