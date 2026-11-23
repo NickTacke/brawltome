@@ -89,8 +89,12 @@ function RestTile({ result, isSelected }: TileProps) {
   )
 }
 
-function bestFirst(left: EsportsResult, right: EsportsResult): number {
-  return left.placement - right.placement || right.startTime - left.startTime
+// the api scores each finish by placement, event tier and venue; an api from before the score sends none, and the
+// cards then go by placement alone
+function mostImportantFirst(left: EsportsResult, right: EsportsResult): number {
+  const importanceGap = (right.importance ?? 0) - (left.importance ?? 0)
+
+  return importanceGap || left.placement - right.placement || right.startTime - left.startTime
 }
 
 function newestFirst(left: EsportsResult, right: EsportsResult): number {
@@ -98,12 +102,12 @@ function newestFirst(left: EsportsResult, right: EsportsResult): number {
 }
 
 // the same pick as pickHighlights in packages/modules/esports/domain/highlights.ts, whose sets the refresh fetches
-// first for the card art; change one and change the other
+// first for the card art; the importance comes from the api, so only the pick itself has to match
 function splitHighlights(results: EsportsResult[], now: Date) {
   const recentSince = Math.floor(now.getTime() / 1000) - recentWindowSeconds
   const topEight = results.filter((result) => result.placement <= highlightCutoff)
 
-  const recent = topEight.filter((result) => result.startTime >= recentSince).sort(bestFirst)
+  const recent = topEight.filter((result) => result.startTime >= recentSince).sort(mostImportantFirst)
   const older = topEight.filter((result) => result.startTime < recentSince).sort(newestFirst)
   const highlights = [...recent, ...older].slice(0, highlightCount)
 
@@ -148,8 +152,8 @@ function Rest({ results }: { results: EsportsResult[] }) {
 type EsportsSectionProps = { esports: EsportsProfile; loadedAt: string }
 
 /**
- * A player's esports results: the best finishes of the last year lead as large cards with the legend played there,
- * the rest follow small.
+ * A player's esports results: the finishes of the last year that count most lead as large cards with the legend
+ * played there, the rest follow small.
  */
 export function EsportsSection({ esports, loadedAt }: EsportsSectionProps) {
   const [mode, setMode] = useState<ModeFilter>('all')

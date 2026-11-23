@@ -264,6 +264,54 @@ describe('esports tiles', () => {
     expect(cardNames()).toEqual(['edge-sixth', 'recent-eighth', 'outside-first'])
   })
 
+  test('the recent cards go by the importance the api sends', async () => {
+    await renderResults([
+      { ...finish('galaxy-third', 3, 10), importance: 60 },
+      { ...finish('bcx-seventh', 7, 200), importance: 96 },
+      { ...finish('champs-third', 3, 240), importance: 120 },
+      { ...finish('cup-first', 1, 300), importance: 100 },
+      { ...finish('cup-fifth', 5, 30), importance: 40 },
+    ])
+
+    expect(cardNames()).toEqual(['champs-third', 'cup-first', 'bcx-seventh', 'galaxy-third'])
+  })
+
+  test('the same importance goes to the better placement, then the newer', async () => {
+    await renderResults([
+      { ...finish('trial-fourth', 4, 5), importance: 75 },
+      { ...finish('cup-second-old', 2, 90), importance: 75 },
+      { ...finish('cup-second-new', 2, 30), importance: 75 },
+    ])
+
+    expect(cardNames()).toEqual(['cup-second-new', 'cup-second-old', 'trial-fourth'])
+  })
+
+  test('older top 8s fill by date whatever their importance', async () => {
+    await renderResults([
+      { ...finish('recent-eighth', 8, 20), importance: 32 },
+      { ...finish('old-bcx-first', 1, 400), importance: 375 },
+      { ...finish('newer-cup', 8, 380), importance: 32 },
+      { ...finish('older-cup', 2, 420), importance: 75 },
+    ])
+
+    expect(cardNames()).toEqual(['recent-eighth', 'newer-cup', 'old-bcx-first', 'older-cup'])
+  })
+
+  test('without an importance from the api the recent cards go by placement', async () => {
+    const results = [
+      finish('seventh', 7, 10),
+      finish('third', 3, 20),
+      finish('first', 1, 300),
+      finish('third-new', 3, 5),
+    ]
+
+    expect(results.every((result) => result.importance === undefined)).toBe(true)
+
+    await renderResults(results)
+
+    expect(cardNames()).toEqual(['first', 'third-new', 'third', 'seventh'])
+  })
+
   test('the mode filter picks the cards from its own results', async () => {
     await renderResults([
       finish('solo-first', 1, 10),
