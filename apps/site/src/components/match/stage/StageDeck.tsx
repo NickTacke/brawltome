@@ -1,7 +1,8 @@
 import { Maximize, Minimize } from 'lucide-react'
-import type { ReactNode, RefObject } from 'react'
+import { type ReactNode, type RefObject, useRef } from 'react'
 import { FoldButton } from './ReviewControls'
 import { LanesPanel, onStage, shownOnStage, stageControlsGroup, TransportCorner, underStage } from './StageControls'
+import { useFoldFocus } from './use-fold-focus'
 import type { Fullscreen } from './use-fullscreen'
 import type { LanesFold } from './use-lanes-fold'
 import type { StageControlsState } from './use-stage-controls'
@@ -91,17 +92,21 @@ function TopLeftCorner({ controls, fullscreen, tools, note, topLeftRef }: TopLef
 export function StageDeck(props: StageDeckProps) {
   const { controls, fullscreen, lanes, fold } = props
   const isAlongTop = lanes.edge === 'top' && !fold.isFolded
+  const groupRef = useRef<HTMLDivElement>(null)
+  const foldButtonRef = useRef<HTMLButtonElement>(null)
+
+  useFoldFocus(groupRef, foldButtonRef, fold.isFolded)
 
   const ends = (
     <>
       {props.speed}
-      <FoldButton fold={fold} isAlongTop={isAlongTop} />
+      <FoldButton fold={fold} isAlongTop={isAlongTop} buttonRef={foldButtonRef} />
     </>
   )
 
   return (
     <>
-      <div data-stage-controls-group className={stageControlsGroup}>
+      <div ref={groupRef} data-stage-controls-group className={stageControlsGroup}>
         <TopLeftCorner
           controls={controls}
           fullscreen={fullscreen}

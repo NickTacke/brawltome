@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, PanelBottomClose, PanelBottomOpen, Pause, Play } from 'lucide-react'
+import type { RefObject } from 'react'
 import { IconTooltip, iconTooltipParent } from '../../IconTooltip'
 import { formatClock } from '../match-format'
 import type { LanesFold } from './use-lanes-fold'
@@ -111,10 +112,11 @@ type FoldButtonProps = {
   fold: LanesFold
   // the name opens away from the stage's edge the lanes lie along
   isAlongTop: boolean
+  buttonRef?: RefObject<HTMLButtonElement | null>
 }
 
 /** After the speed: folds the lanes down to a thin bar, for more of the stage, and back. */
-export function FoldButton({ fold, isAlongTop }: FoldButtonProps) {
+export function FoldButton({ fold, isAlongTop, buttonRef }: FoldButtonProps) {
   const label = fold.isFolded ? 'Show timeline' : 'Hide timeline'
   const Icon = fold.isFolded ? PanelBottomOpen : PanelBottomClose
   const name = `${label} (T)`
@@ -124,6 +126,7 @@ export function FoldButton({ fold, isAlongTop }: FoldButtonProps) {
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       aria-label={label}
       aria-keyshortcuts="T"
