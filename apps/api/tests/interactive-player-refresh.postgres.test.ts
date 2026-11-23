@@ -7,7 +7,7 @@ import {
   playerModule,
 } from '@brawltome/player'
 import { createPostgresRefreshOperations, queueModule } from '@brawltome/queue'
-import type { ActorAdmission } from '@brawltome/request-admission'
+import type { ActorAdmission, ActorAdmissionResult } from '@brawltome/request-admission'
 import { requestInteractivePlayerRefresh } from '../src/interactive-player-refresh'
 
 const admission = {
@@ -36,6 +36,9 @@ const admittingActors: ActorAdmission = {
   hasActorReservation: async () => false,
 }
 
+const verificationRequired = { outcome: 'verificationRequired', retry: { kind: 'verify' } } as const
+const askAgainShortly = { outcome: 'temporarilyUnavailable', retry: { kind: 'after', afterSeconds: 2 } } as const
+
 let database: TestDatabase
 
 beforeAll(async () => {
@@ -46,15 +49,26 @@ afterAll(async () => {
   await database?.drop()
 })
 
-function visitorRefresh(brawlhallaId: number, staleSections: ('ranked' | 'stats')[]) {
+type VisitorOptions = {
+  staleSections?: ('ranked' | 'stats')[]
+  resolveActor?: Parameters<typeof requestInteractivePlayerRefresh>[0]['resolveActor']
+  admission?: ActorAdmissionResult
+  // the reservations the request sees, to stage a refresh that appears after its first look
+  reservations?: ReturnType<typeof createPlayerRefreshReservations>
+}
+
+function visitorRefresh(brawlhallaId: number, options: VisitorOptions = {}) {
+  const staleSections = options.staleSections ?? ['ranked', 'stats']
+  const actorAdmission = options.admission ?? { outcome: 'admitted' }
+
   return requestInteractivePlayerRefresh({
     brawlhallaId,
     dedupeKey: `player:${brawlhallaId}:visit:${staleSections.join(',')}`,
     staleSections,
     provenance: { source: 'interactive-api' },
-    playerRefreshReservations: createPlayerRefreshReservations(database),
-    requestAdmission: admittingActors,
-    resolveActor: () => ({ kind: 'verified-anonymous', ip: '203.0.113.7' }),
+    playerRefreshReservations: options.reservations ?? createPlayerRefreshReservations(database),
+    requestAdmission: { ...admittingActors, admitActor: async () => actorAdmission },
+    resolveActor: options.resolveActor ?? (() => ({ kind: 'verified-anonymous', ip: '203.0.113.7' })),
   })
 }
 
@@ -77,13 +91,26 @@ async function queueCoverage(brawlhallaId: number): Promise<string> {
   return row.id
 }
 
+// a worker claims the operation; the other tests' work is settled first so the claim reaches it
+async function startOnWorker(operationId: string): Promise<void> {
+  await database.sql`
+    UPDATE queue.operations
+    SET status = 'succeeded', completed_at = clock_timestamp(), lease_owner = NULL, lease_expires_at = NULL,
+        reservation_token = NULL, reservation_expires_at = NULL
+    WHERE id <> ${operationId} AND status IN ('pending', 'awaiting_admission', 'leased')
+  `
+
+  const operations = createPostgresRefreshOperations({ database }, { jobs: [interactivePlayerRefreshContract] })
+  const lease = await operations.claim('worker', 30_000, admission)
+
+  expect(lease?.operationId).toBe(operationId)
+}
+
 describe('a visitor refresh beside a ranked coverage refresh', () => {
-  test('takes over a queued coverage refresh and widens it to the sections the visitor needs', async () => {
+  test('takes over a queued coverage refresh and widens it to their sections', async () => {
     const coverageId = await queueCoverage(1001)
 
-    const outcome = await visitorRefresh(1001, ['ranked', 'stats'])
-
-    expect(outcome).toEqual({
+    expect(await visitorRefresh(1001)).toEqual({
       outcome: 'alreadyRefreshing',
       operationId: coverageId,
       retry: { kind: 'poll', afterSeconds: 2 },
@@ -96,26 +123,56 @@ describe('a visitor refresh beside a ranked coverage refresh', () => {
     })
   })
 
-  test('asks the visitor to come back when a running coverage refresh misses one of their sections', async () => {
-    const coverageId = await queueCoverage(1002)
+  test('leaves a queued coverage refresh alone for a request that fails verification', async () => {
+    const coverageId = await queueCoverage(1004)
 
-    // settle the other tests' work so the claim reaches this coverage refresh
-    await database.sql`
-      UPDATE queue.operations SET status = 'succeeded', completed_at = clock_timestamp() WHERE id <> ${coverageId}
-    `
+    expect(await visitorRefresh(1004, { resolveActor: () => verificationRequired })).toEqual(verificationRequired)
 
-    const operations = createPostgresRefreshOperations({ database }, { jobs: [interactivePlayerRefreshContract] })
-    const lease = await operations.claim('worker', 30_000, admission)
+    expect(await readOperation(coverageId)).toMatchObject({
+      work_class: 'primary-monitoring',
+      payload: { cohort: 'ranked-coverage', staleSections: ['ranked'] },
+    })
+  })
 
-    expect(lease?.operationId).toBe(coverageId)
+  test('leaves a queued coverage refresh alone for a rate-limited request', async () => {
+    const coverageId = await queueCoverage(1005)
+    const limited = { outcome: 'rate-limited', retryAfterSeconds: 40 } as const
 
-    expect(await visitorRefresh(1002, ['ranked', 'stats'])).toEqual({
-      outcome: 'temporarilyUnavailable',
-      retry: { kind: 'after', afterSeconds: 2 },
+    expect(await visitorRefresh(1005, { admission: limited })).toEqual({
+      outcome: 'rateLimited',
+      retry: { kind: 'after', afterSeconds: 40 },
     })
 
+    expect(await readOperation(coverageId)).toMatchObject({
+      work_class: 'primary-monitoring',
+      payload: { cohort: 'ranked-coverage', staleSections: ['ranked'] },
+    })
+  })
+
+  test('widens a queued ranked-only visitor refresh for a later visitor who needs stats too', async () => {
+    const coverageId = await queueCoverage(1006)
+
+    // the overlay asks for ranked alone and takes the coverage refresh over as it is
+    expect(await visitorRefresh(1006, { staleSections: ['ranked'] })).toMatchObject({ operationId: coverageId })
+
+    expect(await readOperation(coverageId)).toMatchObject({
+      work_class: 'interactive',
+      payload: { staleSections: ['ranked'] },
+    })
+
+    expect(await visitorRefresh(1006)).toMatchObject({ outcome: 'alreadyRefreshing', operationId: coverageId })
+    expect(await readOperation(coverageId)).toMatchObject({ payload: { staleSections: ['ranked', 'stats'] } })
+  })
+
+  test('asks the visitor to come back when a running refresh misses one of their sections', async () => {
+    const coverageId = await queueCoverage(1002)
+
+    await startOnWorker(coverageId)
+
+    expect(await visitorRefresh(1002)).toEqual(askAgainShortly)
+
     // ranked alone is what the running refresh fetches, so that visitor can wait on it
-    expect(await visitorRefresh(1002, ['ranked'])).toMatchObject({
+    expect(await visitorRefresh(1002, { staleSections: ['ranked'] })).toMatchObject({
       outcome: 'alreadyRefreshing',
       operationId: coverageId,
     })
@@ -123,8 +180,20 @@ describe('a visitor refresh beside a ranked coverage refresh', () => {
     expect(await readOperation(coverageId)).toMatchObject({ work_class: 'primary-monitoring', status: 'leased' })
   })
 
+  test('checks the sections of a refresh that started after its first look', async () => {
+    const coverageId = await queueCoverage(1007)
+
+    await startOnWorker(coverageId)
+
+    // the first look found nothing; the reservation then meets the running coverage refresh
+    const reservations = createPlayerRefreshReservations(database)
+    const lateReservations = { ...reservations, findActiveInteractivePlayerRefresh: async () => null }
+
+    expect(await visitorRefresh(1007, { reservations: lateReservations })).toEqual(askAgainShortly)
+  })
+
   test('reserves the visitor their own refresh when nothing holds the player', async () => {
-    const outcome = await visitorRefresh(1003, ['ranked', 'stats'])
+    const outcome = await visitorRefresh(1003)
 
     if (outcome.outcome !== 'accepted') throw new Error(`expected an accepted refresh, got ${outcome.outcome}`)
 

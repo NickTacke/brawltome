@@ -12,8 +12,8 @@ import {
   reserveForAdmission,
   type TransitionResult,
 } from '@brawltome/queue'
-import { handBackgroundRefreshToVisitor, promoteBackgroundRefreshes } from './background-refresh-handover'
 import { interactivePlayerRefreshContract, type PlayerRefreshSection } from './interactive-player-refresh-contract'
+import { inspectVisitorFit, takeOverPlayerRefresh } from './visitor-refresh-takeover'
 
 const playerRefreshKinds = ['interactive-player-refresh'] as const
 
@@ -60,14 +60,8 @@ export function reserveInteractivePlayerRefresh(
     reservationTtlSeconds: input.reservationTtlSeconds,
   }
 
-  return reserveForAdmission(database, reservation, {
-    // a background refresh queued after the visitor's first look is handed over here, in the same transaction
-    beforeInsert: (transaction) =>
-      promoteBackgroundRefreshes(transaction, {
-        brawlhallaId: input.brawlhallaId,
-        staleSections: input.staleSections,
-      }),
-  })
+  // a refresh already holding the player comes back as already-active; the caller takes it over once admitted
+  return reserveForAdmission(database, reservation)
 }
 
 export function activateInteractivePlayerRefresh(
@@ -113,8 +107,11 @@ export function createPlayerRefreshReservations(database: Database) {
     findActiveInteractivePlayerRefresh: (dedupeKey: string, brawlhallaId?: number) =>
       findActiveInteractivePlayerRefresh(database, dedupeKey, brawlhallaId),
 
-    handBackgroundRefreshToVisitor: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
-      handBackgroundRefreshToVisitor(database, { brawlhallaId, staleSections }),
+    inspectVisitorFit: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
+      inspectVisitorFit(database, { brawlhallaId, staleSections }),
+
+    takeOverPlayerRefresh: (brawlhallaId: number, staleSections: readonly PlayerRefreshSection[]) =>
+      takeOverPlayerRefresh(database, { brawlhallaId, staleSections }),
 
     reserveInteractivePlayerRefresh: (input: InteractivePlayerRefreshReservation) =>
       reserveInteractivePlayerRefresh(database, input),

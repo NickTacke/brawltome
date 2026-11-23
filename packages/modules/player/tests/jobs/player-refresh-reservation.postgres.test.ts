@@ -18,7 +18,6 @@ import {
   rejectInteractivePlayerRefresh,
   reserveInteractivePlayerRefresh,
 } from '../../jobs/player-refresh-reservation'
-import { enqueueRankedCoverageRefresh } from '../../jobs/ranked-coverage-refreshes'
 
 let database: TestDatabase
 let queue: ReturnType<typeof createPostgresRefreshOperations>
@@ -190,28 +189,14 @@ describe('player refresh reservations', () => {
     expect((await queue.inspect(other.operationId)).operation).toMatchObject({ status: 'awaiting_admission' })
   })
 
-  test('promotes a queued recently viewed refresh when a visitor asks for the same player', async () => {
+  test('reports a queued background refresh as holding the player and leaves it to the takeover', async () => {
     const brawlhallaId = nextBrawlhallaId++
     const queued = await queueRecentlyViewed(brawlhallaId)
 
     const reservation = await reserveInteractivePlayerRefresh(database, reservationInput(undefined, brawlhallaId))
 
     expect(reservation).toEqual({ outcome: 'already-active', operationId: queued })
-    expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'interactive' })
-  })
-
-  test('promotes a queued ranked coverage refresh and widens it to the visitor sections', async () => {
-    const brawlhallaId = nextBrawlhallaId++
-
-    expect(await enqueueRankedCoverageRefresh(database, brawlhallaId)).toBe(true)
-
-    const reservation = await reserveInteractivePlayerRefresh(database, reservationInput(undefined, brawlhallaId))
-
-    if (reservation.outcome !== 'already-active') throw new Error('expected the coverage refresh to hold the player')
-
-    expect((await queue.inspect(reservation.operationId)).operation).toMatchObject({
-      work_class: 'interactive',
-      payload: { cohort: 'ranked-coverage', brawlhallaId, staleSections: ['ranked', 'stats'] },
-    })
+    // promoting it is for a visitor who passed admission, which the reservation hasn't checked yet
+    expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'primary-monitoring' })
   })
 })
