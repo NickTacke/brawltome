@@ -89,6 +89,20 @@ groups:
           description: "An enabled schedule has remained more than five minutes late."
           runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#schedulematerializationlate"
 
+      # a failing planner no longer holds up the schedules, so ScheduleMaterializationLate can't catch it. a one-off
+      # failure retries on the next tick; only one that keeps failing counts
+      - alert: WorkerPlannerFailing
+        expr: sum by (planner) (increase(worker_planner_failures_total[15m])) > 5
+        for: 15m
+        labels:
+          severity: warning
+          service: brawltome
+          signal: planner-failures
+        annotations:
+          summary: "{{ $labels.planner }} planner keeps failing"
+          description: "The worker planner failed more than five times in 15 minutes. The other planners and schedules keep running, but this planner's work is not being done."
+          runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#workerplannerfailing"
+
       # Fires on newly dead-lettered work only. The gauge counts every unresolved dead letter, so alerting on its
       # level paged continuously; admission rejections (reason="admission_rejected") are expected user outcomes.
       # The gauge delta also covers dead letters that bypass the worker attempt counter (expired leases, restarts).

@@ -120,6 +120,34 @@ tests:
         alertname: ScheduleMaterializationLate
         exp_alerts: []
 
+  - name: a planner that keeps failing fires, a one-off failure does not, and it recovers once it stops
+    interval: 1m
+    input_series:
+      # statistics-cohort fails once a minute for half an hour, then stops
+      - series: 'worker_planner_failures_total{job="operations-worker",planner="statistics-cohort"}'
+        values: "0+1x30 30x40"
+      - series: 'worker_planner_failures_total{job="operations-worker",planner="freshness"}'
+        values: "0 1x70"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: WorkerPlannerFailing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: WorkerPlannerFailing
+        exp_alerts:
+          - exp_labels:
+              planner: statistics-cohort
+              severity: warning
+              service: brawltome
+              signal: planner-failures
+            exp_annotations:
+              summary: "statistics-cohort planner keeps failing"
+              description: "The worker planner failed more than five times in 15 minutes. The other planners and schedules keep running, but this planner's work is not being done."
+              runbook_url: "https://github.com/NickTacke/brawltome/blob/master/docs/operations/alerts.md#workerplannerfailing"
+      - eval_time: 50m
+        alertname: WorkerPlannerFailing
+        exp_alerts: []
+
   - name: new execution dead letters fire from the attempt counter and recover
     interval: 1m
     input_series:
