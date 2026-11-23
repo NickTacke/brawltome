@@ -146,7 +146,10 @@ pub fn set_overlay_position(
     store: State<'_, SettingsStore>,
     overlay: State<'_, Arc<OverlayWindow>>,
 ) -> Result<Settings, String> {
-    let settings = store.update(|settings| settings.overlay_position = position)?;
+    // the page's console reaches no log in release builds, so a refusal is logged here
+    let settings = store
+        .update(|settings| settings.overlay_position = position)
+        .inspect_err(|error| log::warn!("move the overlay to {position:?}: {error}"))?;
     overlay.set_position(position);
 
     Ok(settings)

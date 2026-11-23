@@ -126,7 +126,8 @@ function readTheClockOnFocus(setNowMs: (nowMs: number) => void): () => void {
   return () => window.removeEventListener('focus', update)
 }
 
-// null when the app refused, which is already logged
+// null when the app refused; the app logs a refused setting change itself, as console.warn reaches no log in
+// release builds
 async function ask<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
     return await invoke<T>(command, args)

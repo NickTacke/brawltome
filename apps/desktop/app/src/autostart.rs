@@ -130,9 +130,12 @@ pub fn set_starts_with_windows(
     app: AppHandle,
     store: State<'_, SettingsStore>,
 ) -> Result<Settings, String> {
-    change_setting(&store, is_enabled, |wants_autostart| {
+    let changed = change_setting(&store, is_enabled, |wants_autostart| {
         set_registration(&app, wants_autostart)
-    })
+    });
+
+    // the page's console reaches no log in release builds, so a refusal is logged here
+    changed.inspect_err(|error| log::warn!("set start with Windows to {is_enabled}: {error}"))
 }
 
 #[cfg(test)]
