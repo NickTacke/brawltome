@@ -12,8 +12,9 @@ import {
   type ComparedSnapshots,
   playedRows,
 } from './db/activity-rows'
-import { recordLeaderboardEffect } from './db/leaderboard-effects'
+import { publishRegionGeneration, publishWindowGeneration } from './db/publish-generation'
 import { readRecentMovers } from './db/recent-movers'
+import { readLatestRegionalBoards } from './db/regional-boards'
 import { rowsByRating } from './db/rows-by-rating'
 import { publishedIdentity, type StoredIdentityRow } from './db/stored-identity'
 import type {
@@ -23,7 +24,6 @@ import type {
   PlayerValhallanEvidence,
   PlayerValhallanQueries,
   PublicationResult,
-  PublishedLeaderboardIdentity,
   RankingPublicationAuthorization,
   RankingQueries,
   RecentActivityView,
@@ -116,24 +116,11 @@ function validateMode(mode: string): asserts mode is LeaderboardMode {
   if (!(leaderboardModes as readonly string[]).includes(mode)) throw new Error(`unsupported leaderboard mode ${mode}`)
 }
 
-function storedIdentity(identity: PublishedLeaderboardIdentity) {
-  if (identity.type === 'fixed-two-vs-two-team') {
-    return {
-      identity_kind: identity.type,
-      player_one_id: identity.players[0].brawlhallaId,
-      player_one_name: identity.players[0].name,
-      player_two_id: identity.players[1].brawlhallaId,
-      player_two_name: identity.players[1].name,
-    }
-  }
+// a global board that carries a region from an earlier scan is only as fresh as that region
+function carriesStaleRegions(snapshot: SnapshotRow): boolean {
+  const staleRegions = snapshot.provenance.staleRegions
 
-  return {
-    identity_kind: identity.type,
-    player_one_id: identity.player.brawlhallaId,
-    player_one_name: identity.player.name,
-    player_two_id: null,
-    player_two_name: null,
-  }
+  return snapshot.scope === 'all' && Array.isArray(staleRegions) && staleRegions.length > 0
 }
 
 function publishedProvenance(
@@ -195,71 +182,50 @@ const longestComparedSpan = '2 hours'
 const scanGapLookback = '6 hours'
 
 /**
- * Finds the latest snapshot between 45 minutes and 2 hours before the newest one. Scans before that range, up to six
- * hours back, mean the collector skipped scans, which clears up after the next scan. Without them the board is too new
- * to compare.
+ * Finds the board's latest snapshot between 45 minutes and 2 hours before its newest one. Each region publishes on its
+ * own, so only scans of the asked board count: a region the source keeps failing compares its own last scans and
+ * keeps its own age. Scans before that range, up to six hours back, mean the collector skipped scans, which clears up
+ * after the next scan. Without them the board is too new to compare.
  */
 async function readActivityInterval(sql: Sql, input: ActivityIntervalInput): Promise<ActivityInterval> {
   const [row] = await sql<ActivityIntervalLookupRow[]>`
-    WITH current_generation AS (
-      SELECT generation.*
-      FROM rankings.generations generation
-      WHERE generation.finalized
-        AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
-        AND generation.mode = ${input.mode}
-        AND (
-          ${input.snapshotId ?? null}::uuid IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM rankings.snapshots pinned_snapshot
-            WHERE pinned_snapshot.id = ${input.snapshotId ?? null}
-              AND pinned_snapshot.generation_id = generation.id
-              AND pinned_snapshot.mode = generation.mode
-              AND pinned_snapshot.scope = ${input.region}
-          )
-        )
-      ORDER BY generation.schedule_window_at DESC, generation.id DESC
-      LIMIT 1
-    ), current_endpoint AS (
+    WITH board_scans AS (
       SELECT snapshot.id AS snapshot_id, snapshot.generation_id, snapshot.mode, snapshot.scope,
              generation.observed_at, generation.schedule_window_at, generation.published_at,
              generation.expected_next_publication_at, generation.page_depth, generation.source,
              generation.source_contract_version, generation.provenance, snapshot.row_count
-      FROM current_generation generation
-      JOIN rankings.snapshots snapshot
-        ON snapshot.generation_id = generation.id
-       AND snapshot.mode = generation.mode
-       AND snapshot.scope = ${input.region}
-       AND (${input.snapshotId ?? null}::uuid IS NULL OR snapshot.id = ${input.snapshotId ?? null})
+      FROM rankings.snapshots snapshot
+      JOIN rankings.generations generation
+        ON generation.id = snapshot.generation_id AND generation.mode = snapshot.mode
+      WHERE generation.finalized
+        AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
+        AND snapshot.mode = ${input.mode}
+        AND snapshot.scope = ${input.region}
+    ), current_endpoint AS (
+      SELECT scan.*
+      FROM board_scans scan
+      WHERE ${input.snapshotId ?? null}::uuid IS NULL OR scan.snapshot_id = ${input.snapshotId ?? null}
+      ORDER BY scan.schedule_window_at DESC, scan.generation_id DESC
+      LIMIT 1
     )
     SELECT current_endpoint.*,
-           previous_snapshot.id AS previous_snapshot_id,
-           previous_generation.observed_at AS previous_observed_at,
+           previous_scan.snapshot_id AS previous_snapshot_id,
+           previous_scan.observed_at AS previous_observed_at,
            EXISTS (
              SELECT 1
-             FROM rankings.generations generation
-             WHERE generation.finalized
-               AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
-               AND generation.mode = current_endpoint.mode
-               AND generation.schedule_window_at < current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
-               AND generation.schedule_window_at >= current_endpoint.schedule_window_at - ${scanGapLookback}::interval
+             FROM board_scans earlier_scan
+             WHERE earlier_scan.schedule_window_at < current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
+               AND earlier_scan.schedule_window_at >= current_endpoint.schedule_window_at - ${scanGapLookback}::interval
            ) AS has_earlier_scans
     FROM current_endpoint
     LEFT JOIN LATERAL (
-      SELECT generation.id AS generation_id, generation.observed_at
-      FROM rankings.generations generation
-      WHERE generation.finalized
-        AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
-        AND generation.mode = current_endpoint.mode
-        AND generation.schedule_window_at <= current_endpoint.schedule_window_at - ${shortestComparedSpan}::interval
-        AND generation.schedule_window_at >= current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
-      ORDER BY generation.schedule_window_at DESC, generation.id DESC
+      SELECT scan.snapshot_id, scan.observed_at
+      FROM board_scans scan
+      WHERE scan.schedule_window_at <= current_endpoint.schedule_window_at - ${shortestComparedSpan}::interval
+        AND scan.schedule_window_at >= current_endpoint.schedule_window_at - ${longestComparedSpan}::interval
+      ORDER BY scan.schedule_window_at DESC, scan.generation_id DESC
       LIMIT 1
-    ) previous_generation ON true
-    LEFT JOIN rankings.snapshots previous_snapshot
-      ON previous_snapshot.generation_id = previous_generation.generation_id
-     AND previous_snapshot.mode = current_endpoint.mode
-     AND previous_snapshot.scope = current_endpoint.scope
+    ) previous_scan ON true
   `
 
   if (!row) return { status: 'unavailable', reason: 'not_enough_history' }
@@ -296,20 +262,19 @@ export function createPostgresRanking(
         player_two_id: number | null
       }>
     >`
-      WITH latest_generation AS (
-        SELECT DISTINCT ON (mode) id, mode
-        FROM rankings.generations
-        WHERE finalized
-          AND source = 'brawlhalla-v1-ranked-leaderboard'
-          AND mode IN ('1v1', '2v2', 'solo2v2')
-        ORDER BY mode, schedule_window_at DESC, id DESC
+      WITH latest_global AS (
+        SELECT DISTINCT ON (snapshot.mode) snapshot.id, snapshot.mode
+        FROM rankings.snapshots snapshot
+        JOIN rankings.generations generation
+          ON generation.id = snapshot.generation_id AND generation.mode = snapshot.mode
+        WHERE generation.finalized
+          AND generation.source = 'brawlhalla-v1-ranked-leaderboard'
+          AND snapshot.mode IN ('1v1', '2v2', 'solo2v2')
+          AND snapshot.scope = 'all'
+        ORDER BY snapshot.mode, generation.schedule_window_at DESC, generation.id DESC
       )
       SELECT row.mode, row.player_one_id, row.player_two_id
-      FROM latest_generation generation
-      JOIN rankings.snapshots snapshot
-        ON snapshot.generation_id = generation.id
-        AND snapshot.mode = generation.mode
-        AND snapshot.scope = 'all'
+      FROM latest_global snapshot
       JOIN rankings.snapshot_rows row
         ON row.snapshot_id = snapshot.id
         AND row.mode = snapshot.mode
@@ -401,7 +366,8 @@ export function createPostgresRanking(
 
       const stale =
         now >= snapshot.expected_next_publication_at ||
-        (snapshot.latest_failure_at !== null && snapshot.latest_failure_at > snapshot.published_at)
+        (snapshot.latest_failure_at !== null && snapshot.latest_failure_at > snapshot.published_at) ||
+        carriesStaleRegions(snapshot)
 
       return {
         status: stale ? 'stale' : 'fresh',
@@ -556,126 +522,28 @@ export function createPostgresRanking(
   return {
     queries,
 
+    readLatestRegionalBoards(mode: LeaderboardMode) {
+      validateMode(mode)
+
+      return readLatestRegionalBoards(client, mode)
+    },
+
+    async publishRegion(
+      authorization: RankingPublicationAuthorization,
+      candidate: LeaderboardGenerationCandidate,
+    ): Promise<PublicationResult> {
+      return client.begin((transaction) =>
+        publishRegionGeneration(transaction as unknown as typeof client, authorization, candidate),
+      )
+    },
+
     async publishGeneration(
       authorization: RankingPublicationAuthorization,
       candidate: LeaderboardGenerationCandidate,
     ): Promise<PublicationResult> {
-      return client.begin(async (transaction) => {
-        const sql = transaction as unknown as typeof client
-
-        if (candidate.operationKey !== authorization.operationKey) throw new Error('candidate operation key mismatch')
-
-        if (leaderboardModeFromOperationKind(authorization.operationKind) !== candidate.mode) {
-          throw new Error('candidate mode does not match operation kind')
-        }
-
-        const requiredScopes: LeaderboardScope[] = ['all', ...regionalLeaderboardScopes]
-
-        if (candidate.snapshots.size !== requiredScopes.length) throw new Error('candidate must contain ten scopes')
-
-        for (const scope of requiredScopes) {
-          const rows = candidate.snapshots.get(scope)
-
-          if (!rows || (scope === 'all' && rows.length === 0)) throw new Error(`candidate scope ${scope} is empty`)
-        }
-
-        const effect = await recordLeaderboardEffect(sql, authorization)
-
-        if (effect === 'lease-lost' || effect === 'effect-conflict') return effect
-
-        const effectOperationId = authorization.effectOperationId ?? authorization.operationId
-
-        const [existing] = await sql<{ operation_id: string; operation_key: string; mode: LeaderboardMode }[]>`
-          SELECT operation_id, operation_key, mode
-          FROM rankings.generations
-          WHERE operation_key = ${candidate.operationKey} OR operation_id = ${effectOperationId}
-          LIMIT 1
-        `
-
-        if (existing) {
-          return existing.operation_id === effectOperationId &&
-            existing.operation_key === candidate.operationKey &&
-            existing.mode === candidate.mode
-            ? ('already-published' as const)
-            : ('effect-conflict' as const)
-        }
-
-        if (effect === 'already-applied') throw new Error('leaderboard effect exists without its Ranking generation')
-
-        const generationId = randomUUID()
-
-        await sql`
-          INSERT INTO rankings.generations
-            (id, operation_id, operation_key, mode, observed_at, schedule_window_at,
-             expected_next_publication_at, page_depth, source, source_contract_version, finalized, provenance)
-          VALUES
-            (${generationId}, ${effectOperationId}, ${candidate.operationKey}, ${candidate.mode},
-             ${candidate.observedAt}, ${candidate.scheduleWindowAt}, ${candidate.expectedNextPublicationAt},
-             ${candidate.pageDepth}, 'brawlhalla-v1-ranked-leaderboard', 2, false,
-             ${sql.json({
-               source: 'brawlhalla-v1-ranked-leaderboard',
-               contractVersion: 2,
-               pageDepth: candidate.pageDepth,
-               scopePageDepths: candidate.scopePageDepths,
-             })})
-        `
-
-        for (const scope of requiredScopes) {
-          const rows = candidate.snapshots.get(scope)
-
-          if (!rows) throw new Error(`candidate scope ${scope} disappeared during publication`)
-
-          const snapshotId = randomUUID()
-
-          await sql`
-            INSERT INTO rankings.snapshots (id, generation_id, mode, scope, row_count)
-            VALUES (${snapshotId}, ${generationId}, ${candidate.mode}, ${scope}, ${rows.length})
-          `
-
-          const storedRows = rows.map((row, index) => ({
-            snapshot_id: snapshotId,
-            mode: candidate.mode,
-            ordinal: index + 1,
-            standing: row.standing,
-            source_rank: row.sourceRank,
-            ...storedIdentity(row.identity),
-            region: row.region,
-            rating: row.rating,
-            peak_rating: row.peakRating,
-            wins: row.wins,
-            losses: row.losses,
-            tier: row.tier,
-          }))
-
-          for (let offset = 0; offset < storedRows.length; offset += 500) {
-            await sql`
-              INSERT INTO rankings.snapshot_rows ${sql(
-                storedRows.slice(offset, offset + 500),
-                'snapshot_id',
-                'mode',
-                'ordinal',
-                'standing',
-                'source_rank',
-                'identity_kind',
-                'player_one_id',
-                'player_one_name',
-                'player_two_id',
-                'player_two_name',
-                'region',
-                'rating',
-                'peak_rating',
-                'wins',
-                'losses',
-                'tier',
-              )}
-            `
-          }
-        }
-
-        await sql`UPDATE rankings.generations SET finalized = true WHERE id = ${generationId}`
-
-        return 'published' as const
-      })
+      return client.begin((transaction) =>
+        publishWindowGeneration(transaction as unknown as typeof client, authorization, candidate),
+      )
     },
 
     // The retention delete commits only while this worker still holds the maintenance lease: the lease row stays

@@ -4,7 +4,7 @@ import { defaultDeepCrawlSlicePages } from '../../jobs/leaderboard-deep-crawl-jo
 import { LeaderboardDeepCrawlYield } from '../../jobs/leaderboard-failure'
 import type { LeaderboardPlayerStanding } from '../../jobs/player-propagation'
 import { LeaderboardSourceError } from '../../v1-leaderboard-source'
-import { runLeaderboardJobOnce } from './leaderboard-job-fixtures'
+import { runLeaderboardJobOnce, stubPublication } from './leaderboard-job-fixtures'
 
 function deepCrawlLease(): OperationLease {
   return {
@@ -97,12 +97,14 @@ describe('leaderboard deep crawl job', () => {
           sourceAdmission: {
             admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
           },
-          publication: {
+          publication: stubPublication({
             publishGeneration: async () => {
               throw new Error('the deep crawl must not publish a generation')
             },
-            recordCollectionFailure: async () => 'recorded' as const,
-          },
+            publishRegion: async () => {
+              throw new Error('the deep crawl must not publish a region')
+            },
+          }),
           playerNames: {
             applyLeaderboardNames: async ({ players }) => {
               nameWrites.push(players.length)

@@ -862,6 +862,13 @@ describe.skipIf(!connectionString)('PostgreSQL migration runner', () => {
             created_at timestamptz NOT NULL DEFAULT clock_timestamp()
           )
         `
+
+        await client`
+          CREATE TABLE rankings.generations (
+            id uuid PRIMARY KEY,
+            operation_id uuid NOT NULL UNIQUE
+          )
+        `
       } finally {
         await client.end()
       }

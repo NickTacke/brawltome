@@ -119,15 +119,18 @@ async function propagateStandings(
 }
 
 // leaderboards observe current names and 1v1 standings for thousands of players nobody visits; feed them to Players
-// after the generation is durable, a failure only delays them until the next scan so it never fails the publication
+// after the generation is durable, a failure only delays them until the next scan so it never fails the publication.
+// only a region's own publication is fed: the global board repeats those rows and may carry a stale region's old ones
 export function withPlayerPropagation(
   publication: RankingPublicationStore,
   dependencies: PlayerPropagationDependencies,
 ): RankingPublicationStore {
   return {
+    readLatestRegionalBoards: (mode) => publication.readLatestRegionalBoards(mode),
     recordCollectionFailure: (authorization, failure) => publication.recordCollectionFailure(authorization, failure),
-    async publishGeneration(authorization, candidate) {
-      const result = await publication.publishGeneration(authorization, candidate)
+    publishGeneration: (authorization, candidate) => publication.publishGeneration(authorization, candidate),
+    async publishRegion(authorization, candidate) {
+      const result = await publication.publishRegion(authorization, candidate)
 
       if (result !== 'published' && result !== 'already-published') return result
 

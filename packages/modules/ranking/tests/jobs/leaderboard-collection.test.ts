@@ -3,7 +3,7 @@ import type { OperationFailure, OperationLease } from '@brawltome/queue'
 import { createTelemetry } from '@brawltome/telemetry'
 import type { LeaderboardPlayerStanding } from '../../jobs/player-propagation'
 import { LeaderboardSourceError } from '../../v1-leaderboard-source'
-import { runLeaderboardJobOnce } from './leaderboard-job-fixtures'
+import { runLeaderboardJobOnce, stubPublication } from './leaderboard-job-fixtures'
 
 const collectionKinds = ['leaderboard-1v1', 'leaderboard-2v2', 'leaderboard-solo-2v2', 'leaderboard-3v3'] as const
 
@@ -57,10 +57,7 @@ describe('leaderboard collection job', () => {
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
       },
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       source: {
         fetchPage: async () => ({ rankings: [], totalPages: 1 }),
       },
@@ -113,10 +110,7 @@ describe('leaderboard collection job', () => {
       waitForSourceAdmission: async (retryAfterMs) => {
         waits.push(retryAfterMs)
       },
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       source: {
         fetchPage: async ({ region }) => {
           sourceCalls += 1
@@ -197,10 +191,7 @@ describe('leaderboard collection job', () => {
       waitForSourceRetry: async (delayMs) => {
         retryWaits.push(delayMs)
       },
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       source: {
         fetchPage: async ({ region }) => {
           calls.push(region)
@@ -279,10 +270,7 @@ describe('leaderboard collection job', () => {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
       },
       waitForSourceRetry: async () => {},
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       source: {
         fetchPage: async () => {
           sourceCalls += 1
@@ -339,10 +327,7 @@ describe('leaderboard collection job', () => {
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
       },
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       waitForSourceRetry: async () => {},
       source: {
         fetchPage: async () => {
@@ -352,7 +337,8 @@ describe('leaderboard collection job', () => {
       },
     })
 
-    expect(sourceCalls).toBe(3)
+    // each region tries its page three times before the window gives up
+    expect(sourceCalls).toBe(27)
     expect(deferredMs).toBe(60_000)
     expect(failed).toBe(false)
     const failures = telemetry.metrics.snapshot().find(({ name }) => name === 'refresh_failures_total')
@@ -397,10 +383,7 @@ describe('leaderboard collection job', () => {
       sourceAdmission: {
         admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
       },
-      publication: {
-        publishGeneration: async () => 'published' as const,
-        recordCollectionFailure: async () => 'recorded' as const,
-      },
+      publication: stubPublication(),
       source: {
         fetchPage: async () => {
           throw new LeaderboardSourceError(
@@ -472,10 +455,7 @@ describe('leaderboard collection job', () => {
         sourceAdmission: {
           admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
         },
-        publication: {
-          publishGeneration: async () => published,
-          recordCollectionFailure: async () => 'recorded' as const,
-        },
+        publication: stubPublication({ publishRegion: async () => published }),
         playerNames: { applyLeaderboardNames },
         rankedStandings: { applyLeaderboardRanked },
         source: {
@@ -523,20 +503,22 @@ describe('leaderboard collection job', () => {
       return { changed: input.players.length }
     }
 
+    // each region feeds its own players as it publishes
     expect(await run(leaseFor('leaderboard-2v2'), 'published', record)).toBe(true)
-    expect(applied).toHaveLength(1)
+    expect(applied).toHaveLength(9)
     expect(applied[0].observedAt).toBeInstanceOf(Date)
-    expect(applied[0].players).toHaveLength(18)
-    expect(applied[0].players).toContainEqual({ brawlhallaId: 1, name: 'First 1' })
-    expect(applied[0].players).toContainEqual({ brawlhallaId: 2, name: 'Second 2' })
+    const teamPlayers = applied.splice(0).flatMap(({ players }) => players)
+
+    expect(teamPlayers).toHaveLength(18)
+    expect(teamPlayers).toContainEqual({ brawlhallaId: 1, name: 'First 1' })
+    expect(teamPlayers).toContainEqual({ brawlhallaId: 2, name: 'Second 2' })
 
     expect(await run(leaseFor('leaderboard-1v1'), 'already-published', record)).toBe(true)
-    expect(applied).toHaveLength(2)
-    expect(applied[1].players).toHaveLength(9)
-    expect(applied[1].players).toContainEqual({ brawlhallaId: 81, name: 'Solo 81' })
+    expect(applied).toHaveLength(9)
+    expect(applied.splice(0).flatMap(({ players }) => players)).toContainEqual({ brawlhallaId: 81, name: 'Solo 81' })
 
     await run(leaseFor('leaderboard-1v1'), 'effect-conflict', record)
-    expect(applied).toHaveLength(2)
+    expect(applied).toHaveLength(0)
 
     expect(
       await run(leaseFor('leaderboard-1v1'), 'published', async () => {
@@ -596,10 +578,7 @@ describe('leaderboard collection job', () => {
           sourceAdmission: {
             admitSource: async () => ({ outcome: 'admitted', deduplicated: false }),
           },
-          publication: {
-            publishGeneration: async () => 'published' as const,
-            recordCollectionFailure: async () => 'recorded' as const,
-          },
+          publication: stubPublication(),
           playerNames: { applyLeaderboardNames: noNames },
           rankedStandings: { applyLeaderboardRanked },
           source: {
@@ -640,10 +619,10 @@ describe('leaderboard collection job', () => {
     expect(standings).toHaveLength(0)
 
     expect(await run(lease('leaderboard-1v1'), recordStandings)).toBe(true)
-    expect(standings).toHaveLength(1)
-    expect(standings[0].players).toHaveLength(9)
+    expect(standings).toHaveLength(9)
+    expect(standings.flatMap(({ players }) => players)).toHaveLength(9)
 
-    expect(standings[0].players).toContainEqual({
+    expect(standings.flatMap(({ players }) => players)).toContainEqual({
       brawlhallaId: 41,
       region: 'AUS',
       rating: 1_973,
@@ -723,14 +702,18 @@ describe('leaderboard collection job', () => {
     }
 
     const outcome = await runLeaderboardJobOnce(operations, lease, {
-      publication: {
+      publication: stubPublication({
+        publishRegion: async () => {
+          publishCalls += 1
+
+          return 'published'
+        },
         publishGeneration: async () => {
           publishCalls += 1
 
           return 'published'
         },
-        recordCollectionFailure: async () => 'recorded',
-      },
+      }),
       source: { fetchPage: async () => ({ rankings: [], totalPages: 1 }) },
     })
 

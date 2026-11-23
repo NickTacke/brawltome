@@ -112,6 +112,7 @@ async function insertGeneration(
     source?: 'v1' | 'v2-legacy'
     finalized?: boolean
     wins?: number
+    scopes?: readonly LeaderboardScope[]
   },
 ): Promise<GenerationFixture> {
   const generationId = randomUUID()
@@ -140,7 +141,7 @@ async function insertGeneration(
 
   const snapshots = {} as Record<LeaderboardScope, string>
 
-  for (const scope of ['all', 'EU'] as const) {
+  for (const scope of input.scopes ?? (['all', 'EU'] as const)) {
     const snapshotId = randomUUID()
 
     snapshots[scope] = snapshotId
@@ -711,6 +712,38 @@ describe('Ranking snapshot retention', () => {
       } finally {
         connection.release()
       }
+    } finally {
+      await sql.end()
+    }
+  }, 30_000)
+
+  test('keeps the newest two boards of every scope, so a region that stops publishing keeps its last rows', async () => {
+    const { sql } = await migratedDatabase()
+
+    try {
+      const now = await databaseNow(sql)
+      const at = (offsetMs: number) => new Date(now.getTime() - offsetMs)
+      const usEast = (windowAt: Date) => insertGeneration(sql, { mode: '1v1', windowAt, scopes: ['US-E'] })
+      const usEastOldest = await usEast(at(50 * hour))
+      const usEastLastTwo = [await usEast(at(49 * hour)), await usEast(at(48 * hour))]
+
+      const othersOld = [
+        await insertGeneration(sql, { mode: '1v1', windowAt: at(30 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: at(29 * hour) }),
+      ]
+
+      const othersRecent = [
+        await insertGeneration(sql, { mode: '1v1', windowAt: at(1 * hour) }),
+        await insertGeneration(sql, { mode: '1v1', windowAt: at(0.5 * hour) }),
+      ]
+
+      expect(await expireWithBacklog(sql, at(24 * hour), 200)).toEqual({ deleted: 3, expirable: 0 })
+
+      const expiredIds = [usEastOldest, ...othersOld].map(({ generationId }) => generationId)
+      const keptIds = [...usEastLastTwo, ...othersRecent].map(({ generationId }) => generationId)
+
+      expect((await storedGenerationIds(sql)).sort()).toEqual(keptIds.sort())
+      expect(await orphanCounts(sql, expiredIds)).toEqual({ snapshots: 0, rows: 0 })
     } finally {
       await sql.end()
     }
