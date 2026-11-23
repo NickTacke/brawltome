@@ -1,4 +1,4 @@
-//! the win32 calls that read the totals windows keeps for the app's processes: cpu time and working set
+//! the win32 calls that read the totals windows keeps for the app's processes: cpu time and private memory
 
 use std::mem;
 
@@ -6,7 +6,10 @@ use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HANDLE, INVALID_HAND
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows_sys::Win32::System::ProcessStatus::{
+    GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+    PROCESS_MEMORY_COUNTERS_EX2,
+};
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcessId, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
 };
@@ -42,10 +45,8 @@ pub fn sample_process_tree(at_ms: u64) -> Option<ProcessTreeSample> {
         if let Some(cpu_ms) = cpu_ms(&process) {
             sample.cpu_ms_by_pid.insert(pid, cpu_ms);
         }
-        if let Some(working_set_bytes) = working_set_bytes(&process) {
-            sample
-                .working_set_bytes_by_pid
-                .insert(pid, working_set_bytes);
+        if let Some(private_bytes) = private_bytes(&process) {
+            sample.private_bytes_by_pid.insert(pid, private_bytes);
         }
     }
 
@@ -104,20 +105,49 @@ fn cpu_ms(process: &OwnedHandle) -> Option<u64> {
     Some(steps / FILETIME_STEPS_PER_MS)
 }
 
-fn working_set_bytes(process: &OwnedHandle) -> Option<u64> {
-    let size = mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
-    let mut counters = PROCESS_MEMORY_COUNTERS {
-        cb: size,
-        ..PROCESS_MEMORY_COUNTERS::default()
-    };
+/// task manager's memory column: the private working set, or the private commit before windows 10 1809
+fn private_bytes(process: &OwnedHandle) -> Option<u64> {
+    if let Some(bytes) = private_working_set_bytes(process) {
+        return Some(bytes);
+    }
 
-    // SAFETY: the handle is open with query rights, and counters is a live struct of the size passed
-    let succeeded = unsafe { GetProcessMemoryInfo(process.0, &mut counters, size) };
+    private_usage_bytes(process)
+}
+
+/// none where windows predates the counter: it refuses the larger struct, or leaves the field at zero
+fn private_working_set_bytes(process: &OwnedHandle) -> Option<u64> {
+    let size = mem::size_of::<PROCESS_MEMORY_COUNTERS_EX2>() as u32;
+    let mut counters = PROCESS_MEMORY_COUNTERS_EX2 {
+        cb: size,
+        ..PROCESS_MEMORY_COUNTERS_EX2::default()
+    };
+    let counters_pointer = (&raw mut counters).cast::<PROCESS_MEMORY_COUNTERS>();
+
+    // SAFETY: the handle is open with query rights; the pointer is to a live EX2 struct, which starts with the
+    // fields of PROCESS_MEMORY_COUNTERS, and size is that struct's, so windows writes no further than it
+    let succeeded = unsafe { GetProcessMemoryInfo(process.0, counters_pointer, size) };
+    if succeeded == 0 || counters.PrivateWorkingSetSize == 0 {
+        return None;
+    }
+
+    u64::try_from(counters.PrivateWorkingSetSize).ok()
+}
+
+fn private_usage_bytes(process: &OwnedHandle) -> Option<u64> {
+    let size = mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+    let mut counters = PROCESS_MEMORY_COUNTERS_EX {
+        cb: size,
+        ..PROCESS_MEMORY_COUNTERS_EX::default()
+    };
+    let counters_pointer = (&raw mut counters).cast::<PROCESS_MEMORY_COUNTERS>();
+
+    // SAFETY: as for the EX2 struct above; EX also starts with the fields of PROCESS_MEMORY_COUNTERS
+    let succeeded = unsafe { GetProcessMemoryInfo(process.0, counters_pointer, size) };
     if succeeded == 0 {
         return None;
     }
 
-    u64::try_from(counters.WorkingSetSize).ok()
+    u64::try_from(counters.PrivateUsage).ok()
 }
 
 fn filetime_steps(time: FILETIME) -> u64 {
@@ -146,5 +176,34 @@ impl Drop for OwnedHandle {
     fn drop(&mut self) {
         // SAFETY: the handle is open and owned here alone, so it is closed exactly once
         unsafe { CloseHandle(self.0) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_app_holds_private_memory_inside_its_working_set() {
+        // SAFETY: GetCurrentProcessId takes nothing and cannot fail
+        let own_pid = unsafe { GetCurrentProcessId() };
+        let process = OwnedHandle::open(own_pid).expect("open the test's own process");
+
+        let private_working_set_bytes =
+            private_working_set_bytes(&process).expect("read the private working set");
+
+        // read second, so a working set that grows in between can't fail the comparison
+        let size = mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: size,
+            ..PROCESS_MEMORY_COUNTERS::default()
+        };
+        // SAFETY: the handle is open with query rights, and counters is a live struct of the size passed
+        let succeeded = unsafe { GetProcessMemoryInfo(process.0, &mut counters, size) };
+        assert_ne!(succeeded, 0, "read the test's own working set");
+
+        assert!(private_working_set_bytes > 0);
+        assert!(private_working_set_bytes <= counters.WorkingSetSize as u64);
+        assert!(private_bytes(&process).is_some());
     }
 }

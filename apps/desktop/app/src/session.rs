@@ -2493,11 +2493,11 @@ mod tests {
     fn usage_sample(
         at_ms: u64,
         cpu_ms: &[(u32, u64)],
-        working_set_bytes: &[(u32, u64)],
+        private_bytes: &[(u32, u64)],
     ) -> ProcessTreeSample {
         ProcessTreeSample {
             cpu_ms_by_pid: HashMap::from_iter(cpu_ms.iter().copied()),
-            working_set_bytes_by_pid: HashMap::from_iter(working_set_bytes.iter().copied()),
+            private_bytes_by_pid: HashMap::from_iter(private_bytes.iter().copied()),
             at_ms,
         }
     }

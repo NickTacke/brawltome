@@ -21,7 +21,8 @@ const LOWEST_SHOWN_PERCENT: f64 = 0.01;
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessTreeSample {
     pub cpu_ms_by_pid: HashMap<u32, u64>,
-    pub working_set_bytes_by_pid: HashMap<u32, u64>,
+    /// the pages only this process uses, as task manager's memory column counts them
+    pub private_bytes_by_pid: HashMap<u32, u64>,
     /// on the session's clock
     pub at_ms: u64,
 }
@@ -32,7 +33,7 @@ pub struct MatchUsage {
     pub cpu_ms: u64,
     /// of the whole machine over the match, all cores together, the way task manager counts
     pub cpu_percent: f64,
-    /// the working set at the end of the match
+    /// the private memory at the end of the match
     pub ram_mb: u64,
     pub request_count: u32,
     pub duration_ms: u64,
@@ -52,14 +53,14 @@ pub fn usage_between(
         .iter()
         .map(|(pid, end_cpu_ms)| cpu_used_ms(start, *pid, *end_cpu_ms))
         .sum();
-    // each process's working set counts the pages it shares with the others, such as the webview's, so the sum
-    // errs high next to task manager's private memory
-    let working_set_bytes: u64 = end.working_set_bytes_by_pid.values().sum();
+    // private memory, not the working set: each webview process's working set counts the pages it shares with
+    // the others, so summing those counted the shared ones once per process and overstated the total
+    let private_bytes: u64 = end.private_bytes_by_pid.values().sum();
 
     MatchUsage {
         cpu_ms,
         cpu_percent: cpu_percent(cpu_ms, duration_ms, logical_cores),
-        ram_mb: rounded_mb(working_set_bytes),
+        ram_mb: rounded_mb(private_bytes),
         request_count,
         duration_ms,
     }
@@ -149,11 +150,11 @@ mod tests {
     fn sample(
         at_ms: u64,
         cpu_ms: &[(u32, u64)],
-        working_set_bytes: &[(u32, u64)],
+        private_bytes: &[(u32, u64)],
     ) -> ProcessTreeSample {
         ProcessTreeSample {
             cpu_ms_by_pid: cpu_ms.iter().copied().collect(),
-            working_set_bytes_by_pid: working_set_bytes.iter().copied().collect(),
+            private_bytes_by_pid: private_bytes.iter().copied().collect(),
             at_ms,
         }
     }
@@ -201,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn the_ram_is_the_working_set_at_the_end() {
+    fn the_ram_is_the_private_memory_at_the_end() {
         let start = sample(0, &[], &[(10, 300 * MB)]);
         let end = sample(1_000, &[], &[(10, 41 * MB), (11, 51 * MB)]);
 
