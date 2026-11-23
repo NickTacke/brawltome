@@ -194,6 +194,27 @@ describe('esports sets backfill job', () => {
     expect(row?.failureCount).toBe(1)
   })
 
+  test('broken events at the start do not stop the rest, since brawltools answered for them', async () => {
+    const broken = ['a', 'b', 'c']
+
+    await saveRefresh(
+      database,
+      linkedRefresh({
+        placements: [...broken, 'd'].map((tournamentId) => placement({ tournamentId })),
+      }),
+    )
+
+    const malformed = new Error('brawltools sent invalid json: /player/match')
+    const failures = new Map(broken.map((tournamentId) => [`matches ${tournamentId}`, malformed]))
+    const stub = answers({ matches: new Map([['d', [match({ matchId: 'd' })]]]), failures })
+
+    const { calls } = await runBackfill(stub)
+    const { stored } = await readStoredEsports(database, brawlhallaId)
+
+    expect(calls).toEqual(['matches a', 'matches b', 'matches c', 'matches d'])
+    expect(stored.setsByTournament.get('d')?.map((set) => set.matchId)).toEqual(['d'])
+  })
+
   test('backfill leaves side mode events out', async () => {
     await saveRefresh(
       database,

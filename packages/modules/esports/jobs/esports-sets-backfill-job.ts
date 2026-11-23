@@ -5,7 +5,7 @@ import { readEsportsPlayer } from '../db/read-stored-esports'
 import { saveEventSets } from '../db/save-event-sets'
 import { isSideModeEvent } from '../domain'
 import type { BrawltoolsClient } from '../source/brawltools-client'
-import { decideBrawltoolsFailure, isBrawltoolsRateLimited } from './brawltools-failures'
+import { decideBrawltoolsFailure, isBrawltoolsRateLimited, isBrawltoolsUnavailable } from './brawltools-failures'
 import { type EsportsSetsBackfillPayload, esportsSetsBackfillContract } from './esports-sets-backfill-contract'
 import { type EsportsJobDependencies, runEsportsJob } from './run-esports-job'
 
@@ -13,8 +13,8 @@ export type EsportsSetsBackfillJobDependencies = EsportsJobDependencies
 
 type EventToFetch = { brawlhallaId: number; brawltoolsPlayerId: number; tournamentId: string }
 
-// this many events failing one after another means brawltools is down, not that one event is broken
-const maxFailuresInARow = 3
+// this many events in a row finding brawltools down or not answering means it is down, not that one event is broken
+const maxUnavailableInARow = 3
 
 // a failed event is returned, not thrown, so the events after it are still fetched; a rate limit still stops the run
 async function fetchEventSets(
@@ -56,16 +56,17 @@ async function backfillSets(
   if (row?.link !== 'linked' || !brawltoolsPlayerId) return
 
   let lastFailure: unknown = null
-  let failuresInARow = 0
+  let unavailableInARow = 0
 
   for (const { tournamentId } of await listEventsToFetch(dependencies.database, brawlhallaId)) {
     // a pro's first backfill is about a hundred calls; a lost lease means another run may take over, and a run of
-    // failures that brawltools is down, so either way stop spending
-    if (leaseLost.aborted || failuresInARow >= maxFailuresInARow) break
+    // unavailable answers that brawltools is down, so either way stop spending
+    if (leaseLost.aborted || unavailableInARow >= maxUnavailableInARow) break
 
     const failure = await fetchEventSets(dependencies, client, { brawlhallaId, brawltoolsPlayerId, tournamentId })
 
-    failuresInARow = failure ? failuresInARow + 1 : 0
+    // any other answer, a broken event's included, means brawltools is up, so the streak starts over
+    unavailableInARow = isBrawltoolsUnavailable(failure) ? unavailableInARow + 1 : 0
     lastFailure = failure ?? lastFailure
   }
 
