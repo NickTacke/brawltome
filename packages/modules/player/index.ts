@@ -72,6 +72,10 @@ export {
   type PrimaryMonitoringSnapshot,
   reconcilePrimaryMonitoring,
 } from './jobs/primary-monitoring-schedules'
+export {
+  createRankedCoverageRefreshes,
+  type RankedCoverageRefreshes,
+} from './jobs/ranked-coverage-refreshes'
 export { rankedPlayerPulseContract } from './jobs/ranked-player-pulse-contract'
 export { createRankedPlayerPulseJob } from './jobs/ranked-player-pulse-job'
 export {

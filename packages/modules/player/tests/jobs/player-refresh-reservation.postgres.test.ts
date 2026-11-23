@@ -18,6 +18,7 @@ import {
   rejectInteractivePlayerRefresh,
   reserveInteractivePlayerRefresh,
 } from '../../jobs/player-refresh-reservation'
+import { enqueueRankedCoverageRefresh } from '../../jobs/ranked-coverage-refreshes'
 
 let database: TestDatabase
 let queue: ReturnType<typeof createPostgresRefreshOperations>
@@ -197,5 +198,20 @@ describe('player refresh reservations', () => {
 
     expect(reservation).toEqual({ outcome: 'already-active', operationId: queued })
     expect((await queue.inspect(queued)).operation).toMatchObject({ work_class: 'interactive' })
+  })
+
+  test('promotes a queued ranked coverage refresh when a visitor asks for the same player', async () => {
+    const brawlhallaId = nextBrawlhallaId++
+
+    expect(await enqueueRankedCoverageRefresh(database, brawlhallaId)).toBe(true)
+
+    const reservation = await reserveInteractivePlayerRefresh(database, reservationInput(undefined, brawlhallaId))
+
+    if (reservation.outcome !== 'already-active') throw new Error('expected the coverage refresh to hold the player')
+
+    expect((await queue.inspect(reservation.operationId)).operation).toMatchObject({
+      work_class: 'interactive',
+      payload: { cohort: 'ranked-coverage', brawlhallaId, staleSections: ['ranked'] },
+    })
   })
 })
