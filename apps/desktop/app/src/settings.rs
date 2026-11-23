@@ -37,8 +37,8 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    /// reads `<directory>/settings.json`, making the folder if it is missing; whatever it can't read becomes the
-    /// default. never fails: a folder it can't make only costs the saves, which then say why
+    /// reads `<directory>/settings.json`, making the folder and the file if they are missing; whatever it can't read
+    /// becomes the default. never fails: a folder it can't make only costs the saves, which then say why
     pub fn open(directory: &Path) -> Self {
         if let Err(error) = std::fs::create_dir_all(directory) {
             log::warn!(
@@ -49,6 +49,13 @@ impl SettingsStore {
 
         let path = directory.join(FILE_NAME);
         let (settings, was_created_now) = read_settings(&path);
+
+        // saved at once, so the next start knows it isn't the first, even if the player never changes a setting
+        if was_created_now {
+            if let Err(error) = write_settings(&path, &settings) {
+                log::warn!("{error}");
+            }
+        }
 
         Self {
             path,
@@ -179,6 +186,27 @@ mod tests {
     }
 
     #[test]
+    fn the_start_after_the_first_is_not_a_first_start() {
+        let directory = tempfile::tempdir().unwrap();
+        SettingsStore::open(directory.path());
+
+        let reopened = SettingsStore::open(directory.path());
+
+        assert!(!reopened.was_created_now());
+        assert_defaults(&reopened.get());
+    }
+
+    #[test]
+    fn the_first_start_saves_the_defaults() {
+        let directory = tempfile::tempdir().unwrap();
+
+        SettingsStore::open(directory.path());
+
+        let text = std::fs::read_to_string(directory.path().join(FILE_NAME)).unwrap();
+        assert_defaults(&parse_settings(&text));
+    }
+
+    #[test]
     fn a_change_is_there_after_reopening() {
         let directory = tempfile::tempdir().unwrap();
         let store = SettingsStore::open(directory.path());
@@ -286,7 +314,7 @@ mod tests {
         let folder = directory.path().join("config");
         std::fs::create_dir(&folder).unwrap();
         let store = SettingsStore::open(&folder);
-        std::fs::remove_dir(&folder).unwrap();
+        std::fs::remove_dir_all(&folder).unwrap();
 
         let result = store.update(|settings| settings.starts_with_windows = false);
 

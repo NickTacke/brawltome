@@ -169,6 +169,27 @@ mod tests {
     }
 
     #[test]
+    fn turning_it_off_in_windows_after_a_first_start_without_changes_is_adopted() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = SettingsStore::open(directory.path());
+        let first_action = startup_action(
+            first.was_created_now(),
+            first.get().starts_with_windows,
+            false,
+        );
+
+        let second = SettingsStore::open(directory.path());
+        let second_action = startup_action(
+            second.was_created_now(),
+            second.get().starts_with_windows,
+            false,
+        );
+
+        assert_eq!(first_action, StartupAction::Register);
+        assert_eq!(second_action, StartupAction::AdoptSystemState);
+    }
+
+    #[test]
     fn adopting_the_system_state_saves_it() {
         let directory = tempfile::tempdir().unwrap();
         let store = SettingsStore::open(directory.path());
