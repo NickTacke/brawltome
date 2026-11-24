@@ -3,7 +3,17 @@
 //
 // The manifest is the match's own file. Every path inside it (art/, sheets/, anims/, maps/) is relative to the art
 // store's root, baseUrl, which is shared by every match and can live on another domain.
-import type { AnyArtGroup, AnyManifest, ManifestArt, ManifestPlayer, ManifestPlayerFormat4 } from './format.ts'
+import { composeSheet, decodeImages, type WeightedImages } from './compose-sheet.ts'
+import {
+  type AnyArtGroup,
+  type AnyManifest,
+  type ManifestArt,
+  type ManifestPlayer,
+  type ManifestPlayerFormat4,
+  SET_FORMAT,
+  type SetSheet,
+} from './format.ts'
+import { coloredPiecesOf, compositionKeyOf, type Group, Groups, isWeighted, type WeightedSheet } from './groups.ts'
 import { type Pack, readPack } from './pack.ts'
 import { Animations, ArtSet, eachDraw, type Frame, groupOf, type Matrix, pieceOf } from './placement.ts'
 import { readArtGroup, readManifest } from './read.ts'
@@ -39,11 +49,11 @@ const SHEETS_AT_ONCE = 4
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 
-type Group = { url: string; json: AnyArtGroup; sheets: (ImageBitmap | undefined)[] }
-
 // Drawable is a player's (or the objects') animations, with the art they're drawn with
 type Drawable = { animations: Animations; sets: Map<string, ArtSet>; ready: Map<string, boolean> }
 
+// a player's sets are by look: "" for a format 3 player's only one, or the index into their manifest looks. set is
+// the first
 export type PlayerAssets = Drawable & { slot: string; info: ManifestPlayer | ManifestPlayerFormat4; set: ArtSet }
 export type ObjectAssets = Drawable
 
@@ -163,11 +173,14 @@ class Store {
   }
 }
 
-// Sheets loads the sprite sheets: the ones asked for at once, then the rest from a queue a few at a time
+// Sheets loads the sprite sheets: the ones asked for at once, then the rest from a queue a few at a time. A weighted
+// sheet loads with its weight sheets and is composed once in each colouring its groups give it
 class Sheets {
   private readonly store: Store
   private readonly groups: Group[]
   private readonly jobs = new Map<string, Promise<void>>()
+  // composed sheets by compositionKeyOf, so groups in the same colours share one
+  private readonly composed = new Map<string, Promise<ImageBitmap>>()
   private queue: string[] = []
 
   constructor(store: Store, groups: Group[]) {
@@ -222,7 +235,24 @@ class Sheets {
     await Promise.all(Array.from({ length: SHEETS_AT_ONCE }, worker))
   }
 
-  private async fetchSheet(src: string) {
+  private sheetNamed(src: string): SetSheet | undefined {
+    for (const group of this.groups) {
+      const sheets: SetSheet[] = group.json.sheets
+      const sheet = sheets.find((candidate) => candidate.src === src)
+
+      if (sheet) return sheet
+    }
+
+    return undefined
+  }
+
+  private fetchSheet(src: string): Promise<void> {
+    const sheet = this.sheetNamed(src)
+
+    return isWeighted(sheet) ? this.fetchWeighted(sheet) : this.fetchPlain(src)
+  }
+
+  private async fetchPlain(src: string) {
     const blob = await (await this.store.file(src)).blob()
 
     this.store.throwIfAborted()
@@ -241,53 +271,118 @@ class Sheets {
 
     this.store.progress(src)
   }
-}
 
-// loadGroups loads every group's piece table first: they're small, and say which sheets the first seconds need
-async function loadGroups(store: Store, arts: ManifestArt[]): Promise<Group[]> {
-  const urls = [...new Set(arts.flatMap((art) => art.art))]
-  const jsons = await Promise.all(urls.map((url) => store.artGroup(url)))
+  // fetchWeighted loads a weighted sheet and its weight sheets, and gives each group that has it the sheet in its
+  // colours. The decoded sheets, and their pixels once read, are shared by every colouring and let go once all are
+  // composed
+  private async fetchWeighted(sheet: WeightedSheet) {
+    const paths = [sheet.src, ...sheet.weights.map((weight) => weight.src)]
+    const [base, ...weights] = await Promise.all(paths.map(async (path) => (await this.store.file(path)).blob()))
 
-  return jsons.map((json, index) => ({ url: urls[index], json, sheets: json.sheets.map(() => undefined) }))
-}
+    this.store.throwIfAborted()
 
-// GroupTable finds a manifest art's groups among the replay's, and their tables
-type GroupTable = { indexesOf: (art: ManifestArt) => number[]; jsonOf: (group: number) => AnyArtGroup }
+    const images = await decodeImages(base, weights)
 
-function groupTableOf(groups: Group[]): GroupTable {
-  const urls = groups.map((group) => group.url)
+    try {
+      await this.composeFor(sheet.src, images)
+    } finally {
+      images.close()
+    }
 
-  return {
-    indexesOf: (art) => art.art.map((url) => urls.indexOf(url)),
-    jsonOf: (group) => groups[group].json,
+    for (const path of paths) this.store.progress(path)
+  }
+
+  private async composeFor(src: string, images: WeightedImages) {
+    for (const group of this.groups) {
+      for (const [index, sheet] of group.json.sheets.entries()) {
+        if (sheet.src !== src || group.sheets[index]) continue
+
+        const bitmap = await this.composedIn(group, index, images)
+
+        // a replay abandoned while composing keeps nothing
+        this.store.throwIfAborted()
+        group.sheets[index] ??= bitmap
+      }
+    }
+  }
+
+  private composedIn(group: Group, index: number, images: WeightedImages): Promise<ImageBitmap> {
+    const pieces = coloredPiecesOf(group, index)
+    const key = compositionKeyOf(group.json.sheets[index].src, pieces)
+    const known = this.composed.get(key)
+
+    if (known) return known
+
+    const composed = composeSheet(images, pieces)
+
+    this.composed.set(key, composed)
+
+    return composed
   }
 }
 
-function playersOf(manifest: AnyManifest, table: GroupTable): Map<string, PlayerAssets> {
+// loadGroups loads every group's piece table first: they're small, and say which sheets the first seconds need
+async function loadGroups(store: Store, manifest: AnyManifest): Promise<Map<string, AnyArtGroup>> {
+  const arts = [...Object.values(manifest.players), ...(manifest.objects ? [manifest.objects] : [])]
+  const urls = [...new Set(arts.flatMap((art) => art.art))]
+  const jsons = await Promise.all(urls.map((url) => store.artGroup(url)))
+
+  return new Map(urls.map((url, index) => [url, jsons[index]]))
+}
+
+function playersOf(manifest: AnyManifest, groups: Groups): Map<string, PlayerAssets> {
   const players = new Map<string, PlayerAssets>()
 
   for (const [slot, info] of Object.entries(manifest.players)) {
-    const set = new ArtSet(table.indexesOf(info), table.jsonOf)
-    const ready = new Map<string, boolean>()
+    if (manifest.format === SET_FORMAT) {
+      players.set(slot, playerByLooks(slot, info as ManifestPlayerFormat4, groups))
 
-    players.set(slot, { slot, info, set, sets: new Map([['', set]]), animations: new Animations(), ready })
+      continue
+    }
+
+    const set = new ArtSet(
+      info.art.map((url) => groups.indexOf(url)),
+      groups.jsonOf,
+    )
+
+    players.set(slot, playerOf(slot, info, set, new Map([['', set]])))
   }
 
   return players
 }
 
+function playerOf(slot: string, info: PlayerAssets['info'], set: ArtSet, sets: Map<string, ArtSet>): PlayerAssets {
+  return { slot, info, set, sets, animations: new Animations(), ready: new Map() }
+}
+
+// playerByLooks is a format 4 player: a set per look, sharing their bones' ids, each look's groups in its colours. A
+// player with no looks draws nothing
+function playerByLooks(slot: string, info: ManifestPlayerFormat4, groups: Groups): PlayerAssets {
+  const names = new Map<string, number>()
+
+  const lookSets = info.looks.map((look) => {
+    const lookGroups = look.art.map((art) => groups.indexOf(info.art[art], look.swaps))
+
+    return new ArtSet(lookGroups, groups.jsonOf, names)
+  })
+
+  const first = lookSets[0] ?? new ArtSet([], groups.jsonOf)
+
+  return playerOf(slot, info, first, new Map(lookSets.map((set, index) => [String(index), set])))
+}
+
 // objectsOf is the objects' art: a set per look, sharing their bones' ids
-function objectsOf(art: ManifestArt | undefined, table: GroupTable): ObjectAssets | undefined {
+function objectsOf(art: ManifestArt | undefined, groups: Groups): ObjectAssets | undefined {
   if (!art) return undefined
 
-  const indexes = table.indexesOf(art)
+  const indexes = art.art.map((url) => groups.indexOf(url))
   const names = new Map<string, number>()
 
   const sets = new Map(
     Object.entries(art.artByLook ?? {}).map(([look, at]) => {
-      const groups = at.map((index) => indexes[index])
+      const lookGroups = at.map((index) => indexes[index])
 
-      return [look, new ArtSet(groups, table.jsonOf, names)] as const
+      return [look, new ArtSet(lookGroups, groups.jsonOf, names)] as const
     }),
   )
 
@@ -302,14 +397,17 @@ function addPack(drawable: Drawable, pack: Pack) {
   if (set) drawable.animations.add(pack, set)
 }
 
-// startFramesOf is every frame a player (or the objects, by look) shows in the first seconds, with the set it's drawn
-// with
+// setsOf is each set a drawable has, once
+const setsOf = (drawable: Drawable) => [...new Set(drawable.sets.values())]
+
+// startFramesOf is every frame a player (in each of their looks) or the objects (by look) show in the first seconds,
+// with the set it's drawn with
 function startFramesOf(art: ManifestArt, drawable: Drawable): [ArtSet, Frame][] {
-  const starts: [string, number[]][] = art.startByLook ? Object.entries(art.startByLook) : [['', art.startAnimations]]
+  const starts: [ArtSet | undefined, number[]][] = art.startByLook
+    ? Object.entries(art.startByLook).map(([look, indexes]) => [drawable.sets.get(look), indexes])
+    : setsOf(drawable).map((set) => [set, art.startAnimations])
 
-  return starts.flatMap(([look, indexes]) => {
-    const set = drawable.sets.get(look)
-
+  return starts.flatMap(([set, indexes]) => {
     if (!set) return []
 
     return indexes.flatMap((index) =>
@@ -362,11 +460,9 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
   const manifest = await fetchManifest(manifestUrl, options)
   const store = new Store(manifest, options)
 
-  const arts = [...Object.values(manifest.players), ...(manifest.objects ? [manifest.objects] : [])]
-  const groups = await loadGroups(store, arts)
-  const table = groupTableOf(groups)
-  const players = playersOf(manifest, table)
-  const objects = objectsOf(manifest.objects, table)
+  const groups = new Groups(await loadGroups(store, manifest))
+  const players = playersOf(manifest, groups)
+  const objects = objectsOf(manifest.objects, groups)
 
   const drawables: [ManifestArt, Drawable][] = [...players.values()].map((player) => [player.info, player])
 
@@ -374,7 +470,7 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
 
   await Promise.all(drawables.map(async ([art, drawable]) => addPack(drawable, await store.pack(art.start))))
 
-  const sheets = new Sheets(store, groups)
+  const sheets = new Sheets(store, groups.list)
 
   await Promise.all([...firstSheetsOf(drawables, sheets)].map((src) => sheets.load(src)))
   store.started = true
@@ -389,7 +485,7 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
     players,
     objects,
     loaded,
-    groups,
+    groups: groups.list,
     isLoaded: sheets.isLoaded,
     want: sheets.want,
     assetUrl: (path) => store.urlOf(path),

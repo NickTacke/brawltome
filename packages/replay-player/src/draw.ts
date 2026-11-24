@@ -22,7 +22,8 @@ import type { Tint } from './tint.ts'
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 
 // isReady says whether an animation of a player (or of the objects, in a look) can be drawn at every frame the match
-// shows, with every weapon skin
+// shows, with every weapon skin. A format 4 player's look is the index into their manifest looks, as a string; with
+// none given, the animation has to be ready in every look of theirs
 export function isReady(
   replay: Replay,
   drawable: PlayerAssets | ObjectAssets,
@@ -33,20 +34,32 @@ export function isReady(
 
   if (drawable.ready.get(key)) return true
 
-  const set = drawable.sets.get(look) ?? drawable.sets.get('-')
+  const sets = setsOfLook(drawable, look)
   const entry = drawable.animations.byIndex.get(animationIndex)
 
-  if (!set || !entry) return false
+  if (sets.length === 0 || !entry) return false
 
-  for (const frameNumber of entry.animation.frames.keys()) {
-    const frame = drawable.animations.frame(animationIndex, frameNumber)
+  for (const set of sets) {
+    for (const frameNumber of entry.animation.frames.keys()) {
+      const frame = drawable.animations.frame(animationIndex, frameNumber)
 
-    if (!frame || !canDrawEveryWeapon(set, frame, replay.isLoaded)) return false
+      if (!frame || !canDrawEveryWeapon(set, frame, replay.isLoaded)) return false
+    }
   }
 
   drawable.ready.set(key, true)
 
   return true
+}
+
+// setsOfLook is the sets a look draws with: its own, else for a player without that look every set they have, one per
+// look in format 4
+function setsOfLook(drawable: PlayerAssets | ObjectAssets, look: string): ArtSet[] {
+  const set = drawable.sets.get(look) ?? drawable.sets.get('-')
+
+  if (set) return [set]
+
+  return 'set' in drawable ? [...new Set(drawable.sets.values())] : []
 }
 
 function canDrawEveryWeapon(set: ArtSet, frame: Frame, isLoaded: (ref: number) => boolean): boolean {
