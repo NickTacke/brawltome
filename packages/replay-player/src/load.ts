@@ -3,7 +3,7 @@
 //
 // The manifest is the match's own file. Every path inside it (art/, sheets/, anims/, maps/) is relative to the art
 // store's root, baseUrl, which is shared by every match and can live on another domain.
-import { composeSheet, decodeImages, type WeightedImages } from './compose-sheet.ts'
+import { composeSheet, decodeImages, isLostSheet, onGpuLost, type WeightedImages } from './compose-sheet.ts'
 import {
   type AnyArtGroup,
   type AnyManifest,
@@ -123,6 +123,8 @@ class Store {
   private readonly onProgress?: (progress: Progress) => void
   private totalBytes: number
   private loadedBytes = 0
+  // the files counted in so far: a sheet loaded again, after a lost GPU context, isn't counted twice
+  private readonly counted = new Set<string>()
   // the sizes of the files a manifest's bytes don't list: a set's sheets, which its file gives
   private readonly expected = new Map<string, number>()
 
@@ -163,7 +165,10 @@ class Store {
 
   // progress counts a file in, by its path, and tells onProgress
   progress(path?: string) {
-    if (path) this.loadedBytes += this.manifest.bytes[path] ?? this.expected.get(path) ?? 0
+    if (path && !this.counted.has(path)) {
+      this.counted.add(path)
+      this.loadedBytes += this.manifest.bytes[path] ?? this.expected.get(path) ?? 0
+    }
 
     this.onProgress?.({ loaded: this.loadedBytes, total: this.totalBytes, started: this.started })
   }
@@ -207,30 +212,44 @@ type SheetFailed = (src: string, error: unknown) => boolean
 // GroupDrawn says whether anyone still draws from a group: no one does once all its players are missing
 type GroupDrawn = (group: number) => boolean
 
+// SheetsHooks are what Sheets tells and asks the replay: a sheet that failed, whether a group is still drawn, and that
+// sheets it had were forgotten, as a lost GPU context took them
+type SheetsHooks = { onFailed: SheetFailed; isDrawn: GroupDrawn; onForgotten: () => void }
+
 // Sheets loads the sprite sheets: the ones asked for at once, then the rest from a queue a few at a time. A weighted
-// sheet loads with its weight sheets and is composed once in each colouring its groups give it
+// sheet loads with its weight sheets and is composed once in each colouring its groups give it. A sheet composed on
+// the GPU is lost with its context: it's forgotten then, and loaded and composed again on the 2D path
 class Sheets {
   private readonly store: Store
   private readonly groups: Group[]
-  private readonly onFailed: SheetFailed
-  private readonly isDrawn: GroupDrawn
+  private readonly hooks: SheetsHooks
   private readonly jobs = new Map<string, Promise<void>>()
   // composed sheets by compositionKeyOf, so groups in the same colours share one
   private readonly composed = new Map<string, Promise<ImageBitmap>>()
   private queue: string[] = []
+  // how many of loadQueued's workers are still taking sheets off the queue
+  private workers = 0
+  // whether a loadQueued has run to its end, failed or not: until the first does, loadRest's own takes whatever is queued
+  private hasEmptiedQueue = false
 
-  constructor(store: Store, groups: Group[], onFailed: SheetFailed, isDrawn: GroupDrawn) {
+  constructor(store: Store, groups: Group[], hooks: SheetsHooks) {
     this.store = store
     this.groups = groups
-    this.onFailed = onFailed
-    this.isDrawn = isDrawn
+    this.hooks = hooks
+
+    // held weakly, so a replay the page has let go of isn't kept for the loss of a context it no longer draws from
+    const sheets = new WeakRef(this)
+
+    onGpuLost(() => sheets.deref()?.forgetLostSheets())
   }
 
   isLoaded = (ref: number): boolean => {
     const group = this.groups[groupOf(ref)]
     const piece = group?.json.pieces[pieceOf(ref)]
+    const sheet = piece && group?.sheets[piece[0]]
 
-    return piece !== undefined && group?.sheets[piece[0]] !== undefined
+    // a sheet a lost context took is forgotten once the page is told; until then it isn't loaded either
+    return sheet !== undefined && !isLostSheet(sheet)
   }
 
   sheetOf(ref: number): string | undefined {
@@ -257,13 +276,14 @@ class Sheets {
   }
 
   // queueRest queues every sheet not asked for yet but a set's: those in order first, in it, then the others. A set
-  // holds far more than a match draws, so its sheets wait for queueDrawn
+  // holds far more than a match draws, so its sheets wait for queueDrawn. What's queued already, sheets a lost GPU
+  // context took during the first load, stays first
   queueRest(order: string[]) {
     const whole = this.groups.filter((group) => !isSetGroup(group.json))
     const every = new Set(whole.flatMap((group) => group.json.sheets.map((sheet) => sheet.src)))
     const inOrder = order.filter((src) => every.has(src))
 
-    this.queue = [...new Set([...inOrder, ...every])].filter((src) => !this.jobs.has(src))
+    this.queue = [...new Set([...this.queue, ...inOrder, ...every])].filter((src) => !this.jobs.has(src))
   }
 
   // queueDrawn queues, after the rest, the sets' sheets the match draws from
@@ -292,18 +312,64 @@ class Sheets {
   // loadQueued loads the queue a few sheets at a time, so the order holds whatever the connection
   async loadQueued() {
     const worker = async () => {
-      for (let src = this.queue.shift(); src !== undefined; src = this.queue.shift()) {
-        if (this.isSheetDrawn(src)) await this.load(src)
+      this.workers++
+
+      try {
+        for (let src = this.queue.shift(); src !== undefined; src = this.queue.shift()) {
+          if (this.isSheetDrawn(src)) await this.load(src)
+        }
+      } finally {
+        this.workers--
       }
     }
 
-    await Promise.all(Array.from({ length: SHEETS_AT_ONCE }, worker))
+    try {
+      await Promise.all(Array.from({ length: SHEETS_AT_ONCE }, worker))
+    } finally {
+      // a failed pass counts too: what's queued after it needs a pass of its own
+      this.hasEmptiedQueue = true
+    }
+  }
+
+  // forgetLostSheets forgets every sheet a lost GPU context took with it, so what draws from them waits, and queues
+  // them first to be composed again on the 2D path
+  private forgetLostSheets() {
+    const lost = new Set<string>()
+
+    for (const group of this.groups) {
+      for (const [index, bitmap] of group.sheets.entries()) {
+        if (!bitmap || !isLostSheet(bitmap)) continue
+
+        group.sheets[index] = undefined
+        lost.add(group.json.sheets[index].src)
+      }
+    }
+
+    if (lost.size === 0) return
+
+    for (const src of lost) this.forgetSheet(src)
+
+    this.hooks.onForgotten()
+    this.queue.unshift(...lost)
+
+    // until loadRest's own load has emptied the queue, it takes these too, so a sheet the objects draw from still
+    // fails replay.loaded. Once it has, replay.loaded has settled: a sheet that fails this time has its players marked
+    // missing, and one the objects draw from stays unloaded, as there's no load left to fail
+    if (this.workers === 0 && this.hasEmptiedQueue) this.loadQueued().catch(() => undefined)
+  }
+
+  private forgetSheet(src: string) {
+    this.jobs.delete(src)
+
+    for (const key of this.composed.keys()) {
+      if (key.startsWith(`${src}|`)) this.composed.delete(key)
+    }
   }
 
   // isSheetDrawn says whether anyone still draws from a sheet: a sheet only missing players draw from isn't loaded
   private isSheetDrawn(src: string): boolean {
     return this.groups.some(
-      (group, index) => this.isDrawn(index) && group.json.sheets.some((sheet) => sheet.src === src),
+      (group, index) => this.hooks.isDrawn(index) && group.json.sheets.some((sheet) => sheet.src === src),
     )
   }
 
@@ -312,7 +378,7 @@ class Sheets {
   private failed(src: string, error: unknown) {
     this.store.throwIfAborted()
 
-    if (!this.onFailed(src, error)) throw error
+    if (!this.hooks.onFailed(src, error)) throw error
   }
 
   private sheetNamed(src: string): SetSheet | undefined {
@@ -375,26 +441,41 @@ class Sheets {
   // composeFor composes a weighted sheet for each group that has it and still draws, unless it has it already
   private async composeFor(src: string, images: WeightedImages) {
     for (const [groupIndex, group] of this.groups.entries()) {
-      if (!this.isDrawn(groupIndex)) continue
+      if (!this.hooks.isDrawn(groupIndex)) continue
 
       for (const [index, sheet] of group.json.sheets.entries()) {
         if (sheet.src !== src || group.sheets[index]) continue
 
-        const bitmap = await this.composedIn(group, index, images)
+        const bitmap = await this.composedAgainIfLost(group, index, images)
 
-        // a replay abandoned while composing keeps nothing
-        this.store.throwIfAborted()
-        group.sheets[index] ??= bitmap
+        if (!isLostSheet(bitmap)) group.sheets[index] ??= bitmap
       }
     }
   }
 
-  private composedIn(group: Group, index: number, images: WeightedImages): Promise<ImageBitmap> {
+  // composedAgainIfLost composes a sheet, and again when its GPU context was lost meanwhile, before the loss was
+  // heard of: forgetLostSheets only finds sheets already in place, and a lost context leaves the second to the 2D path.
+  // A replay abandoned while composing keeps nothing
+  private async composedAgainIfLost(group: Group, index: number, images: WeightedImages): Promise<ImageBitmap> {
+    const bitmap = await this.composedIn(group, index, images)
+
+    this.store.throwIfAborted()
+
+    if (!isLostSheet(bitmap)) return bitmap
+
+    const again = await this.composedIn(group, index, images)
+
+    this.store.throwIfAborted()
+
+    return again
+  }
+
+  private async composedIn(group: Group, index: number, images: WeightedImages): Promise<ImageBitmap> {
     const pieces = coloredPiecesOf(group, index)
     const key = compositionKeyOf(group.json.sheets[index].src, pieces)
-    const known = this.composed.get(key)
+    const known = await this.composed.get(key)
 
-    if (known) return known
+    if (known && !isLostSheet(known)) return known
 
     const composed = composeSheet(images, pieces)
 
@@ -700,8 +781,15 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
 
   await Promise.all(drawables.map(async ([art, drawable]) => addPack(drawable, await store.pack(art.start))))
 
-  const onFailed = missingOnFailure(manifest, groups.list, players, objects, options)
-  const sheets = new Sheets(store, groups.list, onFailed, groupDrawnBy(players, objects))
+  const sheets = new Sheets(store, groups.list, {
+    onFailed: missingOnFailure(manifest, groups.list, players, objects, options),
+    isDrawn: groupDrawnBy(players, objects),
+    // a sheet forgotten makes what drew from it not ready any more
+    onForgotten: () => {
+      for (const [, drawable] of drawables) drawable.ready.clear()
+    },
+  })
+
   const firstSheets = [...firstSheetsOf(drawables, sheets)]
 
   for (const src of firstSheets) sheets.expect(src)
