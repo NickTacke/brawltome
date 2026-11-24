@@ -1,4 +1,5 @@
-// in a format 4 group a sprite frame past the end of a bone's row shows the row's last piece; in format 3 it shows none
+// in a format 4 group a sprite frame past the end of a bone's row shows the row's last piece; in format 3 it shows
+// none. A bone a format 4 group has first is drawn from that group alone
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -101,5 +102,16 @@ describe('a sprite frame past the end of a row', () => {
     expect(piecesShown(groups, 'a_Hand', 4)).toEqual([1])
     expect(piecesShown(groups, 'a_Hand', 0, { weapon: 'Katar' })).toEqual([PIECES + 3])
     expect(piecesShown(groups, 'a_Hand', 4, { weapon: 'Katar' })).toEqual([])
+  })
+})
+
+describe('a bone two sets have', () => {
+  test("takes its whole row from the first, as the game takes a bone's art from one place", () => {
+    const groups = [groupOfFormat(4, { a_Hand: [1] }), groupOfFormat(4, { a_Hand: [5, 6, 7] })]
+    const onlyTheSecond = (ref: number) => groupOf(ref) === 1
+
+    expect(piecesShown(groups, 'a_Hand', 0)).toEqual([1])
+    expect(piecesShown(groups, 'a_Hand', 2)).toEqual([1])
+    expect(piecesShown(groups, 'a_Hand', 2, { isLoaded: onlyTheSecond })).toEqual([])
   })
 })
