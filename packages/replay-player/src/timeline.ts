@@ -48,6 +48,9 @@ export type LineObject = {
   class: string
   look?: number
   behind?: boolean
+  // the slot of the player it moves with (their sweat, a hit reaction on them): the game draws it in their off-screen
+  // bubble with them, where the line has it beside them where they are
+  follows?: number
   animation: [number, number | null, number, number][]
   transform: [number, number, number, number, number, number, number][]
   alpha?: [number, number][]
@@ -62,6 +65,7 @@ export type ObjectPose = {
   alpha: number
   behind: boolean // drawn under the players
   owner: number | null
+  follows: number | null // the slot of the player it moves with, into their off-screen bubble too
 }
 
 export type PlayerPose = {
@@ -181,6 +185,7 @@ function objectPoseAt(
     alpha: valueAt(object.alpha, whole) ?? 1,
     behind: object.behind ?? false,
     owner: object.owner,
+    follows: object.follows ?? null,
   }
 }
 
