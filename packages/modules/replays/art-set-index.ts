@@ -7,11 +7,15 @@ import { parseArtPath } from './art-paths'
 // the index's words for a row that needs no set of its own
 const NOT_A_SET = ['nothing to draw', 'draw per look']
 
-/** The patch an index is for and every set it names, once each, or why it isn't a set index. */
-export function readSetIndex(index: unknown): { patch: string; sets: string[] } | { reason: string } {
+export type SetIndex = { patch: string; format: number; sets: string[] }
+
+/** The patch an index is for, the format of its sets and every set it names, once each, or why it isn't a set index. */
+export function readSetIndex(index: unknown): SetIndex | { reason: string } {
   if (!isRecord(index)) return { reason: 'the set index is not a json object' }
 
   if (typeof index.patch !== 'string') return { reason: 'the set index names no patch' }
+
+  if (!isFormat(index.format)) return { reason: 'the set index names no set format' }
 
   const { skins, weaponSkins, classes } = index
 
@@ -30,7 +34,12 @@ export function readSetIndex(index: unknown): { patch: string; sets: string[] } 
 
   const sets = (names as string[]).filter((name) => !NOT_A_SET.includes(name))
 
-  return { patch: index.patch, sets: [...new Set(sets)] }
+  return { patch: index.patch, format: index.format, sets: [...new Set(sets)] }
+}
+
+// a format fits the smallint it is kept in, as the worker's reported formats do
+function isFormat(format: unknown): format is number {
+  return Number.isInteger(format) && (format as number) >= 1 && (format as number) <= 32767
 }
 
 // each class set's name, or null when classes isn't { class: { animation: { set, bones } } }

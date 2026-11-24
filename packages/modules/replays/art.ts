@@ -45,7 +45,7 @@ export type ReadArtOutcome =
 
 /**
  * The next art job, warm jobs first, then predraw jobs, then the newest match; null when there is nothing to do. Only
- * a worker that reports a set format is handed predraw jobs and set indexes.
+ * a worker that reports a set format is handed predraw jobs, and a set index only when its sets are in that format.
  */
 export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Promise<ClaimedArtJob | null> {
   if (!deps.artStore) return null
@@ -53,10 +53,10 @@ export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Prom
   await noteWorkerReport(deps, report)
   await failExhaustedArtJobs(deps.database.sql)
 
-  const canDrawSets = typeof report.setFormat === 'number'
+  const setFormat = report.setFormat ?? null
 
   for (;;) {
-    const job = await takeNextArtJob(deps.database.sql, canDrawSets)
+    const job = await takeNextArtJob(deps.database.sql, setFormat !== null)
 
     if (!job) return null
 
@@ -71,7 +71,7 @@ export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Prom
     if (job.kind !== 'match') return { ...claimed, line: null, setIndex: null }
 
     const line = job.timelineKey ? await deps.objectStore.get(job.timelineKey) : null
-    const setIndex = canDrawSets ? await setIndexOf(deps.database.sql, job.patch) : null
+    const setIndex = await setIndexOf(deps.database.sql, job.patch, setFormat)
 
     if (line) return { ...claimed, line, setIndex }
 
@@ -111,8 +111,14 @@ async function takeNextArtJob(sql: Sql, canDrawSets: boolean): Promise<(LiveArtJ
   return job ?? null
 }
 
-async function setIndexOf(sql: Sql, patch: string): Promise<string | null> {
-  const [index] = await sql<{ path: string }[]>`SELECT path FROM replays.set_indexes WHERE patch = ${patch}`
+// render --sets refuses an index of another set format and fails the match, so a worker whose export draws another
+// format than the index's, or none, draws the match as if its patch had no index
+async function setIndexOf(sql: Sql, patch: string, setFormat: number | null): Promise<string | null> {
+  if (setFormat === null) return null
+
+  const [index] = await sql<{ path: string }[]>`
+    SELECT path FROM replays.set_indexes WHERE patch = ${patch} AND format = ${setFormat}
+  `
 
   return index?.path ?? null
 }

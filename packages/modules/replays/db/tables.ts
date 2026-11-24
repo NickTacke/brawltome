@@ -192,5 +192,6 @@ export const artFormats = replaysSchema.table('art_formats', {
 export const setIndexes = replaysSchema.table('set_indexes', {
   patch: varchar('patch', { length: 16 }).primaryKey(),
   path: varchar('path', { length: 80 }).notNull(),
+  format: smallint('format').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 })

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { Accounts } from '@brawltome/accounts'
 import { accountsTestModules } from '@brawltome/accounts/testing'
 import { createMemoryObjectStore, createTestDatabase, type TestDatabase } from '@brawltome/foundation/testing'
@@ -101,7 +101,11 @@ describe.skipIf(!connectionString)('predraw jobs and set indexes', () => {
   }
 
   async function setIndexes() {
-    return [...(await database.sql<{ patch: string; path: string }[]>`SELECT patch, path FROM replays.set_indexes`)]
+    const rows = await database.sql<{ patch: string; path: string; format: number }[]>`
+      SELECT patch, path, format FROM replays.set_indexes
+    `
+
+    return [...rows]
   }
 
   async function jobOf(jobId: string) {
@@ -149,7 +153,7 @@ describe.skipIf(!connectionString)('predraw jobs and set indexes', () => {
     const outcome = await predraw(await claimedPredrawJob())
 
     expect(outcome).toBe('completed')
-    expect(await setIndexes()).toEqual([{ patch: '11.00', path: fakeSetsExport().indexPath }])
+    expect(await setIndexes()).toEqual([{ patch: '11.00', path: fakeSetsExport().indexPath, format: 4 }])
   })
 
   test('a set file is refused until its sheets and weight sheets are stored', async () => {
@@ -249,7 +253,7 @@ describe.skipIf(!connectionString)('predraw jobs and set indexes', () => {
     await predraw(await claimedPredrawJob())
     await predraw(await claimedPredrawJob(), fakeSetsExport('11.00', 'two'))
 
-    expect(await setIndexes()).toEqual([{ patch: '11.00', path: fakeSetsExport('11.00', 'two').indexPath }])
+    expect(await setIndexes()).toEqual([{ patch: '11.00', path: fakeSetsExport('11.00', 'two').indexPath, format: 4 }])
   })
 
   test("a match job carries its patch's index only to a worker that draws sets", async () => {
@@ -269,6 +273,55 @@ describe.skipIf(!connectionString)('predraw jobs and set indexes', () => {
       kind: 'match',
       setIndex: fakeSetsExport().indexPath,
     })
+  })
+
+  // render --sets refuses an index of another format and would fail the match for good
+  test("a match job carries its patch's index only to a worker whose sets are the index's format", async () => {
+    await predraw(await claimedPredrawJob())
+    await parsedMatch()
+
+    for (const setFormat of [3, 5]) {
+      const claimed = (await claimArtJob(deps, { ...report, setFormat })) as ClaimedArtJob
+
+      expect(claimed).toMatchObject({ kind: 'match', setIndex: null })
+
+      await database.sql`
+        UPDATE replays.art_jobs SET status = 'pending', lease_token = NULL, lease_expires_at = NULL
+        WHERE id = ${claimed.jobId}
+      `
+    }
+
+    expect(await claimArtJob(deps, setsReport)).toMatchObject({ kind: 'match', setIndex: fakeSetsExport().indexPath })
+  })
+
+  test("an index is kept with its own sets' format, whatever the worker that drew it reported", async () => {
+    const sets = fakeSetsExport('11.00', 'one', 5)
+
+    await predraw(await claimedPredrawJob(), sets)
+    await parsedMatch()
+
+    expect(await setIndexes()).toEqual([{ patch: '11.00', path: sets.indexPath, format: 5 }])
+    expect(await claimArtJob(deps, setsReport)).toMatchObject({ kind: 'match', setIndex: null })
+
+    await database.sql`
+      UPDATE replays.art_jobs SET status = 'pending', lease_token = NULL, lease_expires_at = NULL WHERE kind = 'match'
+    `
+
+    expect(await claimArtJob(deps, { ...report, setFormat: 5 })).toMatchObject({ setIndex: sets.indexPath })
+  })
+
+  test('an index without a set format fails the predraw job', async () => {
+    const claimed = await claimedPredrawJob()
+    const sets = fakeSetsExport()
+    const index = JSON.parse(new TextDecoder().decode(sets.files.get(sets.indexPath)))
+    const indexBytes = new TextEncoder().encode(JSON.stringify({ ...index, format: undefined }))
+    const indexPath = `sets/${createHash('sha256').update(indexBytes).digest('hex').slice(0, 32)}.json`
+
+    sets.files.delete(sets.indexPath)
+    sets.files.set(indexPath, indexBytes)
+
+    expect(await predraw(claimed, { ...sets, indexPath })).toBe('failed')
+    expect(await setIndexes()).toEqual([])
   })
 
   test('a match job of a patch without an index carries none', async () => {

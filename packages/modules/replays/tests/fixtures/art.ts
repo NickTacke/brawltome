@@ -126,10 +126,10 @@ export function fakeArtExport(seed = 'one') {
   return { files, manifest, mapPath: fixedNames.map }
 }
 
-/** A patch's set index in the brawlhalla-anims format 4, naming its first set for a skin and its last for a class. */
-export function fakeSetIndex(patch: string, sets: string[]) {
+/** A patch's set index in the brawlhalla-anims format, naming its first set for a skin and its last for a class. */
+export function fakeSetIndex(patch: string, sets: string[], format = 4) {
   return {
-    format: 4,
+    format,
     drawing: 1,
     pixelsPerUnit: 1.2,
     patch,
@@ -142,9 +142,9 @@ export function fakeSetIndex(patch: string, sets: string[]) {
 
 /**
  * Every file of a fake predraw of a patch, in the order the worker sends them: the sets' sheets, then the two set files
- * (a skin's with a weighted sheet, a class's with a plain one), then the index naming them.
+ * (a skin's with a weighted sheet, a class's with a plain one), then the index naming them, in the given set format.
  */
-export function fakeSetsExport(patch = '11.00', seed = 'one') {
+export function fakeSetsExport(patch = '11.00', seed = 'one', format = 4) {
   const files = new Map<string, Uint8Array>()
   const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
 
@@ -174,7 +174,7 @@ export function fakeSetsExport(patch = '11.00', seed = 'one') {
 
   files.set(sets[1] as string, setFile('class', [{ src: plain, w: 4, h: 4, bytes: 10 }]))
 
-  const indexBytes = json(fakeSetIndex(patch, sets))
+  const indexBytes = json(fakeSetIndex(patch, sets, format))
   const indexPath = `sets/${createHash('sha256').update(indexBytes).digest('hex').slice(0, 32)}.json`
 
   files.set(indexPath, indexBytes)
