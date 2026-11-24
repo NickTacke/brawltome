@@ -12,7 +12,10 @@
 //   for (const o of objects) if (!o.behind) drawObject(ctx, replay, o, levelToCanvas)
 //
 // A player or object is drawn whole or not at all: drawPlayer and drawObject draw nothing, and return false, while a
-// piece of its frame hasn't loaded yet. isReady says whether an animation can be drawn at every frame.
+// piece of its frame hasn't loaded yet, so the page can wait for it. A missing player (PlayerAssets.missing), whose art
+// will never load, draws nothing and returns true, as there's nothing to wait for; a player can be marked missing
+// mid-match, when a sheet of theirs fails, and draws nothing from then on. isReady says whether an animation can be
+// drawn at every frame; it never is for a missing player.
 import type { ManifestLook, PieceRow, Rect } from './format.ts'
 import type { ObjectAssets, PlayerAssets, Replay } from './load.ts'
 import { type ArtSet, eachDraw, type Frame, groupOf, type Matrix, multiply, pieceOf } from './placement.ts'
@@ -30,6 +33,9 @@ export function isReady(
   animationIndex: number,
   look = '',
 ): boolean {
+  // a player marked missing once their animation was ready is never ready again
+  if ('missing' in drawable && drawable.missing) return false
+
   const key = `${look}|${animationIndex}`
 
   if (drawable.ready.get(key)) return true
@@ -127,8 +133,9 @@ function setOfPose(player: PlayerAssets, pose: PlayerPose): ArtSet {
 }
 
 // drawPlayer draws one player's pose. levelToCanvas takes level units to canvas pixels (include devicePixelRatio). It
-// draws nothing and returns false while a piece of the frame hasn't loaded. A pose with a tint (from poseAt) is drawn
-// in the game's colours: see drawTinted
+// draws nothing and returns false while a piece of the frame hasn't loaded, and draws nothing and returns true for a
+// missing player, whom there's no waiting for. A pose with a tint (from poseAt) is drawn in the game's colours: see
+// drawTinted
 export function drawPlayer(
   ctx: CanvasRenderingContext2D,
   replay: Replay,
@@ -136,6 +143,8 @@ export function drawPlayer(
   pose: PlayerPose,
   levelToCanvas: Matrix,
 ): boolean {
+  if (player.missing) return true
+
   const frame = player.animations.frame(pose.animationIndex, Math.floor(pose.frame))
 
   if (!frame) return false

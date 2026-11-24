@@ -43,10 +43,16 @@ const artChecks: ((art: Art) => void)[] = []
 const tools: StageTools = {
   readMatchArt: () => new Promise<Art>((resolve) => artChecks.push(resolve)),
   artCheckEveryMs: 1,
-  loadReplay: async (manifestUrl) => {
+  loadReplay: async (manifestUrl, options) => {
     loadedManifests.push(String(manifestUrl))
 
     if (String(manifestUrl).includes('broken')) return brokenReplay()
+
+    if (String(manifestUrl).includes('missing')) {
+      options.onMissing?.('2', new Error('load replay file sheets/0000000000000000.webp: HTTP 404'))
+
+      return firstReplay
+    }
 
     return String(manifestUrl).includes('first') ? firstReplay : new Promise<Replay>(() => undefined)
   },
@@ -154,6 +160,27 @@ describe('the stage in a browser', () => {
     console.error = errorBefore
 
     expect(container.querySelector('[data-stage-window]')?.parentElement?.textContent).toContain(
+      'Legends unavailable for this match',
+    )
+
+    await unmount()
+  })
+
+  test('a player whose art cannot load is reported, and the legends still play', async () => {
+    const errorBefore = console.error
+    const reported: unknown[][] = []
+
+    console.error = (...parts: unknown[]) => reported.push(parts)
+
+    await mount(<MatchByKind match={matchNamed('missing')} />)
+
+    console.error = errorBefore
+
+    expect(reported.map(([what]) => what)).toEqual([
+      'load the art of player 2 at https://art.test/manifests/missing.json:',
+    ])
+
+    expect(container.querySelector('[data-stage-window]')?.parentElement?.textContent).not.toContain(
       'Legends unavailable for this match',
     )
 

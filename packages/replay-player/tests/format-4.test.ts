@@ -1,6 +1,7 @@
 // format 4 files as the loader reads them: three real sets drawn by brawlhalla-anims `predraw draw --check` from
 // 11.01 (the PistolCowgirl and KatarDKSent weapon skins and the orb's FirstPickUp class set, its pickup flash), a
-// manifest naming them beside a format 3 group, and the ways a format 4 file can be wrong
+// manifest naming them beside a format 3 group, and the ways a format 4 file can be wrong. A player's file that's
+// wrong marks that player missing; one the objects draw from fails the replay
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -97,6 +98,7 @@ describe('reading format 4', () => {
     expect(replay.groups.map((group) => group.url)).toEqual([pistolPath, pickupPath, ownPath, katarPath])
     expect(replay.groups.map((group) => group.json)).toEqual([pistolPath, pickupPath, ownPath, katarPath].map(setOf))
     expect(replay.players.get('1')?.info).toEqual(manifest.players['1'])
+    expect(replay.players.get('1')?.missing).toBeUndefined()
   })
 
   test('a format 4 look may leave out its index into the line looks and have no swaps', () => {
@@ -107,12 +109,16 @@ describe('reading format 4', () => {
     expect(readManifest(manifest, manifestUrl)).toEqual(manifest)
   })
 
-  test('a format 4 player may have no looks', () => {
+  test('a format 4 player may have no looks, and is then missing', async () => {
     const manifest = manifestOf()
 
     manifest.players['1'].looks = []
 
     expect(readManifest(manifest, manifestUrl)).toEqual(manifest)
+
+    const replay = await loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifest) })
+
+    expect(replay.players.get('1')?.missing?.message).toBe('load replay: player 1 has no looks')
   })
 
   test('a group with neither set nor swappable colours reads, as a match writes its own', () => {
@@ -131,11 +137,28 @@ describe('refusing what neither format is', () => {
     )
   })
 
-  test.each([2, 5, '3'])('loadReplay refuses an art group of format %p', async (format) => {
+  test.each([2, 5, '3'])('loadReplay marks missing a player whose art group is of format %p', async (format) => {
     files.set(ownPath, { ...setOf(ownPath), format } as unknown as AnyArtGroup)
 
     try {
-      await expect(loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifestOf()) })).rejects.toThrow(
+      const replay = await loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifestOf()) })
+
+      expect(replay.players.get('1')?.missing?.message).toBe(
+        `load replay file ${artUrl}${ownPath}: art group format ${String(format)}, expected 3 or 4`,
+      )
+    } finally {
+      files.set(ownPath, readJson('format-3/9e79c1d66d6b83f8f5691d04d489bfe3.json'))
+    }
+  })
+
+  test.each([2, 5, '3'])('loadReplay refuses an art group of format %p the objects draw from', async (format) => {
+    const manifest = manifestOf()
+
+    manifest.objects = { art: [ownPath], start: packPath, startAnimations: [] }
+    files.set(ownPath, { ...setOf(ownPath), format } as unknown as AnyArtGroup)
+
+    try {
+      await expect(loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifest) })).rejects.toThrow(
         `load replay file ${artUrl}${ownPath}: art group format ${String(format)}, expected 3 or 4`,
       )
     } finally {
@@ -267,17 +290,22 @@ const wrongGroups: GroupChange[] = [
   ],
 ]
 
-test.each(wrongGroups)('loadReplay refuses a format 4 group with %s', async (_, change, problem) => {
-  const group = setOf(pistolPath)
+test.each(wrongGroups)(
+  'loadReplay marks missing the player of a format 4 group with %s',
+  async (_, change, problem) => {
+    const group = setOf(pistolPath)
 
-  change(group)
-  files.set(pistolPath, group)
+    change(group)
+    files.set(pistolPath, group)
 
-  try {
-    await expect(loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifestOf()) })).rejects.toThrow(
-      `load replay file ${artUrl}${pistolPath}: art group ${problem}`,
-    )
-  } finally {
-    files.set(pistolPath, readJson('format-4/583f0e4a79e7ae898cb46b0d1a0d1013.json'))
-  }
-})
+    try {
+      const replay = await loadReplay(manifestUrl, { baseUrl: artUrl, fetch: fetchOf(manifestOf()) })
+
+      expect(replay.players.get('1')?.missing?.message).toBe(
+        `load replay file ${artUrl}${pistolPath}: art group ${problem}`,
+      )
+    } finally {
+      files.set(pistolPath, readJson('format-4/583f0e4a79e7ae898cb46b0d1a0d1013.json'))
+    }
+  },
+)
