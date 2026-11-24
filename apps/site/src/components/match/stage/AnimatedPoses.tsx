@@ -5,16 +5,12 @@ import { LegendTags } from './LegendTags'
 import type { Camera } from './play-camera'
 import type { Pose } from './pose'
 import { StageSpinner } from './StageSpinner'
+import { useCanvasSize } from './use-canvas-size'
 import { useHeldFor } from './use-held-for'
 import { useMomentDrawing } from './use-moment-drawing'
 
 // a wait shorter than this shows no spinner, as a sheet often comes in a frame or two late
 const spinnerDelayMs = 250
-
-// the canvas covers the frame, so its size on screen is the frame's
-function frameOf(canvas: HTMLCanvasElement | null): { width: number; height: number } | null {
-  return canvas ? { width: canvas.clientWidth, height: canvas.clientHeight } : null
-}
 
 type AnimatedPosesProps = {
   match: DrawnMatch
@@ -30,7 +26,9 @@ type AnimatedPosesProps = {
 /** Draws each player as their animated legend on a canvas over the stage, with their weapon, damage and stocks above them. */
 export function AnimatedPoses({ match, poses, selectedSlot, box, camera, timeMs, onBuffering }: AnimatedPosesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const isBuffering = useMomentDrawing({ canvasRef, match, camera, timeMs })
+  // the canvas covers the frame, so its size on screen is the frame's
+  const frame = useCanvasSize(canvasRef)
+  const isBuffering = useMomentDrawing({ canvasRef, canvasSize: frame, match, camera, timeMs })
   const isSpinnerShown = useHeldFor(isBuffering, spinnerDelayMs)
 
   useEffect(() => onBuffering(isBuffering), [isBuffering, onBuffering])
@@ -41,13 +39,7 @@ export function AnimatedPoses({ match, poses, selectedSlot, box, camera, timeMs,
   return (
     <>
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full" />
-      <LegendTags
-        poses={poses}
-        selectedSlot={selectedSlot}
-        box={box}
-        camera={camera}
-        frame={frameOf(canvasRef.current)}
-      />
+      <LegendTags poses={poses} selectedSlot={selectedSlot} box={box} camera={camera} frame={frame} />
       {isSpinnerShown ? <StageSpinner label="Loading the art for this moment" /> : null}
     </>
   )
