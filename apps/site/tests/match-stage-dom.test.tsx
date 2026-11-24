@@ -42,6 +42,10 @@ const artCheckTimes: number[] = []
 // how often the fake page checks once its first checks found the art still being drawn
 const slowArtCheckEveryMs = 40
 
+// failures of player 2's art that come after the replay's first seconds have loaded, made when a test says so
+const laterFailures: ((error: Error) => void)[] = []
+const sheetFailure = () => new Error('load replay file sheets/0000000000000000.webp: HTTP 404')
+
 // the stage loads and draws through these instead of the real ones, so the test sees which art it loaded and drew
 const tools: StageTools = {
   readMatchArt: () => {
@@ -57,9 +61,22 @@ const tools: StageTools = {
     if (String(manifestUrl).includes('broken')) return brokenReplay()
 
     if (String(manifestUrl).includes('missing')) {
-      options.onMissing?.('2', new Error('load replay file sheets/0000000000000000.webp: HTTP 404'))
+      options.onMissing?.('2', sheetFailure())
 
       return firstReplay
+    }
+
+    if (String(manifestUrl).includes('late')) {
+      laterFailures.push((error) => options.onMissing?.('2', error))
+
+      return firstReplay
+    }
+
+    // a load that is replaced before it is in; aborting it still reaches its players' sheets as failures
+    if (String(manifestUrl).includes('replaced')) {
+      laterFailures.push((error) => options.onMissing?.('2', error))
+
+      return new Promise<Replay>(() => undefined)
     }
 
     return String(manifestUrl).includes('first') ? firstReplay : new Promise<Replay>(() => undefined)
@@ -157,6 +174,14 @@ async function unmount(): Promise<void> {
   container.remove()
 }
 
+// the players drawn as their portraits on the stage. a weapon icon has no text of its own, while a portrait is named
+// for its player
+function portraitNames(): (string | null)[] {
+  const portraits = container.querySelectorAll('[data-stage-window] img:not([alt=""])')
+
+  return [...portraits].map((image) => image.getAttribute('alt'))
+}
+
 describe('the stage in a browser', () => {
   test('art that fails after the first seconds makes the legends unavailable, so the portraits play instead', async () => {
     const errorBefore = console.error
@@ -200,19 +225,60 @@ describe('the stage in a browser', () => {
 
     console.error = () => undefined
 
-    await mount(<MatchByKind match={matchNamed('missing')} />)
+    try {
+      await mount(<MatchByKind match={matchNamed('missing')} />)
 
-    console.error = errorBefore
+      expect(container.querySelector('[data-stage-window] canvas')).not.toBeNull()
+      expect(portraitNames()).toEqual(['Player B'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
 
-    const stage = container.querySelector('[data-stage-window]')
-    // a weapon icon has no text of its own, while a portrait is named for its player
-    const portraits = [...(stage?.querySelectorAll('img:not([alt=""])') ?? [])]
-    const names = portraits.map((image) => image.getAttribute('alt'))
+  test('a player whose sheet fails after the replay is in is drawn as their portrait from then on', async () => {
+    const errorBefore = console.error
 
-    expect(stage?.querySelector('canvas')).not.toBeNull()
-    expect(names).toEqual(['Player B'])
+    console.error = () => undefined
+    laterFailures.length = 0
 
-    await unmount()
+    try {
+      await mount(<MatchByKind match={matchNamed('late')} />)
+
+      expect(portraitNames()).toEqual([])
+
+      await act(async () => laterFailures.shift()?.(sheetFailure()))
+
+      expect(portraitNames()).toEqual(['Player B'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
+
+  test('a load replaced by another one never marks its players missing', async () => {
+    const match = matchNamed('replaced')
+    const insights = readInsights('duel-a')
+
+    const replayWith = (art: Art) => (
+      <ReplayWithArt insights={insights} art={art} playbackPath={match.playbackPath} selectedSlot={1} />
+    )
+
+    laterFailures.length = 0
+
+    try {
+      await mount(replayWith(match.art))
+      await act(async () => root.render(withTools(replayWith(artAt('first')))))
+      await settle()
+
+      // aborting the replaced load fails its sheets as it goes
+      await act(async () => laterFailures.shift()?.(new DOMException('The operation was aborted.', 'AbortError')))
+
+      expect(container.querySelector('[data-stage-window] canvas')).not.toBeNull()
+      expect(portraitNames()).toEqual([])
+    } finally {
+      await unmount()
+    }
   })
 
   test('where the browser refuses fullscreen, the stage is laid over the screen from the body, outside the page', async () => {
