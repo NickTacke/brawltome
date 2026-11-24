@@ -89,7 +89,11 @@ function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
 
     setLoad({ status: 'loading' })
 
-    loadReplay(manifestUrl, { baseUrl, signal: controller.signal })
+    // a player whose art can't load draws as nothing while the others play on, so it's only reported
+    const onMissing = (slot: string, error: Error) =>
+      reportUnlessAborted(`load the art of player ${slot} at ${manifestUrl}`, error)
+
+    loadReplay(manifestUrl, { baseUrl, signal: controller.signal, onMissing })
       .then((replay) => {
         if (controller.signal.aborted) return
 
