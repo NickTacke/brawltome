@@ -10,5 +10,8 @@ export type ReplaysDeps = {
   accounts: Accounts
 }
 
-/** What the worker runs, sent with every claim; artFormat is null from a worker that can't export art. */
-export type WorkerReport = { build: string; patches: string[]; artFormat: number | null }
+/**
+ * What the worker runs, sent with every claim; artFormat is null from a worker that can't export art, and setFormat
+ * (the pre-drawn sets' format) from one whose export can't draw sets or a match from them. A parse claim leaves it out.
+ */
+export type WorkerReport = { build: string; patches: string[]; artFormat: number | null; setFormat?: number | null }

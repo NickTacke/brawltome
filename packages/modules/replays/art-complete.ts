@@ -2,17 +2,25 @@ import type { ObjectStore, Sql, TransactionSql } from '@brawltome/foundation'
 import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartArtJob } from './art-lease'
 import { readManifestPaths } from './art-manifest'
 import { parseArtPath } from './art-paths'
+import { readSetIndex } from './art-set-index'
 import { unstoredArtPaths } from './art-stored'
 import type { CompleteOutcome } from './jobs'
 import { manifestKey } from './keys'
 import { MAX_ART_FILE_BYTES, MAX_MERGE_HOPS } from './limits'
 import type { ReplaysDeps } from './model'
 
-// the worker's last answer for an art job: the manifest (none for a warm job) and the map files it exported. nothing
-// is stored unless every file named is already in the art bucket
+// the worker's last answer for an art job: the manifest (none for a warm or predraw job), the map files it exported,
+// and a predraw job's set index. nothing is stored unless every file named is already in the art bucket
 
 export type ArtMap = { patch: string; mapId: number; path: string }
-export type ArtResult = { manifest: unknown | null; maps: ArtMap[]; artFormat: number }
+
+export type ArtResult = {
+  manifest: unknown | null
+  maps: ArtMap[]
+  artFormat: number
+  // the set index a predraw job drew; a worker from before the sets sends none
+  setIndex?: string | null
+}
 
 type MatchLine = { build: string; timelineKey: string | null }
 
@@ -35,7 +43,10 @@ export async function completeArtJob(
 
   if (job === 'not-found' || job === 'lease-lost') return job
 
-  const problem = await resultProblem(sql, job, result)
+  const problem =
+    job.kind === 'predraw'
+      ? await predrawProblem({ sql, artStore }, job, result)
+      : await resultProblem(sql, job, result)
 
   if (problem) {
     const failure = { code: 'export-failed' as const, message: problem.slice(0, 500) }
@@ -47,6 +58,8 @@ export async function completeArtJob(
 
   if (job.kind === 'warm') return storeMaps(sql, { id: jobId, leaseToken }, result)
 
+  if (job.kind === 'predraw') return storeSetIndex(sql, { ...job, leaseToken }, result.setIndex as string)
+
   return storeManifest({ sql, artStore }, { ...job, leaseToken }, result)
 }
 
@@ -55,6 +68,8 @@ async function resultProblem(sql: Sql, job: LiveArtJob, result: ArtResult): Prom
   if (!Number.isInteger(result.artFormat) || result.artFormat < 1 || result.artFormat > 32767) {
     return `art format ${result.artFormat} is not a format number`
   }
+
+  if (result.setIndex) return 'only a predraw job names a set index'
 
   const badMap = result.maps.find((map) => !isMapEntry(map, job.patch))
 
@@ -67,6 +82,40 @@ async function resultProblem(sql: Sql, job: LiveArtJob, result: ArtResult): Prom
   const missing = await unstoredArtPaths(sql, [...manifestPaths.paths, ...result.maps.map((map) => map.path)])
 
   if (missing.length > 0) return `the art bucket lacks ${missing.length} named files, such as ${missing[0]}`
+
+  return null
+}
+
+// a predraw job's only answer is its set index: an index of its own patch, in the art bucket with every set it names,
+// so a match job handed it never waits on a set that will never come
+async function predrawProblem(
+  stores: { sql: Sql; artStore: ObjectStore },
+  job: LiveArtJob,
+  result: ArtResult,
+): Promise<string | null> {
+  if (result.manifest !== null || result.maps.length > 0) return 'a predraw job has no manifest or map files'
+
+  const path = result.setIndex
+
+  if (!path || parseArtPath(path)?.kind !== 'set-index') return `${String(path)} is not a set index path`
+
+  const [unstored] = await unstoredArtPaths(stores.sql, [path])
+
+  if (unstored) return `the art bucket lacks the set index ${path}`
+
+  const bytes = await stores.artStore.get(path)
+
+  if (!bytes) return `the art bucket lacks the set index ${path}`
+
+  const index = readSetIndex(JSON.parse(new TextDecoder().decode(bytes)))
+
+  if ('reason' in index) return `${path}: ${index.reason}`
+
+  if (index.patch !== job.patch) return `${path} is the set index of patch ${index.patch}, not ${job.patch}`
+
+  const missing = await unstoredArtPaths(stores.sql, index.sets)
+
+  if (missing.length > 0) return `the art bucket lacks ${missing.length} sets ${path} names, such as ${missing[0]}`
 
   return null
 }
@@ -86,6 +135,22 @@ function isMapEntry(map: ArtMap, patch: string): boolean {
   const isMapId = Number.isInteger(map.mapId) && map.mapId >= 0 && map.mapId <= MAX_MAP_ID
 
   return map.patch === patch && isMapId && parseArtPath(map.path)?.kind === 'map'
+}
+
+// a later index of the patch replaces the one before: both name only stored sets
+async function storeSetIndex(
+  sql: Sql,
+  job: LiveArtJob & { leaseToken: string },
+  path: string,
+): Promise<CompleteOutcome> {
+  return finishJob(sql, job, async (transaction) => {
+    await transaction`
+      INSERT INTO replays.set_indexes (patch, path) VALUES (${job.patch}, ${path})
+      ON CONFLICT (patch) DO UPDATE SET path = excluded.path, updated_at = clock_timestamp()
+    `
+
+    return 'done'
+  })
 }
 
 async function storeMaps(

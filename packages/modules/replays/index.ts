@@ -6,10 +6,11 @@ import { addArt } from './migrations/0003-add-art'
 import { allowNoScore } from './migrations/0004-allow-no-score'
 import { indexRecentMatches } from './migrations/0005-index-recent-matches'
 import { addHasTimeline } from './migrations/0006-add-has-timeline'
+import { addSetIndexes } from './migrations/0007-add-set-indexes'
 
 export type { ClaimedArtJob, ReadArtOutcome, ReplayArtJobs } from './art'
 export type { ArtMap, ArtResult } from './art-complete'
-export type { ArtFailure, ArtFailureCode } from './art-lease'
+export type { ArtFailure, ArtFailureCode, ArtJobKind } from './art-lease'
 export { parseArtPath } from './art-paths'
 export type { StoreArtOutcome } from './art-upload'
 export { readMatchInsightsFor } from './insights'
@@ -27,7 +28,15 @@ export type { ReplaysDeps, WorkerReport } from './model'
 export { type PlaybackTimeline, trimPlaybackTimeline } from './playback'
 export { type UploadFile, type UploadOutcome, type UploadRejectionCode, uploadReplays } from './upload'
 
-const migrations = [createReplays, addWorkerReports, addArt, allowNoScore, indexRecentMatches, addHasTimeline] as const
+const migrations = [
+  createReplays,
+  addWorkerReports,
+  addArt,
+  allowNoScore,
+  indexRecentMatches,
+  addHasTimeline,
+  addSetIndexes,
+] as const
 
 export const replaysModule = {
   name: 'replays' as const,

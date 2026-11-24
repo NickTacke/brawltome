@@ -4,11 +4,13 @@ import { z } from 'zod'
 
 const idSchema = z.uuid()
 
-// artFormat is the art export format the worker runs; a worker without the export sends none
+// artFormat is the art export format the worker runs; a worker without the export sends none. setFormat is the
+// format of the pre-drawn sets its export draws and draws matches from; a worker whose export can't sends none
 export const workerReportSchema = z.object({
   build: z.string().min(1).max(64),
   patches: z.array(z.string().max(16)).max(10),
   artFormat: z.number().int().min(1).max(32767).nullable().default(null),
+  setFormat: z.number().int().min(1).max(32767).nullable().optional(),
 })
 
 export type Lease = { jobId: string; leaseToken: string }
