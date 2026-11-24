@@ -187,6 +187,26 @@ describe('the stage in a browser', () => {
     await unmount()
   })
 
+  test('a player whose art cannot load is drawn as their portrait, where their legend would be', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+
+    await mount(<MatchByKind match={matchNamed('missing')} />)
+
+    console.error = errorBefore
+
+    const stage = container.querySelector('[data-stage-window]')
+    // a weapon icon has no text of its own, while a portrait is named for its player
+    const portraits = [...(stage?.querySelectorAll('img:not([alt=""])') ?? [])]
+    const names = portraits.map((image) => image.getAttribute('alt'))
+
+    expect(stage?.querySelector('canvas')).not.toBeNull()
+    expect(names).toEqual(['Player B'])
+
+    await unmount()
+  })
+
   test('where the browser refuses fullscreen, the stage is laid over the screen from the body, outside the page', async () => {
     const requestBefore = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen')
 

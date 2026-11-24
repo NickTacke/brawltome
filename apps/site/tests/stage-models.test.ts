@@ -22,6 +22,7 @@ import {
 } from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
+import { missingPosesInFrame } from '../src/components/match/stage/missing-poses'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
 import {
   boxInFrame,
@@ -32,7 +33,7 @@ import {
   unitInFrame,
 } from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
-import { posesAt, valueAt } from '../src/components/match/stage/pose'
+import { type Pose, posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
 import { tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
@@ -217,7 +218,16 @@ describe('the camera', () => {
     const half = { x: stage.box.minX, y: stage.box.minY, width: stage.box.width / 2, height: stage.box.height / 2 }
     const empty = new Float64Array()
     const track: CameraTrack = { steps: empty, frameTimes: empty, frameViews: empty, at: () => half }
-    const ready: Legends = { replay: null, timeline, track, state: 'ready', isDownloading: false }
+
+    const ready: Legends = {
+      replay: null,
+      timeline,
+      track,
+      state: 'ready',
+      isDownloading: false,
+      missingSlots: new Set(),
+    }
+
     const loading: Legends = { ...ready, state: 'loading' }
     const wholeStage = fixedCamera(stage.box)
 
@@ -324,6 +334,7 @@ describe('the ring around a player’s body', () => {
       track: null,
       state: 'ready',
       isDownloading: false,
+      missingSlots: new Set(),
     }
 
     expect(areLegendsDrawn(ready)).toBe(true)
@@ -388,6 +399,47 @@ describe('off-screen bubbles', () => {
     const corner = { x: -100_000, y: -100_000, width: 10, height: 10 }
 
     expect([...bubblesBySlot(timeline, corner, step).keys()]).toEqual(['1', '2'])
+  })
+})
+
+describe('a player whose art can’t load', () => {
+  const insights = readInsights('duel-a')
+  const stageBox = insights.insights.stage.box
+  const timeline = readPlaybackTimeline(readPlayback('duel-a'))
+  const timeMs = 20_000
+  const poses = posesAt(timeline, stageBox, timeMs)
+  const missing = new Set([2])
+
+  test('stands where their legend would, in view, and no one else does', () => {
+    const camera = fixedCamera(stageBox)
+    const placed = missingPosesInFrame(poses, missing, timeline, stageBox, camera, timeMs)
+    const own = poses.find((pose) => pose.slot === 2)
+
+    expect(own).toBeDefined()
+    expect(placed).toEqual([inFrame(own as Pose, stageBox, camera)])
+  })
+
+  test('out of view, stands in their bubble at the frame’s edge, as their legend would', () => {
+    const corner = cameraOn({
+      x: stageBox.minX,
+      y: stageBox.minY,
+      width: stageBox.width / 4,
+      height: stageBox.height / 4,
+    })
+
+    const [placed] = missingPosesInFrame(poses, missing, timeline, stageBox, corner, timeMs)
+    const own = inFrame(poses.find((pose) => pose.slot === 2) as Pose, stageBox, corner)
+
+    expect(placed.slot).toBe(2)
+    expect(own.x > 1 || own.y > 1).toBe(true)
+    expect(placed.x).toBeGreaterThanOrEqual(0)
+    expect(placed.x).toBeLessThanOrEqual(1)
+    expect(placed.y).toBeGreaterThanOrEqual(0)
+    expect(placed.y).toBeLessThanOrEqual(1)
+  })
+
+  test('with no one missing, there is no one to place', () => {
+    expect(missingPosesInFrame(poses, new Set(), timeline, stageBox, fixedCamera(stageBox), timeMs)).toEqual([])
   })
 })
 
