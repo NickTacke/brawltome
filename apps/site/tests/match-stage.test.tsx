@@ -370,8 +370,8 @@ describe('the rings on the stage', () => {
   // a legend's ring is 216 level units across and 80 above the feet: 5% of this box's width, 5% of its height up.
   // on a stage too small for that to show, it stays 32 pixels
   const box: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
-  const legends = { box, areLegends: true }
-  const tokens = { box, areLegends: false }
+  const legends = { box, areLegends: true, tokenSlots: new Set<number>() }
+  const tokens = { box, areLegends: false, tokenSlots: new Set<number>() }
   const aroundLegend = 'left:50%;top:45%;width:max(32px, 5%);aspect-ratio:1'
   const aroundToken = 'left:50%;top:calc(50% - 14px);width:min(64px, 10%);aspect-ratio:1'
   const firstHit = readInsights('duel-a').insights.stage.marks.hits[0]
@@ -413,6 +413,21 @@ describe('the rings on the stage', () => {
 
   test('while tokens stand in for the legends, the rings keep the tokens’ size', () => {
     expect(renderMarkers(tokens)).toContain(aroundToken)
+  })
+
+  test('among legends, a player drawn as their portrait is ringed as a token, and the other as a legend', () => {
+    const markup = renderMarkers({ ...legends, tokenSlots: new Set([moment.victim]) })
+
+    expect(markup).toContain(aroundToken)
+    expect(markup).toContain('left:25%;top:45%;width:max(32px, 5%);aspect-ratio:1')
+  })
+
+  test('a hit on a player drawn as their portrait flashes on the portrait', () => {
+    const hit = { ...firstHit, x: 0.5, y: 0.5 }
+    const bodies = { ...legends, tokenSlots: new Set([hit.target]) }
+    const markup = renderToStaticMarkup(<PlayEffects hits={[hit]} bodies={bodies} timeMs={hit.timeMs} />)
+
+    expect(markup).toContain('left:50%;top:calc(50% - 14px);width:min(16px, 2.5%);aspect-ratio:1')
   })
 
   test('the moment being watched is ringed around the body of whoever gets hit', () => {

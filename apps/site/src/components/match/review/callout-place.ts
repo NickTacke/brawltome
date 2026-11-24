@@ -13,8 +13,8 @@ export type Point = { x: number; y: number }
 export type CardSpace = {
   card: Size
   stage: Size
-  // how big the players are drawn on the stage: the ring around each and the tag over them
-  body: BodyPx
+  // how big each player is drawn on the stage, by slot: the ring around them and the tag over them
+  bodyOf: (slot: number) => BodyPx
   panel: { edge: 'top' | 'bottom'; bandPx: number }
   obstacles: Rect[]
 }
@@ -36,16 +36,17 @@ const ringAirPx = 4
 const acrossShares = [0, 1, 0.5, 0.25, 0.75, 0.125, 0.875, 0.375, 0.625]
 
 // the middle of the ring around a player: the middle of their body, over the feet their pose is at
-function ringMiddle(pose: Pose, { stage, body }: CardSpace): Point {
-  return { x: pose.x * stage.width, y: pose.y * stage.height - body.ringMiddlePx }
+function ringMiddle(pose: Pose, { stage, bodyOf }: CardSpace): Point {
+  return { x: pose.x * stage.width, y: pose.y * stage.height - bodyOf(pose.slot).ringMiddlePx }
 }
 
 // what a player takes up around their feet: the ring of a review's stop around the body, and the tag over them
 function bodyRect(pose: Pose, space: CardSpace): Rect {
+  const body = space.bodyOf(pose.slot)
   const middle = ringMiddle(pose, space)
-  const ringReach = space.body.ringRadiusPx + ringAirPx
+  const ringReach = body.ringRadiusPx + ringAirPx
   const halfWidth = Math.max(ringReach, tagWidthPx / 2)
-  const tagTop = pose.y * space.stage.height - space.body.tagTopPx
+  const tagTop = pose.y * space.stage.height - body.tagTopPx
 
   return {
     left: middle.x - halfWidth,
@@ -129,7 +130,7 @@ export function placeCard(poses: Pose[], space: CardSpace, stop: StopPlayers): C
 export function lineToRing(place: Point, space: CardSpace, pose: Pose): { from: Point; to: Point } | null {
   const card = rectAt(place, space.card)
   const ring = ringMiddle(pose, space)
-  const radiusPx = space.body.ringRadiusPx
+  const radiusPx = space.bodyOf(pose.slot).ringRadiusPx
 
   const from = {
     x: ring.x > (card.left + card.right) / 2 ? card.right : card.left,

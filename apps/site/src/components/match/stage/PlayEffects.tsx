@@ -13,7 +13,7 @@ const flashMark = 'pointer-events-none absolute -translate-x-1/2 -translate-y-1/
 // the damage rises from the spot itself
 function HitFlash({ hit, bodies, timeMs }: { hit: StageHit; bodies: DrawnBodies; timeMs: number }) {
   const age = (timeMs - hit.timeMs) / hitFlashMs
-  const ring = bodyRingStyle(hit, bodies, flashStartShare + (1 - flashStartShare) * age)
+  const ring = bodyRingStyle(hit, bodies, hit.target, flashStartShare + (1 - flashStartShare) * age)
   const opacity = 1 - age
 
   return (

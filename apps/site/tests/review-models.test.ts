@@ -242,8 +242,9 @@ function checkStop(insights: MatchInsights, stop: ReviewStop, layout: Layout): C
   const poses = trackedPoses(insights, stop.timeMs).map((pose) => inFrame(pose, box, camera))
   const players = { victim: moment?.victim ?? null, attacker: moment?.attacker ?? null }
   const bandPx = insights.summary.players.length > 2 ? 130 : 74
-  const body = bodyPxOf({ box, areLegends }, stage.width * unitInFrame(camera))
-  const space = (card: Size) => ({ card, stage, body, panel: { edge, bandPx }, obstacles: corners(stage) })
+  const bodies = { box, areLegends, tokenSlots: new Set<number>() }
+  const bodyOf = (slot: number) => bodyPxOf(bodies, stage.width * unitInFrame(camera), slot)
+  const space = (card: Size) => ({ card, stage, bodyOf, panel: { edge, bandPx }, obstacles: corners(stage) })
   const upright = placeCard(poses, space(uprightCard), players)
   const card = upright.isOnStopPlayers ? wideCard(stage) : uprightCard
   const place = upright.isOnStopPlayers ? placeCard(poses, space(card), players) : upright
@@ -308,10 +309,10 @@ describe('the line from the card to the player who got hit', () => {
   const box = { minX: 0, minY: 0, width: 4000, height: 2240 }
   const victim = poseAt(1, 0.8, 0.8)
 
-  const spaceWith = (areLegends: boolean, unitPx: number) => ({
+  const spaceWith = (areLegends: boolean, unitPx: number, tokenSlots: ReadonlySet<number> = new Set()) => ({
     card,
     stage,
-    body: bodyPxOf({ box, areLegends }, unitPx),
+    bodyOf: (slot: number) => bodyPxOf({ box, areLegends, tokenSlots }, unitPx, slot),
     panel: { edge: 'bottom' as const, bandPx: 0 },
     obstacles: [],
   })
@@ -329,6 +330,12 @@ describe('the line from the card to the player who got hit', () => {
 
   test('ends on a token’s ring, which is as big at every zoom', () => {
     const line = lineToRing({ x: 8, y: 8 }, spaceWith(false, 0.8), victim)
+
+    expect(Math.hypot((line?.to.x ?? 0) - 800, (line?.to.y ?? 0) - (448 - 14))).toBeCloseTo(32)
+  })
+
+  test('ends on a token’s ring for a player drawn as their portrait among legends', () => {
+    const line = lineToRing({ x: 8, y: 8 }, spaceWith(true, 0.8, new Set([1])), victim)
 
     expect(Math.hypot((line?.to.x ?? 0) - 800, (line?.to.y ?? 0) - (448 - 14))).toBeCloseTo(32)
   })

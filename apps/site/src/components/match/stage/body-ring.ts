@@ -1,13 +1,13 @@
 import type { Stage, StageBox } from '@brawltome/contracts'
 import { OFFSCREEN } from '@brawltome/replay-player'
 import type { CSSProperties } from 'react'
-import { tagHeightPx, tagLift } from './tag-stack'
+import { portraitTagLiftPx, tagHeightPx, tagLift } from './tag-stack'
 import { areLegendsDrawn, type Legends } from './use-legends'
 
 // a ring around a player's body. a drawn legend follows the camera's zoom, so its ring is measured in level units;
 // the game gives the body: every legend's standing hurtbox is 145 units wide and 160 high and stands on the feet. a
 // move can bring a hurtbox of its own, which the ring doesn't follow. a portrait token, which stands in while there
-// is no art, is as big on every stage, and so is its ring
+// is no art or for a player whose own art can't load, is as big on every stage, and so is its ring
 
 // the body's middle is this far above the feet: half the standing hurtbox's height, which the game centres its own
 // off-screen bubble on
@@ -28,12 +28,17 @@ const tokenRing = { middlePx: 14, diameterPx: 64, widestShare: 0.1 }
 // how far over the feet a token's tag reaches, with the portrait under it
 const tokenTagTopPx = 72
 
-// how the players are drawn on the stage: as their legends, measured in the level units of the stage box, or as tokens
-export type DrawnBodies = { box: StageBox; areLegends: boolean }
+// how the players are drawn on the stage: as their legends, measured in the level units of the stage box, or as tokens.
+// among legends, the players whose art can't load are drawn as tokens, by slot
+export type DrawnBodies = { box: StageBox; areLegends: boolean; tokenSlots: ReadonlySet<number> }
 
 /** How a match's players are drawn on its stage with what has loaded of its legends. */
 export function drawnBodiesOf(stage: Stage, legends: Legends): DrawnBodies {
-  return { box: stage.box, areLegends: areLegendsDrawn(legends) }
+  return { box: stage.box, areLegends: areLegendsDrawn(legends), tokenSlots: legends.missingSlots }
+}
+
+function isLegend(bodies: DrawnBodies, slot: number): boolean {
+  return bodies.areLegends && !bodies.tokenSlots.has(slot)
 }
 
 type Feet = { x: number; y: number }
@@ -64,12 +69,12 @@ function tokenRingStyle(feet: Feet, share: number): CSSProperties {
 }
 
 /**
- * Where a ring around the body of a player goes on the stage's mark layer, from their feet in shares of the stage
- * box, and how big it is: the whole ring, or a share of it. The ring is centred on its place by the element's own
- * translate.
+ * Where a ring around the body of the player in `slot` goes on the stage's mark layer, from their feet in shares of
+ * the stage box, and how big it is: the whole ring, or a share of it. The ring is centred on its place by the
+ * element's own translate.
  */
-export function bodyRingStyle(feet: Feet, bodies: DrawnBodies, share = 1): CSSProperties {
-  return bodies.areLegends ? legendRingStyle(feet, bodies.box, share) : tokenRingStyle(feet, share)
+export function bodyRingStyle(feet: Feet, bodies: DrawnBodies, slot: number, share = 1): CSSProperties {
+  return isLegend(bodies, slot) ? legendRingStyle(feet, bodies.box, share) : tokenRingStyle(feet, share)
 }
 
 // what a player takes up on a stage as it is laid out, in pixels from their feet: the ring around the body, and how
@@ -89,13 +94,20 @@ function tokenRingDiameterPx(box: StageBox, unitPx: number): number {
   return Math.min(tokenRing.diameterPx, markLayerWidthPx * tokenRing.widestShare)
 }
 
-/** A player's ring and tag in the pixels of a stage on which a level unit is `unitPx` wide. */
-export function bodyPxOf(bodies: DrawnBodies, unitPx: number): BodyPx {
-  if (!bodies.areLegends) {
+// a token among legends has its tag stacked with theirs, over the portrait or as high as theirs, whichever is higher
+function tokenTagTopPxOf(bodies: DrawnBodies, unitPx: number): number {
+  if (!bodies.areLegends) return tokenTagTopPx
+
+  return Math.max(tagLift * unitPx, portraitTagLiftPx) + tagHeightPx
+}
+
+/** The ring and tag of the player in `slot`, in the pixels of a stage on which a level unit is `unitPx` wide. */
+export function bodyPxOf(bodies: DrawnBodies, unitPx: number, slot: number): BodyPx {
+  if (!isLegend(bodies, slot)) {
     return {
       ringMiddlePx: tokenRing.middlePx,
       ringRadiusPx: tokenRingDiameterPx(bodies.box, unitPx) / 2,
-      tagTopPx: tokenTagTopPx,
+      tagTopPx: tokenTagTopPxOf(bodies, unitPx),
     }
   }
 
