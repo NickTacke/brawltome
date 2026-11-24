@@ -4,7 +4,7 @@
 // nothing draws the leg, whose sheet is never fetched
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { drawPlayer, isReady, loadReplay, type PlayerPose, type Replay } from '..'
-import type { ArtGroupFormat4, ManifestFormat4, ManifestLook } from '../src/format.ts'
+import type { ArtGroupFormat4, Manifest, ManifestFormat4, ManifestLook } from '../src/format.ts'
 import { groupOf } from '../src/placement.ts'
 import { composedSheets, type FakeBitmap, imageBlob, installFakeCanvas, removeFakeCanvas } from './fake-canvas.ts'
 import { writePack } from './pack-writer.ts'
@@ -321,23 +321,125 @@ describe("a player's readiness", () => {
   })
 })
 
+describe('a player whose art cannot load', () => {
+  test('is missing when a set fails, and the others still draw', async () => {
+    const manifest = manifestOf()
+
+    manifest.players['2'].art = [katarPath, 'art/dddddddddddddddddddddddddddddddd.json', ownPath]
+
+    const { replay } = await loaded(manifest)
+
+    expect(replay.players.get('2')?.missing?.message).toBe(
+      `load replay file ${artUrl}art/dddddddddddddddddddddddddddddddd.json: HTTP 404`,
+    )
+
+    expect(replay.players.get('1')?.missing).toBeUndefined()
+    expect(drawn(replay, '2', poseOf({}))).toEqual([])
+    expect(drawn(replay, '1', poseOf({})).length).toBe(1)
+  })
+
+  test('is missing when a weight sheet the first seconds draw fails, and loadReplay still resolves', async () => {
+    const { replay } = await loaded(manifestOf(), { missing: [bodyWeights] })
+
+    expect(replay.players.get('1')?.missing?.message).toBe(`load replay file ${artUrl}${bodyWeights}: HTTP 404`)
+    expect(replay.players.get('2')?.missing?.message).toBe(`load replay file ${artUrl}${bodyWeights}: HTTP 404`)
+  })
+
+  test('is missing when a sheet fails after the first seconds, and replay.loaded still resolves', async () => {
+    const { replay } = await loaded(manifestOf(), { missing: [katarSheet] })
+
+    expect(replay.players.get('1')?.missing?.message).toBe(`load replay file ${artUrl}${katarSheet}: HTTP 404`)
+    expect(replay.players.get('2')?.missing).toBeUndefined()
+    const player = replay.players.get('1')
+
+    expect(player && isReady(replay, player, BODY_ANIMATION)).toBe(false)
+  })
+
+  test('draws nothing and has nothing to wait for', async () => {
+    const { replay } = await loaded(manifestOf(), { missing: [katarSheet] })
+    const sheets: unknown[] = []
+    const player = replay.players.get('1')
+
+    const isWhole =
+      player && drawPlayer(contextDrawingInto(sheets), replay, player, poseOf({ look: 1 }), [1, 0, 0, 1, 0, 0])
+
+    expect(isWhole).toBe(true)
+    expect(sheets).toEqual([])
+  })
+
+  test('is told of once, at load and mid-match, with why', async () => {
+    const manifest = manifestOf()
+    const told: [string, string][] = []
+
+    manifest.players['2'].art = [katarPath, 'art/dddddddddddddddddddddddddddddddd.json', ownPath]
+
+    const store = stubStore(manifest, { missing: [katarSheet, katarWeights] })
+
+    const replay = await loadReplay(manifestUrl, {
+      baseUrl: artUrl,
+      fetch: store.fetch,
+      onMissing: (slot, error) => told.push([slot, error.message]),
+    })
+
+    await replay.loaded
+
+    expect(told).toEqual([
+      ['2', `load replay file ${artUrl}art/dddddddddddddddddddddddddddddddd.json: HTTP 404`],
+      ['1', `load replay file ${artUrl}${katarSheet}: HTTP 404`],
+    ])
+  })
+
+  test('is not ready once marked missing, though an animation was ready before', async () => {
+    const { replay } = await loaded()
+    const player = replay.players.get('1')
+
+    expect(player && isReady(replay, player, BODY_ANIMATION)).toBe(true)
+
+    if (player) player.missing = new Error('a sheet failed')
+
+    expect(player && isReady(replay, player, BODY_ANIMATION)).toBe(false)
+  })
+
+  test('has no more of their sheets fetched', async () => {
+    // both players draw the body, so both are missing once its weights fail: no one draws the rest
+    const { store } = await loaded(manifestOf(), { missing: [bodyWeights] })
+
+    expect(store.sheetsFetched().sort()).toEqual([bodySheet, bodyWeights].sort())
+  })
+
+  test('fails the whole replay in format 3, as it always did', async () => {
+    const manifest = {
+      ...manifestOf(),
+      format: 3,
+      players: { '1': { ...playerOf(1, []), art: [ownPath], startAnimations: [] } },
+    } as unknown as Manifest
+
+    const store = stubStore(manifest, { missing: [ownSheet] })
+    const replay = await loadReplay(manifestUrl, { baseUrl: artUrl, fetch: store.fetch })
+
+    await expect(replay.loaded).rejects.toThrow(`load replay file ${artUrl}${ownSheet}: HTTP 404`)
+  })
+})
+
 type DrawnSheet = FakeBitmap
 
-// drawn is the sheets drawPlayer draws a pose from
-function drawn(replay: Replay, slot: string, pose: PlayerPose): DrawnSheet[] {
-  const sheets: DrawnSheet[] = []
-
-  const context = {
+// contextDrawingInto is a 2D context that records the sheets drawn from
+function contextDrawingInto(sheets: unknown[]): CanvasRenderingContext2D {
+  return {
     save() {},
     restore() {},
     setTransform() {},
     globalAlpha: 1,
-    drawImage: (sheet: DrawnSheet) => sheets.push(sheet),
+    drawImage: (sheet: unknown) => sheets.push(sheet),
   } as unknown as CanvasRenderingContext2D
+}
 
+// drawn is the sheets drawPlayer draws a pose from
+function drawn(replay: Replay, slot: string, pose: PlayerPose): DrawnSheet[] {
+  const sheets: DrawnSheet[] = []
   const player = replay.players.get(slot)
 
-  if (player) drawPlayer(context, replay, player, pose, [1, 0, 0, 1, 0, 0])
+  if (player) drawPlayer(contextDrawingInto(sheets), replay, player, pose, [1, 0, 0, 1, 0, 0])
 
   return sheets
 }

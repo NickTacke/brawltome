@@ -43,6 +43,9 @@ export type LoadOptions = {
   // aborting it stops the replay's downloads: loadReplay rejects if it hasn't resolved, and replay.loaded rejects
   // with the signal's reason (an AbortError) instead of loading the rest
   signal?: AbortSignal
+  // told once of each player marked missing (PlayerAssets.missing), with why: before loadReplay resolves for one whose
+  // art group fails, or later for one whose sheet fails
+  onMissing?: (slot: string, error: Error) => void
 }
 
 type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
@@ -61,8 +64,14 @@ const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 type Drawable = { animations: Animations; sets: Map<string, ArtSet>; ready: Map<string, boolean> }
 
 // a player's sets are by look: "" for a format 3 player's only one, or the index into their manifest looks. set is
-// the first
-export type PlayerAssets = Drawable & { slot: string; info: ManifestPlayer | ManifestPlayerFormat4; set: ArtSet }
+// the first. A player whose art can't be drawn (a set or a sheet failed to load, or they have no looks) is missing,
+// with why: nothing of theirs draws, and the page can show their portrait instead
+export type PlayerAssets = Drawable & {
+  slot: string
+  info: ManifestPlayer | ManifestPlayerFormat4
+  set: ArtSet
+  missing?: Error
+}
 export type ObjectAssets = Drawable
 
 export type Replay = {
@@ -191,19 +200,30 @@ class Store {
   }
 }
 
+// SheetFailed is told of a sheet that failed to load, and says whether that's taken care of (its players marked
+// missing) rather than a failure of the whole replay
+type SheetFailed = (src: string, error: unknown) => boolean
+
+// GroupDrawn says whether anyone still draws from a group: no one does once all its players are missing
+type GroupDrawn = (group: number) => boolean
+
 // Sheets loads the sprite sheets: the ones asked for at once, then the rest from a queue a few at a time. A weighted
 // sheet loads with its weight sheets and is composed once in each colouring its groups give it
 class Sheets {
   private readonly store: Store
   private readonly groups: Group[]
+  private readonly onFailed: SheetFailed
+  private readonly isDrawn: GroupDrawn
   private readonly jobs = new Map<string, Promise<void>>()
   // composed sheets by compositionKeyOf, so groups in the same colours share one
   private readonly composed = new Map<string, Promise<ImageBitmap>>()
   private queue: string[] = []
 
-  constructor(store: Store, groups: Group[]) {
+  constructor(store: Store, groups: Group[], onFailed: SheetFailed, isDrawn: GroupDrawn) {
     this.store = store
     this.groups = groups
+    this.onFailed = onFailed
+    this.isDrawn = isDrawn
   }
 
   isLoaded = (ref: number): boolean => {
@@ -221,7 +241,7 @@ class Sheets {
   }
 
   load(src: string): Promise<void> {
-    const job = this.jobs.get(src) ?? this.fetchSheet(src)
+    const job = this.jobs.get(src) ?? this.fetchSheet(src).catch((error: unknown) => this.failed(src, error))
 
     this.jobs.set(src, job)
 
@@ -272,10 +292,27 @@ class Sheets {
   // loadQueued loads the queue a few sheets at a time, so the order holds whatever the connection
   async loadQueued() {
     const worker = async () => {
-      for (let src = this.queue.shift(); src !== undefined; src = this.queue.shift()) await this.load(src)
+      for (let src = this.queue.shift(); src !== undefined; src = this.queue.shift()) {
+        if (this.isSheetDrawn(src)) await this.load(src)
+      }
     }
 
     await Promise.all(Array.from({ length: SHEETS_AT_ONCE }, worker))
+  }
+
+  // isSheetDrawn says whether anyone still draws from a sheet: a sheet only missing players draw from isn't loaded
+  private isSheetDrawn(src: string): boolean {
+    return this.groups.some(
+      (group, index) => this.isDrawn(index) && group.json.sheets.some((sheet) => sheet.src === src),
+    )
+  }
+
+  // failed hands a sheet's failure to onFailed, and fails the load if it's not taken care of. Once the replay is
+  // abandoned, it fails with the abort
+  private failed(src: string, error: unknown) {
+    this.store.throwIfAborted()
+
+    if (!this.onFailed(src, error)) throw error
   }
 
   private sheetNamed(src: string): SetSheet | undefined {
@@ -335,8 +372,11 @@ class Sheets {
     for (const path of paths) this.store.progress(path)
   }
 
+  // composeFor composes a weighted sheet for each group that has it and still draws, unless it has it already
   private async composeFor(src: string, images: WeightedImages) {
-    for (const group of this.groups) {
+    for (const [groupIndex, group] of this.groups.entries()) {
+      if (!this.isDrawn(groupIndex)) continue
+
       for (const [index, sheet] of group.json.sheets.entries()) {
         if (sheet.src !== src || group.sheets[index]) continue
 
@@ -364,21 +404,44 @@ class Sheets {
   }
 }
 
-// loadGroups loads every group's piece table first: they're small, and say which sheets the first seconds need
-async function loadGroups(store: Store, manifest: AnyManifest): Promise<Map<string, AnyArtGroup>> {
+// GroupFiles are the replay's art group files by path, and those that failed to load
+type GroupFiles = { jsons: Map<string, AnyArtGroup>; failed: Map<string, unknown> }
+
+// loadGroups loads every group's piece table first: they're small, and say which sheets the first seconds need. In
+// format 4 a player's group may fail without failing the replay: that player is missing
+async function loadGroups(store: Store, manifest: AnyManifest): Promise<GroupFiles> {
   const arts = [...Object.values(manifest.players), ...(manifest.objects ? [manifest.objects] : [])]
   const urls = [...new Set(arts.flatMap((art) => art.art))]
-  const jsons = await Promise.all(urls.map((url) => store.artGroup(url)))
 
-  return new Map(urls.map((url, index) => [url, jsons[index]]))
+  if (manifest.format !== SET_FORMAT) {
+    const jsons = await Promise.all(urls.map((url) => store.artGroup(url)))
+
+    return { jsons: new Map(urls.map((url, index) => [url, jsons[index]])), failed: new Map() }
+  }
+
+  const results = await Promise.allSettled(urls.map((url) => store.artGroup(url)))
+  const files: GroupFiles = { jsons: new Map(), failed: new Map() }
+  const objectUrls = new Set(manifest.objects?.art ?? [])
+
+  store.throwIfAborted()
+
+  for (const [index, result] of results.entries()) {
+    const url = urls[index]
+
+    if (result.status === 'fulfilled') files.jsons.set(url, result.value)
+    else if (objectUrls.has(url)) throw result.reason
+    else files.failed.set(url, result.reason)
+  }
+
+  return files
 }
 
-function playersOf(manifest: AnyManifest, groups: Groups): Map<string, PlayerAssets> {
+function playersOf(manifest: AnyManifest, groups: Groups, failed: Map<string, unknown>): Map<string, PlayerAssets> {
   const players = new Map<string, PlayerAssets>()
 
   for (const [slot, info] of Object.entries(manifest.players)) {
     if (manifest.format === SET_FORMAT) {
-      players.set(slot, playerByLooks(slot, info as ManifestPlayerFormat4, groups))
+      players.set(slot, playerByLooks(slot, info as ManifestPlayerFormat4, groups, failed))
 
       continue
     }
@@ -394,13 +457,35 @@ function playersOf(manifest: AnyManifest, groups: Groups): Map<string, PlayerAss
   return players
 }
 
-function playerOf(slot: string, info: PlayerAssets['info'], set: ArtSet, sets: Map<string, ArtSet>): PlayerAssets {
-  return { slot, info, set, sets, animations: new Animations(), ready: new Map() }
+function playerOf(
+  slot: string,
+  info: PlayerAssets['info'],
+  set: ArtSet,
+  sets: Map<string, ArtSet>,
+  missing?: Error,
+): PlayerAssets {
+  const player: PlayerAssets = { slot, info, set, sets, animations: new Animations(), ready: new Map() }
+
+  if (missing) player.missing = missing
+
+  return player
 }
 
-// playerByLooks is a format 4 player: a set per look, sharing their bones' ids, each look's groups in its colours. A
-// player with no looks draws nothing
-function playerByLooks(slot: string, info: ManifestPlayerFormat4, groups: Groups): PlayerAssets {
+// playerByLooks is a format 4 player: a set per look, sharing their bones' ids, each look's groups in its colours
+function playerByLooks(
+  slot: string,
+  info: ManifestPlayerFormat4,
+  groups: Groups,
+  failed: Map<string, unknown>,
+): PlayerAssets {
+  const missing = missingReasonOf(slot, info, failed)
+
+  if (missing) {
+    const nothing = new ArtSet([], groups.jsonOf)
+
+    return playerOf(slot, info, nothing, new Map([['', nothing]]), missing)
+  }
+
   const names = new Map<string, number>()
 
   const lookSets = info.looks.map((look) => {
@@ -409,10 +494,25 @@ function playerByLooks(slot: string, info: ManifestPlayerFormat4, groups: Groups
     return new ArtSet(lookGroups, groups.jsonOf, names)
   })
 
-  const first = lookSets[0] ?? new ArtSet([], groups.jsonOf)
-
-  return playerOf(slot, info, first, new Map(lookSets.map((set, index) => [String(index), set])))
+  return playerOf(slot, info, lookSets[0], new Map(lookSets.map((set, index) => [String(index), set])))
 }
+
+// missingReasonOf is why a format 4 player can't be drawn before any sheet loads, or undefined
+function missingReasonOf(slot: string, info: ManifestPlayerFormat4, failed: Map<string, unknown>): Error | undefined {
+  if (info.looks.length === 0) return new Error(`load replay: player ${slot} has no looks`)
+
+  for (const look of info.looks) {
+    for (const art of look.art) {
+      const reason = failed.get(info.art[art])
+
+      if (reason !== undefined) return errorOf(reason)
+    }
+  }
+
+  return undefined
+}
+
+const errorOf = (reason: unknown) => (reason instanceof Error ? reason : new Error(String(reason)))
 
 // objectsOf is the objects' art: a set per look, sharing their bones' ids
 function objectsOf(art: ManifestArt | undefined, groups: Groups): ObjectAssets | undefined {
@@ -528,15 +628,71 @@ async function loadRest(store: Store, drawables: [ManifestArt, Drawable][], shee
   await sheets.loadQueued()
 }
 
+// usesGroupOf says whether a drawable draws from any of some groups
+function usesGroupOf(drawable: Drawable, groups: Set<number>): boolean {
+  return setsOf(drawable).some((set) => set.groups.some((group) => groups.has(group)))
+}
+
+// groupDrawnBy says whether the objects, or a player who isn't missing, draw from a group
+function groupDrawnBy(players: Map<string, PlayerAssets>, objects?: ObjectAssets): GroupDrawn {
+  return (group: number): boolean => {
+    const groups = new Set([group])
+
+    if (objects && usesGroupOf(objects, groups)) return true
+
+    return [...players.values()].some((player) => !player.missing && usesGroupOf(player, groups))
+  }
+}
+
+// markMissing marks a player missing, with why, and tells onMissing; a player is marked once
+function markMissing(player: PlayerAssets, error: unknown, options: LoadOptions) {
+  if (player.missing) return
+
+  player.missing = errorOf(error)
+  options.onMissing?.(player.slot, player.missing)
+}
+
+// missingOnFailure marks missing the players of a format 4 manifest that draw from a sheet that failed, and says
+// whether it did. A failed sheet the objects draw from, or one in format 3, still fails the replay
+function missingOnFailure(
+  manifest: AnyManifest,
+  groups: Group[],
+  players: Map<string, PlayerAssets>,
+  objects: ObjectAssets | undefined,
+  options: LoadOptions,
+): SheetFailed {
+  return (src: string, error: unknown): boolean => {
+    if (manifest.format !== SET_FORMAT) return false
+
+    const withSheet = new Set(
+      groups.flatMap((group, index) => (group.json.sheets.some((sheet) => sheet.src === src) ? [index] : [])),
+    )
+
+    if (objects && usesGroupOf(objects, withSheet)) return false
+
+    const drawing = [...players.values()].filter((player) => usesGroupOf(player, withSheet))
+
+    for (const player of drawing) markMissing(player, error, options)
+
+    return drawing.length > 0
+  }
+}
+
 // loadReplay loads a manifest and resolves once the players and objects the match's first seconds show
-// (manifest.start) can be drawn completely; the rest goes on loading, and replay.loaded settles when it's done
+// (manifest.start) can be drawn completely; the rest goes on loading, and replay.loaded settles when it's done. A
+// player whose art can't load is marked missing (PlayerAssets.missing), and the others still draw
 export async function loadReplay(manifestUrl: string | URL, options: LoadOptions): Promise<Replay> {
   const manifest = await fetchManifest(manifestUrl, options)
   const store = new Store(manifest, options)
 
-  const groups = new Groups(await loadGroups(store, manifest))
-  const players = playersOf(manifest, groups)
+  const files = await loadGroups(store, manifest)
+  const groups = new Groups(files.jsons)
+  const players = playersOf(manifest, groups, files.failed)
   const objects = objectsOf(manifest.objects, groups)
+
+  for (const player of players.values()) {
+    if (player.missing) options.onMissing?.(player.slot, player.missing)
+  }
 
   const drawables: [ManifestArt, Drawable][] = [...players.values()].map((player) => [player.info, player])
 
@@ -544,7 +700,8 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
 
   await Promise.all(drawables.map(async ([art, drawable]) => addPack(drawable, await store.pack(art.start))))
 
-  const sheets = new Sheets(store, groups.list)
+  const onFailed = missingOnFailure(manifest, groups.list, players, objects, options)
+  const sheets = new Sheets(store, groups.list, onFailed, groupDrawnBy(players, objects))
   const firstSheets = [...firstSheetsOf(drawables, sheets)]
 
   for (const src of firstSheets) sheets.expect(src)
