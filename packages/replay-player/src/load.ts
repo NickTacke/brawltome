@@ -13,7 +13,15 @@ import {
   SET_FORMAT,
   type SetSheet,
 } from './format.ts'
-import { coloredPiecesOf, compositionKeyOf, type Group, Groups, isWeighted, type WeightedSheet } from './groups.ts'
+import {
+  coloredPiecesOf,
+  compositionKeyOf,
+  type Group,
+  Groups,
+  isSetGroup,
+  isWeighted,
+  type WeightedSheet,
+} from './groups.ts'
 import { type Pack, readPack } from './pack.ts'
 import { Animations, ArtSet, eachDraw, type Frame, groupOf, type Matrix, pieceOf } from './placement.ts'
 import { readArtGroup, readManifest } from './read.ts'
@@ -104,8 +112,10 @@ class Store {
   private readonly get: Fetch
   private readonly signal?: AbortSignal
   private readonly onProgress?: (progress: Progress) => void
-  private readonly totalBytes: number
+  private totalBytes: number
   private loadedBytes = 0
+  // the sizes of the files a manifest's bytes don't list: a set's sheets, which its file gives
+  private readonly expected = new Map<string, number>()
 
   constructor(manifest: AnyManifest, options: LoadOptions) {
     this.manifest = manifest
@@ -134,9 +144,17 @@ class Store {
     this.signal?.throwIfAborted()
   }
 
+  // expect counts a file the manifest doesn't list into the total, once it's to be loaded
+  expect(path: string, bytes: number) {
+    if (path in this.manifest.bytes || this.expected.has(path)) return
+
+    this.expected.set(path, bytes)
+    this.totalBytes += bytes
+  }
+
   // progress counts a file in, by its path, and tells onProgress
   progress(path?: string) {
-    if (path) this.loadedBytes += this.manifest.bytes[path] ?? 0
+    if (path) this.loadedBytes += this.manifest.bytes[path] ?? this.expected.get(path) ?? 0
 
     this.onProgress?.({ loaded: this.loadedBytes, total: this.totalBytes, started: this.started })
   }
@@ -218,12 +236,37 @@ class Sheets {
     if (at > 0) this.queue.unshift(...this.queue.splice(at, 1))
   }
 
-  // queueRest queues every sheet not asked for yet: those in order first, in it, then the others
+  // queueRest queues every sheet not asked for yet but a set's: those in order first, in it, then the others. A set
+  // holds far more than a match draws, so its sheets wait for queueDrawn
   queueRest(order: string[]) {
-    const every = new Set(this.groups.flatMap((group) => group.json.sheets.map((sheet) => sheet.src)))
+    const whole = this.groups.filter((group) => !isSetGroup(group.json))
+    const every = new Set(whole.flatMap((group) => group.json.sheets.map((sheet) => sheet.src)))
     const inOrder = order.filter((src) => every.has(src))
 
     this.queue = [...new Set([...inOrder, ...every])].filter((src) => !this.jobs.has(src))
+  }
+
+  // queueDrawn queues, after the rest, the sets' sheets the match draws from
+  queueDrawn(sources: string[]) {
+    const queued = new Set(this.queue)
+
+    for (const src of sources) {
+      if (this.jobs.has(src) || queued.has(src)) continue
+
+      this.expect(src)
+      this.queue.push(src)
+    }
+  }
+
+  // expect counts a sheet and its weight sheets into the bytes to load, where the manifest doesn't list them
+  expect(src: string) {
+    const sheet = this.sheetNamed(src)
+
+    if (!sheet) return
+
+    this.store.expect(src, sheet.bytes)
+
+    for (const weight of sheet.weights ?? []) this.store.expect(weight.src, weight.bytes)
   }
 
   // loadQueued loads the queue a few sheets at a time, so the order holds whatever the connection
@@ -422,33 +465,64 @@ function framesOf(animations: Animations, index: number): Frame[] {
   return frameNumbers.flatMap((frameNumber) => animations.frame(index, frameNumber) ?? [])
 }
 
-// firstSheetsOf is the sheets the first seconds draw: each start animation's pieces, the first candidate of each
-function firstSheetsOf(drawables: [ManifestArt, Drawable][], sheets: Sheets): Set<string> {
-  const firstSheets = new Set<string>()
-
+// sheetsDrawn collects the sheets a frame of a set draws, the first candidate of each piece
+function sheetsDrawn(set: ArtSet, frame: Frame, sheets: Sheets, into: Set<string>) {
   const addSheet = (ref: number) => {
     const src = sheets.sheetOf(ref)
 
-    if (src !== undefined) firstSheets.add(src)
+    if (src !== undefined) into.add(src)
 
     return true
   }
 
+  for (const weapon of set.weapons()) eachDraw(set, weapon, frame, IDENTITY, addSheet)
+}
+
+// firstSheetsOf is the sheets the first seconds draw: each start animation's pieces, the first candidate of each
+function firstSheetsOf(drawables: [ManifestArt, Drawable][], sheets: Sheets): Set<string> {
+  const firstSheets = new Set<string>()
+
   for (const [art, drawable] of drawables) {
-    for (const [set, frame] of startFramesOf(art, drawable)) {
-      for (const weapon of set.weapons()) eachDraw(set, weapon, frame, IDENTITY, addSheet)
-    }
+    for (const [set, frame] of startFramesOf(art, drawable)) sheetsDrawn(set, frame, sheets, firstSheets)
   }
 
   return firstSheets
 }
 
-// loadRest loads, in the background, the other animations, then every sheet in the order playback first needs it
-async function loadRest(store: Store, drawables: [ManifestArt, Drawable][], sheets: Sheets) {
+// setSheetsDrawnOf is the sets' sheets the match draws from: those any frame of the packs shows, in any look
+function setSheetsDrawnOf(drawables: Drawable[], groups: Group[], sheets: Sheets): string[] {
+  const drawn = new Set<string>()
+  const isSet = (group: number) => isSetGroup(groups[group].json)
+
+  for (const drawable of drawables) {
+    for (const set of setsOf(drawable)) {
+      if (!set.groups.some(isSet)) continue
+
+      for (const index of drawable.animations.byIndex.keys()) {
+        for (const frame of framesOf(drawable.animations, index)) sheetsDrawn(set, frame, sheets, drawn)
+      }
+    }
+  }
+
+  // the other groups' sheets are queued already
+  return [...drawn]
+}
+
+// loadRest loads, in the background, the other animations, then every sheet in the order playback first needs it, then
+// the sets' sheets the animations draw from
+async function loadRest(store: Store, drawables: [ManifestArt, Drawable][], sheets: Sheets, groups: Group[]) {
   await Promise.all(
     drawables.map(async ([art, drawable]) => {
       if (art.rest) addPack(drawable, await store.pack(art.rest))
     }),
+  )
+
+  sheets.queueDrawn(
+    setSheetsDrawnOf(
+      drawables.map(([, drawable]) => drawable),
+      groups,
+      sheets,
+    ),
   )
 
   await sheets.loadQueued()
@@ -471,14 +545,17 @@ export async function loadReplay(manifestUrl: string | URL, options: LoadOptions
   await Promise.all(drawables.map(async ([art, drawable]) => addPack(drawable, await store.pack(art.start))))
 
   const sheets = new Sheets(store, groups.list)
+  const firstSheets = [...firstSheetsOf(drawables, sheets)]
 
-  await Promise.all([...firstSheetsOf(drawables, sheets)].map((src) => sheets.load(src)))
+  for (const src of firstSheets) sheets.expect(src)
+
+  await Promise.all(firstSheets.map((src) => sheets.load(src)))
   store.started = true
   store.progress()
 
   // a sheet something failed to draw for moves to the front of the queue (want)
   sheets.queueRest(manifest.sheetOrder)
-  const loaded = loadRest(store, drawables, sheets)
+  const loaded = loadRest(store, drawables, sheets, groups.list)
 
   return {
     manifest,

@@ -17,6 +17,11 @@ export type Group = {
 
 export type WeightedSheet = SetSheet & { weights: { src: string; bytes: number }[] }
 
+// isSetGroup says whether a group is a pre-drawn set, which holds far more than one match draws
+export function isSetGroup(json: AnyArtGroup): boolean {
+  return json.format === SET_FORMAT && json.set !== undefined
+}
+
 export function isWeighted(sheet: SetSheet | undefined): sheet is WeightedSheet {
   return sheet?.weights !== undefined && sheet.weights.length > 0
 }

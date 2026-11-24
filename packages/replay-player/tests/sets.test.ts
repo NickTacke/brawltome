@@ -1,6 +1,7 @@
 // drawing from pre-drawn sets, on a tiny synthetic store: a skin set of three sheets, two weighted and one plain, and
 // a katar weapon skin set of one weighted sheet. Player 1 has two looks, unarmed and with the katar, in the same skin
-// colours; player 2 wears the same skin in another colour. The start pack draws the body, the rest pack an arm
+// colours; player 2 wears the same skin in another colour. The start pack draws the body, the rest pack an arm, and
+// nothing draws the leg, whose sheet is never fetched
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { drawPlayer, isReady, loadReplay, type PlayerPose, type Replay } from '..'
 import type { ArtGroupFormat4, ManifestFormat4, ManifestLook } from '../src/format.ts'
@@ -222,6 +223,14 @@ beforeAll(installFakeCanvas)
 afterAll(removeFakeCanvas)
 
 describe('loading a match drawn from sets', () => {
+  test('fetches only the sheets the packs draw from, each with its weight sheets', async () => {
+    const { store } = await loaded()
+
+    expect(store.sheetsFetched().sort()).toEqual(
+      [armSheet, armWeights, bodySheet, bodyWeights, ownSheet, katarSheet, katarWeights].sort(),
+    )
+  })
+
   test("composes a sheet in each player's colours", async () => {
     const { replay } = await loaded()
 
@@ -266,8 +275,24 @@ describe('loading a match drawn from sets', () => {
       Object.assign(globalThis, { createImageBitmap: decode })
     }
 
-    // the plain sheets are drawn as they decode; the six weighted ones are composed and closed
+    // the format 3 sheet is drawn as it decodes; the six weighted ones are composed and closed
     expect(decoded.filter((bitmap) => bitmap.closed)).toHaveLength(6)
+  })
+
+  test('counts the sets’ sheets into the progress, as the set files give their sizes', async () => {
+    const progress: { loaded: number; total: number }[] = []
+    const store = stubStore(manifestOf())
+
+    const replay = await loadReplay(manifestUrl, {
+      baseUrl: artUrl,
+      fetch: store.fetch,
+      onProgress: (p) => progress.push(p),
+    })
+
+    await replay.loaded
+
+    // the match's own sheet, and three weighted sheets of 100 bytes with a weight sheet of 10
+    expect(progress.at(-1)).toMatchObject({ loaded: 430, total: 430 })
   })
 })
 
