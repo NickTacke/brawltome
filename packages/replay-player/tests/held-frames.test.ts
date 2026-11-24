@@ -97,11 +97,24 @@ describe('a sprite frame past the end of a row', () => {
   })
 
   test("drops the base row's last piece where a format 3 weapon row replaces it", () => {
-    const groups = [groupOfFormat(4, { a_Hand: [1] }), groupOfFormat(3, {}, { Katar: { a_Hand: [3] } })]
+    const groups = [groupOfFormat(3, { a_Hand: [5] }, { Katar: { a_Hand: [3] } }), groupOfFormat(4, { a_Hand: [1] })]
 
-    expect(piecesShown(groups, 'a_Hand', 4)).toEqual([1])
-    expect(piecesShown(groups, 'a_Hand', 0, { weapon: 'Katar' })).toEqual([PIECES + 3])
+    expect(piecesShown(groups, 'a_Hand', 4)).toEqual([PIECES + 1])
+    expect(piecesShown(groups, 'a_Hand', 0, { weapon: 'Katar' })).toEqual([3])
     expect(piecesShown(groups, 'a_Hand', 4, { weapon: 'Katar' })).toEqual([])
+  })
+
+  test("keeps a format 4 group's row where a later format 3 group has a weapon row", () => {
+    // a look's own format 3 groups come after its sets, and a set has the bone first
+    const groups = [
+      groupOfFormat(4, { a_Hand: [1] }),
+      groupOfFormat(3, { a_Hat: [2] }, { Katar: { a_Hand: [3], a_Hat: [4] } }),
+    ]
+
+    expect(piecesShown(groups, 'a_Hand', 0, { weapon: 'Katar' })).toEqual([1])
+    expect(piecesShown(groups, 'a_Hand', 4, { weapon: 'Katar' })).toEqual([1])
+    // a bone no set has still takes the weapon row
+    expect(piecesShown(groups, 'a_Hat', 0, { weapon: 'Katar' })).toEqual([PIECES + 4])
   })
 })
 

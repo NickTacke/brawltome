@@ -113,10 +113,16 @@ function drawFrame(
   return drawn
 }
 
-// lookIndexOf is the manifest look a pose is drawn in: the one its look index names, else the one for the weapon held,
-// else the first
+// lookIndexOf is the manifest look a pose is drawn in: the one with its look index and the weapon held, else the one
+// its look index names, else the one for the weapon held, else the first. A line lists a look once by its art and
+// swaps, so two weapons whose skins look the same share an index, and the manifest has a look for each of them, with
+// its own weapon skin's set
 function lookIndexOf(looks: ManifestLook[], pose: PlayerPose): number {
-  const byLook = pose.look === undefined ? -1 : looks.findIndex((look) => look.look === pose.look)
+  const byLookAndWeapon = looks.findIndex((look) => isPosesLook(look, pose) && look.weapon === pose.weapon)
+
+  if (byLookAndWeapon >= 0) return byLookAndWeapon
+
+  const byLook = looks.findIndex((look) => isPosesLook(look, pose))
 
   if (byLook >= 0) return byLook
 
@@ -124,6 +130,9 @@ function lookIndexOf(looks: ManifestLook[], pose: PlayerPose): number {
 
   return Math.max(byWeapon, 0)
 }
+
+// isPosesLook says whether a manifest look has the look index a pose is drawn in
+const isPosesLook = (look: ManifestLook, pose: PlayerPose) => pose.look !== undefined && look.look === pose.look
 
 // setOfPose is the set a player's pose is drawn with: in format 4, their look's
 function setOfPose(player: PlayerAssets, pose: PlayerPose): ArtSet {

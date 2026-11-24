@@ -89,11 +89,23 @@ function tailOf(groupRows: GroupRow[]): Int32Array | undefined {
   return tail[0] < 0 ? undefined : tail
 }
 
+// isSetFirst says whether a bone's first row in lookup order is a format 4 group's
+const isSetFirst = (groupRows: GroupRow[] | undefined) => groupRows?.[0]?.holdsLast === true
+
+// isTakenBySet says whether a format 4 group has a bone first and a later group has its weapon row
+function isTakenBySet(boneRows: GroupRow[] | undefined, weaponRows: GroupRow[]): boolean {
+  const first = boneRows?.[0]
+
+  if (!first?.holdsLast) return false
+
+  return weaponRows[0].group !== first.group
+}
+
 // rowsShown are the rows a bone is drawn from. A bone a format 4 group has first takes its whole row from that group,
 // as the game takes a bone's art from one place: a look's sets come in the order it picks art in. Rows that start
 // with a format 3 group's are all kept, as the first seconds' group shares its bones with the whole match's
 function rowsShown(groupRows: GroupRow[]): GroupRow[] {
-  return groupRows[0].holdsLast ? groupRows.slice(0, 1) : groupRows
+  return isSetFirst(groupRows) ? groupRows.slice(0, 1) : groupRows
 }
 
 // putRows adds a bone's rows from the groups it's drawn from, in lookup order. A format 4 group's row is stretched to
@@ -109,6 +121,15 @@ function putRows(table: Table, id: number, groupRows: GroupRow[]) {
   table.tails[id] = tailOf(shown)
 }
 
+// baseTable is each bone's pieces without a weapon skin, from every group in lookup order
+function baseTable(boneRows: Map<number, GroupRow[]>): Table {
+  const table: Table = { rows: [], tails: [] }
+
+  for (const [id, groupRows] of boneRows) putRows(table, id, groupRows)
+
+  return table
+}
+
 // ArtSet is what one player (or the objects in one look) draws with: its art groups in lookup order, read into
 // tables of the pieces each bone shows at each sprite frame, without a weapon skin ("") and with each weapon's
 export class ArtSet {
@@ -121,13 +142,14 @@ export class ArtSet {
     this.groups = groups
     this.names = names
 
-    const base = this.baseTable(groupJson)
+    const boneRows = this.groupRows(groupJson, (json) => json.bones)
+    const base = baseTable(boneRows)
 
     this.tables.set('', base)
 
     const weapons = new Set(groups.flatMap((group) => Object.keys(groupJson(group).weapons)))
 
-    for (const weapon of weapons) this.tables.set(weapon, this.weaponTable(weapon, base, groupJson))
+    for (const weapon of weapons) this.tables.set(weapon, this.weaponTable(weapon, base, boneRows, groupJson))
   }
 
   // groupRows is each bone's row in every group, in lookup order, from the groups' bones or a weapon's
@@ -154,21 +176,21 @@ export class ArtSet {
     return rows
   }
 
-  // baseTable is each bone's pieces without a weapon skin, from every group in lookup order
-  private baseTable(groupJson: (group: number) => AnyArtGroup): Table {
-    const table: Table = { rows: [], tails: [] }
-
-    for (const [id, groupRows] of this.groupRows(groupJson, (json) => json.bones)) putRows(table, id, groupRows)
-
-    return table
-  }
-
-  // weaponTable is the base table with the bones a weapon's skin changes replaced by that skin's pieces
-  private weaponTable(weapon: string, base: Table, groupJson: (group: number) => AnyArtGroup): Table {
+  // weaponTable is the base table with the bones a weapon's skin changes replaced by that skin's pieces. A bone a
+  // format 4 group has first takes its whole row from that group, its weapon's row too, so a later group's weapon row
+  // doesn't replace it: a look's own format 3 groups come after its sets
+  private weaponTable(
+    weapon: string,
+    base: Table,
+    boneRows: Map<number, GroupRow[]>,
+    groupJson: (group: number) => AnyArtGroup,
+  ): Table {
     const table: Table = { rows: base.rows.map((row) => row.slice()), tails: base.tails.slice() }
     const overrides = this.groupRows(groupJson, (json) => json.weapons[weapon] ?? {})
 
     for (const [id, groupRows] of overrides) {
+      if (isTakenBySet(boneRows.get(id), groupRows)) continue
+
       table.rows[id] = new Int32Array(Math.max(groupRows[0].frames.length, 1) * CANDIDATES).fill(-1)
       putRows(table, id, groupRows)
     }
