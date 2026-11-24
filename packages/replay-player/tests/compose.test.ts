@@ -3,11 +3,13 @@
 // (its hands coloured by the skin holding it) and the orb's FirstPickUp class set (its pickup flash in a map's crate
 // colours). Each has the look --check composes it in, the colours anims resolves that look to, and in a .bin.gz the
 // piece's decoded base (RGBA), its weight sheets (RGB) and the piece anims' composePiece made of them (RGBA)
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { composePiece, resolvedColors, type SheetPixels, type Swap } from '../src/compose.ts'
+import { composeSheet, decodeImages } from '../src/compose-sheet.ts'
+import { type FakeBitmap, imageBlob, installFakeCanvas, readSheets, removeFakeCanvas } from './fake-canvas.ts'
 
 const folder = join(import.meta.dir, 'fixtures', 'compose')
 
@@ -121,5 +123,65 @@ describe('resolving a colour', () => {
 
   test('gives a piece with no colour rule no colours', () => {
     expect(resolvedColors([], [[0x111111, 0xaaaaaa, 0]])).toEqual([])
+  })
+})
+
+describe('composing a sheet on a 2D canvas', () => {
+  beforeAll(installFakeCanvas)
+  afterAll(removeFakeCanvas)
+
+  // a 4 by 1 sheet: a weighted piece on the first two pixels, half covered by its colour, and two plain pixels
+  const base = [0, 0, 0, 255, 0, 0, 0, 128, 7, 8, 9, 255, 7, 8, 9, 0]
+  const weights = [128, 0, 0, 255, 64, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]
+
+  const decoded = () => decodeImages(imageBlob(4, 1, base), [imageBlob(4, 1, weights)])
+
+  test('sums each weighted piece into the base, and keeps the rest of the base as it is', async () => {
+    const pieces = [{ sx: 0, sy: 0, sw: 2, sh: 1, colors: [0xff8000] }]
+    const composed = (await composeSheet(await decoded(), pieces)) as unknown as FakeBitmap
+    const expected = new Uint8ClampedArray(base)
+    const rgba = (pixels: number[]) => ({ width: 4, channels: 4, pixels: new Uint8Array(pixels) })
+
+    composePiece(rgba(base), [rgba(weights)], pieces[0], pieces[0].colors, expected)
+
+    expect([...composed.pixels]).toEqual([...expected])
+    expect([...composed.pixels.subarray(0, 4)]).toEqual([128, 64, 0, 255])
+    expect([...composed.pixels.subarray(8)]).toEqual([7, 8, 9, 255, 7, 8, 9, 0])
+  })
+
+  test('reads the sheets once for every colouring', async () => {
+    const images = await decoded()
+    const before = readSheets()
+
+    await composeSheet(images, [{ sx: 0, sy: 0, sw: 2, sh: 1, colors: [0xff8000] }])
+    await composeSheet(images, [{ sx: 0, sy: 0, sw: 2, sh: 1, colors: [0x0080ff] }])
+
+    // the base and its one weight sheet
+    expect(readSheets() - before).toBe(2)
+  })
+
+  test('closes the sheets that decoded when another fails', async () => {
+    const opened: FakeBitmap[] = []
+    const decode = globalThis.createImageBitmap
+
+    Object.assign(globalThis, {
+      createImageBitmap: async (blob: Blob) => {
+        if (blob.size === 0) throw new Error('not an image')
+
+        const bitmap = (await decode(blob)) as unknown as FakeBitmap
+
+        opened.push(bitmap)
+
+        return bitmap
+      },
+    })
+
+    try {
+      await expect(decodeImages(imageBlob(4, 1, base), [new Blob([])])).rejects.toThrow('not an image')
+    } finally {
+      Object.assign(globalThis, { createImageBitmap: decode })
+    }
+
+    expect(opened.map((bitmap) => bitmap.closed)).toEqual([true])
   })
 })
