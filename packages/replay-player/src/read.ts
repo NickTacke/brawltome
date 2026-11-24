@@ -1,5 +1,6 @@
 // Checks the manifest and art groups src/load.ts fetches before anything is drawn with them: that their format is one
 // this reads, and, in format 4, the shape it adds. A format 3 file is taken as it comes, as it always was
+import { MAX_WEIGHT_SHEETS, WEIGHTS_PER_SHEET } from './compose.ts'
 import {
   type AnyArtGroup,
   type AnyManifest,
@@ -8,13 +9,6 @@ import {
   SET_FORMAT,
   type SetKind,
 } from './format.ts'
-
-// a weight sheet's three channels each hold one colour's weight
-const WEIGHTS_PER_SHEET = 3
-
-// the most weight sheets a sheet can have: with its base, what one WebGL2 shader can read. In 11.01 the busiest piece
-// keeps 23 colours
-const MAX_WEIGHT_SHEETS = 8
 
 const SET_KINDS: readonly SetKind[] = ['skin', 'weaponSkin', 'class']
 
