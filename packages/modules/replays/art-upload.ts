@@ -1,4 +1,5 @@
 import type { Sql } from '@brawltome/foundation'
+import { readArtGroupSheets } from './art-group-sheets'
 import { findLiveArtJob } from './art-lease'
 import { readMapFileSheets } from './art-map-file'
 import { parseArtPath, verifyArtFile } from './art-paths'
@@ -60,15 +61,21 @@ export async function storeArtFile(
   return held.status === 'exists' ? held : { status: 'lease-lost' }
 }
 
-// a map file names sheets of its own, which the bucket must hold first: the worker sends a match's sheets before its
-// map file. null for any other file
+// a map file and a format 4 art group name sheets of their own, which the bucket must hold first: the worker sends a
+// match's or a set's sheets before the files naming them. null for any other file
 async function unstoredSheetsProblem(sql: Sql, path: string, bytes: Uint8Array): Promise<string | null> {
-  if (parseArtPath(path)?.kind !== 'map') return null
+  const kind = parseArtPath(path)?.kind
+
+  if (kind !== 'map' && kind !== 'art') return null
 
   // verifyArtFile already found it a json object
-  const sheets = readMapFileSheets(JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>)
+  const file = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>
+  const sheets = kind === 'map' ? readMapFileSheets(file) : readArtGroupSheets(file)
 
   if ('reason' in sheets) return `${path}: ${sheets.reason}`
+
+  // a format 3 group names none, and is stored as before
+  if (sheets.paths.length === 0) return null
 
   const unstored = await unstoredArtPaths(sql, sheets.paths)
 

@@ -2,17 +2,25 @@ import type { ObjectStore, Sql, TransactionSql } from '@brawltome/foundation'
 import { findLiveArtJob, finishArtWithFailure, type LiveArtJob, restartArtJob } from './art-lease'
 import { readManifestPaths } from './art-manifest'
 import { parseArtPath } from './art-paths'
+import { readSetIndex, type SetIndex } from './art-set-index'
 import { unstoredArtPaths } from './art-stored'
 import type { CompleteOutcome } from './jobs'
 import { manifestKey } from './keys'
 import { MAX_ART_FILE_BYTES, MAX_MERGE_HOPS } from './limits'
 import type { ReplaysDeps } from './model'
 
-// the worker's last answer for an art job: the manifest (none for a warm job) and the map files it exported. nothing
-// is stored unless every file named is already in the art bucket
+// the worker's last answer for an art job: the manifest (none for a warm or predraw job), the map files it exported,
+// and a predraw job's set index. nothing is stored unless every file named is already in the art bucket
 
 export type ArtMap = { patch: string; mapId: number; path: string }
-export type ArtResult = { manifest: unknown | null; maps: ArtMap[]; artFormat: number }
+
+export type ArtResult = {
+  manifest: unknown | null
+  maps: ArtMap[]
+  artFormat: number
+  // the set index a predraw job drew; a worker from before the sets sends none
+  setIndex?: string | null
+}
 
 type MatchLine = { build: string; timelineKey: string | null }
 
@@ -35,19 +43,39 @@ export async function completeArtJob(
 
   if (job === 'not-found' || job === 'lease-lost') return job
 
+  if (job.kind === 'predraw') return completePredraw({ sql, artStore }, { ...job, leaseToken }, result)
+
   const problem = await resultProblem(sql, job, result)
 
-  if (problem) {
-    const failure = { code: 'export-failed' as const, message: problem.slice(0, 500) }
-    const outcome = await finishArtWithFailure(sql, { id: jobId, leaseToken }, failure, true)
-
-    // given back means the line was replaced, which a result answers as for a lost lease
-    return outcome === 'failed' ? 'failed' : 'lease-lost'
-  }
+  if (problem) return failResult(sql, { id: jobId, leaseToken }, problem)
 
   if (job.kind === 'warm') return storeMaps(sql, { id: jobId, leaseToken }, result)
 
   return storeManifest({ sql, artStore }, { ...job, leaseToken }, result)
+}
+
+async function failResult(
+  sql: Sql,
+  job: { id: string; leaseToken: string },
+  problem: string,
+): Promise<CompleteOutcome> {
+  const failure = { code: 'export-failed' as const, message: problem.slice(0, 500) }
+  const outcome = await finishArtWithFailure(sql, job, failure, true)
+
+  // given back means the line was replaced, which a result answers as for a lost lease
+  return outcome === 'failed' ? 'failed' : 'lease-lost'
+}
+
+async function completePredraw(
+  stores: { sql: Sql; artStore: ObjectStore },
+  job: LiveArtJob & { leaseToken: string },
+  result: ArtResult,
+): Promise<CompleteOutcome> {
+  const index = await readPredrawIndex(stores, job, result)
+
+  if ('reason' in index) return failResult(stores.sql, job, index.reason)
+
+  return storeSetIndex(stores.sql, job, { path: result.setIndex as string, format: index.format })
 }
 
 // why the result can't be stored, or null when it can
@@ -55,6 +83,8 @@ async function resultProblem(sql: Sql, job: LiveArtJob, result: ArtResult): Prom
   if (!Number.isInteger(result.artFormat) || result.artFormat < 1 || result.artFormat > 32767) {
     return `art format ${result.artFormat} is not a format number`
   }
+
+  if (result.setIndex) return 'only a predraw job names a set index'
 
   const badMap = result.maps.find((map) => !isMapEntry(map, job.patch))
 
@@ -69,6 +99,44 @@ async function resultProblem(sql: Sql, job: LiveArtJob, result: ArtResult): Prom
   if (missing.length > 0) return `the art bucket lacks ${missing.length} named files, such as ${missing[0]}`
 
   return null
+}
+
+// a predraw job's only answer is its set index: an index of its own patch, in the art bucket with every set it names,
+// so a match job handed it never waits on a set that will never come
+async function readPredrawIndex(
+  stores: { sql: Sql; artStore: ObjectStore },
+  job: LiveArtJob,
+  result: ArtResult,
+): Promise<SetIndex | { reason: string }> {
+  if (result.manifest !== null || result.maps.length > 0) {
+    return { reason: 'a predraw job has no manifest or map files' }
+  }
+
+  const path = result.setIndex
+
+  if (!path || parseArtPath(path)?.kind !== 'set-index') return { reason: `${String(path)} is not a set index path` }
+
+  const [unstored] = await unstoredArtPaths(stores.sql, [path])
+
+  if (unstored) return { reason: `the art bucket lacks the set index ${path}` }
+
+  const bytes = await stores.artStore.get(path)
+
+  if (!bytes) return { reason: `the art bucket lacks the set index ${path}` }
+
+  const index = readSetIndex(JSON.parse(new TextDecoder().decode(bytes)))
+
+  if ('reason' in index) return { reason: `${path}: ${index.reason}` }
+
+  if (index.patch !== job.patch) return { reason: `${path} is the set index of patch ${index.patch}, not ${job.patch}` }
+
+  const missing = await unstoredArtPaths(stores.sql, index.sets)
+
+  if (missing.length > 0) {
+    return { reason: `the art bucket lacks ${missing.length} sets ${path} names, such as ${missing[0]}` }
+  }
+
+  return index
 }
 
 function pathsOf(job: LiveArtJob, manifest: unknown): { paths: string[] } | { reason: string } {
@@ -86,6 +154,23 @@ function isMapEntry(map: ArtMap, patch: string): boolean {
   const isMapId = Number.isInteger(map.mapId) && map.mapId >= 0 && map.mapId <= MAX_MAP_ID
 
   return map.patch === patch && isMapId && parseArtPath(map.path)?.kind === 'map'
+}
+
+// a later index of the patch replaces the one before: both name only stored sets. the index's set format is kept
+// with it, so a worker whose export draws another format is never handed it
+async function storeSetIndex(
+  sql: Sql,
+  job: LiveArtJob & { leaseToken: string },
+  index: { path: string; format: number },
+): Promise<CompleteOutcome> {
+  return finishJob(sql, job, async (transaction) => {
+    await transaction`
+      INSERT INTO replays.set_indexes (patch, path, format) VALUES (${job.patch}, ${index.path}, ${index.format})
+      ON CONFLICT (patch) DO UPDATE SET path = excluded.path, format = excluded.format, updated_at = clock_timestamp()
+    `
+
+    return 'done'
+  })
 }
 
 async function storeMaps(

@@ -162,6 +162,7 @@ export const artJobs = replaysSchema.table('art_jobs', {
   failure: jsonb<ArtFailure>('failure'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  waitUntil: timestamp('wait_until', { withTimezone: true }),
 })
 
 export const artFiles = replaysSchema.table('art_files', {
@@ -186,4 +187,11 @@ export const mapFiles = replaysSchema.table(
 export const artFormats = replaysSchema.table('art_formats', {
   format: smallint('format').primaryKey(),
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+})
+
+export const setIndexes = replaysSchema.table('set_indexes', {
+  patch: varchar('patch', { length: 16 }).primaryKey(),
+  path: varchar('path', { length: 80 }).notNull(),
+  format: smallint('format').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 })

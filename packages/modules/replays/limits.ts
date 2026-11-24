@@ -13,5 +13,7 @@ export const MAX_LINE_BYTES = 32 * 1024 * 1024
 export const MAX_ART_FILE_BYTES = 8 * 1024 * 1024
 // bounds one missing-files question from the worker
 export const MAX_ART_PATHS_PER_CALL = 2000
+// how long a match job that waits for its patch's sets stays out of the queue; planning it again takes seconds
+export const SET_WAIT_SECONDS = 600
 // a merged match keeps answering under its old id, through at most this many merges
 export const MAX_MERGE_HOPS = 3

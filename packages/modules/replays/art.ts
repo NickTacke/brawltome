@@ -2,6 +2,8 @@ import type { Sql } from '@brawltome/foundation'
 import { type ArtResult, completeArtJob } from './art-complete'
 import {
   type ArtFailure,
+  type ArtJobKind,
+  deferArtJob,
   failExhaustedArtJobs,
   findLiveArtJob,
   finishArtWithFailure,
@@ -9,7 +11,7 @@ import {
   type LiveArtJob,
 } from './art-lease'
 import { parseArtPath } from './art-paths'
-import { queueArtJob, queueWarmJob } from './art-queue'
+import { queueArtJob, queuePredrawJob, queueWarmJob } from './art-queue'
 import { unstoredArtPaths } from './art-stored'
 import { type StoreArtOutcome, storeArtFile } from './art-upload'
 import type { CompleteOutcome } from './jobs'
@@ -20,16 +22,19 @@ import type { ReplaysDeps, WorkerReport } from './model'
 // after a match is stored, the worker on VM 106 exports its legends' art: it claims an art job, asks which files the
 // art bucket lacks, sends those, then the manifest. the worker holds no storage keys and its uploads aren't trusted:
 // every file is checked against its path before it is stored, and a manifest only once the bucket has every file it
-// names
+// names. a predraw job draws a patch's pre-drawn sets and its set index the same way; once the patch has an index, a
+// worker that can draw from sets is handed it with each match job of the patch
 
 export type ClaimedArtJob = {
   jobId: string
   leaseToken: string
-  kind: 'match' | 'warm'
+  kind: ArtJobKind
   patch: string
   matchId: string | null
-  // the match's line, gzipped as stored; null for a warm job
+  // the match's line, gzipped as stored; null for a warm or predraw job
   line: Uint8Array | null
+  // the patch's set index (sets/<sha256>.json), for a match job claimed by a worker that can draw from sets
+  setIndex: string | null
 }
 
 export type ReadArtOutcome =
@@ -38,15 +43,20 @@ export type ReadArtOutcome =
   | { status: 'refused'; reason: string }
   | { status: 'lease-lost' }
 
-/** The next art job, warm jobs first, then the newest match; null when there is nothing to do. */
+/**
+ * The next art job, warm jobs first, then predraw jobs, then the newest match; null when there is nothing to do. Only
+ * a worker that reports a set format is handed predraw jobs, and a set index only when its sets are in that format.
+ */
 export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Promise<ClaimedArtJob | null> {
   if (!deps.artStore) return null
 
   await noteWorkerReport(deps, report)
   await failExhaustedArtJobs(deps.database.sql)
 
+  const setFormat = report.setFormat ?? null
+
   for (;;) {
-    const job = await takeNextArtJob(deps.database.sql)
+    const job = await takeNextArtJob(deps.database.sql, setFormat !== null)
 
     if (!job) return null
 
@@ -58,11 +68,12 @@ export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Prom
       matchId: job.matchId,
     }
 
-    if (job.kind === 'warm') return { ...claimed, line: null }
+    if (job.kind !== 'match') return { ...claimed, line: null, setIndex: null }
 
     const line = job.timelineKey ? await deps.objectStore.get(job.timelineKey) : null
+    const setIndex = await setIndexOf(deps.database.sql, job.patch, setFormat)
 
-    if (line) return { ...claimed, line }
+    if (line) return { ...claimed, line, setIndex }
 
     // nothing to export from, unless a re-parse replaced the line just now: the job then goes back with the new
     // one and the next turn of the loop takes it again
@@ -72,20 +83,25 @@ export async function claimArtJob(deps: ReplaysDeps, report: WorkerReport): Prom
   }
 }
 
-async function takeNextArtJob(sql: Sql): Promise<(LiveArtJob & { leaseToken: string }) | null> {
+// a pending job that waits for its patch's sets is passed by until its wait is over
+async function takeNextArtJob(sql: Sql, canDrawSets: boolean): Promise<(LiveArtJob & { leaseToken: string }) | null> {
   const [job] = await sql<(LiveArtJob & { leaseToken: string })[]>`
     WITH candidate AS (
       SELECT job.id FROM replays.art_jobs AS job
       LEFT JOIN replays.matches AS match ON match.id = job.match_id
-      WHERE job.status = 'pending'
-        OR (job.status = 'processing' AND job.lease_expires_at <= clock_timestamp() AND job.attempts < ${MAX_ATTEMPTS})
-      ORDER BY job.kind = 'warm' DESC, match.played_at DESC NULLS LAST, match.created_at DESC, job.created_at, job.id
+      WHERE (
+          (job.status = 'pending' AND (job.wait_until IS NULL OR job.wait_until <= clock_timestamp()))
+          OR (job.status = 'processing' AND job.lease_expires_at <= clock_timestamp() AND job.attempts < ${MAX_ATTEMPTS})
+        )
+        AND (job.kind <> 'predraw' OR ${canDrawSets})
+      ORDER BY job.kind = 'warm' DESC, job.kind = 'predraw' DESC, match.played_at DESC NULLS LAST, match.created_at DESC,
+        job.created_at, job.id
       FOR UPDATE OF job SKIP LOCKED
       LIMIT 1
     )
     UPDATE replays.art_jobs AS job SET status = 'processing', attempts = job.attempts + 1,
       lease_token = gen_random_uuid(), lease_expires_at = clock_timestamp() + ${LEASE_SECONDS} * interval '1 second',
-      timeline_key = (SELECT timeline_key FROM replays.matches WHERE id = job.match_id),
+      timeline_key = (SELECT timeline_key FROM replays.matches WHERE id = job.match_id), wait_until = NULL,
       claimed_at = clock_timestamp(), updated_at = clock_timestamp()
     FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.kind, job.match_id AS "matchId", job.patch, job.attempts, job.timeline_key AS "timelineKey",
@@ -93,6 +109,18 @@ async function takeNextArtJob(sql: Sql): Promise<(LiveArtJob & { leaseToken: str
   `
 
   return job ?? null
+}
+
+// render --sets refuses an index of another set format and fails the match, so a worker whose export draws another
+// format than the index's, or none, draws the match as if its patch had no index
+async function setIndexOf(sql: Sql, patch: string, setFormat: number | null): Promise<string | null> {
+  if (setFormat === null) return null
+
+  const [index] = await sql<{ path: string }[]>`
+    SELECT path FROM replays.set_indexes WHERE patch = ${patch} AND format = ${setFormat}
+  `
+
+  return index?.path ?? null
 }
 
 /** The paths the art bucket doesn't hold yet, of those the worker means to use. */
@@ -114,8 +142,9 @@ export async function missingArtFiles(
 }
 
 /**
- * A stored art group or map file. A render reads those it doesn't make again to name their sheets in the manifest,
- * so only these two kinds are handed out; the sheets and packs they name stay in the bucket.
+ * A stored art group, map file or set index. A render reads the groups and map files it doesn't make again to name
+ * their sheets in the manifest, and a render from sets reads its patch's index, so only these kinds are handed out; the
+ * sheets and packs they name stay in the bucket.
  */
 export async function readArtFile(
   deps: ReplaysDeps,
@@ -129,7 +158,9 @@ export async function readArtFile(
 
   const kind = parseArtPath(path)?.kind
 
-  if (kind !== 'art' && kind !== 'map') return { status: 'refused', reason: `${path} is not an art group or map file` }
+  if (kind !== 'art' && kind !== 'map' && kind !== 'set-index') {
+    return { status: 'refused', reason: `${path} is not an art group, map file or set index` }
+  }
 
   const job = await findLiveArtJob(deps.database.sql, jobId, leaseToken)
 
@@ -176,9 +207,22 @@ export async function releaseArtJob(deps: ReplaysDeps, jobId: string, leaseToken
   return giveBack(deps.database.sql, { id: jobId, leaseToken }, { isAttempt: false })
 }
 
+/**
+ * Gives a match job back unplayed for a while: the sets its patch's index names aren't all in the art bucket yet, and
+ * drawing the match's players itself would only be thrown away once they are. False for a lost lease or another kind.
+ */
+export async function waitForSets(deps: ReplaysDeps, jobId: string, leaseToken: string): Promise<boolean> {
+  const job = await findLiveArtJob(deps.database.sql, jobId, leaseToken)
+
+  if (job === 'not-found' || job === 'lease-lost' || job.kind !== 'match') return false
+
+  return deferArtJob(deps.database.sql, { id: jobId, leaseToken })
+}
+
 export type ReplayArtJobs = {
   queue(matchId: string): Promise<void>
   queueWarm(patch: string): Promise<void>
+  queuePredraw(patch: string): Promise<void>
   claim(report: WorkerReport): Promise<ClaimedArtJob | null>
   missing(jobId: string, leaseToken: string, paths: string[]): Promise<string[] | 'lease-lost'>
   store(jobId: string, leaseToken: string, path: string, bytes: Uint8Array): Promise<StoreArtOutcome>
@@ -187,12 +231,14 @@ export type ReplayArtJobs = {
   fail(jobId: string, leaseToken: string, failure: ArtFailure): Promise<boolean>
   renew(jobId: string, leaseToken: string): Promise<boolean>
   release(jobId: string, leaseToken: string): Promise<boolean>
+  wait(jobId: string, leaseToken: string): Promise<boolean>
 }
 
 export function createReplayArtJobs(deps: ReplaysDeps): ReplayArtJobs {
   return {
     queue: (matchId) => queueArtJob(deps, matchId),
     queueWarm: (patch) => queueWarmJob(deps, patch),
+    queuePredraw: (patch) => queuePredrawJob(deps, patch),
     claim: (report) => claimArtJob(deps, report),
     missing: (jobId, leaseToken, paths) => missingArtFiles(deps, jobId, leaseToken, paths),
     store: (jobId, leaseToken, path, bytes) => storeArtFile(deps, jobId, leaseToken, path, bytes),
@@ -201,5 +247,6 @@ export function createReplayArtJobs(deps: ReplaysDeps): ReplayArtJobs {
     fail: (jobId, leaseToken, failure) => failArtJob(deps, jobId, leaseToken, failure),
     renew: (jobId, leaseToken) => renewArtLease(deps, jobId, leaseToken),
     release: (jobId, leaseToken) => releaseArtJob(deps, jobId, leaseToken),
+    wait: (jobId, leaseToken) => waitForSets(deps, jobId, leaseToken),
   }
 }

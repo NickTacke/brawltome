@@ -4,7 +4,7 @@ import { createApiClient } from './api-client'
 import { createArtClient } from './art-client'
 import { createExporter, exportCommand } from './art-export'
 import { ArtRunner } from './art-runner'
-import { readArtFormat, readConfig } from './config'
+import { readArtFormat, readConfig, readSetFormat } from './config'
 import { ProcessPool } from './process-pool'
 import { runOnce } from './worker'
 
@@ -15,6 +15,7 @@ const config = readConfig(process.env)
 // /opt/bhnative/current links to the folder named after the build, e.g. dev-58fbc3c
 const build = basename(dirname(realpathSync(config.bhnativePath)))
 const artFormat = readArtFormat(config.animsPath)
+const setFormat = readSetFormat(config.animsPath)
 
 const pool = await ProcessPool.start({
   command: [config.bhnativePath],
@@ -34,6 +35,9 @@ console.log(
 )
 
 console.log(artFormat === null ? `art export off: none at ${config.animsPath}` : `art export on: format ${artFormat}`)
+
+if (artFormat !== null)
+  console.log(setFormat === null ? 'pre-drawn sets off' : `pre-drawn sets on: format ${setFormat}`)
 
 async function loop(): Promise<void> {
   while (!isStopping) {
@@ -62,10 +66,13 @@ async function artLoop(format: number): Promise<void> {
     gameRoot: config.gameRoot,
     workDir: config.workDir,
     artFormat: format,
+    setFormat,
     processesDuringArt: config.processesDuringArt,
     renewEveryMs: config.renewEveryMs,
     exportTimeoutMs: config.exportTimeoutMs,
     warmTimeoutMs: config.warmTimeoutMs,
+    predrawTimeoutMs: config.predrawTimeoutMs,
+    isPredrawChecked: config.isPredrawChecked,
     uploadRetryDelaysMs: config.uploadRetryDelaysMs,
   })
 

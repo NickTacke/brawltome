@@ -125,3 +125,59 @@ export function fakeArtExport(seed = 'one') {
 
   return { files, manifest, mapPath: fixedNames.map }
 }
+
+/** A patch's set index in the brawlhalla-anims format, naming its first set for a skin and its last for a class. */
+export function fakeSetIndex(patch: string, sets: string[], format = 4) {
+  return {
+    format,
+    drawing: 1,
+    pixelsPerUnit: 1.2,
+    patch,
+    game: '0'.repeat(64),
+    skins: { '1': sets[0], '2': 'nothing to draw' },
+    weaponSkins: { '3': 'draw per look' },
+    classes: { Unarmed: { Idle: { set: sets[sets.length - 1], bones: ['a_Body'] } } },
+  }
+}
+
+/**
+ * Every file of a fake predraw of a patch, in the order the worker sends them: the sets' sheets, then the two set files
+ * (a skin's with a weighted sheet, a class's with a plain one), then the index naming them, in the given set format.
+ */
+export function fakeSetsExport(patch = '11.00', seed = 'one', format = 4) {
+  const files = new Map<string, Uint8Array>()
+  const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
+
+  const sheet = (body: string) => {
+    const bytes = webp(`${body}-${seed}`)
+    const path = `sheets/${nameOf(bytes)}.webp`
+
+    files.set(path, bytes)
+
+    return path
+  }
+
+  const [base, weights, plain] = [sheet('base'), sheet('weights'), sheet('plain')]
+
+  // a set is named by its recipe, which the seed stands for
+  const sets = ['skin', 'class'].map(
+    (kind) => `art/${createHash('sha256').update(`${kind}-${seed}`).digest('hex').slice(0, 32)}.json`,
+  )
+
+  const setFile = (kind: string, sheets: unknown) =>
+    json({ format: 4, sheets, pieces: [], bones: {}, weapons: {}, set: { kind, drawing: 1 } })
+
+  files.set(
+    sets[0] as string,
+    setFile('skin', [{ src: base, w: 4, h: 4, bytes: 10, weights: [{ src: weights, bytes: 8 }] }]),
+  )
+
+  files.set(sets[1] as string, setFile('class', [{ src: plain, w: 4, h: 4, bytes: 10 }]))
+
+  const indexBytes = json(fakeSetIndex(patch, sets, format))
+  const indexPath = `sets/${createHash('sha256').update(indexBytes).digest('hex').slice(0, 32)}.json`
+
+  files.set(indexPath, indexBytes)
+
+  return { files, sets, sheets: [base, weights, plain], indexPath }
+}

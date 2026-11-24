@@ -9,11 +9,13 @@ const matchId = '4a6d0c55-2b0e-4f7e-9d1a-3c5b7e9f1a2b'
 const auth = { authorization: `Bearer ${token}` }
 const leased = { ...auth, 'x-art-lease': leaseToken }
 const groupPath = `art/${'1'.repeat(32)}.json`
+const indexPath = `sets/${'a'.repeat(32)}.json`
 
 function routes(overrides: Partial<ReplayArtJobs> = {}) {
   const art: ReplayArtJobs = {
     queue: mock(async () => undefined),
     queueWarm: mock(async () => undefined),
+    queuePredraw: mock(async () => undefined),
     claim: mock(async () => null),
     missing: mock(async (_jobId: string, _leaseToken: string, paths: string[]) => paths),
     store: mock(async () => ({ status: 'stored' as const })),
@@ -22,6 +24,7 @@ function routes(overrides: Partial<ReplayArtJobs> = {}) {
     fail: mock(async () => true),
     renew: mock(async () => true),
     release: mock(async () => true),
+    wait: mock(async () => true),
     ...overrides,
   }
 
@@ -57,7 +60,7 @@ describe('replay worker art routes', () => {
 
   test('a claim of a match job returns its gzipped line with the job in headers', async () => {
     const line = Bun.gzipSync(new TextEncoder().encode('{"exit":0}'))
-    const job: ClaimedArtJob = { jobId, leaseToken, kind: 'match', patch: '11.00', matchId, line }
+    const job: ClaimedArtJob = { jobId, leaseToken, kind: 'match', patch: '11.00', matchId, line, setIndex: null }
     const { app } = routes({ claim: mock(async () => job) })
 
     const response = await app.request('/art/claim', jsonRequest(report, auth))
@@ -68,11 +71,65 @@ describe('replay worker art routes', () => {
     expect(response.headers.get('x-art-kind')).toBe('match')
     expect(response.headers.get('x-art-patch')).toBe('11.00')
     expect(response.headers.get('x-art-match')).toBe(matchId)
+    expect(response.headers.has('x-art-set-index')).toBe(false)
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(line))
   })
 
+  test('a claim of a match job of a patch with a set index names the index, for a worker that draws sets', async () => {
+    const line = Bun.gzipSync(new TextEncoder().encode('{"exit":0}'))
+    const job: ClaimedArtJob = { jobId, leaseToken, kind: 'match', patch: '11.00', matchId, line, setIndex: indexPath }
+    const { app, art } = routes({ claim: mock(async () => job) })
+    const setsReport = { ...report, setFormat: 4 }
+
+    const response = await app.request('/art/claim', jsonRequest(setsReport, auth))
+
+    expect(art.claim).toHaveBeenCalledWith(setsReport)
+    expect(response.headers.get('x-art-set-index')).toBe(indexPath)
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(line))
+  })
+
+  test('a claim of a predraw job has no body, no match and no set index', async () => {
+    const job: ClaimedArtJob = {
+      jobId,
+      leaseToken,
+      kind: 'predraw',
+      patch: '11.01',
+      matchId: null,
+      line: null,
+      setIndex: null,
+    }
+
+    const { app } = routes({ claim: mock(async () => job) })
+
+    const response = await app.request('/art/claim', jsonRequest({ ...report, setFormat: 4 }, auth))
+
+    expect(response.headers.get('x-art-kind')).toBe('predraw')
+    expect(response.headers.get('x-art-patch')).toBe('11.01')
+    expect(response.headers.has('x-art-match')).toBe(false)
+    expect(response.headers.has('x-art-set-index')).toBe(false)
+    expect((await response.arrayBuffer()).byteLength).toBe(0)
+  })
+
+  test('a report with a set format that is not a format number is refused', async () => {
+    const { app, art } = routes()
+
+    const response = await app.request('/art/claim', jsonRequest({ ...report, setFormat: 'four' }, auth))
+
+    expect(response.status).toBe(400)
+    expect(art.claim).not.toHaveBeenCalled()
+  })
+
   test('a claim of a warm job has no body and no match', async () => {
-    const job: ClaimedArtJob = { jobId, leaseToken, kind: 'warm', patch: '11.00', matchId: null, line: null }
+    const job: ClaimedArtJob = {
+      jobId,
+      leaseToken,
+      kind: 'warm',
+      patch: '11.00',
+      matchId: null,
+      line: null,
+      setIndex: null,
+    }
+
     const { app } = routes({ claim: mock(async () => job) })
 
     const response = await app.request('/art/claim', jsonRequest(report, auth))
@@ -125,7 +182,6 @@ describe('replay worker art routes', () => {
 
   test("a patch's set index reaches the art jobs", async () => {
     const { app, art } = routes()
-    const indexPath = `sets/${'a'.repeat(32)}.json`
     const bytes = new TextEncoder().encode('{"format":4}')
 
     const response = await app.request(`/art/${jobId}/files/${indexPath}`, {
@@ -255,6 +311,28 @@ describe('replay worker art routes', () => {
     expect(art.complete).toHaveBeenCalledWith(jobId, leaseToken, { manifest: null, maps: [], artFormat: 3 })
   })
 
+  test('a predraw result names its set index, which goes through to completeArtJob', async () => {
+    const { app, art } = routes()
+    const result = { manifest: null, maps: [], artFormat: 3, setIndex: indexPath }
+
+    const response = await app.request(`/art/${jobId}/result`, jsonRequest(result))
+
+    expect(response.status).toBe(204)
+    expect(art.complete).toHaveBeenCalledWith(jobId, leaseToken, result)
+  })
+
+  test('a result whose set index is not a short string is refused', async () => {
+    const { app, art } = routes()
+    const result = { manifest: null, maps: [], artFormat: 3 }
+
+    const long = await app.request(`/art/${jobId}/result`, jsonRequest({ ...result, setIndex: 's'.repeat(65) }))
+    const number = await app.request(`/art/${jobId}/result`, jsonRequest({ ...result, setIndex: 7 }))
+
+    expect(long.status).toBe(400)
+    expect(number.status).toBe(400)
+    expect(art.complete).not.toHaveBeenCalled()
+  })
+
   test('a result the art jobs refuse answers 422, and one after the lease was lost 409', async () => {
     const result = { manifest: null, maps: [], artFormat: 3 }
     const refused = routes({ complete: mock(async () => 'failed' as const) })
@@ -282,6 +360,20 @@ describe('replay worker art routes', () => {
     expect(known.status).toBe(204)
     expect(unknown.status).toBe(400)
     expect(art.fail).toHaveBeenCalledWith(jobId, leaseToken, { code: 'no-animations', message: 'x' })
+  })
+
+  test('a match job waiting for its sets goes back to the art jobs, and answers 409 once the lease is gone', async () => {
+    const waiting = routes()
+    const lost = routes({ wait: mock(async () => false) })
+
+    const waited = await waiting.app.request(`/art/${jobId}/wait`, { method: 'POST', headers: leased })
+    const gone = await lost.app.request(`/art/${jobId}/wait`, { method: 'POST', headers: leased })
+    const unleased = await waiting.app.request(`/art/${jobId}/wait`, { method: 'POST', headers: auth })
+
+    expect(waited.status).toBe(204)
+    expect(waiting.art.wait).toHaveBeenCalledWith(jobId, leaseToken)
+    expect(gone.status).toBe(409)
+    expect(unleased.status).toBe(400)
   })
 
   test('renew answers 409 when the lease is gone', async () => {

@@ -1,15 +1,19 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createArtClient } from '../src/art-client'
 import { createExporter, type Exporter } from '../src/art-export'
 import { ArtRunner, type ArtRunnerDeps } from '../src/art-runner'
 import {
+  fakeGameFile,
   fakeGroups,
   fakeMap,
   fakeMapId,
   fakePack,
+  fakeSetIndex,
+  fakeSetSheets,
+  fakeSets,
   fakeSheet,
   longWarmSkip,
   warmGroup,
@@ -23,13 +27,18 @@ const leaseToken = '9d3c1f0e-0a51-4f6c-9a43-5d1e2f3a4b5c'
 const matchId = '4a6d0c55-2b0e-4f7e-9d1a-3c5b7e9f1a2b'
 const fakeExport = ['bun', join(import.meta.dir, 'fake-export.ts')]
 
-type NextJob = { kind: 'match'; fake: string } | { kind: 'warm'; patch?: string }
+type NextJob =
+  | { kind: 'match'; fake: string; setIndex?: string }
+  | { kind: 'warm'; patch?: string }
+  | { kind: 'predraw'; patch?: string }
 
 type Received = {
   calls: string[]
+  // each export run's arguments after the command
+  exports: string[][]
   claims: unknown[]
   puts: string[]
-  results: { manifest: unknown; maps: unknown[]; artFormat: number }[]
+  results: { manifest: unknown; maps: unknown[]; artFormat: number; setIndex?: string }[]
   failures: { code: string; message: string }[]
   renewals: number
   authorizations: string[]
@@ -60,6 +69,8 @@ describe('the art runner', () => {
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
     mkdirSync(join(root, 'games', '11.00'), { recursive: true })
+    // the game file a set index of 11.00 is named from
+    writeFileSync(join(root, 'games', '11.00', 'BrawlhallaAir.swf'), fakeGameFile)
     // the fake export's warm never ends for this patch
     mkdirSync(join(root, 'games', '11.01'), { recursive: true })
     // and its warm --list names a path outside the store for this one
@@ -87,7 +98,18 @@ describe('the art runner', () => {
     failedUploads = new Map()
     resultDelayMs = 0
     bucket = new Map()
-    received = { calls: [], claims: [], puts: [], results: [], failures: [], renewals: 0, authorizations: [] }
+
+    received = {
+      calls: [],
+      exports: [],
+      claims: [],
+      puts: [],
+      results: [],
+      failures: [],
+      renewals: 0,
+      authorizations: [],
+    }
+
     warned = spyOn(console, 'warn').mockImplementation(() => undefined)
   })
 
@@ -145,14 +167,16 @@ describe('the art runner', () => {
       'x-art-job': claimedJobId,
       'x-art-lease': leaseToken,
       'x-art-kind': job.kind,
-      'x-art-patch': job.kind === 'warm' ? (job.patch ?? '11.00') : '11.00',
+      'x-art-patch': job.kind === 'match' ? '11.00' : (job.patch ?? '11.00'),
     }
 
     nextJob = null
 
-    if (job.kind === 'warm') return new Response(null, { headers })
+    if (job.kind !== 'match') return new Response(null, { headers })
 
     const line = Bun.gzipSync(new TextEncoder().encode(`${JSON.stringify({ fake: job.fake })}\n`))
+
+    if (job.setIndex) headers['x-art-set-index'] = job.setIndex
 
     return new Response(line, { headers: { ...headers, 'x-art-match': matchId } })
   }
@@ -202,11 +226,22 @@ describe('the art runner', () => {
   function recorded(exporter: Exporter): Exporter {
     return {
       run: (args, options) => {
-        received.calls.push(args[0] === 'warm' && args.includes('--list') ? 'warm --list' : (args[0] ?? ''))
+        received.calls.push(commandOf(args))
+        received.exports.push(args)
 
         return exporter.run(args, options)
       },
     }
+  }
+
+  function commandOf(args: string[]): string {
+    if (args[0] === 'predraw') return `predraw ${args[1]}`
+
+    return args[0] === 'warm' && args.includes('--list') ? 'warm --list' : (args[0] ?? '')
+  }
+
+  function argsOf(command: string): string[] {
+    return received.exports.find((args) => commandOf(args) === command) ?? []
   }
 
   function runner(overrides: Partial<ArtRunnerDeps> = {}): ArtRunner {
@@ -227,10 +262,13 @@ describe('the art runner', () => {
       gameRoot: join(root, 'games'),
       workDir: join(root, 'work'),
       artFormat: 3,
+      setFormat: null,
       processesDuringArt: 1,
       renewEveryMs: 60_000,
       exportTimeoutMs: 10_000,
       warmTimeoutMs: 10_000,
+      predrawTimeoutMs: 10_000,
+      isPredrawChecked: false,
       uploadRetryDelaysMs: [10, 10, 10, 10],
       ...overrides,
     })
@@ -274,8 +312,10 @@ describe('the art runner', () => {
       },
     ])
 
-    expect(received.claims).toEqual([{ build: 'dev-test', patches: ['11.00'], artFormat: 3 }])
+    expect(received.claims).toEqual([{ build: 'dev-test', patches: ['11.00'], artFormat: 3, setFormat: null }])
     expect(received.authorizations.every((value) => value === `Bearer ${token}`)).toBe(true)
+    expect(argsOf('plan')).not.toContain('--sets')
+    expect(argsOf('render')).not.toContain('--sets')
   })
 
   // the api refuses a map file whose sheets it doesn't hold yet
@@ -611,6 +651,214 @@ describe('the art runner', () => {
     await runner({ gameRoot: join(root, 'nowhere') }).runOnce()
 
     expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('11.00') }])
+  })
+
+  describe('a match of a patch whose sets are drawn', () => {
+    const index = fakeSetIndex('11.00')
+
+    beforeEach(() => {
+      bucket.set(index.path, new TextEncoder().encode(index.text))
+    })
+
+    test('is drawn from its sets: the index comes down, the plan and render name the sets, the manifest is format 4', async () => {
+      for (const path of fakeSets) storedJson(path, { format: 4, sheets: [] })
+
+      nextJob = { kind: 'match', fake: 'ok', setIndex: index.path }
+
+      expect(await runner({ setFormat: 4 }).runOnce()).toBe('done')
+
+      expect(received.calls).toEqual([
+        'claim',
+        `get ${index.path}`,
+        'plan',
+        'missing',
+        'missing',
+        'limit 1',
+        'render',
+        'unlimit',
+        'missing',
+        ...received.puts.map(() => 'put'),
+        'result',
+      ])
+
+      expect(argsOf('plan').slice(-2)).toEqual(['--sets', expect.stringMatching(/\.sets\.json$/)])
+      expect(argsOf('render').slice(-2)).toEqual(['--sets', expect.stringMatching(/\.sets\.json$/)])
+
+      // the sets are named, not drawn or downloaded
+      expect(received.puts.filter((path) => fakeSets.includes(path))).toEqual([])
+      expect(received.calls.filter((call) => fakeSets.some((path) => call.endsWith(path)))).toEqual([])
+
+      expect(received.results).toEqual([
+        {
+          manifest: { format: 4, map: { layout: fakeMap }, art: [...fakeSets, ...fakeGroups] },
+          maps: [{ patch: '11.00', mapId: fakeMapId, path: fakeMap }],
+          artFormat: 4,
+        },
+      ])
+
+      expect(received.claims).toEqual([{ build: 'dev-test', patches: ['11.00'], artFormat: 3, setFormat: 4 }])
+    })
+
+    test('waits while the art bucket lacks one of its sets: the job goes back and nothing is drawn or sent', async () => {
+      const [skinSet, weaponSkinSet] = fakeSets as [string, string, string]
+
+      storedJson(skinSet, { format: 4, sheets: [] })
+      storedJson(weaponSkinSet, { format: 4, sheets: [] })
+      nextJob = { kind: 'match', fake: 'ok', setIndex: index.path }
+
+      expect(await runner({ setFormat: 4 }).runOnce()).toBe('done')
+
+      expect(received.calls).toEqual(['claim', `get ${index.path}`, 'plan', 'missing', 'wait'])
+      expect(received.puts).toEqual([])
+      expect(received.results).toEqual([])
+      expect(received.failures).toEqual([])
+    })
+
+    // the export refuses such an index and exits 1, which would fail the match for good
+    async function drawnWithout(refusedIndex: { path: string; text: string }, setFormat: number) {
+      bucket.set(refusedIndex.path, new TextEncoder().encode(refusedIndex.text))
+      nextJob = { kind: 'match', fake: 'ok', setIndex: refusedIndex.path }
+
+      expect(await runner({ setFormat }).runOnce()).toBe('done')
+
+      expect(received.calls.slice(0, 3)).toEqual(['claim', `get ${refusedIndex.path}`, 'plan'])
+      expect(argsOf('plan')).not.toContain('--sets')
+      expect(argsOf('render')).not.toContain('--sets')
+      expect(received.failures).toEqual([])
+
+      expect(received.results).toEqual([
+        {
+          manifest: { format: 3, map: { layout: fakeMap }, art: fakeGroups },
+          maps: [{ patch: '11.00', mapId: fakeMapId, path: fakeMap }],
+          artFormat: 3,
+        },
+      ])
+    }
+
+    test.each([3, 5])('a worker drawing format %d sets draws the match without a format 4 index', async (setFormat) => {
+      await drawnWithout(index, setFormat)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${index.path}: its sets are format 4, the export draws ${setFormat}`,
+      ])
+    })
+
+    test("a match draws without an index named from another BrawlhallaAir.swf than its game folder's", async () => {
+      const otherGame = fakeSetIndex('11.00', { game: 'f'.repeat(64) })
+
+      await drawnWithout(otherGame, 4)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${otherGame.path}: it was named from another BrawlhallaAir.swf ` +
+          `than ${join(root, 'games', '11.00')}'s`,
+      ])
+    })
+
+    test('a match draws without an index that is not one', async () => {
+      const notAnIndex = { path: `sets/${'9'.repeat(32)}.json`, text: 'not json' }
+
+      await drawnWithout(notAnIndex, 4)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${notAnIndex.path}: it is not a set index`,
+      ])
+    })
+
+    test('a claim naming a set index outside the store layout is refused before anything is read', async () => {
+      nextJob = { kind: 'match', fake: 'ok', setIndex: '../sets.json' }
+
+      await expect(runner({ setFormat: 4 }).runOnce()).rejects.toThrow('x-art-set-index')
+      expect(received.calls).toEqual(['claim'])
+    })
+  })
+
+  describe('a predraw job', () => {
+    const index = fakeSetIndex('11.00')
+
+    function setFiles(paths: string[]): string[] {
+      return paths.flatMap((path) => [...fakeSetSheets(path).map((sheet) => sheet.path), path])
+    }
+
+    test("draws a patch's sets: names them, asks, draws what is missing, sends sheets, then sets, then the index", async () => {
+      nextJob = { kind: 'predraw' }
+
+      expect(await runner({ setFormat: 4 }).runOnce()).toBe('done')
+
+      expect(received.calls).toEqual([
+        'claim',
+        'limit 1',
+        'predraw name',
+        'unlimit',
+        'missing',
+        'limit 1',
+        'predraw draw',
+        'unlimit',
+        'missing',
+        ...setFiles(fakeSets).map(() => 'put'),
+        'missing',
+        'put',
+        'result',
+      ])
+
+      expect(argsOf('predraw name')).toContain('11.00')
+      expect(argsOf('predraw draw')).not.toContain('--check')
+
+      const folders = received.puts.map((path) => path.slice(0, path.indexOf('/')))
+
+      expect(folders).toEqual(['sheets', 'sheets', 'sheets', 'sheets', 'sheets', 'sheets', 'art', 'art', 'art', 'sets'])
+      expect(received.puts.sort()).toEqual([...setFiles(fakeSets), index.path].sort())
+      expect(new TextDecoder().decode(bucket.get(index.path))).toBe(index.text)
+      expect(received.results).toEqual([{ manifest: null, maps: [], artFormat: 3, setIndex: index.path }])
+    })
+
+    test('run again, draws and sends only the sets the art bucket lacks', async () => {
+      const [drawnSet, ...rest] = fakeSets as [string, string, string]
+
+      for (const path of setFiles([drawnSet])) storedJson(path, {})
+
+      nextJob = { kind: 'predraw' }
+
+      await runner({ setFormat: 4 }).runOnce()
+
+      expect(received.puts.sort()).toEqual([...setFiles(rest), index.path].sort())
+      expect(received.results).toEqual([{ manifest: null, maps: [], artFormat: 3, setIndex: index.path }])
+    })
+
+    test('a draw that fails some sets sends the ones it drew, but no index, and fails the job', async () => {
+      const [first, second, failed] = fakeSets as [string, string, string]
+
+      nextJob = { kind: 'predraw', patch: '11.03' }
+
+      await runner({ setFormat: 4 }).runOnce()
+
+      expect(received.puts.sort()).toEqual(setFiles([first, second]).sort())
+      expect(received.results).toEqual([])
+
+      expect(received.failures).toEqual([
+        { code: 'export-failed', message: `predraw draw failed 1 sets: failed ${failed} a piece needs 24 colours` },
+      ])
+    })
+
+    test('a draw past its timeout sends the set it finished, but no index, and fails the job', async () => {
+      const [finished] = fakeSets as [string, string, string]
+
+      nextJob = { kind: 'predraw', patch: '11.01' }
+
+      await runner({ setFormat: 4, exportTimeoutMs: 60_000, predrawTimeoutMs: 1500 }).runOnce()
+
+      expect(received.puts.sort()).toEqual(setFiles([finished]).sort())
+      expect(received.results).toEqual([])
+      expect(received.failures).toEqual([{ code: 'export-failed', message: expect.stringContaining('1500 ms') }])
+    })
+
+    test('a draw is checked when the worker is set to', async () => {
+      nextJob = { kind: 'predraw' }
+
+      await runner({ setFormat: 4, isPredrawChecked: true }).runOnce()
+
+      expect(argsOf('predraw draw')).toContain('--check')
+      expect(received.results).toHaveLength(1)
+    })
   })
 
   test('is idle when there is no job, and leaves no files behind', async () => {

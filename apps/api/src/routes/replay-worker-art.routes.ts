@@ -12,13 +12,15 @@ import { z } from 'zod'
 import { type Lease, leaseOf, readBounded, workerReportSchema } from './replay-worker-requests'
 
 // after a match is stored the replay worker exports its art: it claims an art job, asks which files the art bucket
-// lacks, sends those one by one, then the manifest. mounted under the parse routes, so their token check covers these
+// lacks, sends those one by one, then the manifest. a predraw job ends with its patch's set index instead, and a match
+// job waiting for its patch's sets is put back for later. mounted under the parse routes, so their token check covers
+// these
 
 // 2000 quoted paths of at most 64 characters
 const MAX_MISSING_BODY_BYTES = 256 * 1024
 // how long a worker waits before it sends a file another attempt is uploading again
 const UPLOAD_RETRY_AFTER_SECONDS = 5
-// the manifest, plus the list of map files a warm job made
+// the manifest, plus the list of map files a warm job made or a predraw job's set index
 const MAX_RESULT_BODY_BYTES = MAX_ART_FILE_BYTES + 1024 * 1024
 
 const missingSchema = z.object({ paths: z.array(z.string().max(64)).max(MAX_ART_PATHS_PER_CALL) })
@@ -27,6 +29,7 @@ const resultSchema = z.object({
   manifest: z.record(z.string(), z.unknown()).nullable(),
   maps: z.array(z.object({ patch: z.string().max(16), mapId: z.number().int(), path: z.string().max(64) })).max(1000),
   artFormat: z.number().int().min(1).max(32767),
+  setIndex: z.string().max(64).nullable().optional(),
 })
 
 const failureCodes = ['no-animations', 'export-failed', 'worker-error'] as const satisfies readonly ArtFailureCode[]
@@ -54,6 +57,8 @@ export function createReplayWorkerArtRoutes(art: ReplayArtJobs): Hono {
     }
 
     if (job.matchId) headers['x-art-match'] = job.matchId
+
+    if (job.setIndex) headers['x-art-set-index'] = job.setIndex
 
     return new Response(job.line ? new Uint8Array(job.line) : null, { headers })
   })
@@ -133,6 +138,15 @@ export function createReplayWorkerArtRoutes(art: ReplayArtJobs): Hono {
     const recorded = await art.fail(lease.jobId, lease.leaseToken, failure.data)
 
     return c.body(null, recorded ? 204 : 409)
+  })
+
+  // the sets the job's patch index names aren't all stored yet; 409 when the lease is gone, as for every answer
+  app.post('/:id/wait', async (c) => {
+    const lease = leaseFrom(c)
+
+    if (!lease) return c.body(null, 400)
+
+    return c.body(null, (await art.wait(lease.jobId, lease.leaseToken)) ? 204 : 409)
   })
 
   app.post('/:id/renew', async (c) => {

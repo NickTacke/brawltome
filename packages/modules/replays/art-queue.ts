@@ -1,15 +1,29 @@
 import type { Sql, TransactionSql } from '@brawltome/foundation'
 import type { ReplaysDeps } from './model'
 
-// art jobs wait here until the worker claims them. a match or patch has at most one waiting or running job, so
-// queueing again while one is active does nothing; the active job reads the match's line when it is claimed. a
-// match whose line has no timeline is never queued: there is nothing to draw, so its art stays none
+// art jobs wait here until the worker claims them. a match, or a patch for each kind of patch job, has at most one
+// waiting or running job, so queueing again while one is active does nothing; the active job reads the match's line
+// when it is claimed. a match whose line has no timeline is never queued: there is nothing to draw, so its art stays
+// none
 
 /** Queues an art export for a stored match and marks its art queued. */
 export async function queueArtJob(deps: Pick<ReplaysDeps, 'database' | 'artStore'>, matchId: string): Promise<void> {
   if (!deps.artStore) return
 
   await queueMatchArt(deps.database.sql, matchId)
+}
+
+/**
+ * Queues the drawing of a patch's pre-drawn sets, after its warm job and ahead of its matches. Nothing queues one on
+ * its own: an operator does, once the sets are to be used.
+ */
+export async function queuePredrawJob(deps: Pick<ReplaysDeps, 'database' | 'artStore'>, patch: string): Promise<void> {
+  if (!deps.artStore) return
+
+  await deps.database.sql`
+    INSERT INTO replays.art_jobs (kind, patch) VALUES ('predraw', ${patch})
+    ON CONFLICT (kind, (coalesce(match_id::text, patch))) WHERE status IN ('pending', 'processing') DO NOTHING
+  `
 }
 
 /** Queues the export of a patch's maps and default looks, ahead of its matches. */

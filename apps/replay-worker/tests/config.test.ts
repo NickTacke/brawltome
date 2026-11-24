@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readArtFormat, readConfig } from '../src/config'
+import { readArtFormat, readConfig, readSetFormat } from '../src/config'
 
 const token = 'replay-worker-token-for-tests-32-bytes-long'
 
@@ -24,6 +24,8 @@ describe('worker settings', () => {
       processesDuringArt: 1,
       exportTimeoutMs: 900_000,
       warmTimeoutMs: 3_600_000,
+      predrawTimeoutMs: 43_200_000,
+      isPredrawChecked: false,
       uploadRetryDelaysMs: [2000, 4000, 8000, 16_000],
     })
   })
@@ -53,6 +55,17 @@ describe('worker settings', () => {
     expect(readConfig(env).warmTimeoutMs).toBe(7_200_000)
     expect(() => readConfig({ ...env, REPLAY_ART_WARM_TIMEOUT_MS: 'an hour' })).toThrow('REPLAY_ART_WARM_TIMEOUT_MS')
     expect(() => readConfig({ ...env, REPLAY_ART_WARM_TIMEOUT_MS: '0' })).toThrow('REPLAY_ART_WARM_TIMEOUT_MS')
+  })
+
+  test('the time a predraw may take can be changed, and it checks its sets only when told to', () => {
+    const env = { REPLAY_WORKER_TOKEN: token, REPLAY_ART_PREDRAW_TIMEOUT_MS: '3600000', REPLAY_PREDRAW_CHECK: '1' }
+
+    expect(readConfig(env)).toMatchObject({ predrawTimeoutMs: 3_600_000, isPredrawChecked: true })
+    expect(readConfig({ ...env, REPLAY_PREDRAW_CHECK: 'yes' }).isPredrawChecked).toBe(false)
+
+    expect(() => readConfig({ ...env, REPLAY_ART_PREDRAW_TIMEOUT_MS: 'a day' })).toThrow(
+      'REPLAY_ART_PREDRAW_TIMEOUT_MS',
+    )
   })
 })
 
@@ -89,5 +102,46 @@ describe('the art format', () => {
 
   test('is null when the bundle does not say its format', () => {
     expect(readArtFormat(bundle({ 'scripts/export.ts': '', 'src/format.ts': 'export const OTHER = 1;\n' }))).toBeNull()
+  })
+})
+
+describe('the set format', () => {
+  const folders: string[] = []
+  const format = 'export const FORMAT = 3;\nexport const SET_FORMAT = 4;\n'
+
+  afterEach(() => {
+    for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
+  })
+
+  function bundle(files: Record<string, string>): string {
+    const root = mkdtempSync(join(tmpdir(), 'replay-worker-anims-'))
+
+    folders.push(root)
+
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, path, '..'), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+
+    return root
+  }
+
+  test('is the format of the sets a bundle draws and draws matches from', () => {
+    const animsPath = bundle({ 'scripts/predraw-draw.ts': '', 'scripts/export-sets.ts': '', 'src/format.ts': format })
+
+    expect(readSetFormat(animsPath)).toBe(4)
+  })
+
+  test('is null for a bundle from before render --sets, or one that does not say it', () => {
+    expect(readSetFormat(bundle({ 'scripts/predraw-draw.ts': '', 'src/format.ts': format }))).toBeNull()
+
+    const unsaid = {
+      'scripts/predraw-draw.ts': '',
+      'scripts/export-sets.ts': '',
+      'src/format.ts': 'export const FORMAT = 3;\n',
+    }
+
+    expect(readSetFormat(bundle(unsaid))).toBeNull()
+    expect(readSetFormat('/no/such/folder')).toBeNull()
   })
 })

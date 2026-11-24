@@ -25,6 +25,11 @@ export type WorkerConfig = {
   // warming a whole patch took 11 minutes on four free cores; the vm shares its cores with bh-native at a lower
   // priority, so a warm gets far more room before it counts as stuck, and a stopped warm fails for good
   warmTimeoutMs: number
+  // naming a patch's sets took 4.5 minutes on one core and drawing them all about three hours, four with --check; the
+  // vm's cores go to bh-native first, so a predraw gets most of a day. a stopped draw keeps the sets it finished
+  predrawTimeoutMs: number
+  // whether predraw checks each set it draws against the look baked in, and leaves out the sets that fail
+  isPredrawChecked: boolean
   // waits between tries of an art file another attempt is uploading: five tries over 30 s
   uploadRetryDelaysMs: number[]
 }
@@ -53,6 +58,8 @@ export function readConfig(env: Env): WorkerConfig {
     processesDuringArt: count(env.REPLAY_PROCESSES_DURING_ART, 1, 'REPLAY_PROCESSES_DURING_ART'),
     exportTimeoutMs: 900_000,
     warmTimeoutMs: milliseconds(env.REPLAY_ART_WARM_TIMEOUT_MS, 3_600_000, 'REPLAY_ART_WARM_TIMEOUT_MS'),
+    predrawTimeoutMs: milliseconds(env.REPLAY_ART_PREDRAW_TIMEOUT_MS, 43_200_000, 'REPLAY_ART_PREDRAW_TIMEOUT_MS'),
+    isPredrawChecked: env.REPLAY_PREDRAW_CHECK === '1',
     uploadRetryDelaysMs: [2000, 4000, 8000, 16_000],
   }
 }
@@ -69,6 +76,25 @@ export function readArtFormat(animsPath: string): number | null {
   if (!existsSync(formatPath)) return null
 
   const format = /^export const FORMAT = (\d+);?$/m.exec(readFileSync(formatPath, 'utf8'))?.[1]
+
+  return format === undefined ? null : Number(format)
+}
+
+/**
+ * The format of the pre-drawn sets the export bundle draws and draws matches from; null for a bundle from before
+ * `render --sets`, whose worker then gets no predraw job and no set index. Read from the bundle's source like the art
+ * format.
+ */
+export function readSetFormat(animsPath: string): number | null {
+  const scripts = ['predraw-draw.ts', 'export-sets.ts'].map((name) => join(animsPath, 'scripts', name))
+
+  if (!scripts.every((script) => existsSync(script))) return null
+
+  const formatPath = join(animsPath, 'src', 'format.ts')
+
+  if (!existsSync(formatPath)) return null
+
+  const format = /^export const SET_FORMAT = (\d+);?$/m.exec(readFileSync(formatPath, 'utf8'))?.[1]
 
   return format === undefined ? null : Number(format)
 }

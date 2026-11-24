@@ -1,5 +1,5 @@
 import type { Sql, TransactionSql } from '@brawltome/foundation'
-import { MAX_ATTEMPTS } from './limits'
+import { MAX_ATTEMPTS, SET_WAIT_SECONDS } from './limits'
 
 // every answer from the worker about an art job is fenced by its lease, as for parse jobs, so an attempt that lost
 // its lease can't end or overwrite a newer one
@@ -7,9 +7,12 @@ import { MAX_ATTEMPTS } from './limits'
 export type ArtFailureCode = 'no-animations' | 'export-failed' | 'worker-error'
 export type ArtFailure = { code: ArtFailureCode; message: string }
 
+// a match job draws one match, a warm job a patch's maps and default looks, a predraw job a patch's pre-drawn sets
+export type ArtJobKind = 'match' | 'warm' | 'predraw'
+
 export type LiveArtJob = {
   id: string
-  kind: 'match' | 'warm'
+  kind: ArtJobKind
   matchId: string | null
   patch: string
   attempts: number
@@ -86,7 +89,7 @@ async function failUnlessLineReplaced(
 }
 
 // locks the match row before the job row is touched, the order a re-parse takes them in, so neither waits on the
-// other. a warm job has no match, and no line to replace
+// other. a warm or predraw job has no match, and no line to replace
 async function lockIsLineReplaced(transaction: TransactionSql, jobId: string): Promise<boolean> {
   const [line] = await transaction<{ isReplaced: boolean }[]>`
     SELECT match.timeline_key IS DISTINCT FROM job.timeline_key AS "isReplaced"
@@ -152,4 +155,20 @@ export async function giveBack(sql: Sql, job: LeasedJob, options: { isAttempt: b
   `
 
   return returned.count === 1
+}
+
+/**
+ * Puts a job back in the queue unplayed, not to be claimed again for a while: a match job whose patch's sets the art
+ * bucket still lacks. It doesn't count as an attempt, since nothing was drawn.
+ */
+export async function deferArtJob(sql: Sql, job: LeasedJob): Promise<boolean> {
+  const deferred = await sql`
+    UPDATE replays.art_jobs SET status = 'pending', lease_token = NULL, lease_expires_at = NULL, timeline_key = NULL,
+      attempts = greatest(attempts - 1, 0), wait_until = clock_timestamp() + ${SET_WAIT_SECONDS} * interval '1 second',
+      updated_at = clock_timestamp()
+    WHERE id = ${job.id} AND status = 'processing' AND lease_token = ${job.leaseToken}
+      AND lease_expires_at > clock_timestamp()
+  `
+
+  return deferred.count === 1
 }
