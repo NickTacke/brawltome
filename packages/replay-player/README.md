@@ -59,8 +59,9 @@ for (const object of objects) if (!object.behind) drawObject(ctx, replay, object
 - `poseAt(timeline, slot, step, frameCount?)` is a player's animation frame, position, facing, weapon and tint at a
   step; `objectsAt(timeline, step, frameCount?)` lists the objects drawn then. Draw the `behind` ones first.
 - `cameraTrack(timeline, bounds, options)` plays the game's camera over the match; `cameraAt(track, step)` is its
-  rectangle at a step and `viewToCanvas(rect, width, height)` the matrix that shows it on a canvas. A track is for
-  one frame rate and one playback speed: pass `fps` and `speed` as [The camera](#the-camera) says.
+  rectangle at a step, eased in time between the frames the game drew, and `viewToCanvas(rect, width, height)` the
+  matrix that shows it on a canvas. A track is for one frame rate and one playback speed: pass `fps` and `speed` as
+  [The camera](#the-camera) says.
   `backgroundToCanvas(image, width, height)` places the level's background, which the camera never moves.
 - `mapArtUrl(replay, mapFile, file)` is where a platform art piece's image is, by the `file` of a `layout.art` piece
   and the map file's `artAssets`; it's null for a file the export left out, so skip that piece.
@@ -132,6 +133,13 @@ speed changes how many steps a frame runs: its clock moves by the frame's time t
 differently at each speed. At 2x it eases once for every two steps; at 0.5x it eases at every step, but the half
 second's hold, which is timed by the real clock, lasts half as many steps. A frame that runs no step leaves the camera
 alone.
+
+A track keeps each update's view at the time its frame is drawn: the frame's replay clock, less the one step a step
+takes to show, so between the frame's last step and the next. Every frame is then moved back by how far past its last
+step a frame is on average (about half a step at 60 fps), as the game shows a frame's view with the players at its last
+step. `cameraAt` eases between those frames in time. Read
+step by step instead, the view would stand still on screen wherever a frame runs two steps (one step in 25 at 60 fps,
+every frame at 2x) and then jump two steps' worth. `track.steps` still holds the view the game shows at each step.
 
 A caller that plays a match at more than one speed passes `cameraTrack` both of these, and keeps a track per speed:
 

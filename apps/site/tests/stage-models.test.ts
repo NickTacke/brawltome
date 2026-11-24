@@ -215,7 +215,8 @@ describe('the camera', () => {
     const { stage } = insights.insights
     const timeline = readPlaybackTimeline(readPlayback('duel-a'))
     const half = { x: stage.box.minX, y: stage.box.minY, width: stage.box.width / 2, height: stage.box.height / 2 }
-    const track: CameraTrack = { steps: new Float64Array(), at: () => half }
+    const empty = new Float64Array()
+    const track: CameraTrack = { steps: empty, frameTimes: empty, frameViews: empty, at: () => half }
     const ready: Legends = { replay: null, timeline, track, state: 'ready', isDownloading: false }
     const loading: Legends = { ...ready, state: 'loading' }
     const wholeStage = fixedCamera(stage.box)

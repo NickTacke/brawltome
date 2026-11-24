@@ -251,3 +251,207 @@ describe('cameraTrack at a speed', () => {
     }
   })
 })
+
+// the frames the game draws on a screen whose frames last frameMs: each frame that runs a step, its last step, and
+// its time on the track's scale of steps (its replay clock in steps, less the one step a step takes to show)
+function framesDrawn(timeline: Timeline, frameMs: number, speed: number): { lastStep: number; time: number }[] {
+  const frames: { lastStep: number; time: number }[] = []
+  let run = 0
+
+  for (let frame = 1; run <= timeline.endStep; frame++) {
+    const now = Math.floor(frame * frameMs + 1)
+    const reached = Math.floor((now * speed) / CAMERA.stepMs)
+
+    if (reached <= run) continue
+
+    if (reached - 1 <= timeline.endStep) frames.push({ lastStep: reached - 1, time: (now * speed) / CAMERA.stepMs - 1 })
+
+    run = reached
+  }
+
+  return frames
+}
+
+// two players walk right side by side at a steady pace, so the view pans at every update
+function walkTogether(): Timeline {
+  const leader = { from: 0, x: [] as number[], y: [] as number[] }
+  const follower = { from: 0, x: [] as number[], y: [] as number[] }
+
+  for (let step = 0; step <= 1200; step++) {
+    leader.x.push(-900 + step * 3)
+    leader.y.push(600)
+    follower.x.push(-1200 + step * 3)
+    follower.y.push(600)
+  }
+
+  return {
+    stepMs: 16,
+    startStep: 0,
+    endStep: 1200,
+    animations: [],
+    state: { '1': { animation: [], status: [[0, 'live']] }, '2': { animation: [], status: [[0, 'live']] } },
+    positions: { every: 1, '1': leader, '2': follower },
+  }
+}
+
+// how far the view's middle and width move between the frames a screen of hz draws at a playback speed, sampling a
+// view with viewAtStep
+type Screen = { hz: number; speed: number }
+
+function movesOnScreen(viewAtStep: (step: number) => Rect, screen: Screen, fromStep: number, toStep: number): number[] {
+  const moves: number[] = []
+  const stepsPerFrame = ((1000 / screen.hz) * screen.speed) / CAMERA.stepMs
+  let before = viewAtStep(fromStep)
+
+  for (let step = fromStep + stepsPerFrame; step <= toStep; step += stepsPerFrame) {
+    const view = viewAtStep(step)
+
+    moves.push(
+      Math.hypot(view.x + view.width / 2 - (before.x + before.width / 2), view.y - before.y) +
+        Math.abs(view.width - before.width),
+    )
+
+    before = view
+  }
+
+  return moves
+}
+
+// a drawn frame stalls when it moves less than half as far as its two neighbours on each side do on average
+function stallsOf(moves: number[]): number {
+  let stalls = 0
+
+  for (let i = 2; i < moves.length - 2; i++) {
+    const mean = (moves[i - 2] + moves[i - 1] + moves[i + 1] + moves[i + 2]) / 4
+
+    if (moves[i] < 0.5 * mean) stalls++
+  }
+
+  return stalls
+}
+
+describe('cameraAt between frames', () => {
+  test('at each frame the game draws, is the view the game showed at that frame’s last step, in order', () => {
+    const timeline = zigzagTimeline()
+
+    for (const [fps, speed] of [
+      [60, 1],
+      [60, 0.25],
+      [60, 0.5],
+      [60, 2],
+      [60, 5],
+      [144, 0.7],
+      [144, 2.3],
+    ]) {
+      const played = playedFrameByFrame(timeline, 1000 / fps, speed)
+      const track = cameraTrack(timeline, bounds, { floor, fps, speed })
+
+      const frames = framesDrawn(timeline, 1000 / fps, speed)
+
+      expect(track.frameTimes.length).toBe(frames.length)
+
+      frames.forEach(({ lastStep }, frame) => {
+        const view = cameraAt(track, track.frameTimes[frame])
+
+        expect(view && [view.x, view.y, view.width, view.height]).toEqual(viewAt(played, lastStep))
+      })
+    }
+  })
+
+  // the game shows a frame's view with the players at its last step, and the viewer draws players at the step it shows
+  test('keeps each frame within a step of its last step, and on average at it, so the view keeps up with the players', () => {
+    const timeline = zigzagTimeline()
+
+    for (const [fps, speed] of [
+      [60, 1],
+      [60, 0.5],
+      [60, 2],
+      [144, 1],
+    ]) {
+      const track = cameraTrack(timeline, bounds, { floor, fps, speed })
+
+      const offsets = framesDrawn(timeline, 1000 / fps, speed).map(
+        ({ lastStep }, frame) => track.frameTimes[frame] - lastStep,
+      )
+
+      const meanOffset = offsets.reduce((sum, offset) => sum + offset, 0) / offsets.length
+
+      expect(Math.abs(meanOffset)).toBeLessThan(1e-9)
+      expect(Math.max(...offsets.map(Math.abs))).toBeLessThan(1)
+    }
+  })
+
+  test('without a frame rate, a frame a step, is each step’s view at that step', () => {
+    const timeline = zigzagTimeline()
+    const track = cameraTrack(timeline, bounds, { floor })
+
+    for (let step = 0; step <= timeline.endStep; step++) {
+      const view = cameraAt(track, step)
+
+      expect(view && [view.x, view.y, view.width, view.height]).toEqual(viewAt(track.steps, step))
+    }
+  })
+
+  // once the view has shrunk onto the players and pans with them, until they reach the bounds' side
+  const panSteps = [450, 1100] as const
+
+  test('on a 60, 120 or 144 Hz screen, moves at every drawn frame while the camera moves, at each speed', () => {
+    const timeline = walkTogether()
+
+    for (const speed of [0.5, 1, 2]) {
+      const track = cameraTrack(timeline, bounds, { fps: 60, speed })
+      const view = (step: number) => cameraAt(track, step) as Rect
+
+      for (const hz of [60, 120, 144]) {
+        const moves = movesOnScreen(view, { hz, speed }, ...panSteps)
+
+        expect(Math.min(...moves)).toBeGreaterThan(0)
+        expect(stallsOf(moves)).toBe(0)
+      }
+    }
+  })
+
+  // what the track did before: at 60 Hz a frame runs two steps about every 25 steps, and at 2x every frame runs two
+  // or more, so the step that wasn't its frame's last kept the frame before's view and stood still on screen
+  test('read step by step, the same views stood still on those screens at 1x and 2x', () => {
+    const timeline = walkTogether()
+
+    for (const speed of [1, 2]) {
+      const { steps } = cameraTrack(timeline, bounds, { fps: 60, speed })
+
+      const view = (step: number) => {
+        const i = Math.floor(step)
+        const share = step - i
+
+        const [x, y, width, height] = viewAt(steps, i).map(
+          (value, k) => value + (steps[(i + 1) * 4 + k] - value) * share,
+        )
+
+        return { x, y, width, height }
+      }
+
+      for (const hz of [60, 120, 144]) {
+        expect(stallsOf(movesOnScreen(view, { hz, speed }, ...panSteps))).toBeGreaterThan(10)
+      }
+    }
+  })
+
+  test('is the first frame’s view before it and the last frame’s after it', () => {
+    const timeline = zigzagTimeline()
+    const track = cameraTrack(timeline, bounds, { floor, fps: 60 })
+    const last = track.frameTimes.length - 1
+    const viewOf = (frame: number) => [...track.frameViews.subarray(frame * 4, frame * 4 + 4)]
+    const asList = (view: Rect | undefined) => view && [view.x, view.y, view.width, view.height]
+
+    expect(asList(cameraAt(track, -5))).toEqual(viewOf(0))
+    expect(asList(cameraAt(track, track.frameTimes[last] + 5))).toEqual(viewOf(last))
+  })
+
+  test('keeps its first view for a match too short to draw a frame', () => {
+    const timeline = { ...zigzagTimeline(), endStep: 3 }
+    const track = cameraTrack(timeline, bounds, { floor, fps: 60, speed: 5 })
+    const view = cameraAt(track, 2)
+
+    expect(view && [view.x, view.y, view.width, view.height]).toEqual(viewAt(track.steps, 0))
+  })
+})
