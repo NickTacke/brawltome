@@ -2,8 +2,9 @@
 // line's `fake` field says what to do: ok (the default), no-animations, bad-plan, crash-render, hang-render. A warm for
 // patch 11.01 never ends, one for 11.02 lists a path outside the store, and ones for 11.03 and 11.04 leave a level
 // out, 11.04 with a very long reason. A predraw names three sets; its draw for 11.01 draws the first and never ends,
-// and the one for 11.03 fails the last. With --sets, plan and render name every set of the index. It writes files named
-// the way the export names them, with tiny bodies
+// and the one for 11.03 fails the last. With --sets, plan and render name every set of the index, and refuse an index
+// of another set format or game file as the export does. It writes files named the way the export names them, with
+// tiny bodies
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -26,16 +27,23 @@ const warmSkipOfPatch: Record<string, string> = { '11.03': warmSkip, '11.04': lo
 // the sets a predraw names: a skin's, a weapon skin's and a class's
 export const fakeSets = [`art/${'a'.repeat(32)}.json`, `art/${'b'.repeat(32)}.json`, `art/${'c'.repeat(32)}.json`]
 
-/** The set index predraw name writes for a patch, and its store path. */
-export function fakeSetIndex(patch: string): { path: string; text: string } {
+// the set format the fake export draws, and the game file each test game folder holds, which an index is named from
+export const fakeSetFormat = 4
+export const fakeGameFile = new TextEncoder().encode('FWS fake BrawlhallaAir.swf')
+
+/** The set index predraw name writes for a patch, and its store path; a test may name it in another format or game. */
+export function fakeSetIndex(
+  patch: string,
+  origin: { format?: number; game?: string } = {},
+): { path: string; text: string } {
   const [skinSet, weaponSkinSet, classSet] = fakeSets
 
   const index = {
-    format: 4,
+    format: origin.format ?? fakeSetFormat,
     drawing: 1,
     pixelsPerUnit: 1.2,
     patch,
-    game: '0'.repeat(64),
+    game: origin.game ?? createHash('sha256').update(fakeGameFile).digest('hex'),
     skins: { '1': skinSet, '2': 'nothing to draw' },
     weaponSkins: { '3': weaponSkinSet, '4': 'draw per look' },
     classes: { Unarmed: { Idle: { set: classSet, bones: ['a_Body'] } } },
@@ -104,7 +112,7 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  const sets = values.sets ? setsOf(values.sets) : null
+  const sets = values.sets ? setsOf(values.sets, gameFolder) : null
 
   if (command === 'plan') return plan(basename(gameFolder), line.fake === 'bad-plan', sets)
 
@@ -126,11 +134,21 @@ function plan(patch: string, isBad: boolean, sets: string[] | null): void {
   console.log(JSON.stringify({ format: 3, patch, mapId: fakeMapId, groups, map, ...(sets ? { sets } : {}) }))
 }
 
-// every set an index names, as plan and render with --sets name them
-function setsOf(indexFile: string): string[] {
-  const index = JSON.parse(readFileSync(indexFile, 'utf8')) as { skins: Record<string, string> }
+type FakeIndex = { skins: Record<string, string>; format: unknown; game: unknown }
+
+// every set an index names, as plan and render with --sets name them. like the export, they refuse an index of
+// another set format or one named from another game file
+function setsOf(indexFile: string, gameFolder: string): string[] {
+  const index = JSON.parse(readFileSync(indexFile, 'utf8')) as FakeIndex
 
   if (!index.skins) fail(`${indexFile} is not a set index`)
+
+  if (index.format !== fakeSetFormat) fail(`--sets: ${indexFile} is format ${index.format}, not ${fakeSetFormat}`)
+
+  const gameFile = join(gameFolder, 'BrawlhallaAir.swf')
+  const digest = existsSync(gameFile) ? createHash('sha256').update(readFileSync(gameFile)).digest('hex') : ''
+
+  if (index.game !== digest) fail(`--sets: ${indexFile} is named from another game than ${gameFolder}`)
 
   return fakeSets
 }

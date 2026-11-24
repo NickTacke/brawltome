@@ -107,6 +107,24 @@ export function readIndexSets(indexFile: string): string[] | null {
   return [...new Set(sets)]
 }
 
+/**
+ * What a set index was named from, as `render --sets` checks it: the format of its sets and the sha256 of the game's
+ * BrawlhallaAir.swf. Null when the file isn't a json object.
+ */
+export function readIndexOrigin(indexFile: string): { format: unknown; game: unknown } | null {
+  let index: unknown
+
+  try {
+    index = JSON.parse(readFileSync(indexFile, 'utf8'))
+  } catch {
+    return null
+  }
+
+  if (!isRecord(index)) return null
+
+  return { format: index.format, game: index.game }
+}
+
 // each class set's name; anything that isn't { class: { animation: { set } } } gives a null, which isn't a set
 function classSetNames(classes: Record<string, unknown>): unknown[] {
   const names: unknown[] = []

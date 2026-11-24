@@ -22,9 +22,12 @@ each claim, and the api hands it two more things:
   `predraw draw` with those in `--have`, and sends the sheets, then the set files, then the index once every set it
   names is stored. A draw that fails some sets or runs out of time still sends the sets it finished, so running the job
   again draws only the rest. The api keeps the index as the patch's once the job ends.
-- A match job of a patch with an index carries the index's path. The worker downloads it and runs `plan --sets` and
-  `render --sets`, which name the players' sets instead of drawing them. If the bucket lacks one of the sets, the job
-  goes back for ten minutes instead. Without an index the match is drawn as before.
+- A match job of a patch with an index in the worker's set format carries the index's path. The worker downloads it
+  and runs `plan --sets` and `render --sets`, which name the players' sets instead of drawing them. If the bucket lacks
+  one of the sets, the job goes back for ten minutes instead. Without an index the match is drawn as before.
+- The export refuses an index of another set format, or one named from another `BrawlhallaAir.swf` than the game
+  folder's, and that would fail the match for good. So the worker checks both first, and on a mismatch logs why and
+  draws the match as without an index.
 
 | Setting | Default |
 | --- | --- |

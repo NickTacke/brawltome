@@ -1,11 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createArtClient } from '../src/art-client'
 import { createExporter, type Exporter } from '../src/art-export'
 import { ArtRunner, type ArtRunnerDeps } from '../src/art-runner'
 import {
+  fakeGameFile,
   fakeGroups,
   fakeMap,
   fakeMapId,
@@ -68,6 +69,8 @@ describe('the art runner', () => {
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'replay-worker-art-'))
     mkdirSync(join(root, 'games', '11.00'), { recursive: true })
+    // the game file a set index of 11.00 is named from
+    writeFileSync(join(root, 'games', '11.00', 'BrawlhallaAir.swf'), fakeGameFile)
     // the fake export's warm never ends for this patch
     mkdirSync(join(root, 'games', '11.01'), { recursive: true })
     // and its warm --list names a path outside the store for this one
@@ -709,6 +712,56 @@ describe('the art runner', () => {
       expect(received.puts).toEqual([])
       expect(received.results).toEqual([])
       expect(received.failures).toEqual([])
+    })
+
+    // the export refuses such an index and exits 1, which would fail the match for good
+    async function drawnWithout(refusedIndex: { path: string; text: string }, setFormat: number) {
+      bucket.set(refusedIndex.path, new TextEncoder().encode(refusedIndex.text))
+      nextJob = { kind: 'match', fake: 'ok', setIndex: refusedIndex.path }
+
+      expect(await runner({ setFormat }).runOnce()).toBe('done')
+
+      expect(received.calls.slice(0, 3)).toEqual(['claim', `get ${refusedIndex.path}`, 'plan'])
+      expect(argsOf('plan')).not.toContain('--sets')
+      expect(argsOf('render')).not.toContain('--sets')
+      expect(received.failures).toEqual([])
+
+      expect(received.results).toEqual([
+        {
+          manifest: { format: 3, map: { layout: fakeMap }, art: fakeGroups },
+          maps: [{ patch: '11.00', mapId: fakeMapId, path: fakeMap }],
+          artFormat: 3,
+        },
+      ])
+    }
+
+    test.each([3, 5])('a worker drawing format %d sets draws the match without a format 4 index', async (setFormat) => {
+      await drawnWithout(index, setFormat)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${index.path}: its sets are format 4, the export draws ${setFormat}`,
+      ])
+    })
+
+    test("a match draws without an index named from another BrawlhallaAir.swf than its game folder's", async () => {
+      const otherGame = fakeSetIndex('11.00', { game: 'f'.repeat(64) })
+
+      await drawnWithout(otherGame, 4)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${otherGame.path}: it was named from another BrawlhallaAir.swf ` +
+          `than ${join(root, 'games', '11.00')}'s`,
+      ])
+    })
+
+    test('a match draws without an index that is not one', async () => {
+      const notAnIndex = { path: `sets/${'9'.repeat(32)}.json`, text: 'not json' }
+
+      await drawnWithout(notAnIndex, 4)
+
+      expect(warnings()).toEqual([
+        `art job ${jobId}: draws the match without ${notAnIndex.path}: it is not a set index`,
+      ])
     })
 
     test('a claim naming a set index outside the store layout is refused before anything is read', async () => {

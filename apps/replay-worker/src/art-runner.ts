@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -17,6 +18,7 @@ import {
   type JobFiles,
   jobFiles,
   listStore,
+  readIndexOrigin,
   readIndexSets,
   readStoreMaps,
   removeJobFiles,
@@ -140,15 +142,15 @@ export class ArtRunner {
   }
 
   // with the patch's set index, the plan and render name the players' sets instead of drawing their art, and the
-  // manifest is in the sets' format. the render reads only the index, not the sets
+  // manifest is in the sets' format. the render reads only the index, not the sets. an index the export can't draw
+  // from is left out, and the match is drawn as without one
   private async exportMatch(attempt: Attempt, gameFolder: string): Promise<Outcome> {
     const { job, files } = attempt
 
     writeFileSync(files.line, job.line ?? new Uint8Array())
 
-    if (job.setIndex) writeFileSync(files.index, await this.deps.art.readFile(job, job.setIndex))
-
-    const setsArgs = job.setIndex ? ['--sets', files.index] : []
+    const isFromSets = await this.canDrawFromSets(attempt, gameFolder)
+    const setsArgs = isFromSets ? ['--sets', files.index] : []
     const planned = await this.step(attempt, ['plan', gameFolder, files.line, ...setsArgs])
 
     if (planned.kind === 'failure') return planned
@@ -183,12 +185,51 @@ export class ArtRunner {
     const manifest = JSON.parse(readFileSync(files.manifest, 'utf8')) as Record<string, unknown>
     const maps = [{ patch: plan.patch, mapId: plan.mapId, path: plan.map.path }]
 
-    return { kind: 'result', result: { manifest, maps, artFormat: this.artFormatOf(job) } }
+    return { kind: 'result', result: { manifest, maps, artFormat: this.artFormatOf(isFromSets) } }
+  }
+
+  // downloads the patch's set index, if the claim named one, and says whether the export can draw the match from it
+  private async canDrawFromSets(attempt: Attempt, gameFolder: string): Promise<boolean> {
+    const { job, files } = attempt
+
+    if (!job.setIndex) return false
+
+    writeFileSync(files.index, await this.deps.art.readFile(job, job.setIndex))
+
+    const refusal = this.setsRefusal(files.index, gameFolder)
+
+    if (refusal === null) return true
+
+    console.warn(`art job ${job.jobId}: draws the match without ${job.setIndex}: ${refusal}`)
+
+    return false
+  }
+
+  // render --sets and plan --sets exit 1 for an index of another set format or one named from another game file, and
+  // that would fail the match for good. the match is drawn per look then, as for a patch with no index
+  private setsRefusal(indexFile: string, gameFolder: string): string | null {
+    const origin = readIndexOrigin(indexFile)
+
+    if (!origin) return 'it is not a set index'
+
+    if (origin.format !== this.deps.setFormat) {
+      const format = String(origin.format).slice(0, 20)
+
+      return `its sets are format ${format}, the export draws ${this.deps.setFormat ?? 'none'}`
+    }
+
+    const gameFile = join(gameFolder, 'BrawlhallaAir.swf')
+
+    if (!existsSync(gameFile)) return `${gameFolder} has no BrawlhallaAir.swf`
+
+    if (origin.game !== fileDigest(gameFile)) return `it was named from another BrawlhallaAir.swf than ${gameFolder}'s`
+
+    return null
   }
 
   // a match drawn from sets is in the sets' format, so raising the reported format to it later finds the match done
-  private artFormatOf(job: ClaimedArt): number {
-    if (job.setIndex && this.deps.setFormat !== null) return this.deps.setFormat
+  private artFormatOf(isFromSets: boolean): number {
+    if (isFromSets && this.deps.setFormat !== null) return this.deps.setFormat
 
     return this.deps.artFormat
   }
@@ -369,6 +410,11 @@ export class ArtRunner {
 
     return { kind: 'done', stdout: run.stdout }
   }
+}
+
+// the sha256 of a file's bytes, as the export names a set index's game by
+function fileDigest(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
 // the step as the log names it: `warm --list`, `predraw draw`, `render`
