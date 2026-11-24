@@ -36,7 +36,10 @@ export function PoseTag({ pose }: { pose: Pose }) {
   const stockNumbers = Array.from({ length: pose.stocksLeft }, (_, index) => index + 1)
 
   return (
-    <div className="mb-0.5 flex items-center gap-1 rounded-sm bg-ink/80 px-1 text-xs leading-4 font-black tabular-nums">
+    <div
+      data-pose-tag={pose.slot}
+      className="mb-0.5 flex items-center gap-1 rounded-sm bg-ink/80 px-1 text-xs leading-4 font-black tabular-nums"
+    >
       <img src={`/images/weapons/${icon}.svg`} alt="" className="size-3.5 object-contain" />
       <span style={{ color: damageColour(pose.damage) }}>{formatDamage(pose.damage)}</span>
       <span className="flex gap-0.5">

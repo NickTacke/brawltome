@@ -182,6 +182,13 @@ function portraitNames(): (string | null)[] {
   return [...portraits].map((image) => image.getAttribute('alt'))
 }
 
+// each tag on the stage by its player's slot, so a player with no tag or two shows
+function tagSlots(): (string | null)[] {
+  const tags = container.querySelectorAll('[data-stage-window] [data-pose-tag]')
+
+  return [...tags].map((tag) => tag.getAttribute('data-pose-tag')).sort()
+}
+
 describe('the stage in a browser', () => {
   test('art that fails after the first seconds makes the legends unavailable, so the portraits play instead', async () => {
     const errorBefore = console.error
@@ -230,6 +237,21 @@ describe('the stage in a browser', () => {
 
       expect(container.querySelector('[data-stage-window] canvas')).not.toBeNull()
       expect(portraitNames()).toEqual(['Player B'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
+
+  test('a player drawn as their portrait keeps one tag, stacked with the others', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+
+    try {
+      await mount(<MatchByKind match={matchNamed('missing')} />)
+
+      expect(tagSlots()).toEqual(['1', '2'])
     } finally {
       console.error = errorBefore
       await unmount()
