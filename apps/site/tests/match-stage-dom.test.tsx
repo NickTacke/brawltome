@@ -36,22 +36,47 @@ function brokenReplay(): Replay {
 const platformImage = 'sheets/10a43fccdae5677c.webp'
 const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
 
-// the page's checks on art still being drawn, each waiting for the test to answer it
+// the page's checks on art still being drawn, each waiting for the test to answer it, and when each was asked for
 const artChecks: ((art: Art) => void)[] = []
+const artCheckTimes: number[] = []
+// how often the fake page checks once its first checks found the art still being drawn
+const slowArtCheckEveryMs = 40
+
+// failures of player 2's art that come after the replay's first seconds have loaded, made when a test says so
+const laterFailures: ((error: Error) => void)[] = []
+const sheetFailure = () => new Error('load replay file sheets/0000000000000000.webp: HTTP 404')
 
 // the stage loads and draws through these instead of the real ones, so the test sees which art it loaded and drew
 const tools: StageTools = {
-  readMatchArt: () => new Promise<Art>((resolve) => artChecks.push(resolve)),
+  readMatchArt: () => {
+    artCheckTimes.push(performance.now())
+
+    return new Promise<Art>((resolve) => artChecks.push(resolve))
+  },
   artCheckEveryMs: 1,
+  slowArtCheckEveryMs,
   loadReplay: async (manifestUrl, options) => {
     loadedManifests.push(String(manifestUrl))
 
     if (String(manifestUrl).includes('broken')) return brokenReplay()
 
     if (String(manifestUrl).includes('missing')) {
-      options.onMissing?.('2', new Error('load replay file sheets/0000000000000000.webp: HTTP 404'))
+      options.onMissing?.('2', sheetFailure())
 
       return firstReplay
+    }
+
+    if (String(manifestUrl).includes('late')) {
+      laterFailures.push((error) => options.onMissing?.('2', error))
+
+      return firstReplay
+    }
+
+    // a load that is replaced before it is in; aborting it still reaches its players' sheets as failures
+    if (String(manifestUrl).includes('replaced')) {
+      laterFailures.push((error) => options.onMissing?.('2', error))
+
+      return new Promise<Replay>(() => undefined)
     }
 
     return String(manifestUrl).includes('first') ? firstReplay : new Promise<Replay>(() => undefined)
@@ -149,6 +174,21 @@ async function unmount(): Promise<void> {
   container.remove()
 }
 
+// the players drawn as their portraits on the stage. a weapon icon has no text of its own, while a portrait is named
+// for its player
+function portraitNames(): (string | null)[] {
+  const portraits = container.querySelectorAll('[data-stage-window] img:not([alt=""])')
+
+  return [...portraits].map((image) => image.getAttribute('alt'))
+}
+
+// each tag on the stage by its player's slot, so a player with no tag or two shows
+function tagSlots(): (string | null)[] {
+  const tags = container.querySelectorAll('[data-stage-window] [data-pose-tag]')
+
+  return [...tags].map((tag) => tag.getAttribute('data-pose-tag')).sort()
+}
+
 describe('the stage in a browser', () => {
   test('art that fails after the first seconds makes the legends unavailable, so the portraits play instead', async () => {
     const errorBefore = console.error
@@ -185,6 +225,82 @@ describe('the stage in a browser', () => {
     )
 
     await unmount()
+  })
+
+  test('a player whose art cannot load is drawn as their portrait, where their legend would be', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+
+    try {
+      await mount(<MatchByKind match={matchNamed('missing')} />)
+
+      expect(container.querySelector('[data-stage-window] canvas')).not.toBeNull()
+      expect(portraitNames()).toEqual(['Player B'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
+
+  test('a player drawn as their portrait keeps one tag, stacked with the others', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+
+    try {
+      await mount(<MatchByKind match={matchNamed('missing')} />)
+
+      expect(tagSlots()).toEqual(['1', '2'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
+
+  test('a player whose sheet fails after the replay is in is drawn as their portrait from then on', async () => {
+    const errorBefore = console.error
+
+    console.error = () => undefined
+    laterFailures.length = 0
+
+    try {
+      await mount(<MatchByKind match={matchNamed('late')} />)
+
+      expect(portraitNames()).toEqual([])
+
+      await act(async () => laterFailures.shift()?.(sheetFailure()))
+
+      expect(portraitNames()).toEqual(['Player B'])
+    } finally {
+      console.error = errorBefore
+      await unmount()
+    }
+  })
+
+  test('a load replaced by another one never marks its players missing', async () => {
+    const match = matchNamed('replaced')
+    const insights = readInsights('duel-a')
+
+    const replayWith = (art: Art) => (
+      <ReplayWithArt insights={insights} art={art} playbackPath={match.playbackPath} selectedSlot={1} />
+    )
+
+    laterFailures.length = 0
+
+    try {
+      await mount(replayWith(match.art))
+      await act(async () => root.render(withTools(replayWith(artAt('first')))))
+      await settle()
+
+      // aborting the replaced load fails its sheets as it goes
+      await act(async () => laterFailures.shift()?.(new DOMException('The operation was aborted.', 'AbortError')))
+
+      expect(container.querySelector('[data-stage-window] canvas')).not.toBeNull()
+      expect(portraitNames()).toEqual([])
+    } finally {
+      await unmount()
+    }
   })
 
   test('where the browser refuses fullscreen, the stage is laid over the screen from the body, outside the page', async () => {
@@ -651,15 +767,41 @@ describe('a match whose legends are still being drawn', () => {
     await unmount()
   })
 
-  test('stops checking after five minutes of checks', async () => {
+  test('after five minutes of checks, goes on checking less often until the legends are in', async () => {
+    artChecks.length = 0
+    artCheckTimes.length = 0
+    drawnReplays.length = 0
+
+    await mount(<MatchByKind match={pendingMatch()} />)
+
+    try {
+      for (let check = 0; check < 30; check++) await answerArtCheck(queuedArt)
+
+      await answerArtCheck(queuedArt)
+
+      const [lastQuickMs, firstSlowMs] = artCheckTimes.slice(29, 31)
+
+      expect(firstSlowMs - lastQuickMs).toBeGreaterThanOrEqual(slowArtCheckEveryMs)
+      expect(stageText()).toContain('Drawing legends…')
+
+      await answerArtCheck(artAt('first'))
+
+      expect(drawnReplays).toContain(firstReplay)
+      expect(await waitForArtCheck()).toBe(false)
+    } finally {
+      await unmount()
+    }
+  })
+
+  test('stops checking once the page is closed', async () => {
     artChecks.length = 0
 
     await mount(<MatchByKind match={pendingMatch()} />)
 
     for (let check = 0; check < 30; check++) await answerArtCheck(queuedArt)
 
-    expect(await waitForArtCheck()).toBe(false)
-
     await unmount()
+
+    expect(await waitForArtCheck()).toBe(false)
   })
 })

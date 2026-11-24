@@ -33,7 +33,7 @@ export function ReviewMarkers({ moment, poses, hits }: ReviewMarkersProps) {
         <span
           key={pose.slot}
           className={`${ring} ${pose.slot === moment.victim ? 'border-2' : 'border border-dashed opacity-80'}`}
-          style={{ ...bodyRingStyle(pose, bodies), borderColor: slotColour(pose.slot) }}
+          style={{ ...bodyRingStyle(pose, bodies, pose.slot), borderColor: slotColour(pose.slot) }}
         />
       ))}
       {hits.map((hit, index) => (

@@ -19,7 +19,7 @@ export function MomentRing({ moment, bodies, timeMs }: MomentRingProps) {
   return (
     <span
       className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border-2 border-dashed"
-      style={{ ...bodyRingStyle(moment.spot, bodies), borderColor: slotColour(moment.victim) }}
+      style={{ ...bodyRingStyle(moment.spot, bodies, moment.victim), borderColor: slotColour(moment.victim) }}
     />
   )
 }

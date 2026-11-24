@@ -20,6 +20,8 @@ export type Legends = {
   state: LegendsState
   // true while the art downloads; a match whose art is still being exported waits without it
   isDownloading: boolean
+  // the players whose art can't load, by slot: their portraits stand in for their legends while the others draw
+  missingSlots: ReadonlySet<number>
 }
 
 type Load<Value> =
@@ -31,6 +33,8 @@ type Load<Value> =
 // the page draws a frame per display refresh, which is 60 a second on most screens; the game's camera updates once per
 // drawn frame, so it is played at that rate
 const framesPerSecond = 60
+
+const noSlots: ReadonlySet<number> = new Set()
 
 // a queued or failed export keeps the last good manifest, so art shows whenever there is one; without one, only a
 // match whose art is queued is still waiting for its legends. without a timeline nothing could play the art, so none
@@ -58,7 +62,14 @@ export function initialLegends(art: Art, playbackPath: string | null): Legends {
   const timeline: Load<Timeline> = playbackPath ? { status: 'loading' } : { status: 'failed' }
   const state = legendsStateOf(art, replay, timeline)
 
-  return { replay: null, timeline: null, track: null, state, isDownloading: replay.status === 'loading' }
+  return {
+    replay: null,
+    timeline: null,
+    track: null,
+    state,
+    isDownloading: replay.status === 'loading',
+    missingSlots: noSlots,
+  }
 }
 
 /** Whether the players are drawn as their legends: the art and the timeline are in. Until then tokens stand in. */
@@ -75,23 +86,39 @@ function reportUnlessAborted(what: string, error: unknown): void {
   if (!isAbort(error)) console.error(`${what}:`, error)
 }
 
-function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
+// the replay's art as it loads, and the players whose art never will
+type ReplayArt = { load: Load<Replay>; missingSlots: ReadonlySet<number> }
+
+function withSlot(slots: ReadonlySet<number>, slot: number): ReadonlySet<number> {
+  if (slots.has(slot)) return slots
+
+  return new Set([...slots, slot])
+}
+
+function useReplayArt(art: Art, playbackPath: string | null): ReplayArt {
   const manifest = manifestOf(art, playbackPath)
   const manifestUrl = manifest?.manifestUrl ?? null
   const baseUrl = manifest?.baseUrl ?? null
   const { loadReplay } = useStageTools()
   const [load, setLoad] = useState<Load<Replay>>(manifest ? { status: 'loading' } : { status: 'idle' })
+  const [missingSlots, setMissingSlots] = useState(noSlots)
 
   useEffect(() => {
+    setMissingSlots(noSlots)
+
     if (!manifestUrl || !baseUrl) return setLoad({ status: 'idle' })
 
     const controller = new AbortController()
 
     setLoad({ status: 'loading' })
 
-    // a player whose art can't load draws as nothing while the others play on, so it's only reported
-    const onMissing = (slot: string, error: Error) =>
+    // a player whose art can't load is reported and drawn as their portrait, while the others play on
+    const onMissing = (slot: string, error: Error) => {
+      if (controller.signal.aborted) return
+
       reportUnlessAborted(`load the art of player ${slot} at ${manifestUrl}`, error)
+      setMissingSlots((slots) => withSlot(slots, Number(slot)))
+    }
 
     loadReplay(manifestUrl, { baseUrl, signal: controller.signal, onMissing })
       .then((replay) => {
@@ -117,7 +144,7 @@ function useReplayArt(art: Art, playbackPath: string | null): Load<Replay> {
     return () => controller.abort()
   }, [manifestUrl, baseUrl, loadReplay])
 
-  return load
+  return { load, missingSlots }
 }
 
 function usePlaybackTimeline(playbackPath: string | null): Load<Timeline> {
@@ -160,12 +187,12 @@ function trackOf(replay: Replay | null, timeline: Timeline | null): CameraTrack 
 
 /** The match's legends and timeline, once the first seconds of the art can be drawn; the rest goes on loading after. */
 export function useLegends(art: Art, playbackPath: string | null): Legends {
-  const replayLoad = useReplayArt(art, playbackPath)
+  const { load: replayLoad, missingSlots } = useReplayArt(art, playbackPath)
   const timelineLoad = usePlaybackTimeline(playbackPath)
   const replay = replayLoad.status === 'loaded' ? replayLoad.value : null
   const timeline = timelineLoad.status === 'loaded' ? timelineLoad.value : null
   const track = useMemo(() => trackOf(replay, timeline), [replay, timeline])
   const state = legendsStateOf(art, replayLoad, timelineLoad)
 
-  return { replay, timeline, track, state, isDownloading: replayLoad.status === 'loading' }
+  return { replay, timeline, track, state, isDownloading: replayLoad.status === 'loading', missingSlots }
 }

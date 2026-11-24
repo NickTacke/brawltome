@@ -93,7 +93,8 @@ type PlayersProps = Pick<StagePlayProps, 'legends' | 'timeMs' | 'selectedSlot' |
   camera: Camera
 }
 
-// the players as their legends once the art and timeline are in; their portraits until then, or without art
+// the players as their legends once the art and timeline are in; their portraits until then, or without art, and for
+// a player whose own art can't load
 function Players({ insights, legends, poses, camera, timeMs, selectedSlot, onBuffering }: PlayersProps) {
   const { replay, timeline } = legends
   const drawn = useMemo(() => (replay && timeline ? { replay, timeline } : null), [replay, timeline])
@@ -108,6 +109,8 @@ function Players({ insights, legends, poses, camera, timeMs, selectedSlot, onBuf
     <AnimatedPoses
       match={drawn}
       poses={poses}
+      players={insights.summary.players}
+      missingSlots={legends.missingSlots}
       selectedSlot={selectedSlot}
       box={insights.insights.stage.box}
       camera={camera}

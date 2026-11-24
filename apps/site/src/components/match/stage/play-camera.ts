@@ -63,7 +63,10 @@ export type StageView = { bodies: DrawnBodies; camera: Camera }
 
 const noBox: StageBox = { minX: 0, minY: 0, width: frameAspect, height: 1 }
 
-const noStage: StageView = { bodies: { box: noBox, areLegends: false }, camera: fixedCamera(noBox) }
+const noStage: StageView = {
+  bodies: { box: noBox, areLegends: false, tokenSlots: new Set() },
+  camera: fixedCamera(noBox),
+}
 
 // what sits on the stage outside its picture, like the card of a review stop, reads how the stage is shown from here
 export const StageViewContext = createContext<StageView>(noStage)

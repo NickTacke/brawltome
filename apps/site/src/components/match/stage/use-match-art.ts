@@ -4,8 +4,9 @@ import { useStageTools } from './stage-tools'
 
 type Art = MatchDetailContract['art']
 
-// checked every ten seconds, this is about five minutes; art that takes longer is shown on the next visit
-const artChecks = 30
+// checked every ten seconds, this is about five minutes. art can wait for hours behind other work, so after these the
+// page goes on checking, only less often, for as long as it is open
+const quickArtChecks = 30
 
 // a queued export that has a manifest from before already has art to show
 function isBeingDrawn(art: Art): boolean {
@@ -14,10 +15,11 @@ function isBeingDrawn(art: Art): boolean {
 
 /**
  * The match's art, checked on again every so often while the replay worker is still drawing it, so the legends show
- * up once they are in without the page reloading. A check that fails counts as one more check.
+ * up once they are in without the page reloading. The first checks come quickly, the ones after them slowly, until
+ * the art is in or has failed. A check that fails counts as one more check.
  */
 export function useMatchArt(matchId: string, firstArt: Art): Art {
-  const { readMatchArt, artCheckEveryMs } = useStageTools()
+  const { readMatchArt, artCheckEveryMs, slowArtCheckEveryMs } = useStageTools()
   const [art, setArt] = useState(firstArt)
   const isWaiting = isBeingDrawn(art)
 
@@ -25,11 +27,15 @@ export function useMatchArt(matchId: string, firstArt: Art): Art {
     if (!isWaiting) return
 
     let isStopped = false
-    let checksLeft = artChecks
+    let checksMade = 0
     let timer = setTimeout(check, artCheckEveryMs)
 
+    function nextCheckInMs(): number {
+      return checksMade < quickArtChecks ? artCheckEveryMs : slowArtCheckEveryMs
+    }
+
     async function check() {
-      checksLeft--
+      checksMade++
 
       const next = await readMatchArt(matchId).catch((error) => {
         console.error(`check the art of match ${matchId}:`, error)
@@ -41,14 +47,14 @@ export function useMatchArt(matchId: string, firstArt: Art): Art {
 
       if (next && !isBeingDrawn(next)) return setArt(next)
 
-      if (checksLeft > 0) timer = setTimeout(check, artCheckEveryMs)
+      timer = setTimeout(check, nextCheckInMs())
     }
 
     return () => {
       isStopped = true
       clearTimeout(timer)
     }
-  }, [isWaiting, matchId, readMatchArt, artCheckEveryMs])
+  }, [isWaiting, matchId, readMatchArt, artCheckEveryMs, slowArtCheckEveryMs])
 
   return art
 }

@@ -18,10 +18,12 @@ import {
   bodyPxOf,
   bodyRingDiameter,
   bodyRingStyle,
+  drawnBodiesOf,
   legendRingFloorPx,
 } from '../src/components/match/stage/body-ring'
 import { isCameraMode } from '../src/components/match/stage/camera-mode'
 import { placedArtOf } from '../src/components/match/stage/map-art'
+import { missingPosesInFrame } from '../src/components/match/stage/missing-poses'
 import { bubblePose, bubblesBySlot, intoBubble } from '../src/components/match/stage/offscreen-bubbles'
 import {
   boxInFrame,
@@ -32,9 +34,9 @@ import {
   unitInFrame,
 } from '../src/components/match/stage/play-camera'
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
-import { posesAt, valueAt } from '../src/components/match/stage/pose'
+import { type Pose, posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
-import { tagLifts } from '../src/components/match/stage/tag-stack'
+import { portraitTagLiftPx, tagFeet, tagHeightPx, tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
 import {
   areLegendsDrawn,
@@ -217,7 +219,16 @@ describe('the camera', () => {
     const half = { x: stage.box.minX, y: stage.box.minY, width: stage.box.width / 2, height: stage.box.height / 2 }
     const empty = new Float64Array()
     const track: CameraTrack = { steps: empty, frameTimes: empty, frameViews: empty, at: () => half }
-    const ready: Legends = { replay: null, timeline, track, state: 'ready', isDownloading: false }
+
+    const ready: Legends = {
+      replay: null,
+      timeline,
+      track,
+      state: 'ready',
+      isDownloading: false,
+      missingSlots: new Set(),
+    }
+
     const loading: Legends = { ...ready, state: 'loading' }
     const wholeStage = fixedCamera(stage.box)
 
@@ -264,8 +275,9 @@ describe('the ring around a player’s body', () => {
   // the game's standing hurtbox, the same for every legend
   const hurtbox = { width: 145, height: 160 }
   const anyBox: StageBox = { minX: -500, minY: 200, width: 4320, height: 1600 }
-  const legends = { box: anyBox, areLegends: true }
-  const tokens = { box: anyBox, areLegends: false }
+  const noSlots: ReadonlySet<number> = new Set()
+  const legends = { box: anyBox, areLegends: true, tokenSlots: noSlots }
+  const tokens = { box: anyBox, areLegends: false, tokenSlots: noSlots }
 
   test('holds a legend’s whole standing hurtbox, and is no bigger than that takes', () => {
     const diagonal = Math.hypot(hurtbox.width, hurtbox.height)
@@ -278,8 +290,8 @@ describe('the ring around a player’s body', () => {
   test('around a legend it is placed in level units: its middle the body’s, over the feet', () => {
     const whole = { left: '50%', top: '45%', width: 'max(32px, 5%)', aspectRatio: '1' }
 
-    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends)).toEqual(whole)
-    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 0.25)).toEqual({ ...whole, width: 'max(8px, 1.25%)' })
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 1)).toEqual(whole)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 1, 0.25)).toEqual({ ...whole, width: 'max(8px, 1.25%)' })
   })
 
   test('around a legend it never gets too small to show beside the numbers of a stop’s hits', () => {
@@ -287,11 +299,11 @@ describe('the ring around a player’s body', () => {
     const hitNumberPx = 16
 
     expect(legendRingFloorPx).toBeGreaterThan(hitNumberPx)
-    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends).width).toBe(`max(${legendRingFloorPx}px, 5%)`)
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, legends, 1).width).toBe(`max(${legendRingFloorPx}px, 5%)`)
   })
 
   test('around a token it is as big on every stage, and smaller on a phone’s', () => {
-    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, tokens)).toEqual({
+    expect(bodyRingStyle({ x: 0.5, y: 0.5 }, tokens, 1)).toEqual({
       left: '50%',
       top: 'calc(50% - 14px)',
       width: 'min(64px, 10%)',
@@ -300,21 +312,59 @@ describe('the ring around a player’s body', () => {
   })
 
   test('on a stage as laid out, a legend’s ring and tag grow with the level unit and a token’s don’t', () => {
-    expect(bodyPxOf(legends, 0.5)).toEqual({ ringMiddlePx: 40, ringRadiusPx: 54, tagTopPx: 115 })
-    expect(bodyPxOf(tokens, 0.5)).toEqual(bodyPxOf(tokens, 2))
+    expect(bodyPxOf(legends, 0.5, 1)).toEqual({ ringMiddlePx: 40, ringRadiusPx: 54, tagTopPx: 115 })
+    expect(bodyPxOf(tokens, 0.5, 1)).toEqual(bodyPxOf(tokens, 2, 1))
   })
 
   test('on a stage as laid out, a legend’s ring is as big as it is drawn where the stage is small', () => {
     // on a 390 pixel stage this box makes the ring through the hurtbox's corners 19.5 pixels, under its smallest size
     const unitPx = 390 / anyBox.width
 
-    expect(bodyPxOf(legends, unitPx).ringRadiusPx).toBe(legendRingFloorPx / 2)
-    expect(bodyPxOf(legends, unitPx).ringMiddlePx).toBeCloseTo(80 * unitPx)
+    expect(bodyPxOf(legends, unitPx, 1).ringRadiusPx).toBe(legendRingFloorPx / 2)
+    expect(bodyPxOf(legends, unitPx, 1).ringMiddlePx).toBeCloseTo(80 * unitPx)
   })
 
   test('on a stage as laid out, a token’s ring is as big as it is drawn: a tenth of a small stage', () => {
-    expect(bodyPxOf(tokens, 1000 / anyBox.width).ringRadiusPx).toBe(32)
-    expect(bodyPxOf(tokens, 390 / anyBox.width).ringRadiusPx).toBeCloseTo(19.5)
+    expect(bodyPxOf(tokens, 1000 / anyBox.width, 1).ringRadiusPx).toBe(32)
+    expect(bodyPxOf(tokens, 390 / anyBox.width, 1).ringRadiusPx).toBeCloseTo(19.5)
+  })
+
+  test('around a player drawn as their portrait among legends it is a token’s, and the others keep a legend’s', () => {
+    const withPortrait = { ...legends, tokenSlots: new Set([2]) }
+    const feet = { x: 0.5, y: 0.5 }
+
+    expect(bodyRingStyle(feet, withPortrait, 2)).toEqual(bodyRingStyle(feet, tokens, 2))
+    expect(bodyRingStyle(feet, withPortrait, 1)).toEqual(bodyRingStyle(feet, legends, 1))
+  })
+
+  test('on a stage as laid out, a portrait among legends has a token’s ring and its tag over the portrait', () => {
+    const withPortrait = { ...legends, tokenSlots: new Set([2]) }
+    // a phone's stage under the fixed camera, where a legend's head is lower than the portrait's top
+    const phoneUnitPx = 0.13
+    const portrait = bodyPxOf(withPortrait, phoneUnitPx, 2)
+    const token = bodyPxOf(tokens, phoneUnitPx, 2)
+
+    expect(portrait.ringMiddlePx).toBe(token.ringMiddlePx)
+    expect(portrait.ringRadiusPx).toBe(token.ringRadiusPx)
+    expect(portrait.tagTopPx).toBe(portraitTagLiftPx + tagHeightPx)
+    expect(bodyPxOf(withPortrait, phoneUnitPx, 1)).toEqual(bodyPxOf(legends, phoneUnitPx, 1))
+    // where the camera is close in, the tag goes as high as a legend's
+    expect(bodyPxOf(withPortrait, 0.5, 2).tagTopPx).toBe(bodyPxOf(legends, 0.5, 1).tagTopPx)
+  })
+
+  test('the players whose art can’t load are drawn as tokens among the legends', () => {
+    const stage = readInsights('duel-a').insights.stage
+
+    const ready: Legends = {
+      replay: {} as Replay,
+      timeline: {} as Timeline,
+      track: null,
+      state: 'ready',
+      isDownloading: false,
+      missingSlots: new Set([2]),
+    }
+
+    expect(drawnBodiesOf(stage, ready)).toEqual({ box: stage.box, areLegends: true, tokenSlots: new Set([2]) })
   })
 
   test('the players are drawn as their legends once the art and the timeline are in', () => {
@@ -324,6 +374,7 @@ describe('the ring around a player’s body', () => {
       track: null,
       state: 'ready',
       isDownloading: false,
+      missingSlots: new Set(),
     }
 
     expect(areLegendsDrawn(ready)).toBe(true)
@@ -391,6 +442,47 @@ describe('off-screen bubbles', () => {
   })
 })
 
+describe('a player whose art can’t load', () => {
+  const insights = readInsights('duel-a')
+  const stageBox = insights.insights.stage.box
+  const timeline = readPlaybackTimeline(readPlayback('duel-a'))
+  const timeMs = 20_000
+  const poses = posesAt(timeline, stageBox, timeMs)
+  const missing = new Set([2])
+
+  test('stands where their legend would, in view, and no one else does', () => {
+    const camera = fixedCamera(stageBox)
+    const placed = missingPosesInFrame(poses, missing, timeline, stageBox, camera, timeMs)
+    const own = poses.find((pose) => pose.slot === 2)
+
+    expect(own).toBeDefined()
+    expect(placed).toEqual([inFrame(own as Pose, stageBox, camera)])
+  })
+
+  test('out of view, stands in their bubble at the frame’s edge, as their legend would', () => {
+    const corner = cameraOn({
+      x: stageBox.minX,
+      y: stageBox.minY,
+      width: stageBox.width / 4,
+      height: stageBox.height / 4,
+    })
+
+    const [placed] = missingPosesInFrame(poses, missing, timeline, stageBox, corner, timeMs)
+    const own = inFrame(poses.find((pose) => pose.slot === 2) as Pose, stageBox, corner)
+
+    expect(placed.slot).toBe(2)
+    expect(own.x > 1 || own.y > 1).toBe(true)
+    expect(placed.x).toBeGreaterThanOrEqual(0)
+    expect(placed.x).toBeLessThanOrEqual(1)
+    expect(placed.y).toBeGreaterThanOrEqual(0)
+    expect(placed.y).toBeLessThanOrEqual(1)
+  })
+
+  test('with no one missing, there is no one to place', () => {
+    expect(missingPosesInFrame(poses, new Set(), timeline, stageBox, fixedCamera(stageBox), timeMs)).toEqual([])
+  })
+})
+
 describe('tags over players', () => {
   const at = (slot: number, x: number, y: number) =>
     ({
@@ -411,6 +503,28 @@ describe('tags over players', () => {
 
     expect(lifts.get(1)).toBe(0)
     expect(lifts.get(2)).toBe(1)
+  })
+
+  test('a portrait’s tag sits over the portrait where a legend’s head is lower, and stacks with a legend’s', () => {
+    const phone = { width: 390, height: 219 }
+    // a legend's tag 25 pixels over the feet, inside the portrait on the same spot
+    const legendRaise = 25 / phone.height
+    const tags = tagFeet([at(1, 0.5, 0.5)], [at(2, 0.5, 0.5)], legendRaise, phone)
+    const lifts = tagLifts(tags, phone)
+    const raisedPx = (slot: number) => (0.5 - (tags.find((tag) => tag.slot === slot)?.y ?? 0)) * phone.height
+
+    expect(raisedPx(1)).toBeCloseTo(25)
+    expect(raisedPx(2)).toBeCloseTo(portraitTagLiftPx)
+    expect(lifts.get(1)).toBe(0)
+    expect(lifts.get(2)).toBe(1)
+  })
+
+  test('a portrait’s tag goes as high as a legend’s where the legend’s head is higher', () => {
+    const frame = { width: 1440, height: 810 }
+    const legendRaise = 60 / frame.height
+    const [legend, portrait] = tagFeet([at(1, 0.2, 0.5)], [at(2, 0.8, 0.5)], legendRaise, frame)
+
+    expect(portrait.y).toBe(legend.y)
   })
 
   test('players apart keep their tags level', () => {

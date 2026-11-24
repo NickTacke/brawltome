@@ -3,10 +3,12 @@ import { slotColour } from '../match-styles'
 import { type Camera, inFrame } from './play-camera'
 import type { Pose } from './pose'
 import { isOnScreen, PoseTag } from './TokenPoses'
-import { tagHeightPx, tagLift, tagLifts } from './tag-stack'
+import { tagFeet, tagHeightPx, tagLift, tagLifts } from './tag-stack'
 
 type LegendTagsProps = {
   poses: Pose[]
+  // the players drawn as their portraits among the legends, as their art can't load, already placed in the frame
+  portraits: Pose[]
   selectedSlot: number
   box: StageBox
   camera: Camera
@@ -14,27 +16,28 @@ type LegendTagsProps = {
   frame: { width: number; height: number } | null
 }
 
-/** The weapon, damage and stocks of each player on screen, above their legend's head. */
-export function LegendTags({ poses, selectedSlot, box, camera, frame }: LegendTagsProps) {
-  const tagShare = tagLift / camera.height
-  const shown = poses.map((pose) => inFrame(pose, box, camera)).filter(isOnScreen)
+/** The weapon, damage and stocks of each player on screen, above their legend's head or their portrait. */
+export function LegendTags({ poses, portraits, selectedSlot, box, camera, frame }: LegendTagsProps) {
+  const legends = poses.map((pose) => inFrame(pose, box, camera)).filter(isOnScreen)
+  const tags = tagFeet(legends, portraits.filter(isOnScreen), tagLift / camera.height, frame)
   // players on the same spot get their tags one over the other
-  const lifts = tagLifts(shown, frame)
+  const lifts = tagLifts(tags, frame)
 
-  return shown.map((pose) => (
+  // over the portraits, so a legend standing on a portrait keeps its tag in sight
+  return tags.map((tag) => (
     <div
-      key={pose.slot}
-      className="pointer-events-none absolute z-[1] flex -translate-x-1/2 -translate-y-full flex-col items-center"
+      key={tag.slot}
+      className="pointer-events-none absolute z-[3] flex -translate-x-1/2 -translate-y-full flex-col items-center"
       style={{
-        left: `${pose.x * 100}%`,
-        top: `${(pose.y - tagShare) * 100}%`,
-        marginTop: -(lifts.get(pose.slot) ?? 0) * tagHeightPx,
+        left: `${tag.x * 100}%`,
+        top: `${tag.y * 100}%`,
+        marginTop: -(lifts.get(tag.slot) ?? 0) * tagHeightPx,
       }}
     >
-      <PoseTag pose={pose} />
+      <PoseTag pose={tag} />
       <span
         className="h-0.5 w-6 rounded-full"
-        style={{ backgroundColor: slotColour(pose.slot), opacity: pose.slot === selectedSlot ? 1 : 0.6 }}
+        style={{ backgroundColor: slotColour(tag.slot), opacity: tag.slot === selectedSlot ? 1 : 0.6 }}
       />
     </div>
   ))
