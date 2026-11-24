@@ -462,6 +462,20 @@ describe('drawing a player in a look', () => {
     expect(sheets).toEqual([sheetOfGroup(replay, url, url === skinPath ? 1 : 0)])
   })
 
+  test('draws each weapon a look index is shown with in its own manifest look', async () => {
+    // the line lists one look for two weapons whose skins look the same, and the manifest has a look for each
+    const manifest = manifestOf()
+    const withBow: ManifestLook = { ...withKatar, weapon: 'Bow', art: [1, 2] }
+
+    manifest.players['1'].looks = [unarmed, withKatar, withBow]
+
+    const { replay } = await loaded(manifest)
+
+    expect(drawn(replay, '1', poseOf({ look: 1, weapon: 'Katar' }))).toEqual([sheetOfGroup(replay, katarPath, 0)])
+    expect(drawn(replay, '1', poseOf({ look: 1, weapon: 'Bow' }))).toEqual([sheetOfGroup(replay, skinPath, 1)])
+    expect(drawn(replay, '1', poseOf({ look: 1, weapon: 'Spear' }))).toEqual([sheetOfGroup(replay, katarPath, 0)])
+  })
+
   test("takes a bone's whole row from the first set that has it", async () => {
     const { replay } = await loaded()
     const katarLook = replay.players.get('1')?.sets.get('1')
