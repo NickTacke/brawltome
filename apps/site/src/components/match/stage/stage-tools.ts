@@ -12,6 +12,8 @@ export type StageTools = {
   drawMoment: typeof drawMoment
   readMatchArt: (matchId: string) => Promise<MatchDetailContract['art'] | null>
   artCheckEveryMs: number
+  // how often the art is checked on once the first checks have found it still being drawn
+  slowArtCheckEveryMs: number
 }
 
 const realTools: StageTools = {
@@ -19,6 +21,7 @@ const realTools: StageTools = {
   drawMoment,
   readMatchArt: async (matchId) => (await getMatch({ data: matchId }))?.art ?? null,
   artCheckEveryMs: 10_000,
+  slowArtCheckEveryMs: 60_000,
 }
 
 export const StageToolsContext = createContext<StageTools>(realTools)

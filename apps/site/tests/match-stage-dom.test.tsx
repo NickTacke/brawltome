@@ -36,13 +36,21 @@ function brokenReplay(): Replay {
 const platformImage = 'sheets/10a43fccdae5677c.webp'
 const mapFileJson = JSON.stringify({ artAssets: { 'Space.Platform_Space1.png': platformImage } })
 
-// the page's checks on art still being drawn, each waiting for the test to answer it
+// the page's checks on art still being drawn, each waiting for the test to answer it, and when each was asked for
 const artChecks: ((art: Art) => void)[] = []
+const artCheckTimes: number[] = []
+// how often the fake page checks once its first checks found the art still being drawn
+const slowArtCheckEveryMs = 40
 
 // the stage loads and draws through these instead of the real ones, so the test sees which art it loaded and drew
 const tools: StageTools = {
-  readMatchArt: () => new Promise<Art>((resolve) => artChecks.push(resolve)),
+  readMatchArt: () => {
+    artCheckTimes.push(performance.now())
+
+    return new Promise<Art>((resolve) => artChecks.push(resolve))
+  },
   artCheckEveryMs: 1,
+  slowArtCheckEveryMs,
   loadReplay: async (manifestUrl, options) => {
     loadedManifests.push(String(manifestUrl))
 
@@ -671,15 +679,41 @@ describe('a match whose legends are still being drawn', () => {
     await unmount()
   })
 
-  test('stops checking after five minutes of checks', async () => {
+  test('after five minutes of checks, goes on checking less often until the legends are in', async () => {
+    artChecks.length = 0
+    artCheckTimes.length = 0
+    drawnReplays.length = 0
+
+    await mount(<MatchByKind match={pendingMatch()} />)
+
+    try {
+      for (let check = 0; check < 30; check++) await answerArtCheck(queuedArt)
+
+      await answerArtCheck(queuedArt)
+
+      const [lastQuickMs, firstSlowMs] = artCheckTimes.slice(29, 31)
+
+      expect(firstSlowMs - lastQuickMs).toBeGreaterThanOrEqual(slowArtCheckEveryMs)
+      expect(stageText()).toContain('Drawing legends…')
+
+      await answerArtCheck(artAt('first'))
+
+      expect(drawnReplays).toContain(firstReplay)
+      expect(await waitForArtCheck()).toBe(false)
+    } finally {
+      await unmount()
+    }
+  })
+
+  test('stops checking once the page is closed', async () => {
     artChecks.length = 0
 
     await mount(<MatchByKind match={pendingMatch()} />)
 
     for (let check = 0; check < 30; check++) await answerArtCheck(queuedArt)
 
-    expect(await waitForArtCheck()).toBe(false)
-
     await unmount()
+
+    expect(await waitForArtCheck()).toBe(false)
   })
 })
