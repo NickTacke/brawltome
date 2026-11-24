@@ -2,7 +2,7 @@
 // a katar weapon skin set of one weighted sheet. Player 1 has two looks, unarmed and with the katar, in the same skin
 // colours; player 2 wears the same skin in another colour. The start pack draws the body, the rest pack an arm
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { isReady, loadReplay, type Replay } from '..'
+import { drawPlayer, isReady, loadReplay, type PlayerPose, type Replay } from '..'
 import type { ArtGroupFormat4, ManifestFormat4, ManifestLook } from '../src/format.ts'
 import { groupOf } from '../src/placement.ts'
 import { composedSheets, type FakeBitmap, imageBlob, installFakeCanvas, removeFakeCanvas } from './fake-canvas.ts'
@@ -296,7 +296,45 @@ describe("a player's readiness", () => {
   })
 })
 
+type DrawnSheet = FakeBitmap
+
+// drawn is the sheets drawPlayer draws a pose from
+function drawn(replay: Replay, slot: string, pose: PlayerPose): DrawnSheet[] {
+  const sheets: DrawnSheet[] = []
+
+  const context = {
+    save() {},
+    restore() {},
+    setTransform() {},
+    globalAlpha: 1,
+    drawImage: (sheet: DrawnSheet) => sheets.push(sheet),
+  } as unknown as CanvasRenderingContext2D
+
+  const player = replay.players.get(slot)
+
+  if (player) drawPlayer(context, replay, player, pose, [1, 0, 0, 1, 0, 0])
+
+  return sheets
+}
+
+function poseOf(pose: Partial<PlayerPose>): PlayerPose {
+  return { animationIndex: ARM_ANIMATION, frame: 0, facingRight: true, x: 0, y: 0, weapon: 'Unarmed', ...pose }
+}
+
 describe('drawing a player in a look', () => {
+  test.each([
+    ['the look its index names', { look: 1 }, katarPath],
+    ['the look for the weapon held without an index', { weapon: 'Katar' }, katarPath],
+    ['the look for the weapon held when no look has the index', { look: 7, weapon: 'Katar' }, katarPath],
+    ['the first look for a weapon no look has', { weapon: 'Spear' }, skinPath],
+    ['the unarmed look by its index', { look: 0, weapon: 'Katar' }, skinPath],
+  ])('draws %s', async (_, pose, url) => {
+    const { replay } = await loaded()
+    const sheets = drawn(replay, '1', poseOf(pose))
+
+    expect(sheets).toEqual([sheetOfGroup(replay, url, url === skinPath ? 1 : 0)])
+  })
+
   test("takes a bone's whole row from the first set that has it", async () => {
     const { replay } = await loaded()
     const katarLook = replay.players.get('1')?.sets.get('1')
