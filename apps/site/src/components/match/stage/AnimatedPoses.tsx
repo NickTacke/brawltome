@@ -50,8 +50,15 @@ export function AnimatedPoses(props: AnimatedPosesProps) {
   return (
     <>
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full" />
-      <LegendTags poses={drawnPoses} selectedSlot={selectedSlot} box={box} camera={camera} frame={frame} />
-      <TokenPoses poses={missingPoses} players={players} selectedSlot={selectedSlot} />
+      <TokenPoses poses={missingPoses} players={players} selectedSlot={selectedSlot} hasTags={false} />
+      <LegendTags
+        poses={drawnPoses}
+        portraits={missingPoses}
+        selectedSlot={selectedSlot}
+        box={box}
+        camera={camera}
+        frame={frame}
+      />
       {isSpinnerShown ? <StageSpinner label="Loading the art for this moment" /> : null}
     </>
   )

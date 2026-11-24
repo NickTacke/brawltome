@@ -35,7 +35,7 @@ import {
 import { readPlaybackTimeline, stepAt } from '../src/components/match/stage/playback-timeline'
 import { type Pose, posesAt, valueAt } from '../src/components/match/stage/pose'
 import { cameraNow, cameraPathKey } from '../src/components/match/stage/stage-camera'
-import { tagLifts } from '../src/components/match/stage/tag-stack'
+import { portraitTagLiftPx, tagFeet, tagLifts } from '../src/components/match/stage/tag-stack'
 import { mixCameras } from '../src/components/match/stage/use-camera-blend'
 import {
   areLegendsDrawn,
@@ -463,6 +463,28 @@ describe('tags over players', () => {
 
     expect(lifts.get(1)).toBe(0)
     expect(lifts.get(2)).toBe(1)
+  })
+
+  test('a portrait’s tag sits over the portrait where a legend’s head is lower, and stacks with a legend’s', () => {
+    const phone = { width: 390, height: 219 }
+    // a legend's tag 25 pixels over the feet, inside the portrait on the same spot
+    const legendRaise = 25 / phone.height
+    const tags = tagFeet([at(1, 0.5, 0.5)], [at(2, 0.5, 0.5)], legendRaise, phone)
+    const lifts = tagLifts(tags, phone)
+    const raisedPx = (slot: number) => (0.5 - (tags.find((tag) => tag.slot === slot)?.y ?? 0)) * phone.height
+
+    expect(raisedPx(1)).toBeCloseTo(25)
+    expect(raisedPx(2)).toBeCloseTo(portraitTagLiftPx)
+    expect(lifts.get(1)).toBe(0)
+    expect(lifts.get(2)).toBe(1)
+  })
+
+  test('a portrait’s tag goes as high as a legend’s where the legend’s head is higher', () => {
+    const frame = { width: 1440, height: 810 }
+    const legendRaise = 60 / frame.height
+    const [legend, portrait] = tagFeet([at(1, 0.2, 0.5)], [at(2, 0.8, 0.5)], legendRaise, frame)
+
+    expect(portrait.y).toBe(legend.y)
   })
 
   test('players apart keep their tags level', () => {

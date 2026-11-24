@@ -8,7 +8,15 @@ import type { Pose } from './pose'
 // who stands on the stage: what a token shows of a player besides their pose
 export type StagePlayer = Pick<SummaryPlayer, 'slot' | 'name' | 'legendKey'>
 
-export type TokenPosesProps = { poses: Pose[]; players: StagePlayer[]; selectedSlot: number }
+export type TokenPosesProps = {
+  poses: Pose[]
+  players: StagePlayer[]
+  selectedSlot: number
+  // false where the tags are drawn with the legends' tags, so they are stacked with theirs
+  hasTags?: boolean
+}
+
+type TokenProps = { pose: Pose; player: StagePlayer; isPicked: boolean; hasTag: boolean }
 
 // which way the player faces, as a small wedge on that side of the portrait
 function FacingWedge({ facingRight, colour }: { facingRight: boolean; colour: string }) {
@@ -47,7 +55,7 @@ function portraitLook(pose: Pose): string {
   return `${dodging} ${stunned}`
 }
 
-function Token({ pose, player, isPicked }: { pose: Pose; player: StagePlayer; isPicked: boolean }) {
+function Token({ pose, player, isPicked, hasTag }: TokenProps) {
   const colour = slotColour(pose.slot)
 
   return (
@@ -55,7 +63,7 @@ function Token({ pose, player, isPicked }: { pose: Pose; player: StagePlayer; is
       className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
       style={{ left: `${pose.x * 100}%`, top: `${pose.y * 100}%`, zIndex: isPicked ? 2 : 1 }}
     >
-      <PoseTag pose={pose} />
+      {hasTag ? <PoseTag pose={pose} /> : null}
       <div className="relative">
         <img
           src={legendAvatarUrl(player.legendKey)}
@@ -75,12 +83,12 @@ export function isOnScreen(pose: Pose): boolean {
 }
 
 /** Draws each player as a token: their legend's portrait in their colour, with weapon, damage and stocks above it. */
-export function TokenPoses({ poses, players, selectedSlot }: TokenPosesProps) {
+export function TokenPoses({ poses, players, selectedSlot, hasTags = true }: TokenPosesProps) {
   return poses.filter(isOnScreen).map((pose) => {
     const player = players.find((entry) => entry.slot === pose.slot)
 
     if (!player) return null
 
-    return <Token key={pose.slot} pose={pose} player={player} isPicked={pose.slot === selectedSlot} />
+    return <Token key={pose.slot} pose={pose} player={player} isPicked={pose.slot === selectedSlot} hasTag={hasTags} />
   })
 }
