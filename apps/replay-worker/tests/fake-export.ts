@@ -1,7 +1,9 @@
-// stands in for the brawlhalla-anims export (`export.ts plan|render|warm`, see its README) in tests. The line's
-// `fake` field says what to do: ok (the default), no-animations, bad-plan, crash-render, hang-render. A warm for
+// stands in for the brawlhalla-anims export (`export.ts plan|render|warm|predraw`, see its README) in tests. The
+// line's `fake` field says what to do: ok (the default), no-animations, bad-plan, crash-render, hang-render. A warm for
 // patch 11.01 never ends, one for 11.02 lists a path outside the store, and ones for 11.03 and 11.04 leave a level
-// out, 11.04 with a very long reason. It writes files named the way the export names them, with tiny bodies
+// out, 11.04 with a very long reason. A predraw names three sets; its draw for 11.01 draws the first and never ends,
+// and the one for 11.03 fails the last. With --sets, plan and render name every set of the index. It writes files named
+// the way the export names them, with tiny bodies
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -20,6 +22,34 @@ export const longWarmSkip = `warning: warm: Brawlhaven (map 7) is left out: read
 export const warningBeforeFailure = 'warning: map 136: no Bare.png in the game folder, its pieces are left out'
 
 const warmSkipOfPatch: Record<string, string> = { '11.03': warmSkip, '11.04': longWarmSkip }
+
+// the sets a predraw names: a skin's, a weapon skin's and a class's
+export const fakeSets = [`art/${'a'.repeat(32)}.json`, `art/${'b'.repeat(32)}.json`, `art/${'c'.repeat(32)}.json`]
+
+/** The set index predraw name writes for a patch, and its store path. */
+export function fakeSetIndex(patch: string): { path: string; text: string } {
+  const [skinSet, weaponSkinSet, classSet] = fakeSets
+
+  const index = {
+    format: 4,
+    drawing: 1,
+    pixelsPerUnit: 1.2,
+    patch,
+    game: '0'.repeat(64),
+    skins: { '1': skinSet, '2': 'nothing to draw' },
+    weaponSkins: { '3': weaponSkinSet, '4': 'draw per look' },
+    classes: { Unarmed: { Idle: { set: classSet, bones: ['a_Body'] } } },
+  }
+
+  const text = JSON.stringify(index)
+
+  return { path: `sets/${createHash('sha256').update(text).digest('hex').slice(0, 32)}.json`, text }
+}
+
+/** A set's two sheets, the base and its weights, named by their content. */
+export function fakeSetSheets(path: string): { path: string; bytes: Uint8Array }[] {
+  return [fakeSheet(`${path} base`), fakeSheet(`${path} weights`)]
+}
 
 /** The sheet the fake draws an art group or map on, named by its content as the export names it. */
 export function fakeSheet(path: string): { path: string; bytes: Uint8Array } {
@@ -49,8 +79,13 @@ async function main(): Promise<void> {
       manifest: { type: 'string' },
       patch: { type: 'string' },
       list: { type: 'boolean' },
+      index: { type: 'string' },
+      sets: { type: 'string' },
+      check: { type: 'boolean' },
     },
   })
+
+  if (positionals[0] === 'predraw') return predraw(positionals.slice(1), values)
 
   const [command, gameFolder = ''] = positionals
 
@@ -69,7 +104,9 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  if (command === 'plan') return plan(basename(gameFolder), line.fake === 'bad-plan')
+  const sets = values.sets ? setsOf(values.sets) : null
+
+  if (command === 'plan') return plan(basename(gameFolder), line.fake === 'bad-plan', sets)
 
   if (line.fake === 'crash-render') {
     console.error(warningBeforeFailure)
@@ -78,18 +115,28 @@ async function main(): Promise<void> {
 
   if (line.fake === 'hang-render') await new Promise(() => undefined)
 
-  render(store, values.have ?? '', values.manifest ?? '')
+  render(store, values.have ?? '', values.manifest ?? '', sets)
 }
 
-function plan(patch: string, isBad: boolean): void {
+function plan(patch: string, isBad: boolean, sets: string[] | null): void {
   const paths = isBad ? [...fakeGroups, '../../outside.json'] : fakeGroups
   const groups = paths.map((path) => ({ fingerprint: path.slice(4, 36), path, kind: 'core' }))
+  const map = { fingerprint: '4', path: fakeMap }
 
-  console.log(JSON.stringify({ format: 3, patch, mapId: fakeMapId, groups, map: { fingerprint: '4', path: fakeMap } }))
+  console.log(JSON.stringify({ format: 3, patch, mapId: fakeMapId, groups, map, ...(sets ? { sets } : {}) }))
+}
+
+// every set an index names, as plan and render with --sets name them
+function setsOf(indexFile: string): string[] {
+  const index = JSON.parse(readFileSync(indexFile, 'utf8')) as { skins: Record<string, string> }
+
+  if (!index.skins) fail(`${indexFile} is not a set index`)
+
+  return fakeSets
 }
 
 // writes what --have lacks, as the export does, and reads what it has, so a store missing one of those fails
-function render(store: string, haveFile: string, manifestPath: string): void {
+function render(store: string, haveFile: string, manifestPath: string, sets: string[] | null): void {
   const have = readHave(haveFile)
 
   for (const path of have) {
@@ -101,7 +148,12 @@ function render(store: string, haveFile: string, manifestPath: string): void {
   const pack = fakePack()
 
   write(store, pack.path, pack.bytes)
-  writeFileSync(manifestPath, JSON.stringify({ format: 3, map: { layout: fakeMap }, art: fakeGroups }))
+
+  const manifest = sets
+    ? { format: 4, map: { layout: fakeMap }, art: [...sets, ...fakeGroups] }
+    : { format: 3, map: { layout: fakeMap }, art: fakeGroups }
+
+  writeFileSync(manifestPath, JSON.stringify(manifest))
   console.log(`${store}: wrote some files`)
 }
 
@@ -129,6 +181,63 @@ async function warm(store: string, values: { have?: string; patch?: string; list
   for (const path of paths) console.log(...writeDrawn(store, path, values.patch))
 
   console.error(`${store}: wrote ${paths.length} files, ${have.size} given, 0 s`)
+}
+
+// predraw name <game folder> --patch <version> --index <file>; predraw draw <game folder> <store> --index <file>
+// --have <file> [--check]
+async function predraw(args: string[], values: { patch?: string; index?: string; have?: string }): Promise<void> {
+  const [subcommand, gameFolder = '', store = ''] = args
+
+  if (!existsSync(gameFolder)) fail(`no game folder ${gameFolder}`)
+
+  if (!values.index) fail('predraw needs --index')
+
+  if (subcommand === 'name') {
+    const index = fakeSetIndex(values.patch ?? '')
+
+    writeFileSync(values.index, index.text)
+    console.log(index.path)
+
+    return
+  }
+
+  const have = readHave(values.have)
+  const patch = basename(gameFolder)
+  const toDraw = fakeSets.filter((path) => !have.has(path))
+  const failed: string[] = []
+
+  for (const [position, path] of toDraw.entries()) {
+    if (patch === '11.03' && position === toDraw.length - 1) {
+      failed.push(path)
+      continue
+    }
+
+    drawSet(store, path)
+
+    // a draw that never ends, once it drew one set whole
+    if (patch === '11.01') await new Promise(() => undefined)
+  }
+
+  for (const path of failed) console.log(`failed ${path} a piece needs 24 colours`)
+
+  if (failed.length > 0) process.exit(3)
+}
+
+// a set's sheets first and its file last, as predraw draws them, so a set file means a whole set
+function drawSet(store: string, path: string): void {
+  const sheets = fakeSetSheets(path)
+
+  for (const sheet of sheets) {
+    write(store, sheet.path, sheet.bytes)
+    console.log(sheet.path)
+  }
+
+  const [base, weights] = sheets.map((sheet) => sheet.path)
+  const sheetRows = [{ src: base, w: 4, h: 4, bytes: 10, weights: [{ src: weights, bytes: 8 }] }]
+  const body = { format: 4, sheets: sheetRows, pieces: [], bones: {}, weapons: {}, set: { kind: 'skin', drawing: 1 } }
+
+  write(store, path, new TextEncoder().encode(JSON.stringify(body)))
+  console.log(path)
 }
 
 function warmListOf(patch: string | undefined): string[] {

@@ -1,4 +1,5 @@
 import type { WorkerReport } from './api-client'
+import { isSetIndexPath } from './art-files'
 
 // the api's /internal/replays/art routes, as the worker calls them. the worker holds no storage keys: every art file
 // goes through the api, which checks it before it reaches the bucket
@@ -11,19 +12,36 @@ const PATHS_PER_CALL = 2000
 // the job id names the job's files under the work folder, so it must be nothing but an id
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// what the art loop reports with each claim: the parse report, the art format, and the format of the pre-drawn sets
+// its export draws, null when it draws none
+export type ArtReport = WorkerReport & { setFormat: number | null }
+
+// a match job draws one match, a warm job a patch's maps and default looks, a predraw job a patch's pre-drawn sets
+export type ArtJobKind = 'match' | 'warm' | 'predraw'
+
+const ART_JOB_KINDS: readonly string[] = ['match', 'warm', 'predraw'] satisfies ArtJobKind[]
+
 export type ClaimedArt = {
   jobId: string
   leaseToken: string
-  kind: 'match' | 'warm'
+  kind: ArtJobKind
   patch: string
-  // the match's line, unzipped; null for a warm job
+  // the match's line, unzipped; null for a warm or predraw job
   line: Uint8Array | null
+  // the patch's set index, for a match job of a patch whose sets are drawn; the match is then drawn from them
+  setIndex: string | null
 }
 
 export type ArtJob = Pick<ClaimedArt, 'jobId' | 'leaseToken'>
 
 export type ArtMap = { patch: string; mapId: number; path: string }
-export type ArtResult = { manifest: Record<string, unknown> | null; maps: ArtMap[]; artFormat: number }
+export type ArtResult = {
+  manifest: Record<string, unknown> | null
+  maps: ArtMap[]
+  artFormat: number
+  // the set index a predraw job drew; none for any other job
+  setIndex?: string
+}
 export type ArtFailureCode = 'no-animations' | 'export-failed' | 'worker-error'
 
 /** The api answered 409: the attempt lost its lease, so nothing more it sends about the job counts. */
@@ -39,13 +57,14 @@ export class ResultUnansweredError extends Error {}
 export class ArtRefusedError extends Error {}
 
 export type ArtClient = {
-  claim(report: WorkerReport): Promise<ClaimedArt | null>
+  claim(report: ArtReport): Promise<ClaimedArt | null>
   missing(job: ArtJob, paths: string[]): Promise<string[]>
   readFile(job: ArtJob, path: string): Promise<Uint8Array>
   putFile(job: ArtJob, path: string, bytes: Uint8Array): Promise<'stored' | 'held' | 'unanswered'>
   result(job: ArtJob, result: ArtResult): Promise<void>
   failure(job: ArtJob, code: ArtFailureCode, message: string): Promise<void>
   renew(job: ArtJob): Promise<boolean>
+  wait(job: ArtJob): Promise<void>
 }
 
 type RequestInit = { method?: string; lease?: string; json?: unknown; bytes?: Uint8Array; timeoutMs?: number }
@@ -132,6 +151,16 @@ export function createArtClient(config: ArtClientConfig): ArtClient {
       }
     },
 
+    // gives the job back for a while, its patch's sets not all drawn; 409 means another attempt owns it, which is as
+    // good: either way this attempt is done
+    async wait(job) {
+      const response = await send(`/${job.jobId}/wait`, { lease: job.leaseToken })
+
+      if (!response.ok && response.status !== 409) {
+        throw new Error(`put art job ${job.jobId} back to wait for sets: the api answered ${response.status}`)
+      }
+    },
+
     // false only once the api says the lease is gone; any other answer is a failed request, not a lost lease
     async renew(job) {
       const response = await send(`/${job.jobId}/renew`, { lease: job.leaseToken })
@@ -157,20 +186,28 @@ async function claimFrom(response: Response): Promise<ClaimedArt | null> {
 
   const kind = requiredHeader(response, 'x-art-kind')
 
-  if (kind !== 'match' && kind !== 'warm') throw new Error(`claim an art job: unknown kind ${kind}`)
+  if (!ART_JOB_KINDS.includes(kind)) throw new Error(`claim an art job: unknown kind ${kind.slice(0, 60)}`)
 
   const jobId = requiredHeader(response, 'x-art-job')
 
   if (!UUID.test(jobId)) throw new Error(`claim an art job: x-art-job ${jobId.slice(0, 60)} is not a uuid`)
+
+  // the index is read through the api like any art file, so it must be one
+  const setIndex = response.headers.get('x-art-set-index')
+
+  if (setIndex !== null && !isSetIndexPath(setIndex)) {
+    throw new Error(`claim an art job: x-art-set-index ${setIndex.slice(0, 60)} is not a set index path`)
+  }
 
   const body = new Uint8Array(await response.arrayBuffer())
 
   return {
     jobId,
     leaseToken: requiredHeader(response, 'x-art-lease'),
-    kind,
+    kind: kind as ArtJobKind,
     patch: requiredHeader(response, 'x-art-patch'),
     line: kind === 'match' ? Bun.gunzipSync(body) : null,
+    setIndex,
   }
 }
 

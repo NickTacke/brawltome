@@ -15,6 +15,17 @@ packs first and map files last, since the api refuses a map file before the shee
 the export draws, only `REPLAY_PROCESSES_DURING_ART` bh-native processes run, so the export has the memory. The worker
 never holds storage keys.
 
+With a bundle that has `render --sets` (brawlhalla-anims 44e8246 or later), the worker reports the sets' format with
+each claim, and the api hands it two more things:
+
+- A predraw job draws a patch's pre-drawn sets. It runs `predraw name`, asks which sets the art bucket lacks, runs
+  `predraw draw` with those in `--have`, and sends the sheets, then the set files, then the index once every set it
+  names is stored. A draw that fails some sets or runs out of time still sends the sets it finished, so running the job
+  again draws only the rest. The api keeps the index as the patch's once the job ends.
+- A match job of a patch with an index carries the index's path. The worker downloads it and runs `plan --sets` and
+  `render --sets`, which name the players' sets instead of drawing them. If the bucket lacks one of the sets, the job
+  goes back for ten minutes instead. Without an index the match is drawn as before.
+
 | Setting | Default |
 | --- | --- |
 | `REPLAY_WORKER_TOKEN` | required, the api's `replay_worker_token` secret |
@@ -26,6 +37,8 @@ never holds storage keys.
 | `REPLAY_ANIMS_PATH` | `/opt/anims/current`, the export bundle; art is off without its `scripts/export.ts` |
 | `REPLAY_PROCESSES_DURING_ART` | `1`, the bh-native processes left running while the export draws |
 | `REPLAY_ART_WARM_TIMEOUT_MS` | `3600000`; a plan or render is stopped after 15 minutes, a warm after this |
+| `REPLAY_ART_PREDRAW_TIMEOUT_MS` | `43200000`, for `predraw name` and for `predraw draw` each |
+| `REPLAY_PREDRAW_CHECK` | off; `1` runs `predraw draw --check`, which leaves out a set further than its limit from the look baked in |
 
 Tests use a fake bh-native (`tests/fake-bhnative.ts`) and a fake export (`tests/fake-export.ts`):
 `bun test apps/replay-worker`.
