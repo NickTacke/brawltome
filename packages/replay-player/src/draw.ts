@@ -13,7 +13,7 @@
 //
 // A player or object is drawn whole or not at all: drawPlayer and drawObject draw nothing, and return false, while a
 // piece of its frame hasn't loaded yet. isReady says whether an animation can be drawn at every frame.
-import type { PieceRow, Rect } from './format.ts'
+import type { ManifestLook, PieceRow, Rect } from './format.ts'
 import type { ObjectAssets, PlayerAssets, Replay } from './load.ts'
 import { type ArtSet, eachDraw, type Frame, groupOf, type Matrix, multiply, pieceOf } from './placement.ts'
 import type { ObjectPose, PlayerPose } from './timeline.ts'
@@ -22,7 +22,8 @@ import type { Tint } from './tint.ts'
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 
 // isReady says whether an animation of a player (or of the objects, in a look) can be drawn at every frame the match
-// shows, with every weapon skin
+// shows, with every weapon skin. A format 4 player's look is the index into their manifest looks, as a string; with
+// none given, the animation has to be ready in every look of theirs
 export function isReady(
   replay: Replay,
   drawable: PlayerAssets | ObjectAssets,
@@ -33,20 +34,32 @@ export function isReady(
 
   if (drawable.ready.get(key)) return true
 
-  const set = drawable.sets.get(look) ?? drawable.sets.get('-')
+  const sets = setsOfLook(drawable, look)
   const entry = drawable.animations.byIndex.get(animationIndex)
 
-  if (!set || !entry) return false
+  if (sets.length === 0 || !entry) return false
 
-  for (const frameNumber of entry.animation.frames.keys()) {
-    const frame = drawable.animations.frame(animationIndex, frameNumber)
+  for (const set of sets) {
+    for (const frameNumber of entry.animation.frames.keys()) {
+      const frame = drawable.animations.frame(animationIndex, frameNumber)
 
-    if (!frame || !canDrawEveryWeapon(set, frame, replay.isLoaded)) return false
+      if (!frame || !canDrawEveryWeapon(set, frame, replay.isLoaded)) return false
+    }
   }
 
   drawable.ready.set(key, true)
 
   return true
+}
+
+// setsOfLook is the sets a look draws with: its own, else for a player without that look every set they have, one per
+// look in format 4
+function setsOfLook(drawable: PlayerAssets | ObjectAssets, look: string): ArtSet[] {
+  const set = drawable.sets.get(look) ?? drawable.sets.get('-')
+
+  if (set) return [set]
+
+  return 'set' in drawable ? [...new Set(drawable.sets.values())] : []
 }
 
 function canDrawEveryWeapon(set: ArtSet, frame: Frame, isLoaded: (ref: number) => boolean): boolean {
@@ -94,6 +107,25 @@ function drawFrame(
   return drawn
 }
 
+// lookIndexOf is the manifest look a pose is drawn in: the one its look index names, else the one for the weapon held,
+// else the first
+function lookIndexOf(looks: ManifestLook[], pose: PlayerPose): number {
+  const byLook = pose.look === undefined ? -1 : looks.findIndex((look) => look.look === pose.look)
+
+  if (byLook >= 0) return byLook
+
+  const byWeapon = looks.findIndex((look) => look.weapon === pose.weapon)
+
+  return Math.max(byWeapon, 0)
+}
+
+// setOfPose is the set a player's pose is drawn with: in format 4, their look's
+function setOfPose(player: PlayerAssets, pose: PlayerPose): ArtSet {
+  if (!('looks' in player.info)) return player.set
+
+  return player.sets.get(String(lookIndexOf(player.info.looks, pose))) ?? player.set
+}
+
 // drawPlayer draws one player's pose. levelToCanvas takes level units to canvas pixels (include devicePixelRatio). It
 // draws nothing and returns false while a piece of the frame hasn't loaded. A pose with a tint (from poseAt) is drawn
 // in the game's colours: see drawTinted
@@ -108,14 +140,16 @@ export function drawPlayer(
 
   if (!frame) return false
 
+  const set = setOfPose(player, pose)
+
   // facing left mirrors the animation around the player's position
   const place = multiply(levelToCanvas, [pose.facingRight ? 1 : -1, 0, 0, 1, pose.x, pose.y])
 
   ctx.save()
 
   const drawn = pose.tint
-    ? drawTinted(ctx, replay, { set: player.set, weapon: pose.weapon, frame, place }, pose.tint)
-    : drawFrame(ctx, replay, player.set, pose.weapon, frame, place, 1)
+    ? drawTinted(ctx, replay, { set, weapon: pose.weapon, frame, place }, pose.tint)
+    : drawFrame(ctx, replay, set, pose.weapon, frame, place, 1)
 
   ctx.restore()
 

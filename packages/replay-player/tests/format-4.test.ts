@@ -1,13 +1,13 @@
 // format 4 files as the loader reads them: three real sets drawn by brawlhalla-anims `predraw draw --check` from
 // 11.01 (the PistolCowgirl and KatarDKSent weapon skins and the orb's FirstPickUp class set, its pickup flash), a
 // manifest naming them beside a format 3 group, and the ways a format 4 file can be wrong
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadReplay } from '..'
 import type { AnyArtGroup, ArtGroupFormat4, ManifestFormat4 } from '../src/format.ts'
 import { readArtGroup, readManifest } from '../src/read.ts'
-import { stubImageBitmaps } from './art-store.ts'
+import { installFakeCanvas, removeFakeCanvas } from './fake-canvas.ts'
 import { writePack } from './pack-writer.ts'
 
 const fixtures = join(import.meta.dir, 'fixtures')
@@ -77,7 +77,8 @@ function fetchOf(manifest: unknown) {
   }
 }
 
-beforeAll(stubImageBitmaps)
+beforeAll(installFakeCanvas)
+afterAll(removeFakeCanvas)
 
 describe('reading format 4', () => {
   test.each([pistolPath, katarPath, pickupPath])('reads the set %s as it was drawn', (path) => {
@@ -90,9 +91,11 @@ describe('reading format 4', () => {
 
     await replay.loaded
 
+    // the groups as the looks ask for them, each in the colours it's drawn in: both looks give the pickup flash the
+    // same colours, so it's listed once
     expect(replay.manifest).toEqual(manifest)
-    expect(replay.groups.map((group) => group.url)).toEqual([pistolPath, katarPath, pickupPath, ownPath])
-    expect(replay.groups.map((group) => group.json)).toEqual([...files.values()])
+    expect(replay.groups.map((group) => group.url)).toEqual([pistolPath, pickupPath, ownPath, katarPath])
+    expect(replay.groups.map((group) => group.json)).toEqual([pistolPath, pickupPath, ownPath, katarPath].map(setOf))
     expect(replay.players.get('1')?.info).toEqual(manifest.players['1'])
   })
 

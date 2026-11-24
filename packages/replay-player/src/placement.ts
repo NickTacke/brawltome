@@ -89,16 +89,24 @@ function tailOf(groupRows: GroupRow[]): Int32Array | undefined {
   return tail[0] < 0 ? undefined : tail
 }
 
-// putRows adds a bone's rows from every group that draws it, in lookup order. A format 4 group's row is stretched to
+// rowsShown are the rows a bone is drawn from. A bone a format 4 group has first takes its whole row from that group,
+// as the game takes a bone's art from one place: a look's sets come in the order it picks art in. Rows that start
+// with a format 3 group's are all kept, as the first seconds' group shares its bones with the whole match's
+function rowsShown(groupRows: GroupRow[]): GroupRow[] {
+  return groupRows[0].holdsLast ? groupRows.slice(0, 1) : groupRows
+}
+
+// putRows adds a bone's rows from the groups it's drawn from, in lookup order. A format 4 group's row is stretched to
 // the longest, so its last piece stays a candidate where another group's row goes on
 function putRows(table: Table, id: number, groupRows: GroupRow[]) {
-  const length = Math.max(...groupRows.map(({ frames }) => frames.length))
+  const shown = rowsShown(groupRows)
+  const length = Math.max(...shown.map(({ frames }) => frames.length))
 
-  for (const { group, frames, holdsLast } of groupRows) {
+  for (const { group, frames, holdsLast } of shown) {
     putPieces(table.rows, id, group, holdsLast ? heldTo(frames, length) : frames)
   }
 
-  table.tails[id] = tailOf(groupRows)
+  table.tails[id] = tailOf(shown)
 }
 
 // ArtSet is what one player (or the objects in one look) draws with: its art groups in lookup order, read into

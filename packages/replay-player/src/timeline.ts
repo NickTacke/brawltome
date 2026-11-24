@@ -16,6 +16,8 @@ export type Timeline = {
       animation: [number, number | null, number, number][]
       facingRight?: [number, boolean][]
       weapon?: [number, string][]
+      // the index into the line's playerLooks the player is drawn in, in lines that record them
+      look?: [number, number][]
       status?: [number, string][]
       // what the game's drawing tints a player by (src/tint.ts), in lines that record it
       damage?: [number, number][]
@@ -69,6 +71,7 @@ export type PlayerPose = {
   x: number // the player's feet, in level units
   y: number
   weapon: string // the weapon held ("Scythe", "Unarmed", an item's name)
+  look?: number // the index into the line's playerLooks the player is drawn in, in lines that record them
   tint?: Tint // the colour the game draws the player with on top of their art (src/tint.ts), when there's one
 }
 
@@ -126,6 +129,7 @@ export function poseAt(
     x: position.x,
     y: position.y,
     weapon: valueAt(state.weapon, whole) ?? 'Unarmed',
+    look: valueAt(state.look, whole),
     tint: tintAt(timeline, slot, whole),
   }
 }
